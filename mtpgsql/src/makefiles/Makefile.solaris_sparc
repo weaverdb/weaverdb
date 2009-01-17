@@ -1,0 +1,18 @@
+%.so: %.o
+	$(LD) -G -Bdynamic -o $@ $<
+MK_NO_LORDER=true
+#CC=lint
+#CFLAGS+= -Xarch=v9 -errchk=longptr64
+CFLAGS+= -mt -g -I/usr/include -xildoff -xarch=v9
+CFLAGS+= -DCLOBBER_FREED_MEMORY -DNOARRAY
+BKIOPTS+= -DNOARRAY
+#CFLAGS+= -DMEMORY_CONTEXT_CHECKING
+AROPT= crs
+CFLAGS_SL+= -Kpic
+LIBS= -lgen -lnsl -lsocket -lm -lrt 
+#LIBS+= -ltermcap -lcrypt -lc -lcurses -lrt
+SUNOS=true
+PORTNAME=sunos
+CPU=sparc
+INSTALL= $(SRCDIR)/install-sh -c 
+POSTGRESDIR=/usr/local/mtpgsql

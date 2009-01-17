@@ -1,0 +1,5 @@
+#!/bin/sh
+cd `dirname $0`
+PGUSER=`logname`
+
+echo "set prune system" | mtpg/bin/postgres -Q -D`pwd`/dbfiles template1 

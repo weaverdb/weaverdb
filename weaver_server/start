@@ -1,0 +1,51 @@
+#!/bin/sh
+cd `dirname $0`
+if [ -f dbfiles/LOCK ]
+then
+
+DBID=`cat db_log.txt | grep 'process id:'`
+echo $DBID
+DBID=`expr "$DBID" : '.*: \([0-9]*\)'`
+echo $DBID
+WEBID=`cat web_log.txt | grep 'process id:'`
+echo $WEBID
+WEBID=`expr "$WEBID" : '.*: \([0-9]*\)'`
+echo $WEBID
+
+if [ `./comcheck.sh | grep -c ' '*$DBID.*pgjava` = "1" ] 
+then
+      echo "still running"
+	exit 5
+else
+       rm dbfiles/LOCK
+       echo "not running"
+fi
+
+fi
+
+if [ -f db_log.txt ]
+then
+	rm db_log.txt
+fi
+if [ -f  web_log.txt ]
+then
+	rm web_log.txt
+fi
+if [ -f log.txt ]
+then
+	rm log.txt
+fi
+
+./start_db
+./start_web
+
+until [ -f log.txt ]
+do
+	sleep 3
+done
+
+while [ `cat log.txt | grep -c 'recording transaction recovery checkpoint'` = "0" ]
+do 
+	sleep 3
+done
+

@@ -1,0 +1,5 @@
+
+
+char* yytext(void);
+
+

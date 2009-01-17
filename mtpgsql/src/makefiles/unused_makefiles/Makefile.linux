@@ -1,0 +1,5 @@
+LDFLAGS+= -export-dynamic
+MK_NO_LORDER= true
+
+%.so: %.o
+	$(CC) -shared -o $@ $<

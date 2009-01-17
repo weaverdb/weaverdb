@@ -1,0 +1,80 @@
+/*-------------------------------------------------------------------------
+ *
+ * indexvalid.c
+ *	  index tuple qualification validity checking code
+ *
+ * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/common/indexvalid.c,v 1.1.1.1 2006/08/12 00:19:55 synmscott Exp $
+ *
+ *-------------------------------------------------------------------------
+ */
+
+#include "postgres.h"
+
+#include "access/heapam.h"
+#include "access/iqual.h"
+#include "executor/execdebug.h"
+
+
+/* ----------------
+ *		index_keytest
+ *
+ * old comments
+ *		May eventually combine with other tests (like timeranges)?
+ *		Should have Buffer buffer; as an argument and pass it to amgetattr.
+ * ----------------
+ */
+bool
+index_keytest(IndexTuple tuple,
+			  TupleDesc tupdesc,
+			  int scanKeySize,
+			  ScanKey key)
+{
+	bool		isNull;
+	Datum		datum;
+	int			test;
+
+	IncrIndexProcessed();
+
+	while (scanKeySize > 0)
+	{
+		datum = index_getattr(tuple,
+							  key[0].sk_attno,
+							  tupdesc,
+							  &isNull);
+
+		if (isNull)
+		{
+			/* XXX eventually should check if SK_ISNULL */
+			return false;
+		}
+
+		if (key[0].sk_flags & SK_ISNULL)
+			return false;
+
+		if (key[0].sk_flags & SK_COMMUTE)
+		{
+			test = (*(fmgr_faddr(&key[0].sk_func)))
+				(DatumGetPointer(key[0].sk_argument),
+				 datum) ? 1 : 0;
+		}
+		else
+		{
+			test = (*(fmgr_faddr(&key[0].sk_func)))
+				(datum,
+				 DatumGetPointer(key[0].sk_argument)) ? 1 : 0;
+		}
+
+		if (!test == !(key[0].sk_flags & SK_NEGATE))
+			return false;
+
+		scanKeySize -= 1;
+		key++;
+	}
+
+	return true;
+}

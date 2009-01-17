@@ -1,0 +1,25 @@
+#!/bin/sh
+cd `dirname $0`
+
+unset DISPLAY;
+JAVA_HOME=/usr/jdk/latest;export JAVA_HOME
+CLASSPATH=base_server.jar
+# this is now handled by individual classloaders
+#for N in libs/*;do CLASSPATH=${CLASSPATH}:$N;done
+export CLASSPATH
+LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/sparcv9/server;export LD_LIBRARY_PATH
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/SUNWspro/lib/v9/;export LD_LIBRARY_PATH
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/SUNWspro/lib/;export LD_LIBRARY_PATH
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:mtpg/lib;export LD_LIBRARY_PATH
+PGDATA=`pwd`/dbfiles;export PGDATA
+PATH=.:`pwd`/mtpg/bin:`pwd`/gs/bin:`pwd`/tiff/bin:$JAVA_HOME/bin:$PATH;export PATH
+#GS_LIB=`pwd`/gs/share/ghostscript/8.15/lib;export GS_LIB
+#GS_FONTPATH=`pwd`/gs/fonts;export GS_FONTPATH
+find dbfiles \( -name 'pg_sorttemp*' -o -name 'pg_temp*' \) -exec rm {} \;
+
+#UMEM_DEBUG=default;export UMEM_DEBUG
+
+#LD_PRELOAD=/opt/SUNWspro/lib/v9/libcollector.so;export LD_PRELOAD
+#pgjava -Xmx128m  server.properties 
+pgjava_server -XX:+UseParallelGC -XX:ParallelGCThreads=4 -Xmx1024m server.properties
+#pgjava -verbose:gc,jni -XX:+UseParallelGC -Xmx512m -XX:ParallelGCThreads=4 server.properties

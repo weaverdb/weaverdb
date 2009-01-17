@@ -1,0 +1,23 @@
+
+
+Issue an init_db command to create the base database system.  
+The default user is the user who issued the command and the 
+password is 'manager'
+
+Start the database via the start_db command.  Once the database
+is started issue mtpg/bin/psql -hlocalhost template1 to log
+in.
+
+There a number of basic testing files and dtrace scripts in the 
+perf directory.
+
+Stop the database via the stop_db command.
+
+
+Feel free to contact me with any questions.
+
+Regards,
+
+Myron K Scott
+mkscott@sacadia.com
+05.27.06

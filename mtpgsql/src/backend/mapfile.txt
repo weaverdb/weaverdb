@@ -1,0 +1,32 @@
+{
+	local:
+		*;
+	global:
+		WCreateConnection;
+                WCreateSubConnection;
+		WDestroyConnection;
+		WBegin;
+		WParsingFunc;
+		WBindWithIndicate; 
+		WOutputLinkInd;
+		WExec;
+		WFetch;
+		WPrepare;
+		WCommit;
+		WRollback;
+		WCancel;
+		WBeginProcedure;
+		WEndProcedure;
+		WUserLock;
+		WIsValidConnection;
+		WGetErrorCode;
+		WGetTransactionId;
+		WGetErrorText;
+		WGetErrorState;
+		WStreamExec;
+		WPipeConnect;
+		WPipeDisconnect;	
+		initweaverbackend;
+		prepareforshutdown;
+		wrapupweaverbackend;
+};

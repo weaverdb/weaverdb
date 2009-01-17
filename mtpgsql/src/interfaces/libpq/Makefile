@@ -1,0 +1,110 @@
+# Generated automatically from Makefile.in by configure.
+#-------------------------------------------------------------------------
+#
+# Makefile
+#    Makefile for libpq library
+#
+# Copyright (c) 1994, Regents of the University of California
+#
+# IDENTIFICATION
+#    $Header: /cvs/weaver/mtpgsql/src/interfaces/libpq/Makefile,v 1.1.1.1 2006/08/12 00:23:02 synmscott Exp $
+#
+#-------------------------------------------------------------------------
+
+NAME= pq
+SO_MAJOR_VERSION= 2
+SO_MINOR_VERSION= 1
+
+SRCDIR= ../..
+include $(SRCDIR)/Makefile.global
+
+CFLAGS+= -DFRONTEND
+
+ifdef KRBVERS
+CFLAGS+= $(KRBFLAGS)
+endif
+
+OBJS= fe-auth.o fe-connect.o fe-exec.o fe-misc.o fe-print.o fe-lobj.o \
+      pqexpbuffer.o dllist.o pqsignal.o 
+ifneq ($(PORTNAME), macosx)
+OBJS+= inet_aton.o
+endif
+ifdef MULTIBYTE
+OBJS+= common.o wchar.o conv.o big5.o
+endif
+
+# If crypt is a separate library, rather than part of libc,
+# make sure it gets included in shared libpq.
+SHLIB_LINK+= $(findstring -lcrypt,$(LIBS))
+
+# Shared library stuff, also default 'all' target
+include $(SRCDIR)/Makefile.shlib
+
+
+# We use several backend modules verbatim, but since we need to compile
+# with appropriate options to build a shared lib, we can't necessarily
+# use the same object files as the backend uses.  Instead, symlink the
+# source files in here and build our own object file.
+
+dllist.c:	$(SRCDIR)/backend/lib/dllist.c
+	-$(LN_S) $(SRCDIR)/backend/lib/dllist.c .
+
+# this only gets done if configure finds system doesn't have snprintf()
+snprintf.c:	$(SRCDIR)/backend/port/snprintf.c
+	-$(LN_S) $(SRCDIR)/backend/port/snprintf.c .
+
+# this only gets done if configure finds system doesn't have inet_aton()
+ifneq ($(PORTNAME),macosx)
+inet_aton.c:	$(SRCDIR)/backend/port/inet_aton.c
+	-$(LN_S) $(SRCDIR)/backend/port/inet_aton.c .
+else
+inet_aton.c:
+
+endif
+ifdef MULTIBYTE
+common.c: $(SRCDIR)/backend/utils/mb/common.c
+	-$(LN_S) $(SRCDIR)/backend/utils/mb/common.c .
+
+wchar.c: $(SRCDIR)/backend/utils/mb/wchar.c
+	-$(LN_S) $(SRCDIR)/backend/utils/mb/wchar.c .
+
+conv.c: $(SRCDIR)/backend/utils/mb/conv.c
+	-$(LN_S) $(SRCDIR)/backend/utils/mb/conv.c .
+
+big5.c: $(SRCDIR)/backend/utils/mb/big5.c
+	-$(LN_S) $(SRCDIR)/backend/utils/mb/big5.c .
+endif
+
+
+# The following rules cause dependencies in the backend directory to 
+# get made if they don't exist, but don't cause them to get remade if they
+# are out of date.
+fe-lobj.o: $(SRCDIR)/include/fmgr.h
+
+$(SRCDIR)/include/fmgr.h:
+	$(MAKE) -C $(SRCDIR)/backend fmgr.h
+
+
+.PHONY: install install-headers
+
+install: install-headers install-lib $(install-shlib-dep)
+
+install-headers: libpq-fe.h libpq-int.h
+	-@if [ ! -d $(HEADERDIR) ]; then mkdir $(HEADERDIR); fi
+	$(INSTALL) $(INSTLOPTS) libpq-fe.h $(HEADERDIR)/libpq-fe.h
+	$(INSTALL) $(INSTLOPTS) libpq-int.h $(HEADERDIR)/libpq-int.h
+	$(INSTALL) $(INSTLOPTS) pqexpbuffer.h $(HEADERDIR)/pqexpbuffer.h
+
+
+.PHONY: clean
+
+clean: clean-shlib
+	rm -f lib$(NAME).a $(OBJS)
+	rm -f dllist.c snprintf.c inet_aton.c common.c wchar.c conv.c big5.c
+
+depend dep:
+	$(CC) -MM $(CFLAGS) *.c >depend
+
+ifeq (depend,$(wildcard depend))
+include depend
+endif
