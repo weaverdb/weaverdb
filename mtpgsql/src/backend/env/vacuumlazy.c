@@ -1428,7 +1428,7 @@ repair_relink_blobs(Relation onerel, FragRepairInfo* repair_info) {
                 if (NoWaitLockRelation(onerel, ShareLock)) {
                     UnlockRelation(onerel, ShareLock);
                 } else {
-                    vacuum_log(onerel,"exiting defrag of due to concurrent access");
+                    vacuum_log(onerel,"exiting relinking due to concurrent access");
                     break;
                 }
             }           
@@ -1704,7 +1704,7 @@ lazy_relink_blobs(Relation onerel, BlockNumber upper_limit, FragRepairInfo* repa
 
 	}			/* walk along relation */
 
-	vacuum_log(onerel, "Rel: Pages: %ld; Tuple(s) relinked: %ld.", upper_limit, added);
+	vacuum_log(onerel, "Rel: Pages: %ld have relinkable Tuple(s): %ld.", upper_limit, added);
 	vacuum_log(onerel, "%s", vac_show_rusage(&ru0, rubuf));
 	/*
 	 * FlushRelationBuffers(onerel,nblocks);

@@ -98,6 +98,11 @@ TLS ThreadGlobals*  thread_globals = NULL;
 static ThreadGlobals* GetThreadGlobals(void);
 static ThreadGlobals* InitializeThreadGlobals(void);
 
+static int ThreadConflicts(LOCKMETHODCTL *lockctl,
+		  LOCKMODE lockmode,
+		  LOCK *lock,
+		  HOLDER *holder);
+
 #define DeadlockCheckTimer pg_options[OPT_DEADLOCKTIMEOUT]
 
 /* --------------------
@@ -368,52 +373,20 @@ ThreadQueueInit(THREAD_QUEUE *queue, pthread_mutex_t* lock)
 	queue->size = 0;
 }
 
-
-/*
- * ProcSleep -- put a process to sleep
- *
- * P() on the semaphore should put us to sleep.  The process
- * semaphore is cleared by default, so the first time we try
- * to acquire it, we sleep.
- *
- * ASSUME: that no one will fiddle with the queue until after
- *		we release the spin lock.
- *
- * NOTES: The process queue is now a priority queue for locking.
- */
 int
-ThreadSleep(LOCKMETHODCTL *lockctl,
+ThreadConflicts(LOCKMETHODCTL *lockctl,
 		  LOCKMODE lockmode,
-		  LOCK *lock,
-		  HOLDER *holder)
+		  LOCK *lock)
 {
-
-/*  the queue is already locked due to the fact that the mutex for 
-    the queue and the lock are the same */
-	THREAD_QUEUE *waitQueue = &(lock->waitThreads);
-	int			myMask = (1 << lockmode);
-	int			waitMask = lock->waitMask;
-	THREAD	   *proc;
-	int			i;
-	int			aheadHolders[MAX_LOCKMODES];
-	bool		selfConflict = (lockctl->conflictTab[lockmode] & myMask),
-				prevSame = false;
-	ThreadGlobals*		tenv = GetThreadGlobals();
-
-	struct itimerval timeval,
-				dummy;
-
-
-	tenv->thread->waitLock = MAKE_OFFSET(lock);
-	tenv->thread->waitHolder = MAKE_OFFSET(holder);
-	tenv->thread->waitLockMode = lockmode;
-	/* We assume the caller set up MyProc->holdLock */
-
-	proc = (THREAD *) MAKE_PTR(waitQueue->links.prev);
-
+	int                 i;
+	int                 myMask = (1 << lockmode);
+        THREAD              *proc = (THREAD *) MAKE_PTR(waitQueue->links.prev);
+	int                 aheadHolders[MAX_LOCKMODES];
+	bool                selfConflict = (lockctl->conflictTab[lockmode] & myMask),
+                            prevSame = false;
 	/* if we don't conflict with any waiter - be first in queue */
-	if (!(lockctl->conflictTab[lockmode] & waitMask)) {
-		goto ins;
+	if (!(lockctl->conflictTab[lockmode] & lock->waitMask)) {
+            return myMask;
         }
 
 	for (i = 1; i < MAX_LOCKMODES; i++)
@@ -453,15 +426,48 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
 		 * Last attempt to don't move any more: if we don't conflict with
 		 * rest waiters in queue.
 		 */
-		else if (!(lockctl->conflictTab[lockmode] & waitMask))
+		else if (!(lockctl->conflictTab[lockmode] & lock->waitMask))
 			break;
 
 		prevSame = (proc->waitLockMode == lockmode);
 		(aheadHolders[proc->waitLockMode])++;
 		if (aheadHolders[proc->waitLockMode] == lock->holders[proc->waitLockMode])
-			waitMask &= ~(1 << proc->waitLockMode);
+			lock->waitMask &= ~(1 << proc->waitLockMode);
 		proc = (THREAD *) MAKE_PTR(proc->links.prev);
 	}
+    }
+/*
+ * ProcSleep -- put a process to sleep
+ *
+ * P() on the semaphore should put us to sleep.  The process
+ * semaphore is cleared by default, so the first time we try
+ * to acquire it, we sleep.
+ *
+ * ASSUME: that no one will fiddle with the queue until after
+ *		we release the spin lock.
+ *
+ * NOTES: The process queue is now a priority queue for locking.
+ */
+int
+ThreadSleep(LOCKMETHODCTL *lockctl,
+		  LOCKMODE lockmode,
+		  LOCK *lock,
+		  HOLDER *holder)
+{
+
+/*  the queue is already locked due to the fact that the mutex for 
+    the queue and the lock are the same */
+	THREAD_QUEUE        *waitQueue = &(lock->waitThreads);
+	ThreadGlobals*		tenv = GetThreadGlobals();
+
+	struct itimerval timeval,
+				dummy;
+
+
+	tenv->thread->waitLock = MAKE_OFFSET(lock);
+	tenv->thread->waitHolder = MAKE_OFFSET(holder);
+	tenv->thread->waitLockMode = lockmode;
+	/* We assume the caller set up MyProc->holdLock */
 ins:;
 	SHMQueueInsertTL(&(proc->links), &(tenv->thread->links));
 	waitQueue->size++;
@@ -482,22 +488,18 @@ ins:;
 			
 		err =  pthread_cond_timedwait(&tenv->thread->sem,&lock->protection,&t);
 
-		if ( err == ETIMEDOUT ) {
-		    if ( CheckForCancel() ) {
-                             pthread_mutex_unlock(&lock->protection);
-                             elog(ERROR,"Query Cancelled");
-                    }
-		} else if ( err != 0 ) {
-			SHMQueueDelete(&(tenv->thread->links));
-			SHMQueueElemInit(&(tenv->thread->links));
-			waitQueue->size--;
-			tenv->thread->locked = 0;
-			return STATUS_ERROR;
-		} 
+		while ( err != 0 ) {
+                    if ( err == ETIMEDOUT && !CheckForCancel() ) break;
+                    SHMQueueDelete(&(tenv->thread->links));
+                    SHMQueueElemInit(&(tenv->thread->links));
+                    waitQueue->size--;
+                    tenv->thread->locked = 0;
+                    tenv->thread->errType = STATUS_ERROR;
+                    goto rt;
+                }
 	}
 
 rt:;
-
 	tenv->thread->waitLock = (SHMEM_OFFSET)0;
 	tenv->thread->waitHolder = (SHMEM_OFFSET)0;
 

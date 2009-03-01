@@ -224,7 +224,9 @@ RegisterFreespace(Relation rel, int space,BlockNumber* index,
         entry->active = active;
         
 	entry->pointer = 0;
-        for (c=0;c<INDEX_SIZE;c++) {
+        entry->index[0] = 0;
+        entry->index_size[0] = sizeof_max_tuple_blob();
+        for (c=1;c<INDEX_SIZE;c++) {
             entry->index[c] = 0;
             entry->index_size[c] = 0;
         }
@@ -363,7 +365,6 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
         int p = 0;
         int run = 0;
         int idx = 0;
-	int prev = 0;
         FreeRun*    alloc;
 
         pthread_mutex_lock(&entry->accessor);
@@ -381,19 +382,12 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
         } else {
            int start = 0;
 
-            while (request > entry->index_size[idx]  && idx < (INDEX_SIZE - 1)) {
+            for (idx=0;idx < INDEX_SIZE-1;idx++) {
 /*  prev is used below to see if we want to add an index entry */
-                prev = entry->index_size[idx];
-                if ( prev == 0 ) break;
-                idx += 1;
+                if (request > entry->index_size[idx+1]) break;
             }
-            
-            start = ( entry->index[idx] > 0 ) ? entry->index[idx] : entry->pointer;
-            if ( start < entry->pointer ) {
-                start = entry->pointer;
-                entry->index[idx] = start;
-            }
-            
+
+            start =  entry->index[idx];
             alloc = entry->blocks;
 
             for (p = start; p < entry->size; p++) {
@@ -429,9 +423,9 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
             DTRACE_PROBE4(mtpg, freespace__reservation,RelationGetRelationName(rel),alloc[p].avail,run,alloc[p].misses);
             Size remove_space = space;
             if ( alloc[p].unused_pointers == 0 ) {
-                    remove_space += sizeof(ItemIdData);
+                remove_space += sizeof(ItemIdData);
             } else {
-                    alloc[p].unused_pointers -= 1;
+                alloc[p].unused_pointers -= 1;
             }
             if ( remove_space > alloc[p].avail ) remove_space = alloc[p].avail;
             alloc[p].misses = 0;
@@ -443,18 +437,12 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
                         
             entry->total_available -= remove_space;
 
-            if ( entry->index_size[idx] == 0 ) {
-                entry->index[idx] = p;
-                entry->index_size[idx] = request;
-            } else if ( prev * 2 <= request && entry->index_size[idx] >= request * 2) {
+            if ( entry->index_size[idx] > request * 2 && entry->index_size[idx+1] * 2 < request ) {
         /*  if the request is less than half the current index, make an entry  */
-/*
-		elog(DEBUG,"pos move idx:%d size:%d loc:%d",idx,request,p);
-*/
-                memmove(entry->index + (idx+1),entry->index + (idx),(INDEX_SIZE - idx - 1) * sizeof(BlockNumber));
-                memmove(entry->index_size + (idx+1),entry->index_size + (idx),(INDEX_SIZE - idx - 1) * sizeof(Size));
-                entry->index[idx] = p;
-                entry->index_size[idx] = request;
+                memmove(entry->index + (idx+2),entry->index + (idx+1),(INDEX_SIZE - idx - 2) * sizeof(BlockNumber));
+                memmove(entry->index_size + (idx+2),entry->index_size + (idx+1),(INDEX_SIZE - idx - 2) * sizeof(Size));
+                entry->index[idx+1] = p;
+                entry->index_size[idx+1] = request;
             } else {
                 entry->index[idx] = p;
             }
@@ -464,12 +452,9 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
 
         if ( allocate ) {                        
             check = PerformAllocation(rel,entry,recommend);
-        }
-/*
-	if ( scan ) {
+        } else if ( scan ) {
             AddFreespaceScanRequest(RelationGetRelationName(rel),GetDatabaseName(),RelationGetRelid(rel),GetDatabaseId());
 	}
-*/	
     }
 
     return check;
@@ -607,7 +592,9 @@ FreeSpace* FindFreespace(Relation rel,char* dbname,bool create) {
 		entry->relkind = rel->rd_rel->relkind;
                 entry->size = 0;
                 entry->pointer = 0;
-                for (c=0;c<INDEX_SIZE;c++) {
+                entry->index[0] = 0;
+                entry->index_size[0] = sizeof_max_tuple_blob();
+                for (c=1;c<INDEX_SIZE;c++) {
                     entry->index[c] = 0;
                     entry->index_size[c] = 0;
                 }                

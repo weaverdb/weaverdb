@@ -1,9 +1,7 @@
-# Build Targets
-.build-conf: ${BUILD_SUBPROJECTS}
-	cd . && ${MAKE} -f Makefile
-
-# Subprojects
-.build-subprojects:
+.build-conf:
+	@echo Tool collection not found.
+	@echo Please specify existing tool collection in project properties
+	@exit 1
 
 # Clean Targets
 .clean-conf:

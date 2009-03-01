@@ -16,15 +16,18 @@ CC=cc
 CCC=CC
 CXX=CC
 FC=f95
+AS=as
 
 # Macros
-PLATFORM=SunStudio-Solaris-Sparc
+CND_PLATFORM=SunStudio-Solaris-Sparc
+CND_CONF=Default
+CND_DISTDIR=dist
 
 # Include project Makefile
 include weaver2-Makefile.mk
 
 # Object Directory
-OBJECTDIR=build/Default/${PLATFORM}
+OBJECTDIR=build/${CND_CONF}/${CND_PLATFORM}
 
 # Object Files
 OBJECTFILES=
@@ -38,6 +41,9 @@ CXXFLAGS=
 
 # Fortran Compiler Flags
 FFLAGS=
+
+# Assembler Flags
+ASFLAGS=
 
 # Link Libraries and Options
 LDLIBSOPTIONS=

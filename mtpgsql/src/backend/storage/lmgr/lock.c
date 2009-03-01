@@ -1031,9 +1031,11 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 
        }
        if ( remove ) {
+           /*  hash remove destroys the protection lock  */
             SearchLockTable(lockmethod, &lock->tag,HASH_REMOVE);
+       } else {
+            ReleaseLockProtection(lock);
        }
-       ReleaseLockProtection(lock);
 
        return TRUE;
 }

@@ -2,9 +2,6 @@
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/1"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/1">
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/commands/dbcommands.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/utils/error/elog.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/pgjava_c/WeaverStmtManager.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/pgjava_c/main.c</file>
+        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/env/freespace.c</file>
     </open-files>
 </project-private>
