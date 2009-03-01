@@ -872,7 +872,7 @@ WaitOnLock(LOCKMETHOD lockmethod, LOCKMODE lockmode,
 		if (lock->activeHolders[lockmode] == lock->holders[lockmode])
 			lock->waitMask &= BITS_OFF[lockmode];
                 ReleaseLockProtection(lock);
-		elog(ERROR, DeadLockMessage);
+		elog(ERROR, "Lock Failed or Cancelled");
 		/* not reached */
 	}
 

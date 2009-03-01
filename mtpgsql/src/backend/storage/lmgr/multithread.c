@@ -100,8 +100,7 @@ static ThreadGlobals* InitializeThreadGlobals(void);
 
 static int ThreadConflicts(LOCKMETHODCTL *lockctl,
 		  LOCKMODE lockmode,
-		  LOCK *lock,
-		  HOLDER *holder);
+		  LOCK *lock,ThreadGlobals* tenv);
 
 #define DeadlockCheckTimer pg_options[OPT_DEADLOCKTIMEOUT]
 
@@ -376,7 +375,7 @@ ThreadQueueInit(THREAD_QUEUE *queue, pthread_mutex_t* lock)
 int
 ThreadConflicts(LOCKMETHODCTL *lockctl,
 		  LOCKMODE lockmode,
-		  LOCK *lock)
+		  LOCK *lock,ThreadGlobals* tenv)
 {
 	int                 i;
 	int                 myMask = (1 << lockmode);
@@ -386,7 +385,8 @@ ThreadConflicts(LOCKMETHODCTL *lockctl,
                             prevSame = false;
 	/* if we don't conflict with any waiter - be first in queue */
 	if (!(lockctl->conflictTab[lockmode] & lock->waitMask)) {
-            return myMask;
+            lock->waitMask |= myMask;
+            return 0;
         }
 
 	for (i = 1; i < MAX_LOCKMODES; i++)
@@ -403,7 +403,7 @@ ThreadConflicts(LOCKMETHODCTL *lockctl,
 			{
 				/* Yes, report deadlock failure */
 				tenv->thread->errType = STATUS_ERROR;
-				goto rt;
+                                return STATUS_ERROR;
 			}
 			/* being waiting for him - go past */
 		}
@@ -435,6 +435,9 @@ ThreadConflicts(LOCKMETHODCTL *lockctl,
 			lock->waitMask &= ~(1 << proc->waitLockMode);
 		proc = (THREAD *) MAKE_PTR(proc->links.prev);
 	}
+
+        lock->waitMask |= myMask;
+        return 0;
     }
 /*
  * ProcSleep -- put a process to sleep
@@ -457,49 +460,49 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
 
 /*  the queue is already locked due to the fact that the mutex for 
     the queue and the lock are the same */
-	THREAD_QUEUE        *waitQueue = &(lock->waitThreads);
-	ThreadGlobals*		tenv = GetThreadGlobals();
-
-	struct itimerval timeval,
-				dummy;
-
+	THREAD_QUEUE            *waitQueue = &(lock->waitThreads);
+	ThreadGlobals           *tenv = GetThreadGlobals();
+        int                     origMask = lock->waitMask;
 
 	tenv->thread->waitLock = MAKE_OFFSET(lock);
 	tenv->thread->waitHolder = MAKE_OFFSET(holder);
 	tenv->thread->waitLockMode = lockmode;
 	/* We assume the caller set up MyProc->holdLock */
-ins:;
-	SHMQueueInsertTL(&(proc->links), &(tenv->thread->links));
-	waitQueue->size++;
 
-	lock->waitMask |= myMask;
-	tenv->thread->locked = 1;
-		
-	while ( tenv->thread->locked == 1 ) {
-#ifndef MACOSX                    
-       		timestruc_t  	t;
-#else
-               	struct timespec		t;
-#endif
-		int 		err = 0;
-			
-		t.tv_sec = time(NULL) + 2;
-		t.tv_nsec = 0;
-			
-		err =  pthread_cond_timedwait(&tenv->thread->sem,&lock->protection,&t);
+        if ( ThreadConflicts(lockctl,lockmode,lock,tenv) != STATUS_ERROR ) {
+            SHMQueueInsertTL(&(proc->links), &(tenv->thread->links));
+            waitQueue->size++;
 
-		while ( err != 0 ) {
-                    if ( err == ETIMEDOUT && !CheckForCancel() ) break;
-                    SHMQueueDelete(&(tenv->thread->links));
-                    SHMQueueElemInit(&(tenv->thread->links));
-                    waitQueue->size--;
-                    tenv->thread->locked = 0;
-                    tenv->thread->errType = STATUS_ERROR;
-                    goto rt;
-                }
-	}
+            tenv->thread->locked = 1;
 
-rt:;
+            while ( tenv->thread->locked == 1 ) {
+    #ifndef MACOSX
+                    timestruc_t  	t;
+    #else
+                    struct timespec		t;
+    #endif
+                    int 		err = 0;
+
+                    t.tv_sec = time(NULL) + 2;
+                    t.tv_nsec = 0;
+
+                    err =  pthread_cond_timedwait(&tenv->thread->sem,&lock->protection,&t);
+
+                    while ( err != 0 ) {
+                        if ( err == ETIMEDOUT && !CheckForCancel() ) break;
+
+                        SHMQueueDelete(&(tenv->thread->links));
+                        SHMQueueElemInit(&(tenv->thread->links));
+                        waitQueue->size--;
+                        tenv->thread->locked = 0;
+                        tenv->thread->errType = STATUS_ERROR;
+                        lock->waitMask = origMask;
+                        
+                        break;
+                    }
+            }
+        }
+
 	tenv->thread->waitLock = (SHMEM_OFFSET)0;
 	tenv->thread->waitHolder = (SHMEM_OFFSET)0;
 
