@@ -39,7 +39,9 @@
 #include "catalog/heap.h"
 #include "miscadmin.h"
 #include "optimizer/prep.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 #include "utils/temprel.h"
@@ -317,7 +319,7 @@ AlterTableAddColumn(const char *relationName,
 	if (!allowSystemTableMods && IsSystemRelationName(relationName))
 		elog(ERROR, "ALTER TABLE: relation \"%s\" is a system catalog",
 			 relationName);
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(GetEnv()->UserName, relationName, RELNAME))
 		elog(ERROR, "ALTER TABLE: permission denied");
 #endif
@@ -521,7 +523,7 @@ AlterTableAlterColumn(const char *relationName,
 	if (!allowSystemTableMods && IsSystemRelationName(relationName))
 		elog(ERROR, "ALTER TABLE: relation \"%s\" is a system catalog",
 			 relationName);
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(GetEnv()->UserName, relationName, RELNAME))
 		elog(ERROR, "ALTER TABLE: permission denied");
 #endif
@@ -925,7 +927,7 @@ AlterTableDropColumn(const char *relationName,
 	if (!allowSystemTableMods && IsSystemRelationName(relationName))
 		elog(ERROR, "ALTER TABLE: relation \"%s\" is a system catalog",
 			 relationName);
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(UserName, relationName, RELNAME))
 		elog(ERROR, "ALTER TABLE: permission denied");
 #endif
@@ -1198,14 +1200,15 @@ void
 LockTableCommand(LockStmt *lockstmt)
 {
 	Relation	rel;
+#ifdef USEACL
 	int			aclresult;
-
+#endif
 
 	rel = heap_openr(lockstmt->relname, NoLock);
 	if (!RelationIsValid(rel))
 		elog(ERROR, "Relation '%s' does not exist", lockstmt->relname);
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (lockstmt->mode == AccessShareLock)
 		aclresult = pg_aclcheck(lockstmt->relname, GetPgUserName(), ACL_RD);
 	else

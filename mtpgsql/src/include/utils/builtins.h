@@ -535,7 +535,7 @@ PG_EXTERN bool textlike(struct varlena * s, struct varlena * p);
 PG_EXTERN bool textnlike(struct varlena * s, struct varlena * p);
 
 /* oracle_compat.c */
-
+#ifdef NOTUSED
 PG_EXTERN text *lower(text *string);
 PG_EXTERN text *upper(text *string);
 PG_EXTERN text *initcap(text *string);
@@ -549,7 +549,7 @@ PG_EXTERN text *translate(text *string, text *from, text *to);
 PG_EXTERN text *ichar(int4 arg1);
 PG_EXTERN text *repeat(text *string, int4 count);
 PG_EXTERN int4 ascii(text *string);
-
+#endif
 /* acl.c */
 
 /* inet_net_ntop.c */

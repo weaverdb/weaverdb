@@ -31,7 +31,9 @@
 #include "libpq/libpq.h"
 #include "miscadmin.h"
 #include "tcop/tcopprot.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
@@ -280,9 +282,10 @@ DoCopy(char *relname, bool binary, bool oids, bool from, bool pipe,
 ----------------------------------------------------------------------------*/
 	FILE	   *fp;
 	Relation	rel;
-/*
+#ifdef USEACL
 	extern char *UserName;	
-*/	const AclMode required_access = from ? ACL_WR : ACL_RD;
+	const AclMode required_access = from ? ACL_WR : ACL_RD;
+#endif
 	int			result;
         StringInfoData attribute_buf;
         
@@ -290,15 +293,16 @@ DoCopy(char *relname, bool binary, bool oids, bool from, bool pipe,
 	 * Open and lock the relation, using the appropriate lock type.
 	 */
 	rel = heap_openr(relname, (from ? RowExclusiveLock : AccessShareLock));
-
+#ifdef USEACL
 	result = pg_aclcheck(relname, GetEnv()->UserName, required_access);
 	if (result != ACLCHECK_OK)
 		elog(ERROR, "%s: %s", relname, aclcheck_error_strings[result]);
-	if (!pipe && !superuser())
+#endif
+        if (!pipe && !superuser())
 		elog(ERROR, "You must have Postgres superuser privilege to do a COPY "
 			 "directly to or from a file.  Anyone can COPY to stdout or "
 			 "from stdin.  Psql's \\copy command also works for anyone.");
-	/*
+        /*
 	 * This restriction is unfortunate, but necessary until the frontend
 	 * COPY protocol is redesigned to be binary-safe...
 	 */

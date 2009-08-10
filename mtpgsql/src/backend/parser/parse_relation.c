@@ -24,7 +24,9 @@
 #include "parser/parse_coerce.h"
 #include "parser/parse_relation.h"
 #include "parser/parse_type.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 

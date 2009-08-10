@@ -13,7 +13,9 @@
 #include "commands/creatinh.h"
 #include "commands/sequence.h"
 #include "miscadmin.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "env/freespace.h"
 
@@ -295,7 +297,7 @@ setval(struct varlena * seqin, int4 next)
 	Buffer		buf;
 	Form_pg_sequence seq;
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (pg_aclcheck(seqname, getpgusername(), ACL_WR) != ACLCHECK_OK)
 		elog(ERROR, "%s.setval: you don't have permissions to set sequence %s",
 			 seqname, seqname);

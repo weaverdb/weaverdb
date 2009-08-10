@@ -498,8 +498,6 @@ InitializeTransactionLog(void)
 /* set the variable cache low water mark here we need to do this before any checks 
 of the pg_log for commits
  */
-	InitTransactionLowWaterMark();
-        VacuumTransactionLog();
 	if (!TransactionIdDidCommit(AmiTransactionId))
 	{
 		Buffer  log;
@@ -515,7 +513,7 @@ of the pg_log for commits
 		TransactionLogUpdate(AmiTransactionId, XID_COMMIT);
 		info->cachedTestXid = AmiTransactionId;
 		info->cachedTestXidStatus = XID_COMMIT;
-		SetTransactionLowWaterMark(AmiTransactionId);  
+		SetTransactionLowWaterMark(FirstTransactionId);
 		
 		VariableRelationPutNextXid(FirstTransactionId);
 	}
@@ -536,7 +534,9 @@ of the pg_log for commits
 		SetTransactionRecoveryCheckpoint(GetNewTransactionId());
 		SpinAcquire(OidGenLockId);
 	}
-
+	InitTransactionLowWaterMark();
+        VacuumTransactionLog();
+        
 	TransactionSystemInitialized  = true;
 	SpinRelease(OidGenLockId);
 
@@ -598,7 +598,7 @@ TransactionIdDidAbort(TransactionId transactionId)
 {
 	TransactionInfo* info = GetTransactionInfo();
 	if (AMI_OVERRIDE)
-		return false;
+            return false;
 
 	return TransactionLogTest(info,transactionId, XID_ABORT_TEST);
 }
@@ -661,7 +661,7 @@ TransactionIdDidCrash(TransactionId transactionId)
 	TransactionInfo* info = GetTransactionInfo();
 	if (AMI_OVERRIDE)
 		return false;
-        
+
 	if (TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST)) {
 	    if ( TransactionIdBeforeCheckpoint(transactionId) ) return true;
             else return !(TransactionIdIsInProgress(transactionId));

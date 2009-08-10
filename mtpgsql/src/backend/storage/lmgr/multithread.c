@@ -98,9 +98,11 @@ TLS ThreadGlobals*  thread_globals = NULL;
 static ThreadGlobals* GetThreadGlobals(void);
 static ThreadGlobals* InitializeThreadGlobals(void);
 
-static int ThreadConflicts(LOCKMETHODCTL *lockctl,
+static THREAD* ThreadEnqueue(LOCKMETHODCTL *lockctl,
 		  LOCKMODE lockmode,
-		  LOCK *lock,ThreadGlobals* tenv);
+		  LOCK *lock,THREAD* self);
+static void ThreadDequeue(THREAD* self);
+
 
 #define DeadlockCheckTimer pg_options[OPT_DEADLOCKTIMEOUT]
 
@@ -281,10 +283,7 @@ GetOffWaitqueue(THREAD *proc)
 		LOCKMODE lockmode = proc->waitLockMode;
 
 		/* Remove proc from lock's wait queue */
-
-                
-		SHMQueueDelete(&(proc->links));
-		--waitLock->waitThreads.size;
+                ThreadDequeue(proc);
 
 		/* Undo increments of holder counts by waiting process */
 		Assert(waitLock->nHolding > 0);
@@ -297,7 +296,6 @@ GetOffWaitqueue(THREAD *proc)
 			waitLock->waitMask &= ~(1 << lockmode);
 
 		/* Clean up the proc's own state */
-		SHMQueueElemInit(&(proc->links));
 		proc->waitLock = (SHMEM_OFFSET)0;
 		proc->waitHolder = (SHMEM_OFFSET)0;
 
@@ -324,9 +322,14 @@ ThreadReleaseLocks(bool isCommit)
 	
 	xid = GetCurrentTransactionId();
 	if (!tenv->thread)
-		return;
-		
-	GetOffWaitqueue(tenv->thread);   
+            return;
+  /*  this should never happen unless some other
+  *    thread is releasing us.  otherwise we'd be
+  *    in the thread sleep loop!
+  */
+	if ( GetOffWaitqueue(tenv->thread) ) {
+            elog(DEBUG,"got off wait queue tid: %u",pthread_self());
+        }
 	LockReleaseAll(HEAP_LOCKMETHOD, tenv->thread,
 				   !isCommit, xid);
 	LockReleaseAll(INDEX_LOCKMETHOD, tenv->thread,
@@ -372,13 +375,14 @@ ThreadQueueInit(THREAD_QUEUE *queue, pthread_mutex_t* lock)
 	queue->size = 0;
 }
 
-int
-ThreadConflicts(LOCKMETHODCTL *lockctl,
+THREAD*
+ThreadEnqueue(LOCKMETHODCTL *lockctl,
 		  LOCKMODE lockmode,
-		  LOCK *lock,ThreadGlobals* tenv)
+		  LOCK *lock,THREAD* thread)
 {
 	int                 i;
 	int                 myMask = (1 << lockmode);
+	THREAD_QUEUE            *waitQueue = &(lock->waitThreads);
         THREAD              *proc = (THREAD *) MAKE_PTR(waitQueue->links.prev);
 	int                 aheadHolders[MAX_LOCKMODES];
 	bool                selfConflict = (lockctl->conflictTab[lockmode] & myMask),
@@ -386,7 +390,9 @@ ThreadConflicts(LOCKMETHODCTL *lockctl,
 	/* if we don't conflict with any waiter - be first in queue */
 	if (!(lockctl->conflictTab[lockmode] & lock->waitMask)) {
             lock->waitMask |= myMask;
-            return 0;
+            SHMQueueInsertTL(&(proc->links), &(thread->links));
+            waitQueue->size++;
+            return proc;
         }
 
 	for (i = 1; i < MAX_LOCKMODES; i++)
@@ -399,16 +405,16 @@ ThreadConflicts(LOCKMETHODCTL *lockctl,
 		if (lockctl->conflictTab[lockmode] & proc->holdLock)
 		{
 			/* is he waiting for me ? */
-			if (lockctl->conflictTab[proc->waitLockMode] & tenv->thread->holdLock)
+			if (lockctl->conflictTab[proc->waitLockMode] & thread->holdLock)
 			{
 				/* Yes, report deadlock failure */
-				tenv->thread->errType = STATUS_ERROR;
-                                return STATUS_ERROR;
+				thread->errType = STATUS_ERROR;
+                                return NULL;
 			}
 			/* being waiting for him - go past */
 		}
 		/* if he waits for me */
-		else if (lockctl->conflictTab[proc->waitLockMode] & tenv->thread->holdLock)
+		else if (lockctl->conflictTab[proc->waitLockMode] & thread->holdLock)
 			break;
 		/* if conflicting locks requested */
 		else if (lockctl->conflictTab[proc->waitLockMode] & myMask)
@@ -437,8 +443,18 @@ ThreadConflicts(LOCKMETHODCTL *lockctl,
 	}
 
         lock->waitMask |= myMask;
-        return 0;
-    }
+        SHMQueueInsertTL(&(proc->links), &(thread->links));
+        waitQueue->size++;
+        
+        return proc;
+}
+
+static void ThreadDequeue(THREAD* target) {
+        SHMQueueDelete(&(target->links));
+        SHMQueueElemInit(&(target->links));
+	(((LOCK*)MAKE_PTR(target->waitLock))->waitThreads.size)--;
+}
+
 /*
  * ProcSleep -- put a process to sleep
  *
@@ -460,22 +476,18 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
 
 /*  the queue is already locked due to the fact that the mutex for 
     the queue and the lock are the same */
-	THREAD_QUEUE            *waitQueue = &(lock->waitThreads);
-	ThreadGlobals           *tenv = GetThreadGlobals();
+        ThreadGlobals           *tenv = GetThreadGlobals();
+        THREAD*                 self = tenv->thread;
         int                     origMask = lock->waitMask;
 
-	tenv->thread->waitLock = MAKE_OFFSET(lock);
-	tenv->thread->waitHolder = MAKE_OFFSET(holder);
-	tenv->thread->waitLockMode = lockmode;
+	self->waitLock = MAKE_OFFSET(lock);
+	self->waitHolder = MAKE_OFFSET(holder);
+	self->waitLockMode = lockmode;
 	/* We assume the caller set up MyProc->holdLock */
 
-        if ( ThreadConflicts(lockctl,lockmode,lock,tenv) != STATUS_ERROR ) {
-            SHMQueueInsertTL(&(proc->links), &(tenv->thread->links));
-            waitQueue->size++;
-
-            tenv->thread->locked = 1;
-
-            while ( tenv->thread->locked == 1 ) {
+	if ( ThreadEnqueue(lockctl,lockmode,lock,self) ) {
+            self->locked = 1;
+            while ( self->locked == 1 ) {
     #ifndef MACOSX
                     timestruc_t  	t;
     #else
@@ -486,16 +498,14 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
                     t.tv_sec = time(NULL) + 2;
                     t.tv_nsec = 0;
 
-                    err =  pthread_cond_timedwait(&tenv->thread->sem,&lock->protection,&t);
+                    err =  pthread_cond_timedwait(&self->sem,&lock->protection,&t);
 
                     while ( err != 0 ) {
                         if ( err == ETIMEDOUT && !CheckForCancel() ) break;
 
-                        SHMQueueDelete(&(tenv->thread->links));
-                        SHMQueueElemInit(&(tenv->thread->links));
-                        waitQueue->size--;
-                        tenv->thread->locked = 0;
-                        tenv->thread->errType = STATUS_ERROR;
+                        ThreadDequeue(self);
+                        self->locked = 0;
+                        self->errType = STATUS_ERROR;
                         lock->waitMask = origMask;
                         
                         break;
@@ -503,10 +513,10 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
             }
         }
 
-	tenv->thread->waitLock = (SHMEM_OFFSET)0;
-	tenv->thread->waitHolder = (SHMEM_OFFSET)0;
+	self->waitLock = (SHMEM_OFFSET)0;
+	self->waitHolder = (SHMEM_OFFSET)0;
 
-	return tenv->thread->errType;
+	return self->errType;
 }
 
 
@@ -530,11 +540,7 @@ ThreadWakeup(THREAD *proc, int errType)
 	retProc = (THREAD *) MAKE_PTR(proc->links.prev);
 
 	/* you have to update waitLock->waitProcs.size yourself */
-	SHMQueueDelete(&(proc->links));
-
-	SHMQueueElemInit(&(proc->links));
-	(((LOCK*)MAKE_PTR(proc->waitLock))->waitThreads.size)--;
-
+        ThreadDequeue(proc);
 
 	proc->errType = errType;
 	proc->locked = 0;
@@ -568,24 +574,26 @@ ThreadLockWakeup(LOCKMETHOD lockmethod, LOCK *lock)
 
 	while (queue_size-- > 0)
 	{
-		if (proc->waitLockMode == last_lockmode)
+            bool wake = TRUE;
+            
+                if (proc->waitLockMode == last_lockmode)
 		{
 			/*
 			 * This proc will conflict as the previous one did, don't even
 			 * try.
 			 */
-			goto nextProc;
+                    wake = FALSE;
 		}
 
 		/*
 		 * Does this proc conflict with locks held by others ?
 		 */
-		if (LockResolveConflicts(lockmethod,
-								proc->waitLockMode,
-								 lock,
-								  (HOLDER*)MAKE_PTR(proc->waitHolder),
-								 proc,
-								 NULL) != STATUS_OK)
+		if (wake && LockResolveConflicts(lockmethod,
+                                            proc->waitLockMode,
+                                             lock,
+                                              (HOLDER*)MAKE_PTR(proc->waitHolder),
+                                             proc,
+                                             NULL) != STATUS_OK)
 		{
 #ifdef LOCK_FIFO
 			break;
@@ -595,25 +603,20 @@ ThreadLockWakeup(LOCKMETHOD lockmethod, LOCK *lock)
 				break;
 			/* Otherwise, see if any later waiters can be awoken. */
 			last_lockmode = proc->waitLockMode;
-			goto nextProc;
+                        wake = FALSE;
 #endif
 		}
 
 		/*
 		 * OK to wake up this sleeping process.
 		 */
-		GrantLock(lock, (HOLDER*)MAKE_PTR(proc->waitHolder), proc->waitLockMode);
-		proc =ThreadWakeup(proc, NO_ERROR);
-		awoken++;
-
-		/*
-		 * ProcWakeup removes proc from the lock's waiting process queue
-		 * and returns the next proc in chain; don't use prev link.
-		 */
-		continue;
-
-nextProc:
-		proc = (THREAD *) MAKE_PTR(proc->links.prev);
+		if ( wake ) {
+                    GrantLock(lock, (HOLDER*)MAKE_PTR(proc->waitHolder), proc->waitLockMode);
+                    proc =ThreadWakeup(proc, NO_ERROR);
+                    awoken++;
+                } else {
+                    proc = (THREAD *) MAKE_PTR(proc->links.prev);
+                }
 	}
 #ifdef LOCK_FIFO
 	return STATUS_OK;

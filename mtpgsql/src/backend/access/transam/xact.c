@@ -1146,8 +1146,8 @@ CommitTransactionCommand()
 			s->blockState = TBLOCK_DEFAULT;
 			break;
 
-		case TBLOCK_ABORTONLY:
 		case TBLOCK_MANUAL:
+		case TBLOCK_ABORTONLY:
 			CommandCounterIncrement();
 			MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->TransactionCommandContext);
 			break;
@@ -1237,7 +1237,6 @@ AbortTransactionBlock(void)
 	 * ----------------
 	 */
 	elog(NOTICE, "ABORT: no transaction in progress");
-	s->blockState = TBLOCK_DEFAULT;
 }
 
 void 
@@ -1379,7 +1378,6 @@ CommitTransactionBlock(void)
 	 * ----------------
 	 */
 	elog(ERROR, "COMMIT: no transaction in progress");
-	s->blockState = TBLOCK_DEFAULT;
 }
 
 void
@@ -1387,10 +1385,11 @@ SetAbortOnly()
 {
 	TransactionState s = GetTransactionInfo()->CurrentTransactionState;
 
-	if ( s->blockState == TBLOCK_AUTO ) 
-		s->blockState = TBLOCK_ABORT;
-	else 
-		s->blockState = TBLOCK_ABORTONLY;
+	if ( s->blockState == TBLOCK_AUTO ) {
+            s->blockState = TBLOCK_ABORT;
+        } else if ( s->blockState != TBLOCK_DEFAULT ) {
+            s->blockState = TBLOCK_ABORTONLY;
+        }
 }
 
 
@@ -1400,7 +1399,7 @@ IsTransactionBlock()
 	TransactionState s = GetTransactionInfo()->CurrentTransactionState;
 
 	if (s->blockState == TBLOCK_MANUAL)
-		return true;
+            return true;
 
 	return false;
 }

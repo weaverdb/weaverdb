@@ -64,7 +64,7 @@ typedef FormData_pg_amop *Form_pg_amop;
 /*
  *	rtree box_ops
  */
-
+#ifdef NOTUSED
 DATA(insert OID = 0 (  402 422 493 1 ));
 DATA(insert OID = 0 (  402 422 494 2 ));
 DATA(insert OID = 0 (  402 422 500 3 ));
@@ -113,6 +113,7 @@ DATA(insert OID = 0 (  402 714 1512 6 ));
 DATA(insert OID = 0 (  402 714 1511 7 ));
 DATA(insert OID = 0 (  402 714 1510 8 ));
 
+#endif
 /*
  *	nbtree int2_ops
  */
@@ -378,7 +379,6 @@ DATA(insert OID = 0 (  403 1663 1661 5 ));
 /*
  *	hash table _ops
  */
-
 /* int2_ops */
 DATA(insert OID = 0 (  405	421   94 1 ));
 /* float8_ops */
@@ -419,7 +419,6 @@ DATA(insert OID = 0 (  405 810 1220 1 ));
 DATA(insert OID = 0 (  405 935 1201 1 ));
 /* cidr_ops */
 DATA(insert OID = 0 (  405 652 820 1 ));
-
 /*
  *	nbtree connector_ops
  */

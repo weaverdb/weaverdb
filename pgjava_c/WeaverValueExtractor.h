@@ -43,6 +43,7 @@ typedef struct javacache {
     jmethodID                        pipeout;
     jmethodID                        infoin;
     jmethodID                        infoout;
+    jmethodID                        typeid;
 
     jmethodID                        charvalue;   
     jmethodID                        createchar;   
@@ -62,7 +63,7 @@ typedef struct javacache {
 
 javacache* CreateCache(JNIEnv* env);
 javacache* DropCache(JNIEnv* env);
-int PassInValue(JNIEnv* env,StmtMgr mgr,Input bound, jobject object);
+int PassInValue(JNIEnv* env,StmtMgr mgr,char* name,short type,jobject object);
 int PassResults(JNIEnv* env, StmtMgr mgr);
 
 #ifdef	__cplusplus

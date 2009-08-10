@@ -555,6 +555,7 @@ reset_enable_hashjoin()
 static bool
 parse_geqo(char *value)
 {
+#ifdef NOTUSED
 	char	   *tok,
 			   *val,
 			   *rest;
@@ -594,23 +595,28 @@ parse_geqo(char *value)
 	}
 	else
 		elog(ERROR, "Bad value for GEQO (%s)", value);
-
 	return TRUE;
+#endif
+        return FALSE;
 }
 
 static bool
 show_geqo()
 {
+/*
 	if (enable_geqo)
 		elog(NOTICE, "GEQO is ON beginning with %d relations", geqo_rels);
 	else
 		elog(NOTICE, "GEQO is OFF");
 	return TRUE;
+*/
+    return false;
 }
 
 static bool
 reset_geqo(void)
 {
+/*
 #ifdef GEQO
 	GetCostInfo()->enable_geqo = true;
 #else
@@ -618,6 +624,8 @@ reset_geqo(void)
 #endif
 	GetCostInfo()->geqo_rels = GEQO_RELS;
 	return TRUE;
+*/
+    return false;
 }
 
 /*
@@ -1713,18 +1721,18 @@ InitializeCostInfo(void) {
     
     bool thread_helpers = ( usehelpers != NULL && toupper(*usehelpers) == 'T' ) ? true : false;
     
-        CostInfo* info = AllocateEnvSpace(cost_id,sizeof(CostInfo));
+    CostInfo* info = AllocateEnvSpace(cost_id,sizeof(CostInfo));
 
-     info->effective_cache_size = DEFAULT_EFFECTIVE_CACHE_SIZE;
-    info->random_page_cost = DEFAULT_RANDOM_PAGE_COST;  
-    info->delegated_random_page_cost = DEFAULT_DELEGATED_RANDOM_PAGE_COST;  
-    info->cpu_tuple_cost = DEFAULT_CPU_TUPLE_COST;
-    info->cpu_delegated_tuple_cost = DEFAULT_CPU_DELEGATED_TUPLE_COST;
-    info->thread_startup_cost = DEFAULT_THREAD_STARTUP_COST;
-    info->delegation_startup_cost = DEFAULT_DELEGATION_STARTUP_COST;
-    info->cpu_index_tuple_cost = DEFAULT_CPU_INDEX_TUPLE_COST;
-    info->cpu_delegated_index_tuple_cost = DEFAULT_CPU_DELEGATED_INDEX_TUPLE_COST;
-    info->cpu_operator_cost = DEFAULT_CPU_OPERATOR_COST;
+    info->effective_cache_size = PropertyIsValid("effective_cache_size") ? GetFloatProperty("effective_cache_size") : DEFAULT_EFFECTIVE_CACHE_SIZE;
+    info->random_page_cost =  PropertyIsValid("random_page_cost") ? GetFloatProperty("random_page_cost") : DEFAULT_RANDOM_PAGE_COST;
+    info->delegated_random_page_cost = PropertyIsValid("delegated_random_page_cost") ? GetFloatProperty("delegated_random_page_cost") : DEFAULT_DELEGATED_RANDOM_PAGE_COST;
+    info->cpu_tuple_cost = PropertyIsValid("cpu_tuple_cost") ? GetFloatProperty("cpu_tuple_cost") : DEFAULT_CPU_TUPLE_COST;
+    info->cpu_delegated_tuple_cost = PropertyIsValid("cpu_delegated_tuple_cost") ? GetFloatProperty("cpu_delegated_tuple_cost") : DEFAULT_CPU_DELEGATED_TUPLE_COST;
+    info->thread_startup_cost = PropertyIsValid("thread_startup_cost") ? GetFloatProperty("thread_startup_cost") : DEFAULT_THREAD_STARTUP_COST;
+    info->delegation_startup_cost = PropertyIsValid("delegation_startup_cost") ? GetFloatProperty("delegation_startup_cost") : DEFAULT_DELEGATION_STARTUP_COST;
+    info->cpu_index_tuple_cost = PropertyIsValid("cpu_index_tuple_cost") ? GetFloatProperty("cpu_index_tuple_cost") : DEFAULT_CPU_INDEX_TUPLE_COST;
+    info->cpu_delegated_index_tuple_cost = PropertyIsValid("cpu_delegated_index_tuple_cost") ? GetFloatProperty("cpu_delegated_index_tuple_cost") : DEFAULT_CPU_DELEGATED_INDEX_TUPLE_COST;
+    info->cpu_operator_cost = PropertyIsValid("cpu_operator_cost") ? GetFloatProperty("cpu_operator_cost") : DEFAULT_CPU_OPERATOR_COST;
 
     info->disable_cost = 100000000.0;
 

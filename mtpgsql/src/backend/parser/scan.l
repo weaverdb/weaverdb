@@ -34,10 +34,7 @@
 
 
 #define YY_DECL int yylex(sval) YYSTYPE* sval;
-/*
-extern char *GetParserInfo()->parseString;
-static char *GetParserInfo()->parseCh;
-*/
+
 /* some versions of lex define this as a macro */
 #if defined(yywrap)
 #undef yywrap

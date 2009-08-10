@@ -25,7 +25,9 @@
 #include "commands/trigger.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/inval.h"
 #include "utils/syscache.h"
@@ -81,7 +83,7 @@ CreateTrigger(CreateTrigStmt *stmt)
 	if (!allowSystemTableMods && IsSystemRelationName(stmt->relname))
 		elog(ERROR, "CreateTrigger: can't create trigger for system relation %s", stmt->relname);
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(GetPgUserName(), stmt->relname, RELNAME))
 		elog(ERROR, "%s: %s", stmt->relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif
@@ -299,7 +301,7 @@ DropTrigger(DropTrigStmt *stmt)
 	int			found = 0;
 	int			tgfound = 0;
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(GetPgUserName(), stmt->relname, RELNAME))
 		elog(ERROR, "%s: %s", stmt->relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif

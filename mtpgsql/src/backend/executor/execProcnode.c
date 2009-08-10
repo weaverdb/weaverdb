@@ -73,6 +73,8 @@
  *		in turn call these routines themselves on their subplans.
  *
  */
+#include <sys/sdt.h>
+
 #include "postgres.h"
 #include "env/env.h"
 #include "executor/executor.h"
@@ -128,7 +130,7 @@ ExecInitNode(Plan *node, EState *estate)
 		if (result == FALSE)
 			return FALSE;
 	}
-
+        DTRACE_PROBE1(mtpg,initplan,nodeTag(node));
 	switch (nodeTag(node))
 	{
 			/* ----------------

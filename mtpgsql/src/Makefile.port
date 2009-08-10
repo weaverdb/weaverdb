@@ -4,7 +4,8 @@ MK_NO_LORDER=true
 CC=cc
 CPP=CC
 #debug new SUNspro Express
-CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
+CFLAGS+= -g -m64 -KPIC 
+#CFLAGS+= -xinstrument=datarace
 CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS
 CFLAGS+= -DDEBUGLOGS
 #CFLAGS+= -xtarget=ultraT1
@@ -15,7 +16,7 @@ CFLAGS+= -DDEBUGLOGS
 #ultrasparc3 platform
 #CFLAGS+= -xO2 -xtarget=ultra3 -xarch=v9a 
 #SPARCv9 performance
-#CFLAGS+= -g -xO4 -xtarget=ultraT1 -m64 -KPIC 
+#CFLAGS+= -xO4 -xtarget=ultraT1 -m64 -KPIC 
 #CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS -xipo
 #debug
 #CFLAGS+= -g -xarch=v9a -KPIC

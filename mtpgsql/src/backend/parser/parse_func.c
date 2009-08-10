@@ -13,6 +13,8 @@
  *-------------------------------------------------------------------------
  */
 #include <signal.h>
+#include <ctype.h>
+
 
 #include "postgres.h"
 
@@ -35,7 +37,9 @@
 #include "parser/parse_func.h"
 #include "parser/parse_relation.h"
 #include "parser/parse_target.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -74,7 +78,7 @@ static Oid *func_select_candidate(int nargs, Oid *input_typeids,
 static int	agg_get_candidates(char *aggname, Oid typeId, CandidateList *candidates);
 static Oid	agg_select_candidate(Oid typeid, CandidateList candidates);
 
-
+static text * lower(text *string);
 /*
  ** ParseNestedFuncOrColumn
  **    Given a nested dot expression (i.e. (relation func ... attr), build up
@@ -861,7 +865,7 @@ ParseFuncOrColumn(ParseState *pstate, char *funcname, List *fargs,
 			seq->constvalue = PointerGetDatum(seqname);
 			seqrel = textout(seqname);
 		}
-#ifndef NO_SECURITY
+#ifdef USEACL
 		if ((aclcheck_result = pg_aclcheck(seqrel, GetPgUserName(),
 					   (((funcid == F_NEXTVAL) || (funcid == F_SETVAL)) ?
 						ACL_WR : ACL_RD)))
@@ -1944,3 +1948,28 @@ func_error(char *caller, char *funcname, int nargs, Oid *argtypes, char *msg)
 			 ((msg != NULL) ? "\n\t" : ""), ((msg != NULL) ? msg : ""));
 	}
 }
+
+
+static text *
+lower(text *string)
+{
+	text	   *ret;
+	char	   *ptr,
+			   *ptr_ret;
+	int			m;
+
+	if ((string == (text *) NULL) || ((m = VARSIZE(string) - VARHDRSZ) <= 0))
+		return string;
+
+	ret = (text *) palloc(VARSIZE(string));
+	SETVARSIZE(ret,VARSIZE(string));
+
+	ptr = VARDATA(string);
+	ptr_ret = VARDATA(ret);
+
+	while (m--)
+		*ptr_ret++ = tolower((unsigned char) *ptr++);
+
+	return ret;
+}
+

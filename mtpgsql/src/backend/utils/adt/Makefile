@@ -23,18 +23,29 @@ CFLAGS+= -mieee
 endif
 endif
 
-OBJS = acl.o bool.o cash.o char.o \
+OBJS = bool.o cash.o char.o \
 	date.o datetime.o datum.o filename.o float.o \
-	geo_ops.o geo_selfuncs.o int.o int8.o like.o lztext.o \
+	int.o int8.o like.o lztext.o \
 	misc.o nabstime.o name.o not_in.o numeric.o numutils.o \
-	oid.o oracle_compat.o \
+	oid.o  \
 	regexp.o regproc.o \
     selfuncs.o sets.o \
 	tid.o timestamp.o varbit.o varchar.o varlena.o version.o \
 	network.o mac.o inet_net_ntop.o inet_net_pton.o \
 	pg_lzcompress.o pg_locale.o formatting.o \
     ruleutils.o ri_triggers.o java.o wrapdatum.o
-#  arrayfuncs.o arrayutils.o chunk.o
+
+ifdef USEACL
+OBJS += acl.o oracle_compat.o
+endif
+
+ifdef USEARRAY
+OBJS += arrayfuncs.o arrayutils.o chunk.o
+endif
+
+ifdef USEGEO
+OBJS += geo_ops.o geo_selfuncs.o
+endif
  
 all: SUBSYS.o
 

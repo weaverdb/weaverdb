@@ -208,9 +208,10 @@ DATA(insert OID =  84 (  boolne			   PGUID 11 f t t 2 f 16 "16 16" 100 0 0 100  
 DESCR("not equal");
 DATA(insert OID =  89 (  version		   PGUID 11 f t f 0 f 25 "" 100 0 0 100 version - ));
 DESCR("PostgreSQL version string");
-
+/*
 DATA(insert OID = 1265 (  rtcostestimate   PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  rtcostestimate - ));
 DESCR("r-tree cost estimator");
+*/
 DATA(insert OID = 1268 (  btcostestimate   PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  btcostestimate - ));
 DESCR("btree cost estimator");
 
@@ -223,7 +224,6 @@ DATA(insert OID = 953 (  longin			PGUID 11 f t t 1 f 952 "0" 100 0 0 100  longin
 DESCR("(internal)");
 DATA(insert OID = 954 (  longout			PGUID 11 f t t 1 f 19 "0" 100 0 0 100  longout - ));
 DESCR("(internal)");
-
 DATA(insert OID = 955 (  longeqoid			PGUID 11 f t t 1 f 16 "952 26" 100 0 0 100  longeqoid - ));
 DESCR("(internal)");
 DATA(insert OID = 956 (  oideqlong			PGUID 11 f t t 1 f 16 "26 952" 100 0 0 100  oideqlong - ));
@@ -256,7 +256,7 @@ DATA(insert OID = 113 (  text			   PGUID 11 f t t 1 f  25 "21" 100 0 0 100	int2_
 DESCR("convert int2 to text");
 DATA(insert OID = 114 (  text			   PGUID 11 f t t 1 f  25 "26" 100 0 0 100	oid_text - ));
 DESCR("convert oid to text");
-
+#ifdef USEGEO
 DATA(insert OID = 115 (  rect_above		   PGUID 11 f t t 2 f  16 "603 603" 100 1 0 100  rect_above - ));
 DESCR("is above");
 DATA(insert OID = 116 (  rect_below		   PGUID 11 f t t 2 f  16 "603 603" 100 1 0 100  rect_below - ));
@@ -310,12 +310,15 @@ DATA(insert OID = 139 (  areasel		   PGUID 11 f t f 5 f 701 "26 26 21 0 23" 100 
 DESCR("restriction selectivity for area-comparison operators");
 DATA(insert OID = 140 (  areajoinsel	   PGUID 11 f t f 5 f 701 "26 26 21 26 21" 100 0 0 100	areajoinsel - ));
 DESCR("join selectivity for area-comparison operators");
+#endif /* USEGEO  */
 DATA(insert OID = 141 (  int4mul		   PGUID 11 f t t 2 f 23 "23 23" 100 0 0 100  int4mul - ));
 DESCR("multiply");
 DATA(insert OID = 142 (  int4fac		   PGUID 11 f t t 1 f 23 "23" 100 0 0 100  int4fac - ));
 DESCR("factorial");
+#ifdef USEGEO
 DATA(insert OID = 143 (  pointdist		   PGUID 11 f t t 2 f 23 "600 600" 100 0 0 100	pointdist - ));
 DESCR("");
+#endif /* USEGEO */
 DATA(insert OID = 144 (  int4ne			   PGUID 11 f t t 2 f 16 "23 23" 100 0 0 100  int4ne - ));
 DESCR("not equal");
 DATA(insert OID = 145 (  int2ne			   PGUID 11 f t t 2 f 16 "21 21" 100 0 0 100  int2ne - ));
@@ -400,6 +403,7 @@ DATA(insert OID = 184 (  oideq			   PGUID 11 f t t 2 f 16 "26 26" 100 0 0 100  o
 DESCR("equal");
 DATA(insert OID = 185 (  oidne			   PGUID 11 f t t 2 f 16 "26 26" 100 0 0 100  oidne - ));
 DESCR("not equal");
+#ifdef USEGEO
 DATA(insert OID = 186 (  rect_same		   PGUID 11 f t t 2 f 16 "603 603" 100 0 0 100	rect_same - ));
 DESCR("same as");
 DATA(insert OID = 187 (  rect_contain	   PGUID 11 f t t 2 f 16 "603 603" 100 0 0 100	rect_contain - ));
@@ -428,7 +432,7 @@ DATA(insert OID = 198 (  rt_poly_inter	   PGUID 11 f t t 2 f 604 "604 604" 100 0
 DESCR("r-tree");
 DATA(insert OID = 199 (  rt_poly_size	   PGUID 11 f t t 2 f 23 "604 23" 100 0 0 100  rt_poly_size - ));
 DESCR("r-tree");
-
+#endif /* USEGEO */
 /* OIDS 200 - 299 */
 
 DATA(insert OID = 200 (  float4in		   PGUID 11 f t t 1 f 700 "0" 100 0 0 100  float4in - ));
@@ -481,14 +485,14 @@ DATA(insert OID = 223 (  float8larger	   PGUID 11 f t t 2 f 701 "701 701" 100 0 
 DESCR("larger of two");
 DATA(insert OID = 224 (  float8smaller	   PGUID 11 f t t 2 f 701 "701 701" 100 0 0 100  float8smaller - ));
 DESCR("smaller of two");
-
+#ifdef USEGEO
 DATA(insert OID = 225 (  lseg_center	   PGUID 11 f t t 1 f 600 "601" 100 0 0 100  lseg_center - ));
 DESCR("center of");
 DATA(insert OID = 226 (  path_center	   PGUID 11 f t t 1 f 600 "602" 100 0 0 100  path_center - ));
 DESCR("center of");
 DATA(insert OID = 227 (  poly_center	   PGUID 11 f t t 1 f 600 "604" 100 0 0 100  poly_center - ));
 DESCR("center of");
-
+#endif
 DATA(insert OID = 228 (  dround			   PGUID 11 f t t 1 f 701 "701" 100 0 0 100  dround - ));
 DESCR("round to integer");
 DATA(insert OID = 229 (  dtrunc			   PGUID 11 f t t 1 f 701 "701" 100 0 0 100  dtrunc - ));
@@ -511,8 +515,10 @@ DATA(insert OID = 237 (  int2			   PGUID 11 f t t 1 f  21 "701" 100 0 0 100  dto
 DESCR("convert float8 to int2");
 DATA(insert OID = 238 (  int2			   PGUID 11 f t t 1 f  21 "700" 100 0 0 100  ftoi2 - ));
 DESCR("convert float4 to int2");
+#ifdef USEGEO
 DATA(insert OID = 239 (  line_distance	   PGUID 11 f t t 2 f 701 "628 628" 100 0 0 100  line_distance - ));
 DESCR("distance between");
+#endif
 
 DATA(insert OID = 240 (  nabstimein		   PGUID 11 f t f 1 f 702 "0" 100 0 0 100  nabstimein - ));
 DESCR("(internal)");
@@ -589,11 +595,12 @@ DESCR("");
 
 DATA(insert OID = 276 (  int2fac		   PGUID 11 f t t 1 f 23 "21" 100 0 0 100  int2fac - ));
 DESCR("");
-
+#ifdef USEGEO
 DATA(insert OID = 277 (  inter_sl		   PGUID 11 f t t 2 f 16 "601 628" 100 0 0 100	inter_sl - ));
 DESCR("");
 DATA(insert OID = 278 (  inter_lb		   PGUID 11 f t t 2 f 16 "628 603" 100 0 0 100	inter_lb - ));
 DESCR("");
+#endif
 
 DATA(insert OID = 279 (  float48mul		   PGUID 11 f t t 2 f 701 "700 701" 100 0 0 100  float48mul - ));
 DESCR("multiply");
@@ -684,7 +691,7 @@ DATA(insert OID = 318 (  float4			   PGUID 11 f t t 1 f 700  "23" 100 0 0 100  i
 DESCR("convert int4 to float4");
 DATA(insert OID = 319 (  int4			   PGUID 11 f t t 1 f  23 "700" 100 0 0 100  ftoi4 - ));
 DESCR("convert float4 to int4");
-
+#ifdef USEGEO
 DATA(insert OID = 320 (  rtinsert		   PGUID 11 f t f 5 f 23 "0" 100 0 0 100  rtinsert - ));
 DESCR("r-tree(internal)");
 DATA(insert OID = 321 (  rtdelete		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  rtdelete - ));
@@ -703,7 +710,7 @@ DATA(insert OID = 327 (  rtrestrpos		   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  r
 DESCR("r-tree(internal)");
 DATA(insert OID = 328 (  rtrescan		   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  rtrescan - ));
 DESCR("r-tree(internal)");
-
+#endif /*  USEGEO  */
 DATA(insert OID = 1842 (  btrecoverpage		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  btrecoverpage - ));
 DESCR("btree(internal)");
 DATA(insert OID = 330 (  btgettuple		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  btgettuple - ));
@@ -724,7 +731,7 @@ DATA(insert OID = 337 (  btrestrpos		   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  b
 DESCR("btree(internal)");
 DATA(insert OID = 338 (  btbuild		   PGUID 11 f t f 9 f 23 "0" 100 0 0 100  btbuild - ));
 DESCR("btree(internal)");
-
+#ifdef USEGEO
 DATA(insert OID = 339 (  poly_same		   PGUID 11 f t t 2 f 16 "604 604" 100 0 1 0  poly_same - ));
 DESCR("same as");
 DATA(insert OID = 340 (  poly_contain	   PGUID 11 f t t 2 f 16 "604 604" 100 0 1 0  poly_contain - ));
@@ -745,7 +752,7 @@ DATA(insert OID = 347 (  poly_in		   PGUID 11 f t t 1 f 604 "0" 100 0 1 0  poly_
 DESCR("(internal)");
 DATA(insert OID = 348 (  poly_out		   PGUID 11 f t t 1 f 23  "0" 100 0 1 0  poly_out - ));
 DESCR("(internal)");
-
+#endif /* USEGEO */
 DATA(insert OID = 350 (  btint2cmp		   PGUID 11 f t t 2 f 23 "21 21" 100 0 0 100  btint2cmp - ));
 DESCR("btree less-equal-greater");
 DATA(insert OID = 351 (  btint4cmp		   PGUID 11 f t t 2 f 23 "23 23" 100 0 0 100  btint4cmp - ));
@@ -774,7 +781,7 @@ DATA(insert OID = 359 (  btnamecmp		   PGUID 11 f t t 2 f 23 "19 19" 100 0 0 100
 DESCR("btree less-equal-greater");
 DATA(insert OID = 360 (  bttextcmp		   PGUID 11 f t t 2 f 23 "25 25" 100 0 0 100  bttextcmp - ));
 DESCR("btree less-equal-greater");
-
+#ifdef USEGEO
 DATA(insert OID = 361 (  lseg_distance	   PGUID 11 f t t 2 f 701 "601 601" 100 0 0 100  lseg_distance - ));
 DESCR("distance between");
 DATA(insert OID = 362 (  lseg_interpt	   PGUID 11 f t t 2 f 600 "601 601" 100 0 0 100  lseg_interpt - ));
@@ -801,7 +808,7 @@ DATA(insert OID = 372 (  on_sb			   PGUID 11 f t t 2 f 16 "601 603" 100 0 0 100	
 DESCR("contained in");
 DATA(insert OID = 373 (  inter_sb		   PGUID 11 f t t 2 f 16 "601 603" 100 0 0 100	inter_sb - ));
 DESCR("intersects?");
-
+#endif
 /* OIDS 400 - 499 */
 
 DATA(insert OID =  406 (  text			   PGUID 11 f t t 1 f	25 "19" 100 0 0 100 name_text - ));
@@ -854,6 +861,7 @@ DATA(insert OID = 456 (  hashtext		   PGUID 11 f t t 1 f 23 "25" 100 0 0 100  ha
 DESCR("hash");
 DATA(insert OID = 457 (  hashoidvector	   PGUID 11 f t t 1 f 23 "30" 100 0 0 100  hashoidvector - ));
 DESCR("hash");
+
 DATA(insert OID = 458 (  text_larger	   PGUID 11 f t t 2 f 25 "25 25" 100 0 0 100  text_larger - ));
 DESCR("larger of two");
 DATA(insert OID = 459 (  text_smaller	   PGUID 11 f t t 2 f 25 "25 25" 100 0 0 100  text_smaller - ));
@@ -975,7 +983,7 @@ DATA(insert OID = 723 (  get_bit		   PGUID 11 f t t 2 f 23 "17 23" 100 0 0 100  
 DESCR("");
 DATA(insert OID = 724 (  set_bit		   PGUID 11 f t t 3 f 17 "17 23 23" 100 0 0 100  byteaSetBit - ));
 DESCR("");
-
+#ifdef USEGEO
 DATA(insert OID = 725 (  dist_pl		   PGUID 11 f t t 2 f 701 "600 628" 100 0 0 100  dist_pl - ));
 DESCR("distance between point and line");
 DATA(insert OID = 726 (  dist_lb		   PGUID 11 f t t 2 f 701 "628 603" 100 0 0 100  dist_lb - ));
@@ -986,7 +994,7 @@ DATA(insert OID = 728 (  dist_cpoly		   PGUID 11 f t t 2 f 701 "718 604" 100 0 0
 DESCR("distance between");
 DATA(insert OID = 729 (  poly_distance	   PGUID 11 f t t 2 f 701 "604 604" 100 0 0 100  poly_distance - ));
 DESCR("distance between");
-
+#endif
 DATA(insert OID = 730 (  pqtest			   PGUID 11 f t f 1 f 23 "25" 100 0 0 100  pqtest - ));
 DESCR("");
 
@@ -1044,7 +1052,7 @@ DATA(insert OID = 770 (  int2larger		   PGUID 11 f t t 2 f 21 "21 21" 100 0 0 10
 DESCR("larger of two");
 DATA(insert OID = 771 (  int2smaller	   PGUID 11 f t t 2 f 21 "21 21" 100 0 0 100  int2smaller - ));
 DESCR("smaller of two");
-
+/*
 DATA(insert OID = 772 (  gistcostestimate  PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  gistcostestimate - ));
 DESCR("gist cost estimator");
 DATA(insert OID = 774 (  gistgettuple	   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  gistgettuple - ));
@@ -1065,7 +1073,7 @@ DATA(insert OID = 781 (  gistrestrpos	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  
 DESCR("gist(internal)");
 DATA(insert OID = 782 (  gistbuild		   PGUID 11 f t f 9 f 23 "0" 100 0 0 100  gistbuild - ));
 DESCR("gist(internal)");
-
+*/
 DATA(insert OID = 784 (  tintervaleq	   PGUID 11 f t f 2 f 16 "704 704" 100 0 0 100	tintervaleq - ));
 DESCR("equal");
 DATA(insert OID = 785 (  tintervalne	   PGUID 11 f t f 2 f 16 "704 704" 100 0 0 100	tintervalne - ));
@@ -1184,6 +1192,7 @@ DESCR("multiply");
 /* OIDS 900 - 999 */
 
 /* isoldpath, upgradepath, upgradepoly, revertpoly are used to update pre-v6.1 to v6.1 - tgl 97/06/03 */
+#ifdef USEGEO
 DATA(insert OID = 936 (  isoldpath		   PGUID 11 f t f 1 f  16 "602" 100 0 0 100  isoldpath - ));
 DESCR("");
 DATA(insert OID = 937 (  upgradepath	   PGUID 11 f t f 1 f 602 "602" 100 0 0 100  upgradepath - ));
@@ -1192,6 +1201,7 @@ DATA(insert OID = 938 (  upgradepoly	   PGUID 11 f t f 1 f 604 "604" 100 0 0 100
 DESCR("");
 DATA(insert OID = 939 (  revertpoly		   PGUID 11 f t f 1 f 604 "604" 100 0 0 100  revertpoly - ));
 DESCR("");
+#endif /*  USEGEO */
 
 DATA(insert OID = 940 (  mod			   PGUID 11 f t t 2 f 21 "21 21" 100 0 0 100  int2mod - ));
 DESCR("modulus");
@@ -1218,7 +1228,7 @@ DATA(insert OID = 950 (  istrue			   PGUID 11 f t t 1 f 16 "16" 100 0 0 100  ist
 DESCR("");
 DATA(insert OID = 951 (  isfalse		   PGUID 11 f t t 1 f 16 "16" 100 0 0 100  isfalse - ));
 DESCR("");
-
+#ifdef USEGEO
 DATA(insert OID = 959 (  on_pl			   PGUID 11 f t t 2 f  16 "600 628" 100 0 10 100  on_pl - ));
 DESCR("point on line?");
 DATA(insert OID = 960 (  on_sl			   PGUID 11 f t t 2 f  16 "601 628" 100 0 10 100  on_sl - ));
@@ -1229,10 +1239,11 @@ DATA(insert OID = 962 (  close_sl		   PGUID 11 f t t 2 f 600 "601 628" 100 0 10 
 DESCR("closest point to line segment on line");
 DATA(insert OID = 963 (  close_lb		   PGUID 11 f t t 2 f 600 "628 603" 100 0 10 100  close_lb - ));
 DESCR("closest point to line on box");
+#endif /* USEGEO */
 
 DATA(insert OID = 972 (  regproctooid	   PGUID 11 f t t 1 f  26 "24" 100 0 0 100	regproctooid - ));
 DESCR("get oid for regproc");
-
+#ifdef USEGEO
 DATA(insert OID = 973 (  path_inter		   PGUID 11 f t t 2 f  16 "602 602" 100 0 10 100  path_inter - ));
 DESCR("paths intersect?");
 DATA(insert OID = 975 (  area			   PGUID 11 f t t 1 f 701 "603" 100 0 0 100  rect_area - ));
@@ -1283,7 +1294,7 @@ DATA(insert OID = 998 (  lseg_horizontal   PGUID 11 f t t 1 f 16 "601" 100 0 0 1
 DESCR("horizontal?");
 DATA(insert OID = 999 (  lseg_eq		   PGUID 11 f t t 2 f 16 "601 601" 100 0 0 100	lseg_eq - ));
 DESCR("equal");
-
+#endif /* USEGEO  */
 /* OIDS 1000 - 1999 */
 
 DATA(insert OID = 1029 (  nullvalue		   PGUID 11 f t t 1 f 16 "0" 100 0 0 100  nullvalue - ));
@@ -1396,7 +1407,7 @@ DATA(insert OID = 1144 (  time_out		   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  ti
 DESCR("(internal)");
 DATA(insert OID = 1145 (  time_eq		   PGUID 11 f t t 2 f 16 "1083 1083" 100 0 0 100  time_eq - ));
 DESCR("equal");
-
+#ifdef USEGEO
 DATA(insert OID = 1146 (  circle_add_pt    PGUID 11 f t t 2 f 718 "718 600" 100 0 0 100  circle_add_pt - ));
 DESCR("addition");
 DATA(insert OID = 1147 (  circle_sub_pt    PGUID 11 f t t 2 f 718 "718 600" 100 0 0 100  circle_sub_pt - ));
@@ -1405,7 +1416,7 @@ DATA(insert OID = 1148 (  circle_mul_pt    PGUID 11 f t t 2 f 718 "718 600" 100 
 DESCR("multiply");
 DATA(insert OID = 1149 (  circle_div_pt    PGUID 11 f t t 2 f 718 "718 600" 100 0 0 100  circle_div_pt - ));
 DESCR("divide");
-
+#endif
 DATA(insert OID = 1150 (  timestamp_in	   PGUID 11 f t f 1 f 1184 "0" 100 0 0 100	timestamp_in - ));
 DESCR("(internal)");
 DATA(insert OID = 1151 (  timestamp_out    PGUID 11 f t f 1 f	23 "0" 100 0 0 100	timestamp_out - ));
@@ -1576,7 +1587,7 @@ DATA(insert OID = 1299 (  now			   PGUID 11 f t f 0 f 1184 "0" 100 0 0 100	now -
 DESCR("current transaction time");
 
 /* OIDS 1300 - 1399 */
-
+#ifdef USEGEO
 DATA(insert OID = 1300 (  positionsel		   PGUID 11 f t f 5 f 701 "26 26 21 0 23" 100 0 0 100  positionsel - ));
 DESCR("restriction selectivity for position-comparison operators");
 DATA(insert OID = 1301 (  positionjoinsel	   PGUID 11 f t f 5 f 701 "26 26 21 26 21" 100 0 0 100	positionjoinsel - ));
@@ -1585,7 +1596,7 @@ DATA(insert OID = 1302 (  contsel		   PGUID 11 f t f 5 f 701 "26 26 21 0 23" 100
 DESCR("restriction selectivity for containment comparison operators");
 DATA(insert OID = 1303 (  contjoinsel	   PGUID 11 f t f 5 f 701 "26 26 21 26 21" 100 0 0 100	contjoinsel - ));
 DESCR("join selectivity for containment comparison operators");
-
+#endif  /* USEGEO  */
 DATA(insert OID = 1304 ( overlaps			 PGUID 11 f t t 4 f 16 "1184 1184 1184 1184" 100 0 1 0	overlaps_timestamp - ));
 DESCR("SQL92 interval comparison");
 DATA(insert OID = 1305 ( overlaps			 PGUID 14 f t t 4 f 16 "1184 1186 1184 1186" 100 0 1 0	"select overlaps($1, ($1 + $2), $3, ($3 + $4))" - ));
@@ -1765,6 +1776,7 @@ DESCR("convert (no-op)");
 DATA(insert OID = 1405 (  int4		   PGUID 14 f t t 1 f	23	 "23" 100 0 0 100  "select $1" - ));
 DESCR("convert (no-op)");
 
+#ifdef USEGEO
 DATA(insert OID = 1406 (  isvertical		PGUID 11 f t t 2 f	16 "600 600" 100 0 0 100	point_vert - ));
 DESCR("vertical?");
 DATA(insert OID = 1407 (  ishorizontal		PGUID 11 f t t 2 f	16 "600 600" 100 0 0 100	point_horiz - ));
@@ -1815,7 +1827,6 @@ DESCR("# points in path");
 /* pclose and popen might better be named close and open, but that crashes initdb.
  * - thomas 97/04/20
  */
-
 DATA(insert OID = 1433 (  pclose			PGUID 11 f t t 1 f 602 "602" 100 0 0 100  path_close - ));
 DESCR("close path");
 DATA(insert OID = 1434 (  popen				PGUID 11 f t t 1 f 602 "602" 100 0 0 100  path_open - ));
@@ -1984,6 +1995,7 @@ DATA(insert OID = 1545 (  npoints			PGUID 11 f t t 1 f	23 "602" 100 0 0 100  pat
 DESCR("# points in path");
 DATA(insert OID = 1556 (  npoints			PGUID 11 f t t 1 f	23 "604" 100 0 0 100  poly_npoints - ));
 DESCR("number of points in polygon");
+#endif  /* USEGEO  */
 
 DATA(insert OID = 1564 (  zpbit_in			PGUID 11 f t t 1 f 1560 "0" 100 0 0 100  zpbit_in - ));
 DESCR("(internal)");
@@ -2065,12 +2077,14 @@ DESCR("multiply interval");
 DATA(insert OID = 1619 (  varchar			PGUID 11 f t t 1 f 1043 "23" 100 0 0 100  int4_text - ));
 DESCR("convert int4 to varchar");
 
+#ifdef ORACLE_COMPAT
 DATA(insert OID = 1620 (  ascii				PGUID 11 f t t 1 f 23 "25" 100 0 0 100	ascii - ));
 DESCR("convert first char to int4");
 DATA(insert OID = 1621 (  ichar				PGUID 11 f t t 1 f 25 "23" 100 0 0 100	ichar - ));
 DESCR("convert int4 to char");
 DATA(insert OID = 1622 (  repeat			PGUID 11 f t t 2 f 25 "25 23" 100 0 0 100  repeat - ));
 DESCR("replicate string int4 times");
+#endif
 
 DATA(insert OID = 1623 (  varchar			PGUID 11 f t t 1 f 1043 "20" 100 0 0 100  int8_text - ));
 DESCR("convert int8 to varchar");
@@ -2109,6 +2123,7 @@ DATA(insert OID = 1656 ( lztext_le			  PGUID 11 f t t 2 f 16 "1625 1625" 100 0 1
 DESCR("less-than-or-equal");
 
 /* Oracle Compatibility Related Functions - By Edmund Mergl <E.Mergl@bawue.de> */
+#ifdef ORACLE_COMPAT
 DATA(insert OID =  868 (  strpos	   PGUID 11 f t t 2 f 23 "25 25" 100 0 0 100  textpos - ));
 DESCR("find position of substring");
 DATA(insert OID =  870 (  lower		   PGUID 11 f t t 1 f 25 "25" 100 0 0 100  lower - ));
@@ -2143,7 +2158,7 @@ DATA(insert OID =  884 (  btrim		   PGUID 11 f t t 2 f 25 "25 25" 100 0 0 100  b
 DESCR("trim both ends of string");
 DATA(insert OID =  885 (  btrim		   PGUID 14 f t t 1 f 25 "25" 100 0 0 100  "select btrim($1, \' \')" - ));
 DESCR("trim both ends of string");
-
+#endif
 /* for multi-byte support */
 DATA(insert OID = 1039 (  getdatabaseencoding	   PGUID 11 f t f 0 f 19 "0" 100 0 0 100  getdatabaseencoding - ));
 DESCR("encoding name of current database");

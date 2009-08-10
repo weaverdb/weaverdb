@@ -1498,7 +1498,7 @@ simplify_op_or_func(Expr *expr, List *args)
  */
 
 bool
-			expression_tree_walker(Node *node, bool (*walker) (), void *context)
+expression_tree_walker(Node *node, bool (*walker) (), void *context)
 {
 	List	   *temp;
 

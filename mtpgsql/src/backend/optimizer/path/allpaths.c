@@ -16,12 +16,13 @@
 #include "postgres.h"
 
 #include "optimizer/cost.h"
-#include "optimizer/geqo.h"
+/*#include "optimizer/geqo.h"*/
 #include "optimizer/internal.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 
 
+/*
 #ifdef GEQO
 const bool		enable_geqo = true;
 
@@ -31,6 +32,7 @@ const bool		enable_geqo = false;
 #endif
 
 const int			geqo_rels = GEQO_RELS;
+*/
 
 
 static void set_base_rel_pathlist(Query *root);
@@ -156,8 +158,10 @@ make_one_rel_by_joins(Query *root, int levels_needed)
 	 *	  <utesch@aut.tu-freiberg.de>		   *
 	 * rest will be skipped in case of GEQO    *
 	 *******************************************/
+/*
 	if (enable_geqo && levels_needed >= geqo_rels)
 		return geqo(root);
+*/
 
 	/*
 	 * We employ a simple "dynamic programming" algorithm: we first find

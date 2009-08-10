@@ -30,7 +30,7 @@ public class BaseWeaverConnection {
     public int resultField = 0;
     String errorText = "";
     String state = "";
-    
+    /*
     private StreamingType streamingPersonality = StreamingType.STREAMING_STREAMS;
     private int streaming_size = 64 * 1024;
 
@@ -56,10 +56,10 @@ public class BaseWeaverConnection {
             return (bt == 0x00);
         }
     }
-
+*/
     public BaseWeaverConnection() {
     }
-
+/*
     public void setStreamingPersonality(StreamingType type) {
         streamingPersonality = type;
     }
@@ -67,7 +67,7 @@ public class BaseWeaverConnection {
     public void setStreamingBufferSize(int size) {
         streaming_size = size;
     }
-
+*/
     private boolean convertString(String connect) throws SQLException {
         String name = connect.substring(0, connect.indexOf('/'));
         String password = connect.substring(connect.indexOf('/') + 1, connect.indexOf('@'));
@@ -76,8 +76,18 @@ public class BaseWeaverConnection {
         return grabConnection(name, password, connection);
     }
 
-    public boolean grabConnection(String connString) throws SQLException {
+    public boolean connect(String connString) throws SQLException {
         return convertString(connString);
+    }
+
+    public void dispose() throws SQLException {
+        disposeConnection();
+    }
+
+    public BaseWeaverConnection spawnHelper() throws SQLException {
+        BaseWeaverConnection cloned = new BaseWeaverConnection();
+        cloned.connectSubConnection(this);
+        return cloned;
     }
 
     public String idDatabaseRoots() {
@@ -86,52 +96,113 @@ public class BaseWeaverConnection {
 
     public void clearResult() {
         resultField = 0;
+        clearBinds();
     }
+
+    HashMap<Integer,BoundOutput> outputs = new HashMap<Integer,BoundOutput>();
     
     public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws SQLException {
-        return new BoundOutput(this,index, type);
+        BoundOutput bo = outputs.get(index);
+        if ( bo != null ) {
+            if ( bo.isSameType(type) ) return bo;
+            else bo.deactivate();
+        }
+
+        bo = new BoundOutput<T>(this, index, type);
+        getOutput(index,bo.getTypeId(),bo);
+        outputs.put(index, bo);
+        return bo;
     }
-    
+
+    HashMap<String,BoundInput> inputs = new HashMap<String,BoundInput>();
+
     public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws SQLException {
-        return new BoundInput(this,name, type);
+        BoundInput bi = inputs.get(name);
+        if ( bi != null ) {
+            if ( bi.isSameType(type) ) return bi;
+            else bi.deactivate();
+        }
+
+        bi = new BoundInput<T>(this, name, type);
+        inputs.put(name, bi);
+        return bi;
+    }
+
+    private void clearBinds() {
+        for ( BoundInput bi : inputs.values() ) bi.deactivate();
+        inputs.clear();
+        for ( BoundOutput bo : outputs.values() ) bo.deactivate();
+        outputs.clear();
+    }
+
+    public long parse(String stmt) throws SQLException {
+        clearBinds();
+        return parseStatement(stmt);
+    }
+
+    public long begin() throws SQLException {
+        clearBinds();
+        return beginTransaction();
+    }
+
+    public void prepare() throws SQLException {
+        prepareTransaction();
+    }
+
+    public void cancel() throws SQLException {
+        cancelTransaction();
+    }
+
+    public void abort() throws SQLException {
+        clearBinds();
+        abortTransaction();
+    }
+
+    public void commit() throws SQLException {
+        clearBinds();
+        commitTransaction();
+    }
+
+    public void start() throws SQLException {
+        clearBinds();
+        beginProcedure();
+    }
+
+    public void end() throws SQLException {
+        clearBinds();
+        endProcedure();
+    }
+
+    public long execute() throws SQLException {
+        return executeStatement();
+    }
+
+    public boolean fetch() throws SQLException {
+        return fetchResults();
     }
     
-    public native boolean grabConnection(String name, String password, String connect) throws SQLException;
+    private native boolean grabConnection(String name, String password, String connect) throws SQLException;
+    private native void connectSubConnection(BaseWeaverConnection parent) throws SQLException;
+    private native void disposeConnection();
 
-    public native void connectSubConnection(BaseWeaverConnection parent) throws SQLException;
+    private native long parseStatement(String theStatement) throws SQLException;
+    private native long executeStatement() throws SQLException;
+    private native boolean fetchResults() throws SQLException;
 
-    public native long parseStatement(String theStatement) throws SQLException;
+    native void setInput(String name, int type, Object value) throws SQLException;
+    native void getOutput(int index, int type, BoundOutput test) throws SQLException;
 
-    native void bind(String name, int type) throws SQLException;
-
-    native void setBind(String name, Object value) throws SQLException;
-
-    native void output(int index, BoundOutput target, int type) throws SQLException;
-
-    public native long execute() throws SQLException;
-
-    public native boolean fetch() throws SQLException;
-
-    public native void disposeConnection();
-
-    public native void prepare() throws SQLException;
-
-    public native void userLock(String group, int connector, boolean lock) throws SQLException;
-
-    public native long beginTransaction() throws SQLException;
-
-    public native void commitTransaction() throws SQLException;
-
-    public native void abortTransaction() throws SQLException;
-
-    public native void beginProcedure() throws SQLException;
-
-    public native void endProcedure() throws SQLException;
+//    public native void userLock(String group, int connector, boolean lock) throws SQLException;
+    private native void prepareTransaction() throws SQLException;
+    private native void cancelTransaction();
+    private native long beginTransaction() throws SQLException;
+    private native void commitTransaction() throws SQLException;
+    private native void abortTransaction() throws SQLException;
+    private native void beginProcedure() throws SQLException;
+    private native void endProcedure() throws SQLException;
 
     public native long getTransactionId();
     public native long getCommandId();
-
-    public native void cancel();
 
     public native void streamExec(String statement) throws SQLException;
 
@@ -160,6 +231,7 @@ public class BaseWeaverConnection {
         }
         return pipeIn(send);
     }
+    
     OutputStream os;
     InputStream is;
 

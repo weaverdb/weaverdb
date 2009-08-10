@@ -39,7 +39,9 @@
 #include "storage/sinval.h"
 #include "storage/smgr.h"
 #include "tcop/tcopprot.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/inval.h"
 #include "utils/portal.h"
@@ -441,8 +443,7 @@ vc_vacone(Oid relid, bool analyze,bool exclusive, List *va_cols, bool fix, int l
         activate_indexes_of_a_table(relid, false);
 #endif
 	onerel = heap_open(relid, AccessExclusiveLock);
-#ifdef NOTUSED  /* disable security check for now */
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(GetPgUserName(), RelationGetRelationName(onerel),
 					   RELNAME))
 	{
@@ -452,7 +453,6 @@ vc_vacone(Oid relid, bool analyze,bool exclusive, List *va_cols, bool fix, int l
 		CommitTransactionCommand();
 		return;
 	}
-#endif
 #endif
 /* make sure there are no soft committed transactions in this 
 	relation so flush after the relation is exclusive locked  */

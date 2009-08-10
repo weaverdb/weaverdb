@@ -786,7 +786,7 @@ vacuum_dup_segment(Relation rel, DupingPack* pack) {
         
         LockHeapTuple(rel,pack->buffer,pack->tuple,TUPLE_LOCK_WRITE);
    /*  make sure the tuple is still stable  */
-        if ( pack->limit < pack->max && (pack->tuple->t_data->t_infomask & valid_check) == valid_check ) {
+        if ( pack->limit < pack->max && ((pack->tuple->t_data->t_infomask & valid_check) == valid_check) ) {
    /*  mark the old tuple as dup'ed  */
             ItemPointerCopy(&copy->t_self,&pack->tuple->t_data->t_ctid); 
             pack->tuple->t_data->t_xmax = GetCurrentTransactionId();

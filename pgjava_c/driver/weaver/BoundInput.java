@@ -17,49 +17,47 @@ import java.nio.channels.ReadableByteChannel;
  *
  * @author  mscott
  */
-public class BoundInput<T> extends Bound {
+public class BoundInput<T> extends Bound<T> {
 
     private BaseWeaverConnection owner;
-    private Class<T> type;
     private String name;
-    private Types settype;
     private Object stream_holder;
 
     protected BoundInput(BaseWeaverConnection fc, String name, Class<T> type) throws SQLException {
         owner = fc;
-        this.type = type;
+        setTypeClass(type);
         this.name = name;
         bind();
     }
 
     private void bind() throws SQLException {
-        settype = Types.Null;
+        Class<T> type = getTypeClass();
         if (type.equals(String.class)) {
-            settype = Types.String;
+            setType(Types.String);
         } else if (type.equals(Double.class)) {
-            settype = Types.Double;
+            setType(Types.Double);
         } else if (type.equals(Integer.class)) {
-            settype = Types.Integer;
+            setType(Types.Integer);
         } else if (type.equals(byte[].class)) {
-            settype = Types.Binary;
+            setType(Types.Binary);
         } else if (type.equals(java.io.ByteArrayOutputStream.class)) {
-            settype = Types.BLOB;
+            setType(Types.BLOB);
         } else if (type.equals(Character.class)) {
-            settype = Types.Character;
+            setType(Types.Character);
         } else if (type.equals(java.util.Date.class)) {
-            settype = Types.Date;
+            setType(Types.Date);
         } else if (type.equals(Long.class)) {
-            settype = Types.Long;
+            setType(Types.Long);
         } else if (type.equals(Boolean.class)) {
-            settype = Types.Boolean;
+            setType(Types.Boolean);
         } else if (java.nio.channels.ReadableByteChannel.class.isAssignableFrom(type)) {
-            settype = Types.Direct;
+            setType(Types.Direct);
         } else if (java.io.InputStream.class.isAssignableFrom(type)) {
-            settype = Types.Stream;
+            setType(Types.Stream);
         } else {
-            settype = Types.Java;
+            setType(Types.Java);
         }
-        owner.bind(name, settype.getId());
+/*        owner.bind(name, getTypeId());  */
     }
 
     protected BaseWeaverConnection getOwner() {
@@ -67,7 +65,10 @@ public class BoundInput<T> extends Bound {
     }
 
     public void set(T value) throws SQLException {
-        switch (settype) {
+//        if ( !isActive() ) {
+//            throw new SQLException("output variable is orphaned");
+//        }
+        switch (getType()) {
             case BLOB:
                 if (value instanceof InputStream) {
                     InputStream is = (InputStream) value;
@@ -81,30 +82,32 @@ public class BoundInput<T> extends Bound {
                         }
                     } catch (IOException ioe) {
                     }
-                    owner.setBind(name, out.toByteArray());
+                    owner.setInput(name, getTypeId(), out.toByteArray());
                 } else if (value instanceof ByteArrayOutputStream) {
                     ByteArrayOutputStream is = (ByteArrayOutputStream) value;
-                    owner.setBind(name, is.toByteArray());
+                    owner.setInput(name, getTypeId(), is.toByteArray());
                 } else if (value instanceof byte[]) {
-                    owner.setBind(name, value);
+                    owner.setInput(name, getTypeId(), value);
                 } else {
-                    throw new SQLException("invalid type conversion for BLOB from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for BLOB from " + name);
                 }
                 break;
             case Direct:
             case Stream:
                 this.stream_holder = value;
                 if ( value != null ) {
-                    owner.setBind(name, this);
+                    owner.setInput(name, getTypeId(), this);
                 } else {
-                    owner.setBind(name,null);
+                    owner.setInput(name, getTypeId(), null);
                 }
                 break;
             case Character:
                 if (value instanceof Character) {
-                    owner.setBind(name, (Character) value);
+                    owner.setInput(name, getTypeId(), (Character) value);
                 } else {
-                    throw new SQLException("invalid type conversion for Character from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for Character from " + name);
                 }
                 break;
             case Binary:
@@ -120,72 +123,81 @@ public class BoundInput<T> extends Bound {
                         }
                     } catch (IOException ioe) {
                     }
-                    owner.setBind(name, out.toByteArray());
+                    owner.setInput(name, getTypeId(), out.toByteArray());
                 } else if (value instanceof ByteArrayOutputStream) {
                     ByteArrayOutputStream is = (ByteArrayOutputStream) value;
-                    owner.setBind(name, is.toByteArray());
+                    owner.setInput(name, getTypeId(), is.toByteArray());
                 } else if (value instanceof byte[]) {
-                    owner.setBind(name, (byte[]) value);
+                    owner.setInput(name, getTypeId(), (byte[]) value);
                 } else {
-                    throw new SQLException("invalid type conversion for Binary from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for Binary from " + name);
                 }
                 break;
             case String:
-                owner.setBind(name, value);
+                owner.setInput(name, getTypeId(), value);
                 break;
             case Boolean:
                 if (value instanceof Boolean) {
-                    owner.setBind(name, value);
+                    owner.setInput(name, getTypeId(), value);
                 } else if (value instanceof Integer) {
                     Integer sb = (Integer) value;
-                    owner.setBind(name, (sb.intValue() != 0));
+                    owner.setInput(name, getTypeId(), (sb.intValue() != 0));
                 } else {
-                    throw new SQLException("invalid type conversion for Boolean from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for Boolean from " + name);
                 }
                 break;
             case Integer:
                 if (value instanceof Boolean) {
                     Boolean sb = (Boolean) value;
-                    owner.setBind(name, (sb) ? 1 : 0);
+                    owner.setInput(name, getTypeId(), (sb) ? 1 : 0);
                 } else if (value instanceof Integer) {
-                    owner.setBind(name, value);
+                    owner.setInput(name, getTypeId(), value);
                 } else {
-                    throw new SQLException("invalid type conversion for Integer from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for Integer from " + name);
                 }
                 break;
             case Date:
                 if (value instanceof java.util.Date) {
-                    owner.setBind(name, value);
+                    owner.setInput(name, getTypeId(), value);
                 } else {
-                    throw new SQLException("invalid type conversion for Date from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for Date from " + name);
                 }
                 break;
             case Long:
                 if (value instanceof java.lang.Long) {
-                    owner.setBind(name, value);
+                    owner.setInput(name, getTypeId(), value);
                 } else {
-                    throw new SQLException("invalid type conversion for Long from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for Long from " + name);
                 }
                 break;
             case Java:
                 byte[] binary = JavaConverter.java_in(value);
-                owner.setBind(name, binary);
+                owner.setInput(name, getTypeId(), binary);
                 break;
             case Double:
                 if (value instanceof Double) {
-                    owner.setBind(name, value);
+                    owner.setInput(name, getTypeId(), value);
                 } else {
-                    throw new SQLException("invalid type conversion for Date from " + value.getClass().getName());
+                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                    throw new SQLException("invalid type conversion for Date from " + name);
                 }
                 break;
             default:
-                throw new SQLException("invalid type conversion for " + settype.toString() + " from " + value.getClass().getName());
+            {
+                String name = ( value != null ) ? value.getClass().getName() : "NULL";
+                throw new SQLException("invalid type conversion for " + getType().toString() + " from " + name);
+            }
         }
     }
 
     public void setObject(Object obj) throws SQLException {
         try {
-            set(type.cast(obj));
+            set(getTypeClass().cast(obj));
         } catch (ClassCastException cast) {
             throw new SQLException(cast);
         }

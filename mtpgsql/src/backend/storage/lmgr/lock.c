@@ -1030,7 +1030,8 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 
 
        }
-       if ( remove ) {
+
+        if ( remove ) {
            /*  hash remove destroys the protection lock  */
             SearchLockTable(lockmethod, &lock->tag,HASH_REMOVE);
        } else {
@@ -1203,9 +1204,10 @@ LockReleaseAll(LOCKMETHOD lockmethod, THREAD *proc,
                 }
                 
                 if ( remove ) {
-                        SearchLockTable(lockmethod,&(lock->tag),HASH_REMOVE);
+                    SearchLockTable(lockmethod,&(lock->tag),HASH_REMOVE);
+                } else {
+                    ReleaseLockProtection(lock);
                 }
-                ReleaseLockProtection(lock);
 next_item:
 		holder = nextHolder;
 	} while (holder);
@@ -1244,6 +1246,8 @@ LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
             if ( lock->refs || lock->removing ) {
     /*  it's been grabbed, fail fast */
                 pthread_mutex_unlock(table_lock);
+    /*  drop the protection lock cause it won't be destroyed  */
+                ReleaseLockProtection(lock);
                 return NULL;
             }
         }

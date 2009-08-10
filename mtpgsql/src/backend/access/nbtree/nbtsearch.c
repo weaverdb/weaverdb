@@ -67,10 +67,10 @@ _bt_search(Relation rel, int keysz, ScanKey scankey,
 		/* if this is a leaf page, we're done */
 		page = BufferGetPage(*bufP);
 		opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-		if (P_ISLEAF(opaque))
+		if (P_ISLEAF(opaque)) 
 			break;
 
-		/*
+                /*
 		 * Find the appropriate item on the internal page, and get the
 		 * child page that it points to.
 		 */
@@ -137,7 +137,6 @@ _bt_moveright(Relation rel,
 {
 	Page		page;
 	BTPageOpaque    opaque;
-	bool		valid;
 
 	page = BufferGetPage(buf);
 	opaque = (BTPageOpaque) PageGetSpecialPointer(page);

@@ -28,7 +28,9 @@
 #include "miscadmin.h"
 #include "storage/smgr.h"
 #include "optimizer/prep.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/relcache.h"
 #include "utils/syscache.h"
 #include "env/dbwriter.h"
@@ -73,7 +75,7 @@ renameatt(char *relname,
 	if (!allowSystemTableMods && IsSystemRelationName(relname))
 		elog(ERROR, "renameatt: class \"%s\" is a system catalog",
 			 relname);
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!IsBootstrapProcessingMode() &&
 		!pg_ownercheck(userName, relname, RELNAME))
 		elog(ERROR, "renameatt: you do not own class \"%s\"",

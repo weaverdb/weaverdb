@@ -64,6 +64,7 @@ typedef FormData_pg_amproc *Form_pg_amproc;
  */
 
 /* rtree */
+#ifdef NOTUSED
 DATA(insert OID = 0 (402  422  193 1));
 DATA(insert OID = 0 (402  422  194 2));
 DATA(insert OID = 0 (402  422  195 3));
@@ -73,7 +74,7 @@ DATA(insert OID = 0 (402  433  196 3));
 DATA(insert OID = 0 (402  434  197 1));
 DATA(insert OID = 0 (402  434  198 2));
 DATA(insert OID = 0 (402  434  199 3));
-
+#endif
 
 /* btree */
 DATA(insert OID = 0 (403  421  350 1));

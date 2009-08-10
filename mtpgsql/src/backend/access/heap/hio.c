@@ -61,7 +61,7 @@ RelationPutHeapTuple(Relation relation,
         pageHeader = (Page) BufferGetPage(buffer);
 	len = MAXALIGN(tuple->t_len);		/* be conservative */
 	Assert(len <= PageGetFreeSpace(pageHeader));
-
+        
 	offnum = PageAddItem((Page) pageHeader, (Item) tuple->t_data,
 						 tuple->t_len, InvalidOffsetNumber, LP_USED);
 	

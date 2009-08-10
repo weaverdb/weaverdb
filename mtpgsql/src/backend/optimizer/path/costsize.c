@@ -326,9 +326,8 @@ cost_index(Path *path, Query *root,
 	if (tuples_fetched < 1.0)
 		tuples_fetched = 1.0;
 
-	if (baserel->pages > 0)
-		pages_fetched = ceil(baserel->pages *
-							 log(tuples_fetched / baserel->pages + 1.0));
+	if (baserel->pages > 0 && baserel->tuples > baserel->pages)
+		pages_fetched = ceil(tuples_fetched / (baserel->tuples/baserel->pages));
 	else
 		pages_fetched = tuples_fetched;
 
@@ -341,7 +340,7 @@ cost_index(Path *path, Query *root,
 	run_cost += pages_fetched * cost_nonsequential_access(baserel->pages,false);
 
 	/* CPU costs */
-	cpu_per_tuple = costinfo->cpu_index_tuple_cost + baserel->baserestrictcost;
+	cpu_per_tuple = 0.0;
 
 	/*
 	 * Normally the indexquals will be removed from the list of
@@ -353,8 +352,8 @@ cost_index(Path *path, Query *root,
 	 * Rather than work out exactly how much to subtract, we don't
 	 * subtract anything in that case either.
 	 */
-	if (!index->lossy && !is_injoin)
-		cpu_per_tuple -= cost_qual_eval(indexQuals);
+	if (index->lossy || is_injoin)
+		cpu_per_tuple += costinfo->cpu_tuple_cost + baserel->baserestrictcost;
 
 	run_cost += cpu_per_tuple * tuples_fetched;
 

@@ -17,7 +17,9 @@
 #include "catalog/pg_shadow.h"
 #include "optimizer/clauses.h"
 #include "rewrite/locks.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 #include "utils/syscache.h"
@@ -160,8 +162,10 @@ checkLockPerms(List *locks, Query *parsetree, int rt_index)
 	HeapTuple	usertup;
 	char	   *evowner;
 	RangeTblEntry *rte;
+#ifdef USEACL
 	int32		reqperm;
 	int32		aclcheck_res;
+#endif
 	int			i;
 	List	   *l;
 
@@ -206,6 +210,7 @@ checkLockPerms(List *locks, Query *parsetree, int rt_index)
 			 */
 			for (i = 2; i < length(query->rtable); i++)
 			{
+#ifdef USEACL
 				if (i + 1 == query->resultRelation)
 					switch (query->resultRelation)
 					{
@@ -218,8 +223,9 @@ checkLockPerms(List *locks, Query *parsetree, int rt_index)
 					}
 				else
 					reqperm = ACL_RD;
-
+#endif
 				rte = (RangeTblEntry *) nth(i, query->rtable);
+#ifdef USEACL
 				aclcheck_res = pg_aclcheck(rte->relname,
 										   evowner, reqperm);
 				if (aclcheck_res != ACLCHECK_OK)
@@ -228,7 +234,7 @@ checkLockPerms(List *locks, Query *parsetree, int rt_index)
 						 rte->relname,
 						 aclcheck_error_strings[aclcheck_res]);
 				}
-
+#endif
 				/*
 				 * So this is allowed due to the permissions of the rules
 				 * event relation owner. But let's see if the next one too

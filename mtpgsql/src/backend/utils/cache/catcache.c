@@ -119,9 +119,9 @@ GetCCHashFunc(Oid keytype)
 {
 	switch (keytype)
 	{
-			case BOOLOID:
-			case CHAROID:
-			return (CCHashFunc) hashchar;
+                case BOOLOID:
+                case CHAROID:
+                    return (CCHashFunc) hashchar;
 		case NAMEOID:
 			return (CCHashFunc) cc_hashname;
 		case INT2OID:

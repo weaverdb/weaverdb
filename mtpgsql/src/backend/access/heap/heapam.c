@@ -843,7 +843,7 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
         
 /* insert new item */
         pageSize = PageGetFreeSpace(BufferGetPage(buffer));
-	if (  !BufferHasError(buffer) && (unsigned) MAXALIGN(newtup->t_len) <= pageSize ) {
+	if (  !BufferHasError(buffer) && (unsigned) MAXALIGN(newtup->t_len) <= pageSize && !(newtup->t_info & TUPLE_HASBUFFERED) ) {
         	RelationPutHeapTuple(relation, buffer, newtup);  
     	} else {
 		/*

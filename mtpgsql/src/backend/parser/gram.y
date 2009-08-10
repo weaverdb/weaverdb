@@ -52,7 +52,9 @@
 #include "parser/parse_type.h"
 #include "storage/bufpage.h"
 #include "storage/lmgr.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/numeric.h"
 #include "utils/relcache.h"
 #include "env/freespace.h"
@@ -132,18 +134,22 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 		AlterTableStmt ClosePortalStmt
 		CopyStmt CreateStmt CreateAsStmt CreateSeqStmt DefineStmt DropStmt
 		TruncateStmt CommentStmt
-		ExtendStmt FetchStmt	GrantStmt CreateTrigStmt DropTrigStmt
+		ExtendStmt FetchStmt CreateTrigStmt DropTrigStmt
 		CreatePLangStmt DropPLangStmt
 		IndexStmt ListenStmt UnlistenStmt LockStmt OptimizableStmt
 		ProcedureStmt ReindexStmt RemoveAggrStmt RemoveOperStmt
 		RemoveFuncStmt RemoveStmt
-		RenameStmt ReportStmt RevokeStmt RuleStmt TransactionStmt ViewStmt LoadStmt
+		RenameStmt ReportStmt RuleStmt TransactionStmt ViewStmt LoadStmt
 		CreatedbStmt DropdbStmt VacuumStmt CursorStmt SubSelect
 		UpdateStmt InsertStmt select_clause SelectStmt NotifyStmt DeleteStmt 
 		ClusterStmt ExplainStmt VariableSetStmt VariableShowStmt VariableResetStmt
 		CreateUserStmt AlterUserStmt DropUserStmt RuleActionStmt
 		RuleActionStmtOrEmpty ConstraintsSetStmt
                 CreateGroupStmt AlterGroupStmt DropGroupStmt
+
+/*  remove acls
+%type <node>	RevokeStmt GrantStmt
+*/
 /*  added by myron scott to look like oracle */
 %type <node>	CreateSchemaStmt
 /*  end add */
@@ -180,8 +186,10 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 		OptUseOp opt_class SpecialRuleRelation
 
 %type <str>		opt_level opt_encoding
-%type <str>		privileges operation_commalist grantee
-%type <chr>		operation TriggerOneEvent
+/*
+%type <str>             privileges operation_commalist grantee operation
+*/
+%type <chr>             TriggerOneEvent
 
 %type <list>	stmtblock stmtmulti
 		result OptTempTableName relation_name_list OptTableElementList
@@ -326,20 +334,23 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 		DISTINCT DOUBLE DROP
 		ELSE END_PROCEDURE END_TRANS EXCEPT EXECUTE EXISTS EXTRACT
 		FALSE_P FIXFLAGS FETCH FLOAT FOR FOREIGN FROM FULL
-		GLOBAL GRANT GROUP HAVING HOUR_P
+		GLOBAL GROUP HAVING HOUR_P
 		IN INNER_P INSENSITIVE INSERT INTERSECT INTERVAL INTO IS
 		ISOLATION JOIN KEY LANGUAGE LEADING LEFT LEVEL LIKE LOCAL
 		MATCH MINUTE_P MONTH_P NAMES
 		NATIONAL NATURAL NCHAR NEXT NO NOT NULLIF NULL_P NUMERIC
 		OF ON ONLY OPTION OR ORDER OUTER_P OVERLAPS
-		PARTIAL POSITION PRECISION PRIMARY PRIOR PRIVILEGES PROCEDURE PUBLIC
-		READ REFERENCES RELATIVE REVOKE RIGHT ROLLBACK
+		PARTIAL POSITION PRECISION PRIMARY PRIOR PROCEDURE PUBLIC
+		READ REFERENCES RELATIVE  RIGHT ROLLBACK
 		SCROLL SECOND_P SELECT SESSION_USER SET SOME SUBSTRING
 		TABLE TEMPORARY THEN TIME TIMESTAMP TIMEZONE_HOUR
 		TIMEZONE_MINUTE TO TRAILING TRANSACTION TRIM TRUE_P
 		UNION UNIQUE UPDATE USER USING
 		VALUES VARCHAR VARYING VIEW
 		WHEN WHERE WITH WORK YEAR_P ZONE
+/*
+%token  GRANT REVOKE PRIVILEGES
+*/
 
 /* Keywords (in SQL3 reserved words) */
 %token	DEFERRABLE DEFERRED
@@ -376,7 +387,7 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 		TEMP TRUNCATE TRUSTED 
 		UNLISTEN UNTIL VACUUM VALID VERBOSE VERSION
 		
-/*  token added by Myron Scott to look like oracle  */
+/*  token added by Myron Scott  */
 %token	SCHEMA S_ARRAY S_PATTERN S_NIL
 
 /* Special keywords not in the query language - see the "lex" file */
@@ -467,7 +478,9 @@ stmt :	AlterTableStmt
 		| ExtendStmt
 		| ExplainStmt
 		| FetchStmt
+/*
 		| GrantStmt
+*/
 		| IndexStmt
 		| ListenStmt
 		| UnlistenStmt
@@ -480,7 +493,9 @@ stmt :	AlterTableStmt
 		| RemoveStmt
 		| RenameStmt
 		| ReportStmt
+/*
 		| RevokeStmt
+*/
 		| OptimizableStmt
 		| RuleStmt
 		| TransactionStmt
@@ -2287,7 +2302,7 @@ from_in:  IN
  *				GRANT [privileges] ON [relation_name_list] TO [GROUP] grantee
  *
  *****************************************************************************/
-
+/*** USEACL
 GrantStmt:  GRANT privileges ON relation_name_list TO grantee opt_with_grant
 				{
 					$$ = (Node*)makeAclStmt($2,$4,$6,'+');
@@ -2358,23 +2373,22 @@ opt_with_grant:  WITH GRANT OPTION
 				{
 					yyerror("WITH GRANT OPTION is not supported.  Only relation owners can set privileges");
 				 }
-		| /*EMPTY*/
+		| 
 		;
-
-
+***/
 /*****************************************************************************
  *
  *		QUERY:
  *				REVOKE [privileges] ON [relation_name] FROM [user]
  *
  *****************************************************************************/
-
+/****    USEACL
 RevokeStmt:  REVOKE privileges ON relation_name_list FROM grantee
 				{
 					$$ = (Node*)makeAclStmt($2,$4,$6,'-');
 				}
 		;
-
+***/
 
 /*****************************************************************************
  *
@@ -5769,7 +5783,9 @@ TokenId:  ABSOLUTE						{ $$ = "absolute"; }
 		| FORCE							{ $$ = "force"; }
 		| FORWARD						{ $$ = "forward"; }
 		| FUNCTION						{ $$ = "function"; }
+/*
 		| GRANT							{ $$ = "grant"; }
+*/
 		| HANDLER						{ $$ = "handler"; }
 		| IMMEDIATE						{ $$ = "immediate"; }
 		| INCREMENT						{ $$ = "increment"; }
@@ -5805,7 +5821,9 @@ TokenId:  ABSOLUTE						{ $$ = "absolute"; }
 		| PASSWORD						{ $$ = "password"; }
 		| PENDANT						{ $$ = "pendant"; }
 		| PRIOR							{ $$ = "prior"; }
+/*
 		| PRIVILEGES					{ $$ = "privileges"; }
+*/
 		| PROCEDURAL					{ $$ = "procedural"; }
 		| READ							{ $$ = "read"; }
 		| REINDEX						{ $$ = "reindex"; }
@@ -5814,7 +5832,9 @@ TokenId:  ABSOLUTE						{ $$ = "absolute"; }
 		| RESTRICT						{ $$ = "restrict"; }
 		| REPORT						{ $$ = "report"; }
 		| RETURNS						{ $$ = "returns"; }
+/*
 		| REVOKE						{ $$ = "revoke"; }
+*/
 		| ROLLBACK						{ $$ = "rollback"; }
 		| ROW							{ $$ = "row"; }
 		| RULE							{ $$ = "rule"; }

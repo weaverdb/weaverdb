@@ -31,7 +31,7 @@
 #include "storage/lmgr.h"
 #include "env/freespace.h"
 
-extern Buffer _bt_fixroot(Relation rel, Buffer oldrootbuf, bool release);
+static Buffer _bt_tryroot(Relation rel,bool create);
 
 /*
  *	We use high-concurrency locking on btrees.	There are two cases in
@@ -90,6 +90,36 @@ _bt_metapinit(Relation rel)
 		UnlockRelation(rel, AccessExclusiveLock);
 }
 
+Buffer
+_bt_getroot(Relation rel, int access)
+{
+    Buffer root = InvalidBuffer;
+    BlockNumber rootblock = InvalidBlockNumber;
+    bool create = (access == BT_WRITE);
+    
+    while ( !BufferIsValid(root) ) {
+        root = _bt_tryroot(rel,create);
+        if ( BufferIsValid(root) ) {
+            Page rootpage = BufferGetPage(root);
+            BTPageOpaque rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
+           if (!P_ISROOT(rootopaque)) {
+                if ( rootblock == BufferGetBlockNumber(root) ) {
+                    root = _bt_fixroot(rel,root,true);
+                } else {
+                    rootblock = BufferGetBlockNumber(root);
+                }
+                _bt_relbuf(rel,root);
+                root = InvalidBuffer;
+                /*  try again */
+            }
+        } else {
+            /*  no root page and don't create one  */
+            if ( !create ) break;
+        }
+    }
+    return root;
+}
+
 /*
  *	_bt_getroot() -- Get the root page of the btree.
  *
@@ -110,29 +140,23 @@ _bt_metapinit(Relation rel)
  *		The metadata page is not locked or pinned on exit.
  */
 Buffer
-_bt_getroot(Relation rel, int access)
+_bt_tryroot(Relation rel, bool create)
 {
 	Buffer		metabuf;
 	Page		metapg;
-	BTPageOpaque metaopaque;
-	Buffer		rootbuf;
-	Page		rootpage;
-	BTPageOpaque rootopaque;
-	BlockNumber rootblkno;
+	BTPageOpaque    metaopaque;
 	BTMetaPageData *metad;
 
 	metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_READ);
 	metapg = BufferGetPage(metabuf);
 	metaopaque = (BTPageOpaque) PageGetSpecialPointer(metapg);
 	metad = BTPageGetMeta(metapg);
-
-
+        
 	if (!(metaopaque->btpo_flags & BTP_META)) {
             elog(ERROR,"Index %s has bad flags in root page",RelationGetRelationName(rel));
         }
         if (metad->btm_magic != BTREE_MAGIC) {
-		elog(ERROR, "Index %s is not a btree",
-			 RelationGetRelationName(rel));
+		elog(ERROR, "Index %s is not a btree", RelationGetRelationName(rel));
         }
 
 	if (metad->btm_version != BTREE_VERSION)
@@ -144,7 +168,7 @@ _bt_getroot(Relation rel, int access)
 	if (metad->btm_root == P_NONE)
 	{
 		/* If access = BT_READ, caller doesn't want us to create root yet */
-		if (access == BT_READ)
+		if (!create)
 		{
 			_bt_relbuf(rel, metabuf);
 			return InvalidBuffer;
@@ -166,18 +190,16 @@ _bt_getroot(Relation rel, int access)
 			 * type on the new root page.  Since this is the first page in
 			 * the tree, it's a leaf as well as the root.
 			 */
-			rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
-			rootblkno = BufferGetBlockNumber(rootbuf);
-			rootpage = BufferGetPage(rootbuf);
+			Buffer rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
+			Page rootpage = BufferGetPage(rootbuf);
 
 			/* NO ELOG(ERROR) till meta is updated */
 
-			metad->btm_root = rootblkno;
+			metad->btm_root = BufferGetBlockNumber(rootbuf);
 			metad->btm_level = 1;
 
 			_bt_pageinit(rootpage, BufferGetPageSize(rootbuf));
-			rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
-			rootopaque->btpo_flags |= (BTP_LEAF | BTP_ROOT);
+			((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_flags |= (BTP_LEAF | BTP_ROOT);
 
 			_bt_wrtnorelbuf(rel, rootbuf);
 
@@ -187,6 +209,7 @@ _bt_getroot(Relation rel, int access)
 
 			/* okay, metadata is correct, write and release it */
 			_bt_wrtbuf(rel, metabuf);
+                        return rootbuf;
 		}
 		else
 		{
@@ -196,44 +219,15 @@ _bt_getroot(Relation rel, int access)
 			 * page and start all over again.
 			 */
 			_bt_relbuf(rel, metabuf);
-			return _bt_getroot(rel, access);
+			return InvalidBuffer;
 		}
 	}
 	else
 	{
-		rootblkno = metad->btm_root;
+		BlockNumber rootblkno = metad->btm_root;
 		_bt_relbuf(rel, metabuf);		/* done with the meta page */
-
-		rootbuf = _bt_getbuf(rel, rootblkno, BT_READ);
+		return _bt_getbuf(rel, rootblkno, BT_READ);
 	}
-
-	/*
-	 * Race condition:	If the root page split between the time we looked
-	 * at the metadata page and got the root buffer, then we got the wrong
-	 * buffer.	Release it and try again.
-	 */
-	rootpage = BufferGetPage(rootbuf);
-	rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
-
-	if (!P_ISROOT(rootopaque))
-	{
-		/*
-		 * It happened, but if root page splitter failed to create new
-		 * root page then we'll go in loop trying to call _bt_getroot
-		 * again and again.
-		 */
-                 
-		/* try again */
-		_bt_relbuf(rel, rootbuf);
-		return _bt_getroot(rel, access);
-	}
-
-	/*
-	 * By here, we have a correct lock on the root block, its reference
-	 * count is correct, and we have no lock set on the metadata page.
-	 * Return the root block.
-	 */
-	return rootbuf;
 }
 
 /*
@@ -246,7 +240,7 @@ _bt_getroot(Relation rel, int access)
 Buffer
 _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 {
-	Buffer		buf;
+	Buffer		buf = InvalidBuffer;
 
 	if (blkno != P_NEW)
 	{

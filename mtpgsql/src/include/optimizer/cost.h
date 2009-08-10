@@ -19,15 +19,15 @@
 /* defaults for costsize.c's Cost parameters */
 /* NB: cost-estimation code should use the variables, not these constants! */
 #define DEFAULT_EFFECTIVE_CACHE_SIZE  200.0	/* measured in pages */
-#define DEFAULT_RANDOM_PAGE_COST  2.0
-#define DEFAULT_DELEGATED_RANDOM_PAGE_COST  1.3
-#define DEFAULT_CPU_TUPLE_COST	0.05
-#define DEFAULT_CPU_DELEGATED_TUPLE_COST	0.04
+#define DEFAULT_RANDOM_PAGE_COST  1.2
+#define DEFAULT_DELEGATED_RANDOM_PAGE_COST  0.9
+#define DEFAULT_CPU_TUPLE_COST	0.005
+#define DEFAULT_CPU_DELEGATED_TUPLE_COST	0.004
 #define DEFAULT_THREAD_STARTUP_COST	900.0
 #define DEFAULT_DELEGATION_STARTUP_COST	100.0
-#define DEFAULT_CPU_INDEX_TUPLE_COST 0.002
-#define DEFAULT_CPU_DELEGATED_INDEX_TUPLE_COST 0.00225
-#define DEFAULT_CPU_OPERATOR_COST  0.0025
+#define DEFAULT_CPU_INDEX_TUPLE_COST 0.0002
+#define DEFAULT_CPU_DELEGATED_INDEX_TUPLE_COST 0.00019
+#define DEFAULT_CPU_OPERATOR_COST  0.00001
 
 /* defaults for function attributes used for expensive function calculations */
 #define BYTE_PCT 100

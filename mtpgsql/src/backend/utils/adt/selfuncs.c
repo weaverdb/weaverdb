@@ -23,6 +23,7 @@
 #include "c.h"
 #include "postgres.h"
 
+#include <sys/sdt.h>
 #include <ctype.h>
 #include <math.h>
 
@@ -1962,6 +1963,7 @@ genericcostestimate(Query *root, RelOptInfo *rel,
 {
 	double		numIndexTuples;
 	double		numIndexPages;
+        double          evalcost = cost_qual_eval(indexQuals);
 
 	/* Estimate the fraction of main-table tuples that will be visited */
 	*indexSelectivity = clauselist_selectivity(root, indexQuals,
@@ -1991,9 +1993,10 @@ genericcostestimate(Query *root, RelOptInfo *rel,
 	 * tuple. All the costs are assumed to be paid incrementally during
 	 * the scan.
 	 */
+        DTRACE_PROBE4(mtpg,indexcost,&numIndexTuples,&numIndexPages,indexSelectivity,&evalcost);
 	*indexStartupCost = 0;
 	*indexTotalCost = numIndexPages +
-		(GetCostInfo()->cpu_index_tuple_cost + cost_qual_eval(indexQuals)) * numIndexTuples;
+		((GetCostInfo()->cpu_index_tuple_cost + evalcost) * numIndexTuples);
 }
 
 /*

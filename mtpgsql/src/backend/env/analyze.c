@@ -32,7 +32,9 @@
 #include "miscadmin.h"
 #include "parser/parse_oper.h"
 #include "parser/parse_relation.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
@@ -478,14 +480,16 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 	double          rstate;
         
 	Assert(targrows > 1);
-
+        if (GetProcessingMode() == ShutdownProcessing) {
+                elog(ERROR, "shutting down");
+        }
 	/*
 	 * Do a simple linear scan until we reach the target number of rows.
 	 */
 	scan = heap_beginscan(onerel, SnapshotNow, 0, (ScanKey) NULL);
 	tuple = heap_getnext(scan);
 	while (HeapTupleIsValid(tuple)) {
-		rows[numrows++] = heap_copytuple(tuple);
+                rows[numrows++] = heap_copytuple(tuple);
 		if (numrows >= targrows)
 			break;
 		tuple = heap_getnext(scan);
@@ -551,7 +555,10 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 		OffsetNumber    targoffset, maxoffset;
                 bool            replaced = FALSE;
 
-		t = select_next_random_record(t, targrows, &rstate);
+                if (GetProcessingMode() == ShutdownProcessing) {
+                        elog(ERROR, "shutting down");
+                }
+                t = select_next_random_record(t, targrows, &rstate);
 		/* Try to read the t'th record in the table */
 		targpos = t / tuplesperpage;
 		targblock = (BlockNumber) targpos;

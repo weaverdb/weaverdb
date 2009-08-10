@@ -23,7 +23,9 @@
 #include "commands/defrem.h"
 #include "miscadmin.h"
 #include "parser/parse_func.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/syscache.h"
 
 
@@ -87,7 +89,7 @@ RemoveOperator(char *operatorName,		/* operator name */
 
 	if (HeapTupleIsValid(tup))
 	{
-#ifndef NO_SECURITY
+#ifdef USEACL
 		userName = GetPgUserName();
 		if (!pg_ownercheck(userName,
 						   (char *) ObjectIdGetDatum(tup->t_data->t_oid),
@@ -259,7 +261,7 @@ RemoveType(char *typeName)		/* type name to be removed */
 	char	   *shadow_type;
 	char	   *userName;
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	userName = GetPgUserName();
 	if (!pg_ownercheck(userName, typeName, TYPENAME))
 		elog(ERROR, "RemoveType: type '%s': permission denied",
@@ -346,7 +348,7 @@ RemoveFunction(char *functionName,		/* function name to be removed */
 		}
 	}
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	userName = GetPgUserName();
 	if (!pg_func_ownercheck(userName, functionName, nargs, argList))
 	{
@@ -412,7 +414,7 @@ RemoveAggregate(char *aggName, char *aggType)
 	else
 		basetypeID = 0;
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	userName = GetPgUserName();
 	if (!pg_aggr_ownercheck(userName, aggName, basetypeID))
 	{

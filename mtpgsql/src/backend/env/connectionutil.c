@@ -717,6 +717,22 @@ char* GetProperty(char* key) {
     return (char*)(val + 1);
 }
 
+int GetIntProperty(char* key) {
+    char* val = GetProperty(key);
+    if ( val == NULL ) return 0;
+    return atoi(val);
+}
+
+double GetFloatProperty(char* key) {
+    char* val = GetProperty(key);
+    if ( val == NULL ) return 0;
+    return atof(val);
+}
+
+bool PropertyIsValid(char* key) {
+    return ( GetProperty(key) != NULL );
+}
+
 void 
 singleusershutdown(int code) {
         

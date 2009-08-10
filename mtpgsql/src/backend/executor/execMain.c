@@ -42,7 +42,9 @@
 #include "miscadmin.h"
 #include "optimizer/var.h"
 #include "parser/parsetree.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
@@ -69,6 +71,7 @@ static void ExecRetrieve(TupleTableSlot *slot,
 
 static TupleTableSlot *EvalPlanQualNext(EState *estate);
 static void EndEvalPlanQual(EState *estate);
+#ifdef USEACL
 static void ExecCheckQueryPerms(CmdType operation, Query *parseTree,
 					Plan *plan);
 static void ExecCheckPlanPerms(Plan *plan, CmdType operation,
@@ -77,7 +80,7 @@ static void ExecCheckRTPerms(List *rangeTable, CmdType operation,
 				 int resultRelation, bool resultIsScanned);
 static void ExecCheckRTEPerms(RangeTblEntry *rte, CmdType operation,
 				  bool isResultRelation, bool resultIsScanned);
-
+#endif
 /* end of local decls */
 
 
@@ -394,6 +397,7 @@ ExecutorEnd(QueryDesc *queryDesc, EState *estate)
  * ExecCheckQueryPerms
  *		Check access permissions for all relations referenced in a query.
  */
+#ifdef USEACL
 static void
 ExecCheckQueryPerms(CmdType operation, Query *parseTree, Plan *plan)
 {
@@ -432,7 +436,6 @@ ExecCheckQueryPerms(CmdType operation, Query *parseTree, Plan *plan)
 
 		if (!(rm->info & ROW_ACL_FOR_UPDATE))
 			continue;
-
 		ExecCheckRTEPerms(rt_fetch(rm->rti, rangeTable),
 						  CMD_UPDATE, true, false);
 	}
@@ -496,7 +499,6 @@ ExecCheckPlanPerms(Plan *plan, CmdType operation,
 
 				if (app->inheritrelid > 0)
 				{
-
 					/*
 					 * Append implements expansion of inheritance; all
 					 * members of inheritrtable list will be plugged into
@@ -504,7 +506,6 @@ ExecCheckPlanPerms(Plan *plan, CmdType operation,
 					 * result relations or none.
 					 */
 					List	   *rtable;
-
 					foreach(rtable, app->inheritrtable)
 					{
 						ExecCheckRTEPerms((RangeTblEntry *) lfirst(rtable),
@@ -580,7 +581,6 @@ ExecCheckRTEPerms(RangeTblEntry *rte, CmdType operation,
 	char	   *relName;
 	char	   *userName;
 	int32		aclcheck_result;
-
 	if (rte->skipAcl)
 	{
 
@@ -639,7 +639,7 @@ ExecCheckRTEPerms(RangeTblEntry *rte, CmdType operation,
 		elog(ERROR, "%s: %s",
 			 relName, aclcheck_error_strings[aclcheck_result]);
 }
-
+#endif
 
 /* ===============================================================
  * ===============================================================
@@ -682,10 +682,9 @@ InitPlan(CmdType operation, Query *parseTree, Plan *plan, EState *estate)
 	/*
 	 * Do permissions checks.
 	 */
-#ifndef NO_SECURITY
+#ifdef USEACL
 	ExecCheckQueryPerms(operation, parseTree, plan);
 #endif
-
 	/*
 	 * get information from query descriptor
 	 */

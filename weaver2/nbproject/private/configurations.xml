@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configurationDescriptor version="58">
+<configurationDescriptor version="62">
   <projectmakefile>weaver2-Makefile.mk</projectmakefile>
   <defaultConf>0</defaultConf>
   <confs>
@@ -8,6 +8,8 @@
         <gdb_command>dbx</gdb_command>
         <array_repeat_threshold>10</array_repeat_threshold>
       </gdbdebugger>
+      <gizmo_options version="1">
+      </gizmo_options>
       <runprofile version="5">
         <args></args>
         <rundir></rundir>
@@ -23,6 +25,8 @@
         <gdb_command>gdb</gdb_command>
         <array_repeat_threshold>10</array_repeat_threshold>
       </gdbdebugger>
+      <gizmo_options version="1">
+      </gizmo_options>
       <runprofile version="5">
         <args></args>
         <rundir></rundir>

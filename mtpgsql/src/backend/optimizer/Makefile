@@ -13,9 +13,11 @@ include ../../Makefile.global
 
 all: submake SUBSYS.o
 
-OBJS = path/SUBSYS.o plan/SUBSYS.o prep/SUBSYS.o util/SUBSYS.o geqo/SUBSYS.o
+OBJS = path/SUBSYS.o plan/SUBSYS.o prep/SUBSYS.o util/SUBSYS.o
+# geqo/SUBSYS.o
 
-DIRS = path plan prep util geqo
+DIRS = path plan prep util
+# geqo
 
 SUBSYS.o: $(OBJS)
 	$(LD) $(LDREL) $(LDOUT) SUBSYS.o $(OBJS)

@@ -463,9 +463,8 @@ GetTransactionRecoveryCheckpoint()
 	recover = ( theader->checkpoint > theader->baseline ) ? theader->checkpoint : theader->baseline;
 	elog(DEBUG,"transaction recovery checkpoint is %llu",recover);
 
-		
         LockBuffer((VariableRelation),header,BUFFER_LOCK_UNLOCK);
-	
+        ReleaseBuffer(VariableRelation,header);
 	RelationClose(VariableRelation);	
 	return recover;
 }

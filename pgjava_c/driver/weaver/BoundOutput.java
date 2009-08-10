@@ -18,50 +18,48 @@ import java.util.Date;
  *
  * @author  mscott
  */
-public class BoundOutput<T> extends Bound {
+public class BoundOutput<T> extends Bound<T> {
 
     private BaseWeaverConnection owner;
-    private Class<T> type;
     private int index;
-    private Types settype;
     private Object value;
     private boolean isnull = true;
 
     protected BoundOutput(BaseWeaverConnection fc, int index, Class<T> type) throws SQLException {
         owner = fc;
-        this.type = type;
+        setTypeClass(type);
         this.index = index;
         bind();
     }
 
     private void bind() throws SQLException {
-        settype = Types.Null;
+        Class<T> type = getTypeClass();
         if (type.equals(String.class)) {
-            settype = Types.String;
+           setType(Types.String);
         } else if (type.equals(Double.class)) {
-            settype = Types.Double;
+            setType(Types.Double);
         } else if (type.equals(Integer.class)) {
-            settype = Types.Integer;
+            setType(Types.Integer);
         } else if (type.equals(byte[].class)) {
-            settype = Types.Binary;
+            setType(Types.Binary);
         } else if (type.equals(java.io.ByteArrayInputStream.class)) {
-            settype = Types.BLOB;
+            setType(Types.BLOB);
         } else if (type.equals(Character.class)) {
-            settype = Types.Character;
+            setType(Types.Character);
         } else if (type.equals(Date.class)) {
-            settype = Types.Date;
+            setType(Types.Date);
         } else if (type.equals(Long.class)) {
-            settype = Types.Long;
+            setType(Types.Long);
         } else if (type.equals(Boolean.class)) {
-            settype = Types.Boolean;
+            setType(Types.Boolean);
         } else if (java.nio.channels.WritableByteChannel.class.isAssignableFrom(type)) {
-            settype = Types.Direct;
+            setType(Types.Direct);
         } else if (java.io.OutputStream.class.isAssignableFrom(type)) {
-            settype = Types.Stream;
+            setType(Types.Stream);
         } else {
-            settype = Types.Java;
+            setType(Types.Java);
         }
-        owner.output(index, this, settype.getId());
+/*        owner.output(index, this, settype.getId());  */
     }
 
     protected BaseWeaverConnection getOwner() {
@@ -77,11 +75,14 @@ public class BoundOutput<T> extends Bound {
     }
 
     public T get() throws SQLException {
+//        if ( !isActive() ) {
+//            throw new SQLException("output variable is orphaned");
+//        }
         if (isnull) {
             return null;
         }
         try {
-            switch (settype) {
+            switch (getType()) {
                 case Stream:
                     break;
                 case Direct:
@@ -95,12 +96,12 @@ public class BoundOutput<T> extends Bound {
                 case Integer:
                 case Date:
                 case Long:
-                    return type.cast(value);
+                    return getTypeClass().cast(value);
                 case Java:
                     value = JavaConverter.java_out((byte[]) value);
                 case Double:
                 default:
-                    return type.cast(value);
+                    return getTypeClass().cast(value);
             }
         } catch (ClassCastException exp) {
             throw new SQLException("type cast exception", exp);

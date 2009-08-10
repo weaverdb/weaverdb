@@ -11,9 +11,9 @@
 SRCDIR = ../..
 include ../../Makefile.global
 
-OBJS = common/SUBSYS.o gist/SUBSYS.o hash/SUBSYS.o heap/SUBSYS.o \
-       index/SUBSYS.o rtree/SUBSYS.o nbtree/SUBSYS.o transam/SUBSYS.o
-
+OBJS = common/SUBSYS.o heap/SUBSYS.o \
+       index/SUBSYS.o nbtree/SUBSYS.o hash/SUBSYS.o transam/SUBSYS.o
+# gist/SUBSYS.o rtree/SUBSYS.o 
 
 all: submake SUBSYS.o
 
@@ -23,11 +23,11 @@ SUBSYS.o: $(OBJS)
 .PHONY: submake
 submake:
 	$(MAKE) -C common  SUBSYS.o
-	$(MAKE) -C gist    SUBSYS.o
+#	$(MAKE) -C gist    SUBSYS.o
 	$(MAKE) -C hash    SUBSYS.o
 	$(MAKE) -C heap    SUBSYS.o
 	$(MAKE) -C index   SUBSYS.o
-	$(MAKE) -C rtree   SUBSYS.o
+#	$(MAKE) -C rtree   SUBSYS.o
 	$(MAKE) -C nbtree  SUBSYS.o
 	$(MAKE) -C transam SUBSYS.o
 
@@ -44,11 +44,11 @@ clean:
 
 .DEFAULT: 
 	$(MAKE) -C common   $@
-	$(MAKE) -C gist     $@
+#	$(MAKE) -C gist     $@
 	$(MAKE) -C hash     $@
 	$(MAKE) -C heap     $@
 	$(MAKE) -C index    $@
-	$(MAKE) -C rtree    $@
+#	$(MAKE) -C rtree    $@
 	$(MAKE) -C nbtree   $@
 	$(MAKE) -C transam  $@
 

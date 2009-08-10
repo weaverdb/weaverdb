@@ -311,10 +311,17 @@ typedef struct
  *	)
  * ----------
  */
+/*
 #define NUM_CACHE_SIZE		64
 #define NUM_CACHE_FIELDS	16
 #define DCH_CACHE_SIZE		128
 #define DCH_CACHE_FIELDS	16
+*/
+
+#define NUM_CACHE_SIZE		1
+#define NUM_CACHE_FIELDS	0
+#define DCH_CACHE_SIZE		1
+#define DCH_CACHE_FIELDS	0
 
 typedef struct
 {
@@ -347,8 +354,7 @@ static int	NUMCounter = 0;
  * Private global-modul definitions
  * ----------
  */
-static struct tm _tm,
-		   *tm = &_tm;
+static struct tm _tm, *tm = &_tm;
 
 /* ----------
  * Utils
@@ -1286,7 +1292,7 @@ get_th(char *num, int type)
 				return numTH[3];
 			return numth[3];
 	}
-	return NULL;
+/*	return NULL;  */
 }
 
 /* ----------
@@ -1722,8 +1728,7 @@ dch_time(int arg, char *inout, int suf, int flag, FormatNode *node)
 static int
 dch_date(int arg, char *inout, int suf, int flag, FormatNode *node)
 {
-	char		buff[DCH_CACHE_SIZE],
-			   *p_inout;
+	char		buff[DCH_CACHE_SIZE],*p_inout;
 	int			i,
 				len;
 
@@ -2358,7 +2363,6 @@ DCH_cache_search(char *str)
 		}
 		i++;
 	}
-
 	return (DCHCacheEntry *) NULL;
 }
 
@@ -2798,7 +2802,6 @@ NUM_cache_search(char *str)
 		}
 		i++;
 	}
-
 	return (NUMCacheEntry *) NULL;
 }
 

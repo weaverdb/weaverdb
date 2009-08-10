@@ -181,7 +181,6 @@
 /* #define GISTDEBUG */
 /* #define OMIT_PARTIAL_INDEX */
 /* #define NO_BUFFERISVALID   */
-/* #define NO_SECURITY        */
 /* #define OLD_REWRITE        */
 
 /*

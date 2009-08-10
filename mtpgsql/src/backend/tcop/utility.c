@@ -46,7 +46,9 @@
 #include "rewrite/rewriteDefine.h"
 #include "rewrite/rewriteRemove.h"
 #include "tcop/utility.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/ps_status.h"
 #include "utils/syscache.h"
@@ -213,7 +215,7 @@ ProcessUtility(Node *parsetree,
 
 					/* close rel, but keep lock until end of xact */
 					heap_close(rel, NoLock);
-#ifndef NO_SECURITY
+#ifdef USEACL
 					if (!pg_ownercheck(userName, relname, RELNAME))
 						elog(ERROR, "you do not own class \"%s\"",
 							 relname);
@@ -253,7 +255,7 @@ ProcessUtility(Node *parsetree,
 						 relname);
 				heap_close(rel, NoLock);
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 				if (!pg_ownercheck(userName, relname, RELNAME))
 					elog(ERROR, "you do not own class \"%s\"", relname);
 #endif
@@ -318,7 +320,7 @@ ProcessUtility(Node *parsetree,
 				if (!allowSystemTableMods && IsSystemRelationName(relname))
 					elog(ERROR, "ALTER TABLE: relation \"%s\" is a system catalog",
 						 relname);
-#ifndef NO_SECURITY
+#ifdef USEACL
 				if (!pg_ownercheck(userName, relname, RELNAME))
 					elog(ERROR, "permission denied");
 #endif
@@ -396,7 +398,7 @@ ProcessUtility(Node *parsetree,
 			}
 			break;
 
-
+#ifdef USEACL
 		case T_ChangeACLStmt:
 			{
 				ChangeACLStmt *stmt = (ChangeACLStmt *) parsetree;
@@ -421,15 +423,14 @@ ProcessUtility(Node *parsetree,
 							 relname);
 					/* close rel, but keep lock until end of xact */
 					heap_close(rel, NoLock);
-#ifndef NO_SECURITY
 					if (!pg_ownercheck(userName, relname, RELNAME))
 						elog(ERROR, "you do not own class \"%s\"",
 							 relname);
-#endif
 					ChangeAcl(relname, aip, modechg);
 				}
 			}
 			break;
+#endif
 
 			/*
 			 * ******************************** object creation /
@@ -499,7 +500,7 @@ ProcessUtility(Node *parsetree,
 				RuleStmt   *stmt = (RuleStmt *) parsetree;
 				int			aclcheck_result;
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 				relname = stmt->object->relname;
 				aclcheck_result = pg_aclcheck(relname, userName, ACL_RU);
 				if (aclcheck_result != ACLCHECK_OK)
@@ -545,7 +546,7 @@ ProcessUtility(Node *parsetree,
 						if (!allowSystemTableMods && IsSystemRelationName(relname))
 							elog(ERROR, "class \"%s\" is a system catalog index",
 								 relname);
-#ifndef NO_SECURITY
+#ifdef USEACL
 						if (!pg_ownercheck(userName, relname, RELNAME))
 							elog(ERROR, "%s: %s", relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif
@@ -556,7 +557,7 @@ ProcessUtility(Node *parsetree,
 							char	   *rulename = stmt->name;
 							int			aclcheck_result;
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 
 							relationName = RewriteGetRuleEventRel(rulename);
 							aclcheck_result = pg_aclcheck(relationName, userName, ACL_RU);
@@ -567,7 +568,7 @@ ProcessUtility(Node *parsetree,
 						}
 						break;
 					case TYPE_P:
-#ifndef NO_SECURITY
+#ifdef USEACL
 						/* XXX moved to remove.c */
 #endif
 						RemoveType(stmt->name);
@@ -577,8 +578,7 @@ ProcessUtility(Node *parsetree,
 							char	   *viewName = stmt->name;
 							char	   *ruleName;
 
-#ifndef NO_SECURITY
-
+#ifdef USEACL
 							ruleName = MakeRetrieveViewRuleName(viewName);
 							relationName = RewriteGetRuleEventRel(ruleName);
 							if (!pg_ownercheck(userName, relationName, RELNAME))
@@ -925,7 +925,7 @@ ProcessUtility(Node *parsetree,
 						*/
 						}
 						
-#ifndef NO_SECURITY
+#ifdef USEACL
 						if (!pg_ownercheck(userName, relname, RELNAME))
 							elog(ERROR, "%s: %s", relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif
@@ -947,7 +947,7 @@ ProcessUtility(Node *parsetree,
 								 relname);
 						*/
 						}
-#ifndef NO_SECURITY
+#ifdef USEACL
 						if (!pg_ownercheck(userName, relname, RELNAME))
 							elog(ERROR, "%s: %s", relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif

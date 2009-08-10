@@ -54,7 +54,6 @@ short EndProcedure( StmtMgr );
 
 short UserLock(StmtMgr mgr, const char* grouptolock,uint32_t val,char lock);
 
-void	Clean( StmtMgr mgr,usercleanup input,usercleanup output);
 void	Init(StmtMgr mgr,usercleanup input,usercleanup output);
 
 Pipe     PipeConnect(StmtMgr mgr, void* args, pipefunc func);
@@ -66,13 +65,16 @@ short StreamExec(StmtMgr mgr,char* statement);
 
 short ParseStatement( StmtMgr mgr,const char* thePass, long passLen);
 short Fetch( StmtMgr );
-
+/*
 Input AddBind(StmtMgr mgr, const char * vari, short type);
 Input GetBind(StmtMgr mgr, const char * vari);
-
-int SetBoundValue(StmtMgr mgr, Bound bound, void* value, int length);
+*/
+Input SetInputValue(StmtMgr mgr, const char * vari, short type, void* value, int length);
+Output SetOutputValue(StmtMgr mgr, int index, short type, void* value, int length);
+/*
 short GetType(StmtMgr mgr, Bound bound);
-void* SetUserspace(StmtMgr mgr, Bound bound,void* user);
+ */
+void* SetUserspace(StmtMgr mgr, Bound bound, void* user);
 
 Output OutputLink(StmtMgr mgr, int index, short type);
 short GetOutputs(StmtMgr mgr, void* funcargs, outputfunc func);

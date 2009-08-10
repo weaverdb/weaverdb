@@ -557,10 +557,12 @@ lazy_vacuum_rel(Relation onerel, bool scanonly, bool force_trim)
             
             vacuum_log(onerel,"defrag chance stats -- ratio:%.2f random:%d threshold:%.0f",ratio, random, (MAX_RANDOM_VALUE * ratio));
                                
+/*
             if ((random < (MAX_RANDOM_VALUE * ratio)) && !scanonly) {
                     AddDefragRequest(NameStr(onerel->rd_rel->relname), GetDatabaseName(), 
                             onerel->rd_id, GetDatabaseId(), true, (vacrelstats->rel_live_tuples * 0.01));
             }
+*/
             if (random < (MAX_RANDOM_VALUE * 0.25)) {
                     AddAnalyzeRequest(NameStr(onerel->rd_rel->relname), GetDatabaseName(), onerel->rd_id, GetDatabaseId());
             }

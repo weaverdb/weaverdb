@@ -49,6 +49,11 @@ typedef struct
 
 #define BuildingBtree 	GetIndexGlobals()->BuildingBtree
 
+static bool
+_bt_check_nextpage(Relation rel, BlockNumber left,BlockNumber parent, BlockNumber right);
+static BlockNumber
+_bt_fixsplit(Relation rel, BlockNumber left, BlockNumber parent, BlockNumber right);
+
 static int
 cmp_itemptr(const void *left, const void *right);
 static void _bt_restscan(IndexScanDesc scan);
@@ -718,6 +723,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
     Buffer buffer;
     Page   page;
     BTPageOpaque opaque;
+    BlockNumber  parent,next;
     HeapTuple    heap;
     Oid         heapid;
     bool        changed = false;
@@ -725,13 +731,14 @@ btrecoverpage(Relation rel, BlockNumber block) {
     buffer = _bt_getbuf(rel,block,BT_WRITE);
     page = BufferGetPage(buffer);
     opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+    parent = opaque->btpo_parent;
+    next = opaque->btpo_next;
     heap = SearchSysCacheTuple(INDEXRELID,ObjectIdGetDatum(rel->rd_id), NULL, NULL, NULL);
     heapid = SysCacheGetAttr(INDEXRELID,heap,Anum_pg_index_indrelid,NULL);
     
     Relation heaprel = RelationIdGetRelation(heapid,DEFAULTDBOID);
     
     if ( !PageIsEmpty(page) && P_ISLEAF(opaque) ) {
-	opaque = (BTPageOpaque) PageGetSpecialPointer(page);
 	OffsetNumber current;
 	OffsetNumber low = P_FIRSTDATAKEY(opaque);
         OffsetNumber max = PageGetMaxOffsetNumber(page);
@@ -748,7 +755,6 @@ btrecoverpage(Relation rel, BlockNumber block) {
             } else {
                 LockBuffer(heaprel,heapbuffer,BUFFER_LOCK_SHARE);
                 Page heapPage = BufferGetPage(heapbuffer);
-
 
                 if ( ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(heapPage) ) {
                     ItemId  heapitem = PageGetItemId(heapPage,ItemPointerGetOffsetNumber(pointer));
@@ -783,7 +789,11 @@ btrecoverpage(Relation rel, BlockNumber block) {
     } else {
         _bt_relbuf(rel,buffer);
     }
-    
+/*  check the next page to make sure that a split wasn't aborted, a false return means page is not valid  */
+    if ( !_bt_check_nextpage(rel,block,parent,next) ) {
+        _bt_fixsplit(rel,block,parent,next);
+    }
+
     return NULL;
 }
 
@@ -1069,6 +1079,94 @@ _bt_restscan(IndexScanDesc scan)
 	}
 }
 
+static bool
+_bt_check_nextpage(Relation rel, BlockNumber left,BlockNumber parent, BlockNumber right) {
+    Buffer buffer;
+    Page   page;
+    BTPageOpaque target;
+    bool result = true;
+
+    buffer = _bt_getbuf(rel, right ,BT_READ);
+
+    if ( !BufferIsValid(buffer) ) return false;
+    
+    page = BufferGetPage(buffer);
+    if ( PageIsNew(page) ) {
+        if ( right == RelationGetNumberOfBlocks(rel) - 1 ) {
+            _bt_relbuf(rel,buffer);
+            smgrtruncate(rel->rd_smgr,right);
+        }
+        return false;
+    }
+    target = (BTPageOpaque)PageGetSpecialPointer(page);
+
+    if ( left != target->btpo_prev ) {
+        result = false;
+    }
+    
+    _bt_relbuf(rel,buffer);
+
+    if ( result && parent == BTREE_METAPAGE ) {
+        Buffer metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_READ);
+        BTMetaPageData* meta = BTPageGetMeta(PageGetSpecialPointer(BufferGetPage(metabuf)));
+        if ( meta->btm_root != left ) {
+            result = false;
+        }
+        _bt_relbuf(rel,metabuf);
+    }
+    return result;
+}
+
+static BlockNumber
+_bt_fixsplit(Relation rel,BlockNumber left, BlockNumber parent, BlockNumber right) {
+    if ( parent == BTREE_METAPAGE ) {
+        Buffer buffer = _bt_getbuf(rel, left, BT_WRITE);
+        buffer = _bt_fixroot(rel, buffer, true);
+        right = BufferGetBlockNumber(buffer);
+        _bt_relbuf(rel,buffer);
+
+        buffer = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
+        BTPageGetMeta(PageGetSpecialPointer(BufferGetPage(buffer)))->btm_root = right;
+        _bt_wrtbuf(rel,buffer);
+    } else {
+        Buffer buffer = _bt_getbuf(rel, parent ,BT_WRITE);
+        Page page = BufferGetPage(buffer);
+        BTPageOpaque opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+        OffsetNumber current;
+        bool found = false;
+      
+        for ( current=P_FIRSTDATAKEY(opaque);current <= PageGetMaxOffsetNumber(page);current=OffsetNumberNext(current) ) {
+            BTItem item = (BTItem)PageGetItem(page, PageGetItemId(page, current));
+            ItemPointer pointer = &item->bti_itup.t_tid;
+            if ( !found && left == ItemPointerGetBlockNumber(pointer) ) {
+                found = true;
+            } else if (  right == ItemPointerGetBlockNumber(pointer) ) {
+                PageIndexTupleDelete(page,current);
+                current = OffsetNumberPrev(current);
+            } else {
+                right = ItemPointerGetBlockNumber(pointer);
+                break;
+            }
+        }
+        _bt_wrtbuf(rel, buffer);
+        
+        buffer = _bt_getbuf(rel,left,BT_WRITE);
+        page = BufferGetPage(buffer);
+        opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+        opaque->btpo_next = right;
+        _bt_wrtbuf(rel,buffer);
+
+        buffer = _bt_getbuf(rel,right,BT_WRITE);
+        page = BufferGetPage(buffer);
+        opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+        opaque->btpo_prev = left;
+        _bt_wrtbuf(rel,buffer);
+    }
+
+    return right;
+}
+
+#ifdef NOTUSED
 static void
 _bt_restore_page(Page page, char *from, int len)
 {
@@ -1088,6 +1186,7 @@ _bt_restore_page(Page page, char *from, int len)
 		from += itemsz;
 	}
 }
+#endif
 
 static int
 cmp_itemptr(const void *left, const void *right)

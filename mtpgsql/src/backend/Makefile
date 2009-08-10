@@ -66,7 +66,7 @@ MACOSPATH=\
 
 
 
-DIRS =  access bootstrap catalog commands executor lib libpq \
+DIRS =  access catalog commands executor lib libpq \
 	parser nodes optimizer regex rewrite \
 	storage tcop utils env postmaster
 
@@ -121,7 +121,7 @@ endif
 
 ifneq ($(PORTNAME), win)
 postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o
-	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o -lmtpg $(LDFLAGS) $(LIBS)
+	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o -lmtpg $(LDFLAGS) $(LIBS)
 else
 postgres: $(DLLOBJS) $(SRCDIR)/utils/dllinit.o postgres.def libpostgres.a
 	dlltool --dllname $@$(X) --output-exp $@.exp --def postgres.def

@@ -23,7 +23,6 @@
 #define PROVIDE_64BIT_CRC
 #define USE_ASSERT_CHECKING 1
 #define ABORT_ON_ASSERT 1
-#define NO_SECURITY 
 /*  #define MULTITHREAD_DEBUG  */
 /*  #define SHOW_MEMORY_STATS   */
 /*  #define SPI_EXECUTOR_STATS  */
@@ -233,7 +232,6 @@
 /* #define GISTDEBUG */
 /* #define OMIT_PARTIAL_INDEX */
 /* #define NO_BUFFERISVALID   */
-/* #define NO_SECURITY        */
 /* #define OLD_REWRITE        */
 
 /*

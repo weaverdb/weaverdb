@@ -161,25 +161,24 @@ WCreateConnection(const char *tName, const char *pass, const char *conn)
 
                 ht = SearchSysCacheTuple(SHADOWNAME, PointerGetDatum(tName), 0, 0, 0);
                 if (HeapTupleIsValid(ht)) {
-                        Datum           dpass = SysCacheGetAttr(SHADOWNAME, ht, Anum_pg_shadow_passwd, &isNull);
-                        if (!isNull) {
-                                char            cpass[256];
-                                memset(cpass, 0, 256);
-                                strncpy(cpass, (char *) DatumGetPointer(dpass + 4), (*(int *) dpass) - 4);
-                                winner = (strcmp(pass, cpass) == 0);
-                                if (!winner) {
-                                        strncpy(connection->env->errortext, "user password does not match", 255);
-                                        sqlError = 1702;
-                                }
-                        } else {
-                                winner = true;
-                        }
+                    Datum           dpass = SysCacheGetAttr(SHADOWNAME, ht, Anum_pg_shadow_passwd, &isNull);
+                    if (!isNull) {
+                            char            cpass[256];
+                            memset(cpass, 0, 256);
+                            strncpy(cpass, (char *) DatumGetPointer(dpass + 4), (*(int *) dpass) - 4);
+                            winner = (strcmp(pass, cpass) == 0);
+                            if (!winner) {
+                                    strncpy(connection->env->errortext, "user password does not match", 255);
+                                    sqlError = 1702;
+                            }
+                    } else {
+                            winner = true;
+                    }
                 } else {
-                        sqlError = 1703;
-                        strncpy(connection->env->errortext, "user does not exist", 255);
-                        winner = false;
+                    sqlError = 1703;
+                    strncpy(connection->env->errortext, "user does not exist", 255);
+                    winner = false;
                 }
-
         }
 
         connection->stage = STMT_INVALID;

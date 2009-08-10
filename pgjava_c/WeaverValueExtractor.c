@@ -17,15 +17,15 @@ static javacache CachedClasses;
 
 static javacache*  Cache = &CachedClasses;
 
-static void ExtractIntValue(JNIEnv* env, StmtMgr mgr,Input bound, jobject target);
-static void ExtractStringValue(JNIEnv* env, StmtMgr mgr,Input bound, jobject target);
-static void ExtractCharacterValue(JNIEnv* env,StmtMgr mgr,Input bound, jobject target);
-static void ExtractBooleanValue(JNIEnv* env,StmtMgr mgr,Input bound, jobject target);
-static void ExtractDoubleValue(JNIEnv* env,StmtMgr mgr,Input bound, jobject target);
-static void ExtractLongValue(JNIEnv* env,StmtMgr mgr,Input bound, jobject target);
-static void ExtractDateValue(JNIEnv* env,StmtMgr mgr, Input bound, jobject target);
-static void ExtractByteArrayValue(JNIEnv* env,StmtMgr mgr,Input bound,jobject target);
-static void ExtractBytes(JNIEnv* env, StmtMgr mgr,Input bound,jbyteArray target);
+static void ExtractIntValue(JNIEnv* env, StmtMgr mgr,char* name, short type,  jobject target);
+static void ExtractStringValue(JNIEnv* env, StmtMgr mgr,char* name, short type, jobject target);
+static void ExtractCharacterValue(JNIEnv* env,StmtMgr mgr,char* name, short type, jobject target);
+static void ExtractBooleanValue(JNIEnv* env,StmtMgr mgr,char* name, short type, jobject target);
+static void ExtractDoubleValue(JNIEnv* env,StmtMgr mgr,char* name, short type, jobject target);
+static void ExtractLongValue(JNIEnv* env,StmtMgr mgr,char* name, short type, jobject target);
+static void ExtractDateValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject target);
+static void ExtractByteArrayValue(JNIEnv* env,StmtMgr mgr,char* name, short type,jobject target);
+static void ExtractBytes(JNIEnv* env, StmtMgr mgr,char* name, short type,jbyteArray target);
 
 javacache*  CreateCache(JNIEnv* env) {
 	/* exceptions  */
@@ -49,7 +49,8 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.pipein = (*env)->GetMethodID(env,CachedClasses.boundin,"pipeIn","(Ljava/nio/ByteBuffer;)I");
         CachedClasses.pipeout = (*env)->GetMethodID(env,CachedClasses.boundout,"pipeOut","(Ljava/nio/ByteBuffer;)V");
         CachedClasses.infoin = (*env)->GetMethodID(env,CachedClasses.talker,"pipeIn","([B)I");
-        CachedClasses.infoout = (*env)->GetMethodID(env,CachedClasses.talker,"pipeOut","([B)V"); 
+        CachedClasses.infoout = (*env)->GetMethodID(env,CachedClasses.talker,"pipeOut","([B)V");
+        CachedClasses.typeid = (*env)->GetMethodID(env,CachedClasses.boundout,"getTypeId","()I");
         /*  output types */
         CachedClasses.doubletype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/lang/Double"));
         CachedClasses.doubletolong = (*env)->GetStaticMethodID(env,CachedClasses.doubletype,"doubleToLongBits","(D)J");
@@ -103,41 +104,41 @@ javacache*  DropCache(JNIEnv* env) {
         return &CachedClasses;
 }
 
-int PassInValue(JNIEnv* env,StmtMgr mgr, Input bound, jobject data) {
+int PassInValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject data) {
     if ( (*env)->IsSameObject(env,NULL,data) ) {
-        SetBoundValue(mgr,InputToBound(bound),NULL,0);
+        SetInputValue(mgr,name,type,NULL,0);
     } else {
-	switch( GetType(mgr,InputToBound(bound)) )
+	switch( type )
 	{
             case INT4TYPE:
-                ExtractIntValue(env,mgr,bound,data);
+                ExtractIntValue(env,mgr,name,type,data);
                 break;
             case VARCHARTYPE:
-                ExtractStringValue(env,mgr,bound,data);
+                ExtractStringValue(env,mgr,name,type,data);
                 break;
             case CHARTYPE:
-                ExtractCharacterValue(env,mgr,bound,data);
+                ExtractCharacterValue(env,mgr,name,type,data);
                 break;
             case BOOLTYPE:
-                ExtractBooleanValue(env,mgr,bound,data);
+                ExtractBooleanValue(env,mgr,name,type,data);
                 break;
             case BYTEATYPE:
-                ExtractByteArrayValue(env,mgr,bound,data);
+                ExtractByteArrayValue(env,mgr,name,type,data);
                 break;
             case TIMESTAMPTYPE:
-                ExtractDateValue(env,mgr,bound,data);
+                ExtractDateValue(env,mgr,name,type,data);
                 break;
             case DOUBLETYPE:
-                ExtractDoubleValue(env,mgr,bound,data);
+                ExtractDoubleValue(env,mgr,name,type,data);
                 break;
             case LONGTYPE:
-                ExtractLongValue(env,mgr,bound,data);
+                ExtractLongValue(env,mgr,name,type,data);
                 break;
             case BLOBTYPE:
             case TEXTTYPE:
             case SLOTTYPE:
             case JAVATYPE:
-                ExtractByteArrayValue(env,mgr,bound,data);
+                ExtractByteArrayValue(env,mgr,name,type,data);
                 break;
             case STREAMTYPE:
                 break;
@@ -171,21 +172,21 @@ GetMethodID(JNIEnv* env,jobject target,const char* name,const char* signature) {
 }
 */
 void
-ExtractIntValue(JNIEnv* env,StmtMgr mgr,Input bound,jobject target) {
+ExtractIntValue(JNIEnv* env,StmtMgr mgr,char* name, short type, jobject target) {
     if ((*env)->IsInstanceOf(env,target,Cache->inttype)) {
         union {
             char    buffer[4];
             jint    val;
         }   convert;
         convert.val = (*env)->CallIntMethod(env,target,Cache->intvalue);
-        SetBoundValue(mgr,InputToBound(bound),convert.buffer,4);
+        SetInputValue(mgr, name, type, convert.buffer,4);
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Number");    
     }
 }
 
 void
-ExtractStringValue(JNIEnv* env, StmtMgr mgr,Input bound,jobject data) {
+ExtractStringValue(JNIEnv* env, StmtMgr mgr,char* name, short type,jobject data) {
     jsize           len = 0;
     jstring         value;
     const char*          buffer;
@@ -197,15 +198,8 @@ ExtractStringValue(JNIEnv* env, StmtMgr mgr,Input bound,jobject data) {
 
         len = (*env)->GetStringUTFLength(env,value);
         buffer = (*env)->GetStringUTFChars(env,(jstring)data,&copy);
-        written =  SetBoundValue(mgr,InputToBound(bound),(void*)buffer,len);
-        if ( written != len ) {
-            if (!(*env)->ExceptionOccurred(env) ) {
-                char size[32];
-                sprintf(size,"%u",written);	
-                if (!(*env)->ExceptionOccurred(env) ) 
-                        (*env)->ThrowNew(env,Cache->truncation,(const char*)size);
-            }
-        }
+        SetInputValue(mgr,name,type,(void*)buffer,len);
+
         (*env)->ReleaseStringUTFChars(env,data,buffer);    
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a String");    
@@ -213,35 +207,35 @@ ExtractStringValue(JNIEnv* env, StmtMgr mgr,Input bound,jobject data) {
 }
 
 void
-ExtractCharacterValue(JNIEnv* env,StmtMgr mgr, Input bound, jobject target) {
+ExtractCharacterValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject target) {
     if ( (*env)->IsInstanceOf(env,target,Cache->chartype) ) {
         union {
             char buffer[1];
             jchar value;
         } convert;
         convert.value = (*env)->CallCharMethod(env,target,Cache->charvalue);
-        SetBoundValue(mgr,InputToBound(bound),convert.buffer,1);
+        SetInputValue(mgr,name,type,convert.buffer,1);
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Character");    
     }
 }
 
 void
-ExtractBooleanValue(JNIEnv* env,StmtMgr mgr, Input bound,jobject target) {
+ExtractBooleanValue(JNIEnv* env,StmtMgr mgr, char* name, short type,jobject target) {
     if ( (*env)->IsInstanceOf(env,target,Cache->booltype) ) {
         union {
             char    buffer[1];
             jboolean    val;
         }   convert;
         convert.val = (*env)->CallBooleanMethod(env,target,Cache->boolvalue);
-        SetBoundValue(mgr,InputToBound(bound),convert.buffer,1);
+        SetInputValue(mgr,name,type,convert.buffer,1);
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Boolean");    
     }
 }
 
 void
-ExtractDoubleValue(JNIEnv* env,StmtMgr mgr, Input bound,jobject target) {
+ExtractDoubleValue(JNIEnv* env,StmtMgr mgr, char* name, short type,jobject target) {
     if ( (*env)->IsInstanceOf(env,target,Cache->doubletype) ) {
         union {
             char    buffer[8];
@@ -251,21 +245,21 @@ ExtractDoubleValue(JNIEnv* env,StmtMgr mgr, Input bound,jobject target) {
         jdouble value = (*env)->CallDoubleMethod(env,target,Cache->doublevalue);
         convert.val = (*env)->CallStaticLongMethod(env,Cache->doubletype,Cache->doubletolong,value);
         
-        SetBoundValue(mgr,InputToBound(bound),convert.buffer,8);
+        SetInputValue(mgr,name,type,convert.buffer,8);
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Double");    
     }
 }
 
 void
-ExtractLongValue(JNIEnv* env,StmtMgr mgr, Input bound,jobject target) {
+ExtractLongValue(JNIEnv* env,StmtMgr mgr, char* name, short type,jobject target) {
     if ( (*env)->IsInstanceOf(env,target,Cache->longtype) ) {
         union {
             char    buffer[8];
             jdouble  val;
         }   convert;
         convert.val = (*env)->CallLongMethod(env,target,Cache->longvalue);
-        SetBoundValue(mgr,InputToBound(bound),convert.buffer,8);
+        SetInputValue(mgr,name,type,convert.buffer,8);
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Long");    
     }
@@ -273,7 +267,7 @@ ExtractLongValue(JNIEnv* env,StmtMgr mgr, Input bound,jobject target) {
 
 
 void
-ExtractDateValue(JNIEnv* env,StmtMgr mgr, Input bound, jobject target) {
+ExtractDateValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject target) {
     if ( (*env)->IsInstanceOf(env,target,Cache->datetype) ) {
         union {
             char    buffer[8];
@@ -284,7 +278,7 @@ ExtractDateValue(JNIEnv* env,StmtMgr mgr, Input bound, jobject target) {
         convert.val /= 1000;
         convert.val -= (10957 * 86400);
 
-        SetBoundValue(mgr,InputToBound(bound),convert.buffer,8);
+        SetInputValue(mgr,name,type,convert.buffer,8);
     } else if (!(*env)->ExceptionOccurred(env) ) {
             (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Date");    
     }
@@ -292,7 +286,7 @@ ExtractDateValue(JNIEnv* env,StmtMgr mgr, Input bound, jobject target) {
 
 
 void
-ExtractByteArrayValue(JNIEnv* env,StmtMgr mgr,Input bound,jobject target) {
+ExtractByteArrayValue(JNIEnv* env,StmtMgr mgr,char* name, short type,jobject target) {
 /*
     jclass clacla = (*env)->FindClass(env,"java/lang/Class");
     jclass clazz = (*env)->GetObjectClass(env,target);
@@ -315,25 +309,16 @@ ExtractByteArrayValue(JNIEnv* env,StmtMgr mgr,Input bound,jobject target) {
         }
     }
 */
-    ExtractBytes(env,mgr,bound,(jbyteArray)target);
+    ExtractBytes(env,mgr,name,type,(jbyteArray)target);
 }
 
-static void ExtractBytes(JNIEnv* env, StmtMgr mgr,Input bound,jbyteArray target) {
+static void ExtractBytes(JNIEnv* env, StmtMgr mgr,char* name, short type,jbyteArray target) {
     jsize       length = (*env)->GetArrayLength(env,target);
     jboolean    copy;
     jbyte*      buffer;
-    int written;
 
     buffer = (*env)->GetByteArrayElements(env,target,&copy);
-    written =  SetBoundValue(mgr,InputToBound(bound),buffer,length);
-    if ( written != length ) {
-        if (!(*env)->ExceptionOccurred(env) ) {
-            char size[32];
-            sprintf(size,"%u",written);	
-            if (!(*env)->ExceptionOccurred(env) ) 
-                    (*env)->ThrowNew(env,Cache->truncation,(const char*)size);
-        }
-    }
+    SetInputValue(mgr,name,type,buffer,length);
     (*env)->ReleaseByteArrayElements(env,target,buffer,JNI_ABORT);
 }
 

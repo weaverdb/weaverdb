@@ -4,6 +4,8 @@ provider mtpg {
 	probe wait(int, int);
 	probe run(int, int);
 	probe showcosts(int, int, int);
+	probe indexcost(int, int, int, int);
+	probe initplan(int);
         probe freespace__miss(int,int);
         probe freespace__hit(int,int);
         probe freespace__reservation(string,int,int,int);

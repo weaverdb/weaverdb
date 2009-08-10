@@ -30,13 +30,16 @@
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
 #include "tcop/tcopprot.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
-
+#ifdef USEACL
 static void CheckPgUserAclNotNull(void);
+#endif
 
 #define SQL_LENGTH	512
 
@@ -207,8 +210,10 @@ CreateUser(CreateUserStmt *stmt)
 	havesysid = stmt->sysid > 0;
 
 	/* Check some permissions first */
+#ifdef USEACL
 	if (stmt->password)
 		CheckPgUserAclNotNull();
+#endif
 
 	if (!superuser())
 		elog(ERROR, "CREATE USER: permission denied");
@@ -358,8 +363,10 @@ AlterUser(AlterUserStmt *stmt)
 				new_tuple;
 	bool		null;
 
+#ifdef USEACL
 	if (stmt->password)
 		CheckPgUserAclNotNull();
+#endif
 
 	/* must be superuser or just want to change your own password */
 	if (!superuser() &&
@@ -631,6 +638,7 @@ DropUser(DropUserStmt *stmt)
  *
  * check to see if there is an ACL on pg_shadow
  */
+#ifdef USEACL
 static void
 CheckPgUserAclNotNull()
 {
@@ -657,7 +665,7 @@ CheckPgUserAclNotNull()
 
 	return;
 }
-
+#endif
 
 
 /*

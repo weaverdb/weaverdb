@@ -10,8 +10,13 @@ package driver.weaver;
  *
  * @author  mscott
  */
-public class Bound {
-    enum Types {
+public class Bound<T> {
+
+    private Types settype = Types.Null;
+    private Class<T> type = null;
+    private boolean active = true;
+
+    protected enum Types {
         String(2,"Ljava/lang/String;"),
         Double(3,"D"),
         Integer(1,"I"),
@@ -44,5 +49,37 @@ public class Bound {
         public String getSignature() {
             return signature;
         }
+    }
+
+    protected void setTypeClass(Class<T> t) {
+        type = t;
+    }
+
+    protected Class<T> getTypeClass() {
+        return type;
+    }
+
+    public boolean isSameType(Class t) {
+        return t.equals(type);
+    }
+
+    protected void setType(Types t) {
+        settype = t;
+    }
+
+    protected Types getType() {
+        return settype;
+    }
+
+    public int getTypeId() {
+        return settype.getId();
+    }
+
+    public void deactivate() {
+        active = false;
+    }
+
+    public boolean isActive() {
+        return active;
     }
 }

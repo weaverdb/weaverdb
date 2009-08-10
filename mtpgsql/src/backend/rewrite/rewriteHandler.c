@@ -30,7 +30,9 @@
 #include "parser/parsetree.h"
 #include "rewrite/locks.h"
 #include "rewrite/rewriteManip.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/lsyscache.h"
 
 
@@ -1121,6 +1123,7 @@ fireRules(Query *parsetree,
 			parsetree->commandType != CMD_SELECT)
 		{
 			RangeTblEntry *rte;
+#ifdef USEACL
 			int32		acl_rc;
 			int32		reqperm;
 
@@ -1133,8 +1136,10 @@ fireRules(Query *parsetree,
 					reqperm = ACL_WR;
 					break;
 			}
+#endif
 
 			rte = rt_fetch(parsetree->resultRelation, parsetree->rtable);
+#ifdef USEACL
 			if (!rte->skipAcl)
 			{
 				acl_rc = pg_aclcheck(rte->relname,
@@ -1146,6 +1151,7 @@ fireRules(Query *parsetree,
 						 aclcheck_error_strings[acl_rc]);
 				}
 			}
+#endif
 		}
 
 		/* multiple rule action time */

@@ -31,10 +31,18 @@ gram.c parse.h: gram.y
 	mv y.tab.c gram.c
 	mv y.tab.h parse.h
 
+gram_r.c: gram_r.y
+	$(YACC) $(YFLAGS) $<
+	mv y.tab.c gram.c
+	mv y.tab.h parse.h
+
 scan.c:	scan.l
 	$(LEX) $<
 	mv lex.yy.c scan.c
 
+scan_r.c: scan_r.l
+	$(LEX2) $<
+	mv lex.yy.c scan.c
 # The following dependencies on parse.h are computed by
 # make depend, but we state them here explicitly anyway because 
 # parse.h doesn't even exist at first and if user fails to 

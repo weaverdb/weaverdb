@@ -28,7 +28,9 @@
 #include "commands/comment.h"
 #include "miscadmin.h"
 #include "rewrite/rewriteRemove.h"
+#ifdef USEACL
 #include "utils/acl.h"
+#endif
 #include "utils/syscache.h"
 
 #include "../backend/parser/parse.h"
@@ -282,7 +284,7 @@ CommentRelation(int reltype, char *relname, char *comment)
 
 	/*** First, check object security ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 		elog(ERROR, "you are not permitted to comment on class '%s'", relname);
 #endif
@@ -348,7 +350,7 @@ CommentAttribute(char *relname, char *attrname, char *comment)
 
 	/*** First, check object security ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 		elog(ERROR, "you are not permitted to comment on class '%s\'", relname);
 #endif
@@ -428,7 +430,7 @@ CommentDatabase(char *database, char *comment)
 
 	/*** Allow if the userid matches the database dba or is a superuser ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	if (!(superuser || (userid == dba)))
 	{
 		elog(ERROR, "you are not permitted to comment on database '%s'",
@@ -465,11 +467,11 @@ CommentRewrite(char *rule, char *comment)
 	Oid			oid;
 	char	   *user,
 			   *relation;
-	int			aclcheck;
+#ifdef USEACL
+        int			aclcheck;
+
 
 	/*** First, validate user ***/
-
-#ifndef NO_SECURITY
 	user = GetPgUserName();
 	relation = RewriteGetRuleEventRel(rule);
 	aclcheck = pg_aclcheck(relation, user, ACL_RU);
@@ -516,7 +518,7 @@ CommentType(char *type, char *comment)
 
 	/*** First, validate user ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	user = GetPgUserName();
 	if (!pg_ownercheck(user, type, TYPENAME))
 	{
@@ -573,7 +575,7 @@ CommentAggregate(char *aggregate, char *argument, char *comment)
 
 	/*** Next, validate the user's attempt to comment ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	user = GetPgUserName();
 	if (!pg_aggr_ownercheck(user, aggregate, baseoid))
 	{
@@ -663,7 +665,7 @@ CommentProc(char *function, List *arguments, char *comment)
 
 	/*** Now, validate the user's ability to comment on this function ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	user = GetPgUserName();
 	if (!pg_func_ownercheck(user, function, argcount, argoids))
 		elog(ERROR, "you are not permitted to comment on function '%s'",
@@ -763,7 +765,7 @@ CommentOperator(char *opername, List *arguments, char *comment)
 
 	/*** Valid user's ability to comment on this operator ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	user = GetPgUserName();
 	if (!pg_ownercheck(user, (char *) ObjectIdGetDatum(oid), OPEROID))
 	{
@@ -811,7 +813,7 @@ CommentTrigger(char *trigger, char *relname, char *comment)
 
 	/*** First, validate the user's action ***/
 
-#ifndef NO_SECURITY
+#ifdef USEACL
 	user = GetPgUserName();
 	if (!pg_ownercheck(user, relname, RELNAME))
 	{

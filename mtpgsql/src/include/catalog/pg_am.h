@@ -106,15 +106,15 @@ typedef FormData_pg_am *Form_pg_am;
  * ----------------
  */
 
-DATA(insert OID = 402 (  rtree PGUID 8 3 0 rtgettuple rtinsert rtdelete - - - - rtbeginscan rtrescan rtendscan rtmarkpos rtrestrpos - - rtbuild - - rtcostestimate ));
-DESCR("");
+//DATA(insert OID = 402 (  rtree PGUID 8 3 0 rtgettuple rtinsert rtdelete - - - - rtbeginscan rtrescan rtendscan rtmarkpos rtrestrpos - - rtbuild - - rtcostestimate ));
+//DESCR("");
 DATA(insert OID = 403 (  btree PGUID 5 1 1 btgettuple btinsert btdelete btbulkdelete - - btrecoverpage btbeginscan btrescan btendscan btmarkpos btrestrpos - - btbuild - - btcostestimate ));
 DESCR("");
 #define BTREE_AM_OID 403
 DATA(insert OID = 405 (  hash PGUID 1 1 0 hashgettuple hashinsert hashdelete - - - - hashbeginscan hashrescan hashendscan hashmarkpos hashrestrpos - - hashbuild - - hashcostestimate ));
 DESCR("");
 #define HASH_AM_OID 405
-DATA(insert OID = 783 (  gist PGUID 100 7 0 gistgettuple gistinsert gistdelete - - - - gistbeginscan gistrescan gistendscan gistmarkpos gistrestrpos - - gistbuild - - gistcostestimate ));
-DESCR("");
+//DATA(insert OID = 783 (  gist PGUID 100 7 0 gistgettuple gistinsert gistdelete - - - - gistbeginscan gistrescan gistendscan gistmarkpos gistrestrpos - - gistbuild - - gistcostestimate ));
+//DESCR("");
 
 #endif	 /* PG_AM_H */

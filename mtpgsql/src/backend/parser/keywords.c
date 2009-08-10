@@ -122,7 +122,9 @@ static ScanKeyword ScanKeywords[] = {
 	{"full", FULL},
 	{"function", FUNCTION},
 	{"global", GLOBAL},
+#ifdef USEACL
 	{"grant", GRANT},
+#endif
 	{"group", GROUP},
 	{"handler", HANDLER},
 	{"having", HAVING},
@@ -206,7 +208,9 @@ static ScanKeyword ScanKeywords[] = {
 	{"precision", PRECISION},
 	{"primary", PRIMARY},
 	{"prior", PRIOR},
+#ifdef USEACL
 	{"privileges", PRIVILEGES},
+#endif
 	{"procedural", PROCEDURAL},
 	{"procedure", PROCEDURE},
 	{"prune", PRUNE},
@@ -221,12 +225,14 @@ static ScanKeyword ScanKeywords[] = {
         {"respan",RESPAN},
 	{"restrict", RESTRICT},
 	{"returns", RETURNS},
+#ifdef USEACL
 	{"revoke", REVOKE},
+#endif
 	{"right", RIGHT},
 	{"rollback", ROLLBACK},
 	{"row", ROW},
 	{"rule", RULE},
-/*  added by myron scott to look like oracle */
+/*  added by myron scott */
 	{"scan", SCAN},
 	{"schema", SCHEMA},
 /*  end add   */
