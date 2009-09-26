@@ -194,7 +194,7 @@ _bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
          * Find first item >= proposed new item.  Note we could also get a
          * pointer to end-of-page here.
          */
-        offset = _bt_binsrch(rel, buf, natts, itup_scankey);
+        offset = _bt_binsrch(rel, page, natts, itup_scankey);
 
         /*
          * Scan over all equal tuples, looking for live conflicts.
@@ -430,7 +430,7 @@ _bt_insertonpg(Relation rel,
 		if (movedright)
 			newitemoff = P_FIRSTDATAKEY(lpageop);
 		else
-			newitemoff = _bt_binsrch(rel, buf, keysz, scankey);
+			newitemoff = _bt_binsrch(rel, page, keysz, scankey);
 	}
 
 	/*
@@ -720,7 +720,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	lhikey = item;
 	if (PageAddItem(leftpage, (Item) item, itemsz, leftoff,
 					LP_USED) == InvalidOffsetNumber)
-		elog(FATAL, "btree: failed to add hikey to the left sibling");
+        elog(FATAL, "btree: failed to add hikey to the left sibling");
 	leftoff = OffsetNumberNext(leftoff);
 
 	/*

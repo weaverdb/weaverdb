@@ -41,45 +41,53 @@ _bt_search(Relation rel, int keysz, ScanKey scankey,
 		   Buffer *bufP, int access)
 {
 	BTStack		stack_in = NULL;
+        Buffer          current = *bufP;
 
 	/* Get the root page to start with */
-	*bufP = _bt_getroot(rel, access);
+	current = _bt_getroot(rel, access);
 
 	/* If index is empty and access = BT_READ, no root page is created. */
-	if (!BufferIsValid(*bufP))
-		return (BTStack) NULL;
+	if (!BufferIsValid(current)) {
+            *bufP = InvalidBuffer;
+            return (BTStack) NULL;
+        }
 
 	/* Loop iterates once per level descended in the tree */
 	for (;;)
 	{
 		Page		page;
-		BTPageOpaque opaque;
-		OffsetNumber offnum;
+		BTPageOpaque    opaque;
+		OffsetNumber    offnum;
 		ItemId		itemid;
 		BTItem		btitem;
 		IndexTuple	itup;
-		BlockNumber blkno;
-		BlockNumber par_blkno;
+		BlockNumber     blkno;
+		BlockNumber     par_blkno;
 		BTStack		new_stack = NULL;
 
-		*bufP = _bt_moveright(rel, *bufP, keysz, scankey, BT_READ);
+		current = _bt_moveright(rel, current, keysz, scankey, BT_READ);
 		
 		/* if this is a leaf page, we're done */
-		page = BufferGetPage(*bufP);
+		page = BufferGetPage(current);
+                Assert(PageIsValid(page));
 		opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-		if (P_ISLEAF(opaque)) 
+                
+		if (P_ISLEAF(opaque)) {
 			break;
+                }
 
                 /*
 		 * Find the appropriate item on the internal page, and get the
 		 * child page that it points to.
 		 */
-		offnum = _bt_binsrch(rel, *bufP, keysz, scankey);
+		offnum = _bt_binsrch(rel, page, keysz, scankey);
+                Assert(OffsetNumberIsValid(offnum));
 		itemid = PageGetItemId(page, offnum);
-		btitem = (BTItem) PageGetItem(page, itemid);
+                Assert((itemid)->lp_flags & LP_USED);
+                btitem = (BTItem) PageGetItem(page, itemid);
 		itup = &(btitem->bti_itup);
 		blkno = ItemPointerGetBlockNumber(&(itup->t_tid));
-		par_blkno = BufferGetBlockNumber(*bufP);
+		par_blkno = BufferGetBlockNumber(current);
 
 		/*
 		 * We need to save the bit image of the index entry we chose in
@@ -100,13 +108,14 @@ _bt_search(Relation rel, int keysz, ScanKey scankey,
 		new_stack->bts_parent = stack_in;
 
 		/* drop the read lock on the parent page, acquire one on the child */
-		_bt_relbuf(rel, *bufP);
-		*bufP = _bt_getbuf(rel, blkno, BT_READ);
+		_bt_relbuf(rel, current);
+		current = _bt_getbuf(rel, blkno, BT_READ);
 
 		/* okay, all set to move down a level */
 		stack_in = new_stack;
 	}
 
+        *bufP = current;
 	return stack_in;
 }
 
@@ -140,8 +149,6 @@ _bt_moveright(Relation rel,
 
 	page = BufferGetPage(buf);
 	opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-
-
 
 	/*
 	 * If the scan key that brought us to this page is > the high key
@@ -192,19 +199,17 @@ _bt_moveright(Relation rel,
  */
 OffsetNumber
 _bt_binsrch(Relation rel,
-			Buffer buf,
+			Page page,
 			int keysz,
 			ScanKey scankey)
 {
 	TupleDesc	itupdesc;
-	Page		page;
 	BTPageOpaque opaque;
 	OffsetNumber low,
 				high;
 	int32		result;
 
 	itupdesc = RelationGetDescr(rel);
-	page = BufferGetPage(buf);
 	opaque = (BTPageOpaque) PageGetSpecialPointer(page);
 
 	low = P_FIRSTDATAKEY(opaque);
@@ -592,7 +597,7 @@ _bt_first(IndexScanDesc scan, ScanDirection dir)
 	page = BufferGetPage(buf);
 
 	/* position to the precise item on the page */
-	offnum = _bt_binsrch(rel, buf, keysCount, scankeys);
+	offnum = _bt_binsrch(rel, page, keysCount, scankeys);
 
 	ItemPointerSet(current, blkno, offnum);
 

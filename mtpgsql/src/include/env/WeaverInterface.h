@@ -72,6 +72,7 @@ LIB_EXTERN long WIsValidConnection(OpaqueWConn conn);
 LIB_EXTERN long WGetTransactionId(OpaqueWConn conn);
 LIB_EXTERN long WGetCommandId(OpaqueWConn conn);
 
+LIB_EXTERN long WExecCount(OpaqueWConn conn);
 LIB_EXTERN long WFetchIsComplete(OpaqueWConn conn);
 LIB_EXTERN long WGetErrorCode(OpaqueWConn conn);
 LIB_EXTERN const char* WGetErrorText(OpaqueWConn conn);

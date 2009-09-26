@@ -389,7 +389,6 @@ WParsingFunc(OpaqueWConn conn, const char *smt)
         memset(connection->targs, 0, sizeof(Oid) * MAX_ARGS);
         connection->nargs = 0;
 
-        connection->cursor = -1;
         connection->processed = -1;
     
         RELEASE(connection);
@@ -463,6 +462,8 @@ WExec(OpaqueWConn conn)
     if (connection->stage == STMT_INVALID) {
             elog(ERROR, "no statement parsed");
     }
+    connection->processed = 0;
+    
     if (connection->plan == NULL) {
             connection->plan = PreparePlan(connection->statement, connection->targs, connection->lineup, connection->nargs);
     }
@@ -470,6 +471,7 @@ WExec(OpaqueWConn conn)
 
     trackquery = plan->querytreelist;
     trackplan = plan->plantreelist;
+
 
     while (trackquery) {
         /*
@@ -513,7 +515,7 @@ WExec(OpaqueWConn conn)
                 TupleTableSlot *slot = NULL;
 
                 ItemPointerData tuple_ctid;
-                int             delete_count = 0;
+                int   count = 0;
 
                 do {
                     slot = ExecProcNode(plan->qdesc->plantree);
@@ -526,27 +528,30 @@ WExec(OpaqueWConn conn)
                         case CMD_INSERT:
                                 slot->val->t_data->t_oid = GetGenId();
                                 ExecAppend(slot, NULL, plan->state);
+                                count++;
                                 break;
                         case CMD_DELETE:
                                 ExecDelete(slot, &tuple_ctid, plan->state);
-                                delete_count++;
+                                count++;
                                 break;
                         case CMD_UPDATE:
                                 ExecReplace(slot, &tuple_ctid, plan->state);
-                                delete_count++;
+                                count++;
                                 break;
                         default:
                                 elog(DEBUG, "ExecutePlan: unknown operation in queryDesc");
                                 break;
                     }
+                    if ( count % 99 == 0 && CheckForCancel() ) {
+                        elog(ERROR,"Query Cancelled");
+                    }
                 } while (true);
 
-                if ( CheckForCancel() ) {
-                    elog(ERROR,"Query Cancelled");
-                }
+                connection->processed += count;
             }
         }
     }
+
     connection->stage = STMT_EXEC;
     RELEASE(connection);
     return err;
@@ -638,6 +643,7 @@ WFetch(OpaqueWConn conn)
         }
         ExecClearTuple(slot);
         plan->state->es_processed++;
+        connection->processed++;
         connection->stage = STMT_FETCH;
     }
                 
@@ -821,6 +827,13 @@ WBindWithIndicate(OpaqueWConn conn, const char *var, void *varAdd, int varSize, 
     return err;
 }
 
+extern long
+WExecCount(OpaqueWConn conn)
+{
+    WConn          connection = (WConn) conn;
+
+    return connection->processed;
+}
 
 extern long 
 WCancel(OpaqueWConn conn)

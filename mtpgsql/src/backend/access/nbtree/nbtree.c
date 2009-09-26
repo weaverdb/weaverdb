@@ -1121,7 +1121,11 @@ static BlockNumber
 _bt_fixsplit(Relation rel,BlockNumber left, BlockNumber parent, BlockNumber right) {
     if ( parent == BTREE_METAPAGE ) {
         Buffer buffer = _bt_getbuf(rel, left, BT_WRITE);
-        buffer = _bt_fixroot(rel, buffer, true);
+        Page page = BufferGetPage(buffer);
+        BTPageOpaque opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+        if ( !P_ISROOT(opaque) ) {
+            buffer = _bt_fixroot(rel, buffer, true);
+        }
         right = BufferGetBlockNumber(buffer);
         _bt_relbuf(rel,buffer);
 

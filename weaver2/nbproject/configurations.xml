@@ -11,6 +11,14 @@
       <itemPath>../pgjava/main.h</itemPath>
     </logicalFolder>
     <logicalFolder name="pgjava_c" displayName="pgjava_c" projectFiles="true">
+      <logicalFolder name="driver" displayName="driver" projectFiles="true">
+        <logicalFolder name="weaver" displayName="weaver" projectFiles="true">
+          <logicalFolder name="connector" displayName="connector" projectFiles="true">
+          </logicalFolder>
+          <logicalFolder name="jdbc" displayName="jdbc" projectFiles="true">
+          </logicalFolder>
+        </logicalFolder>
+      </logicalFolder>
       <itemPath>../pgjava_c/WeaverFrameConnection.c</itemPath>
       <itemPath>../pgjava_c/WeaverStmtManager.c</itemPath>
       <itemPath>../pgjava_c/WeaverStmtManager.h</itemPath>

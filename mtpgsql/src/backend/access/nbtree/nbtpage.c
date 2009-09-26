@@ -96,15 +96,24 @@ _bt_getroot(Relation rel, int access)
     Buffer root = InvalidBuffer;
     BlockNumber rootblock = InvalidBlockNumber;
     bool create = (access == BT_WRITE);
-    
+    int attempts = 0;
+    bool fixedroot = false;
+   
     while ( !BufferIsValid(root) ) {
+        attempts++;
         root = _bt_tryroot(rel,create);
         if ( BufferIsValid(root) ) {
             Page rootpage = BufferGetPage(root);
             BTPageOpaque rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
-           if (!P_ISROOT(rootopaque)) {
+            if (!P_ISROOT(rootopaque)) {
+                elog(DEBUG,"moved btree root page %ld %ld %d",rootblock,BufferGetBlockNumber(root),attempts);
                 if ( rootblock == BufferGetBlockNumber(root) ) {
-                    root = _bt_fixroot(rel,root,true);
+                    if ( attempts > 20 ) {
+                        LockBuffer((rel) ,root, BUFFER_LOCK_UNLOCK);
+                        LockBuffer((rel) ,root, BT_WRITE);
+                        root = _bt_fixroot(rel,root,true);
+                        fixedroot = true;
+                    }
                 } else {
                     rootblock = BufferGetBlockNumber(root);
                 }
@@ -144,41 +153,32 @@ _bt_tryroot(Relation rel, bool create)
 {
 	Buffer		metabuf;
 	Page		metapg;
-	BTPageOpaque    metaopaque;
 	BTMetaPageData *metad;
+        BlockNumber     root;
 
 	metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_READ);
 	metapg = BufferGetPage(metabuf);
-	metaopaque = (BTPageOpaque) PageGetSpecialPointer(metapg);
 	metad = BTPageGetMeta(metapg);
         
-	if (!(metaopaque->btpo_flags & BTP_META)) {
-            elog(ERROR,"Index %s has bad flags in root page",RelationGetRelationName(rel));
-        }
-        if (metad->btm_magic != BTREE_MAGIC) {
-		elog(ERROR, "Index %s is not a btree", RelationGetRelationName(rel));
-        }
+	Assert(((BTPageOpaque)PageGetSpecialPointer(metapg))->btpo_flags & BTP_META);
+        Assert(metad->btm_magic == BTREE_MAGIC);
+        Assert(metad->btm_version == BTREE_VERSION);
 
-	if (metad->btm_version != BTREE_VERSION)
-		elog(ERROR, "Version mismatch on %s: version %d file, version %d code",
-			 RelationGetRelationName(rel),
-			 metad->btm_version, BTREE_VERSION);
+        root = metad->btm_root;
+        _bt_relbuf(rel,metabuf);
 
 	/* if no root page initialized yet, do it */
-	if (metad->btm_root == P_NONE)
-	{
+	if (root == P_NONE) {
 		/* If access = BT_READ, caller doesn't want us to create root yet */
-		if (!create)
-		{
-			_bt_relbuf(rel, metabuf);
+		if (!create) {
 			return InvalidBuffer;
 		}
 
 		/* trade in our read lock for a write lock */
-		LockBuffer((rel) ,metabuf, BUFFER_LOCK_UNLOCK);
-		LockBuffer((rel) ,metabuf, BT_WRITE);
-
-		/*
+		metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
+                metapg = BufferGetPage(metabuf);
+                metad = BTPageGetMeta(metapg);
+                 /*
 		 * Race condition:	if someone else initialized the metadata
 		 * between the time we released the read lock and acquired the
 		 * write lock, above, we must avoid doing it again.
@@ -192,27 +192,22 @@ _bt_tryroot(Relation rel, bool create)
 			 */
 			Buffer rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
 			Page rootpage = BufferGetPage(rootbuf);
+                        root = BufferGetBlockNumber(rootbuf);
 
 			/* NO ELOG(ERROR) till meta is updated */
 
-			metad->btm_root = BufferGetBlockNumber(rootbuf);
+			metad->btm_root = root;
 			metad->btm_level = 1;
 
 			_bt_pageinit(rootpage, BufferGetPageSize(rootbuf));
 			((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_flags |= (BTP_LEAF | BTP_ROOT);
 
-			_bt_wrtnorelbuf(rel, rootbuf);
-
-			/* swap write lock for read lock */
-			LockBuffer((rel) ,rootbuf, BUFFER_LOCK_UNLOCK);
-			LockBuffer((rel) ,rootbuf, BT_READ);
+			_bt_wrtbuf(rel, rootbuf);
 
 			/* okay, metadata is correct, write and release it */
 			_bt_wrtbuf(rel, metabuf);
-                        return rootbuf;
-		}
-		else
-		{
+                        return _bt_getbuf(rel, root, BT_READ);
+		} else {
 			/*
 			 * Metadata initialized by someone else.  In order to
 			 * guarantee no deadlocks, we have to release the metadata
@@ -221,12 +216,8 @@ _bt_tryroot(Relation rel, bool create)
 			_bt_relbuf(rel, metabuf);
 			return InvalidBuffer;
 		}
-	}
-	else
-	{
-		BlockNumber rootblkno = metad->btm_root;
-		_bt_relbuf(rel, metabuf);		/* done with the meta page */
-		return _bt_getbuf(rel, rootblkno, BT_READ);
+	} else {
+            return _bt_getbuf(rel, root, BT_READ);
 	}
 }
 
@@ -265,7 +256,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 		 * here.
 		 */
 		LockPage(rel, 0, ExclusiveLock);
-		buf = ReadBuffer(rel, blkno);
+		buf = ReadBuffer(rel, P_NEW);
                 if ( !BufferIsValid(buf) ) {
                     elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
                 }	

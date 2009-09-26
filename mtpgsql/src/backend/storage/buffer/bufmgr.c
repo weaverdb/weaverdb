@@ -279,9 +279,7 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
     
     /* create a new tag so we can lookup the buffer */
     /* assume that the relation is already open */
-    if (blockNum == P_NEW) {
-        elog(ERROR, "no P_NEW in BufferAlloc");
-    }
+    AssertArg(blockNum != P_NEW);
     
     INIT_BUFFERTAG(&newTag, reln, blockNum);
     

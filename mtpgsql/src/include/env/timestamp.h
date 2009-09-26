@@ -2,7 +2,7 @@
 
 #ifndef BUILDTIME
 
-#define BUILDTIME "2009-08-04 10:25:47"
+#define BUILDTIME "2009-09-22 15:34:00"
 
 #endif
 

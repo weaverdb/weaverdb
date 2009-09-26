@@ -392,7 +392,7 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_executeStatement
             return 0;
         } else {
             clearError(env,talkerObject,link);
-            return GetCommandId(theManagers[link]);
+            return Count(theManagers[link]);
         }
 }
 

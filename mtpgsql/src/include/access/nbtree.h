@@ -295,7 +295,7 @@ PG_EXTERN BTStack _bt_search(Relation rel, int keysz, ScanKey scankey,
 		   Buffer *bufP, int access);
 PG_EXTERN Buffer _bt_moveright(Relation rel, Buffer buf, int keysz,
 			  ScanKey scankey, int access);
-PG_EXTERN OffsetNumber _bt_binsrch(Relation rel, Buffer buf, int keysz,
+PG_EXTERN OffsetNumber _bt_binsrch(Relation rel, Page buf, int keysz,
 			ScanKey scankey);
 PG_EXTERN int32 _bt_compare(Relation rel, int keysz, ScanKey scankey,
 			Page page, OffsetNumber offnum);

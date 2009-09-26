@@ -111,7 +111,6 @@ typedef struct Connection {
 
     pthread_mutex_t                 child_lock;
     
-    int 		cursor;
     int 		processed;
     int                 abortonly;
 } * WConn;

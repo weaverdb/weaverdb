@@ -1,15 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/1"/>
-    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/1">
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/storage/buffer/buf_table.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/access/nbtree/nbtpage.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/access/nbtree/nbtsearch.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/access/nbtree/nbtinsert.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/access/nbtree/nbtsort.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/access/nbtree/nbtree.c</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/include/storage/bufpage.h</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/include/storage/bufmgr.h</file>
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/mapfile.txt</file>
-    </open-files>
 </project-private>

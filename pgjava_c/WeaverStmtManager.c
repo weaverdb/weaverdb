@@ -249,6 +249,12 @@ short Fetch( StmtMgr mgr )
     return CheckForErrors(mgr);
 }
 
+long Count( StmtMgr mgr )
+{
+    if ( !IsValid(mgr) ) return -1;
+    return WExecCount(mgr->theConn);
+}
+
 short Cancel( StmtMgr mgr ) 
 {
     if ( !IsValid(mgr) ) return -1;
