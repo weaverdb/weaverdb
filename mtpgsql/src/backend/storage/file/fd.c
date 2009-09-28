@@ -876,14 +876,14 @@ FileUnlink(File file)
 int
 FileRead(File file, char *buffer, int amount)
 {
-	int			returnCode;
+	long			returnCode;
         Vfd*    target = GetVirtualFD(file);
 	Assert(FileIsValid(file));
 
 	CheckFileAccess(file);
 	returnCode = read(target->fd, buffer, amount);
-	if (returnCode > 0)
-		target->seekPos += returnCode;
+        
+	if ( returnCode > 0 ) target->seekPos += returnCode;
 
 	return returnCode;
 }

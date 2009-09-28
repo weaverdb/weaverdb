@@ -570,9 +570,9 @@ mmdclose_fd(int fd)
 int
 mmdread(Relation reln, BlockNumber blocknum, char *buffer)
 {
-	int			status;
-	long		seekpos;
-	int			nbytes;
+	long                    seekpos;
+	long			nbytes = 0;
+        int                     zerot = 0;
 	MdfdVec    *v;
 	FSMemory*   fsm = (FSMemory*)GetEnvSpace(mmd_id);
 
@@ -598,23 +598,34 @@ mmdread(Relation reln, BlockNumber blocknum, char *buffer)
 		return SM_FAIL;
 	}
 	
-	status = SM_SUCCESS;
-	if ((nbytes = FileRead(v->mdfd_vfd, buffer, BLCKSZ)) != BLCKSZ)
-	{
-		if (nbytes == 0) {
-			if ( blocknum > _internal_mmdnblocks(reln,fsm) ) {
-				elog(NOTICE,"trying to read non-existant block rel:%s,db:%u,blk no.:%llu,rel size:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum,_internal_mmdnblocks(reln,fsm));
+        while (nbytes < BLCKSZ) {
+            long r = FileRead(v->mdfd_vfd, buffer, BLCKSZ-nbytes);
+            if ( r < 0 ) {
+        	FileUnpin(v->mdfd_vfd,6);
+                elog(NOTICE,"read error %d rel:%s,db:%u,blk no.:%llu,rel size:%llu",errno,RelationGetRelationName(reln),GetDatabaseId(),blocknum,_internal_mmdnblocks(reln,fsm));
+                return SM_FAIL;
+            } else if ( r == 0 ) {
+                if ( blocknum > _internal_mmdnblocks(reln,fsm) ) {
+                    elog(NOTICE,"trying to read non-existant block rel:%s,db:%u,blk no.:%llu,rel size:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum,_internal_mmdnblocks(reln,fsm));
+                    FileUnpin(v->mdfd_vfd,6);
+                    return SM_FAIL;
+                }
+                if ( zerot++ == 100 ) {
+                    elog(NOTICE,"too many zero tries rel:%s,db:%u,blk no.:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum);
+                    return SM_FAIL;
+                }
+            } else {
+                nbytes += r;
+                buffer += r;
+                if ( r < BLCKSZ ) {
+                    elog(NOTICE,"partial read: %d block rel:%s,db:%u,blk no.:%llu",r,RelationGetRelationName(reln),GetDatabaseId(),blocknum);
+                }
+            }
+        }
 
-			}
-			MemSet(buffer, 0, BLCKSZ);
-		} else if (blocknum == 0 && nbytes > 0 && _internal_mmdnblocks(reln,fsm) == 0)
-			MemSet(buffer, 0, BLCKSZ);
-		else
-			status = SM_FAIL;
-	}
 	FileUnpin(v->mdfd_vfd,6);
 
-	return status;
+	return SM_SUCCESS;
 }
 
 /*

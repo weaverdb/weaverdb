@@ -34,7 +34,7 @@ MYLIBSOLD=\
 MYPATH=\
 -L${SRCDIR} \
 -L${SRCDIR}/backend \
--L${JAVA_HOME}/jre/lib/sparcv9/server \
+-L${JAVA_HOME}/jre/lib/amd64/server \
 
 MACOSPATH=\
 -L${SRCDIR} \

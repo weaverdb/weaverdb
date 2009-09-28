@@ -16,7 +16,7 @@
 #define SUNOS
 #endif
 
-#define MAX_RANDOM_VALUE (0x7fffffff)
+#define MAX_RANDOM_VALUE (0xffffff7f)
 
 typedef pthread_mutex_t slock_t; 
 extern char*	tzname[2];
@@ -31,7 +31,7 @@ extern char*	tzname[2];
 #define			PDP_ENDIAN		3412
 #endif
 #ifndef			BYTE_ORDER
-#define			BYTE_ORDER		BIG_ENDIAN
+#define			BYTE_ORDER		LITTLE_ENDIAN
 #endif
 
 #ifdef __cplusplus
