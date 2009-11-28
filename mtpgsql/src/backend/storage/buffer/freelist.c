@@ -275,13 +275,18 @@ int ManualPin(BufferDesc* buf, bool pageaccess) {
     int valid = 0;
     BufferDesc*  tail = NULL;
     pthread_mutex_lock(&buf->cntx_lock.guard);
-    
+    /*  if we are doing a pageaccess ( not the dbwriter ) and there is an e_lock
+     *  then wait for the e_lock to be released, do this before
+     *  valid check because the buffer could no longer be valid
+     *  by the time the release gets to us.
+     */
+    while ( pageaccess && buf->e_lock ) {
+        buf->p_waiting++;
+        pthread_cond_wait(&buf->cntx_lock.gate, &buf->cntx_lock.guard);
+        buf->p_waiting--;
+    }
     if ( buf->locflags & BM_VALID ) {
-        while ( pageaccess && buf->e_lock ) {
-            buf->p_waiting++;
-            pthread_cond_wait(&buf->cntx_lock.gate, &buf->cntx_lock.guard);
-            buf->p_waiting--;
-        }
+
         if ( pageaccess ) buf->pageaccess++;
         if ( buf->refCount++ == 0 ) {
             buf->used = true;
