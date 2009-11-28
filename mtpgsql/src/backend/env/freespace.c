@@ -411,7 +411,8 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
                 }
             }
         }
-            
+
+//        if ( entry->size - p < RecommendAllocation(rel,entry) ) scan = true;
         if ( entry->min_request > request ) entry->min_request = request;
         if ( entry->max_request < request ) entry->max_request = request;
             
@@ -790,28 +791,28 @@ long GetNextExtentFactor(Relation rel) {
 BlockNumber
 RelationGetNumberOfBlocks(Relation relation)
 {
-    BlockNumber  size = InvalidBlockNumber;
-
     if ( inited && 
         ( relation->rd_rel->relkind == RELKIND_RELATION || relation->rd_rel->relkind == RELKIND_UNCATALOGED ) ) {
 	FreeSpace* freespace = FindFreespace(relation,NULL,false);
         
         if ( freespace == NULL ) {
-            size = smgrnblocks(relation->rd_smgr);
+            relation->rd_nblocks = smgrnblocks(relation->rd_smgr);
         } else {
             pthread_mutex_lock(&freespace->accessor);
-            size = freespace->relsize;
+            relation->rd_nblocks = freespace->relsize;
             pthread_mutex_unlock(&freespace->accessor);
         }
+    } else if ( relation->rd_rel->relkind == RELKIND_SEQUENCE || relation->rd_rel->relkind == RELKIND_INDEX ) {
+        if ( relation->rd_nblocks == 0 ) {
+            relation->rd_nblocks = smgrnblocks(relation->rd_smgr);
+        }
     } else {
-        if (relation->rd_myxactonly) {
-            size = relation->rd_nblocks;
-        } else {
-            size = smgrnblocks(relation->rd_smgr);
+        if (!relation->rd_myxactonly) {
+            relation->rd_nblocks = smgrnblocks(relation->rd_smgr);
         }
     }
 
-    return size;
+    return relation->rd_nblocks;
 }
 
 int

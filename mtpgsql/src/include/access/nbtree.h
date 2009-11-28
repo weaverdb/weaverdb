@@ -184,6 +184,7 @@ typedef BTStackData *BTStack;
 
 #define BT_READ			BUFFER_LOCK_SHARE
 #define BT_WRITE		BUFFER_LOCK_EXCLUSIVE
+#define BT_UPGRADE		BUFFER_LOCK_UPGRADE
 
 /*
  *	In general, the btree code tries to localize its knowledge about

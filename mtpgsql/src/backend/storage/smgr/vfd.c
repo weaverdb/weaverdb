@@ -27,7 +27,6 @@
 #include "miscadmin.h"
 #include "storage/smgr.h"
 #include "storage/smgr_spi.h"
-#include "utils/inval.h"		/* ImmediateSharedRelationCacheInvalidate()  */
 #include "utils/relcache.h"
 #include "env/env.h"
 #include "env/connectionutil.h"
@@ -415,10 +414,13 @@ vfdclose(SmgrInfo info)
 int
 vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 {
-	int			status;
 	long		seekpos;
-	int			nbytes;
+	long		nbytes = 0;
+        int             spins = 0;
         File            fd = info->fd;
+        int status =  SM_SUCCESS;
+	char*		msg = NULL;
+
 
 	seekpos = (long) (BLCKSZ * (blocknum));
 
@@ -429,19 +431,35 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 
         FilePin(fd, 3);
 	if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-            FileUnpin(fd, 3);
-            return SM_FAIL;
+//            msg = palloc(2048);
+//            elog(NOTICE,"bad seek %d db:%s,rel:%s,blk no.:%llu",seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
+            status = SM_FAIL_SEEK;
         }
 
-	status = SM_SUCCESS;
-	if ((nbytes = FileRead(fd, buffer, BLCKSZ)) != BLCKSZ)
-	{
-		if (nbytes == 0)
-			MemSet(buffer, 0, BLCKSZ);
-		else if (blocknum == 0 && nbytes > 0 && _vfdnblocks(fd,BLCKSZ) == 0)
-			MemSet(buffer, 0, BLCKSZ);
-		else 
-			status = SM_FAIL;
+        while ( nbytes < BLCKSZ && status == SM_SUCCESS ) {
+            int r = FileRead(fd, buffer, BLCKSZ - nbytes);
+            if ( spins++ > 99 ) {
+                MemSet(buffer, 0, BLCKSZ - nbytes);
+ //               elog(NOTICE,"too many read spins %d rel:%s,db:%s,blk no.:%llu",nbytes,NameStr(info->dbname),NameStr(info->relname),blocknum);
+                nbytes = BLCKSZ;
+                status = SM_FAIL_SPINS;
+            } else if (r < 0) {
+//                elog(NOTICE,"bad read %d db:%s,rel:%s,blk no.:%llu",errno,NameStr(info->dbname),NameStr(info->relname),blocknum);
+                status = SM_FAIL_BASE;
+            } else if ( r == 0 && nbytes == 0 ) {
+                long checkpos = FileSeek(fd,0L,SEEK_END);
+                if ( seekpos >= checkpos ) {
+                    MemSet(buffer, 0, BLCKSZ);
+                    nbytes = BLCKSZ;
+                } else {
+                    if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
+                        status = SM_FAIL_SEEK;
+                    }
+                }
+            } else {
+                nbytes += r;
+                buffer += r;
+            }
 	}
 
         FileUnpin(fd, 3);
@@ -464,7 +482,7 @@ vfdwrite(SmgrInfo info, BlockNumber blocknum, char *buffer)
 
         FilePin(fd, 4);
 	if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-                    FileUnpin(fd, 4);
+                FileUnpin(fd, 4);
 		return SM_FAIL;
         }
 
@@ -649,7 +667,10 @@ _vfdnblocks(File file, Size blcksz)
 
 	len = FileSeek(file, 0L, SEEK_END);
         
-	if (len < 0) return 0;	/* on failure, assume file is empty */
+	if (len < 0) {
+            perror("FileSeek:");
+            return 0;	/* on failure, assume file is empty */
+        }
         
 	return (BlockNumber) (len / blcksz);
 }

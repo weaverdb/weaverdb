@@ -102,6 +102,9 @@ top:
 	/* trade in our read lock for a write lock */
 	LockBuffer((rel), buf, BUFFER_LOCK_UNLOCK);
 	LockBuffer((rel), buf, BT_WRITE);
+/*
+	LockBuffer((rel), buf, BUFFER_LOCK_UPGRADE);
+*/
 
 	/*
 	 * If the page was split between the time that we surrendered our read

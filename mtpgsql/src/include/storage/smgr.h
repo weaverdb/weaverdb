@@ -18,6 +18,9 @@
 #include "storage/spin.h"
 #include "nodes/pg_list.h"
 
+#define SM_FAIL_SEEK	-3;
+#define SM_FAIL_BASE	-2;
+#define SM_FAIL_SPINS	-1;
 #define SM_FAIL			0
 #define SM_SUCCESS		1
 

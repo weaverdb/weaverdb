@@ -973,18 +973,12 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
     BufferDesc     *buf;
     bits8	    buflock = 0;
     int             locking_error = 0;
-    bool            defer = false;
 
     Assert(BufferIsValid(buffer));
     if (BufferIsLocal(buffer))
         return locking_error;
-/*
-    BufferCxt bufenv = RelationGetBufferCxt(rel);
-    if ( bufenv == NULL ) bufenv = GetBufferCxt();
-    Assert(bufenv->PrivateRefCount[buffer-1] > 0);    
-    buflock = &(bufenv->BufferLocks[buffer - 1]);
-*/
-    if ( rel != NULL ) {
+    
+     if ( rel != NULL ) {
         if ( RelationGetBufferCxt(rel) == NULL ) rel->buffer_cxt = GetBufferCxt();
         buflock = RelationGetBufferCxt(rel)->BufferLocks[buffer - 1];
     }
@@ -997,19 +991,9 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
     
     switch (mode) {
         case BUFFER_LOCK_UNLOCK:
-            if ( rel == NULL ) {
-       /* if there is a write lock on the buffer
-        * we did not lock on BUFFER_LOCK_WRITEIO
-        * b/c the owner was waiting for flush
-        * so just break out else it was a BUFFER_LOCK_WRITEIO
-        * which translates to BL_R_LOCK
-        */
-                if ( !buf->wio_lock ) {
-                    break;
-                } else {
-                    buf->wio_lock = false;
-                    buflock |= BL_R_LOCK;
-                }
+            if ( rel == NULL && buf->wio_lock ) {
+                buf->wio_lock = false;
+                buflock |= BL_R_LOCK;
             }
             buflock = UnlockIndividualBuffer(buflock, buf);
             break;
@@ -1024,9 +1008,7 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             Assert(!(BL_W_LOCK & buflock));
             while ((buf->pageaccess) > (buf->e_waiting + 1)) {
                 buf->e_waiting++;
-                if (pthread_cond_wait(&buf->cntx_lock.gate, &(buf->cntx_lock.guard)) ) {
-                    elog(ERROR, "Buffer Locking Error 3");
-                }
+                pthread_cond_wait(&buf->cntx_lock.gate, &(buf->cntx_lock.guard));
                 buf->e_waiting--;
             }
             buf->w_lock = true;
@@ -1038,8 +1020,9 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
  *  write so buffers can be freed then there is no danger of changing the 
  *  buffer during a write.  if that is not the case just do what SHARE lock does
  */
+            Assert((rel == NULL));
             if ( buf->w_lock && IsWaitingForFlush(buf->w_owner) ) {
-                locking_error = BL_NOLOCK;
+               locking_error = BL_NOLOCK;
                break;
             } else {
                 buf->wio_lock = true;
@@ -1050,7 +1033,7 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
 
-            while( buf->w_lock || buf->w_waiting > 0 ) {
+            while( buf->w_lock || ( buf->w_waiting + buf->e_waiting ) > 0 ) {
                 buf->r_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->r_waiting--;
@@ -1061,21 +1044,14 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             break;
         case BUFFER_LOCK_EXCLUSIVE:
             Assert(!(BL_R_LOCK & buflock));
+        case BUFFER_LOCK_UPGRADE:
             Assert(!(BL_W_LOCK & buflock));
-            while (( buf->r_locks > 0 || buf->w_lock || defer) ) {
-                defer = false;
+            while ( buf->r_locks > buf->u_waiting || buf->w_lock ) {
                 buf->w_waiting++;
+                if ( BL_R_LOCK & buflock ) buf->u_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->w_waiting--;
-
-                if ( buf->r_waiting > 8 && buf->r_locks == 0 && buf->w_lock && buf->w_waiting < 3  ) {
-                    defer = true;
-                    DTRACE_PROBE2(mtpg, buffer__writelockdefer, buf->r_waiting, buf->w_waiting);
-                    if ( pthread_cond_broadcast(&(buf->cntx_lock.gate))) {
-                        elog(ERROR, "Buffer Locking Error 16");
-                    }
-                }
-
+                if ( BL_R_LOCK & buflock ) buf->u_waiting--;
             }
             buf->w_owner = GetEnv()->eid;
             buf->w_lock = true;
@@ -1093,42 +1069,39 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
 }
 
 bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc * buf) {
+    bool  signal = false;
+
     if (buflock & BL_R_LOCK) {
         (buf->r_locks)--;
         buflock &= ~BL_R_LOCK;
-        if ( buf->r_locks == 0 && ((buf->w_waiting + buf->e_waiting) > 0) ) {
-            if ( pthread_cond_signal(&buf->cntx_lock.gate)) {
-                elog(ERROR, "Buffer Locking Error 6");
-            }
+        if ( buf->r_locks == 0 ) {
+            signal = true;
         }
-    } else if (buflock & BL_W_LOCK) {
+    } 
+    if (buflock & BL_W_LOCK) {
         if (buf->e_lock ) {
-            if ( buf->pageaccess > buf->e_waiting + 1 ) {
-                elog(FATAL, "something happend here");
-            }
+            Assert(buf->pageaccess <= buf->e_waiting + 1);
             if ( buf->p_waiting > 0 ) {
                 pthread_cond_broadcast(&buf->cntx_lock.gate);
             } else if ( buf->e_waiting > 0 ) {
                 pthread_cond_signal(&buf->cntx_lock.gate);
             }
-        } else  if ( buf->r_waiting > 0 ) {
-            if ( pthread_cond_broadcast(&buf->cntx_lock.gate)) {
-                elog(ERROR, "Buffer Locking Error 7");
-            }
-        } else if ( (buf->w_waiting + buf->e_waiting) > 0 ) {
-            if ( pthread_cond_signal(&buf->cntx_lock.gate)) {
-                elog(ERROR, "Buffer Locking Error 8");
-            }
+            signal = false;
+        } else  {
+            signal = true;
         }
         buf->e_lock = false;
         buf->w_lock = false;
         buf->w_owner = 0;
         buflock &= ~BL_W_LOCK;
-    } else {
-        if ( pthread_mutex_unlock(&(buf->cntx_lock.guard)) ) {
-            elog(ERROR, "Buffer Locking Error 9");
+    }
+
+    if ( signal ) {
+        if ( buf->r_waiting > 0 ) {
+            pthread_cond_broadcast(&buf->cntx_lock.gate);
+        } else if ( (buf->w_waiting + buf->e_waiting) > 0 ) {
+            pthread_cond_signal(&buf->cntx_lock.gate);
         }
-        elog(ERROR, "UNLockBuffer: buffer %lu is not locked", BufferDescriptorGetBuffer(buf));
     }
     
     return buflock;

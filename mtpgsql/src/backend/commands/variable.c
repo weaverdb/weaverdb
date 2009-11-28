@@ -1782,14 +1782,14 @@ parse_defrag(char *value)
         char*       lasts;
         char*       name;
         char*       arg1;
-        bool         useblob = true;
+        bool         useblob = false;
         int         max = 0;
         
         name = strtok_r(value,"|",&lasts);
         arg1 = strtok_r(NULL,"|",&lasts);
 
         max = atoi(arg1);
-        if ( strcmp(lasts,"noblob") == 0 ) useblob = false;
+        if ( strcmp(lasts,"blob") == 0 ) useblob = false;
         
         Relation rel = RelationNameGetRelation(name,DEFAULTDBOID);
 	if ( !RelationIsValid(rel) ) {
@@ -1942,14 +1942,14 @@ parse_compact(char *value)
         char*       lasts;
         char*       name;
         char*       arg1;
-        bool         useblob = true;
+        bool         useblob = false;
         int         max = 0;
         
         name = strtok_r(value,"|",&lasts);
         arg1 = strtok_r(NULL,"|",&lasts);
 
         max = atoi(arg1);
-        if ( strcmp(lasts,"noblob") == 0 ) useblob = false;
+        if ( strcmp(lasts,"blob") == 0 ) useblob = false;
         
         Relation rel = RelationNameGetRelation(name,DEFAULTDBOID);
 	if ( !RelationIsValid(rel) ) {

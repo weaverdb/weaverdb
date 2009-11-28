@@ -1328,13 +1328,11 @@ heap_truncate(char *relname)
 	/*
 	 * Close the relation, but keep exclusive lock on it until commit.
 	 */
-
-        
 	heap_close(rel, NoLock);
-
 	/*
 	 * Is this really necessary?
 	 */
+        ImmediateSharedRelationCacheInvalidate(rel);
 	RelationForgetRelation(rid,GetDatabaseId());
 }
 
@@ -1601,7 +1599,6 @@ heap_drop_with_catalog(const char *relname)
 	 */
         
 	InvalidateRelationBuffers(rel);
-       
 
 	heap_close(rel, NoLock);
 
@@ -1628,6 +1625,7 @@ heap_drop_with_catalog(const char *relname)
 
         DropVacuumRequests(rid,GetDatabaseId());
         ForgetFreespace(rel);
+        ImmediateSharedRelationCacheInvalidate(rel);
 	RelationForgetRelation(rid,GetDatabaseId());
 
 	if (istemp)
@@ -1656,6 +1654,7 @@ heap_drop(Relation rel)
 	RemoveFromNoNameRelList(rel);
         DropVacuumRequests(rid,GetDatabaseId());        
         ForgetFreespace(rel);
+        ImmediateSharedRelationCacheInvalidate(rel);
 	RelationForgetRelation(rid,GetDatabaseId());
 }
 

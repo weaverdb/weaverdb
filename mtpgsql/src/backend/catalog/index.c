@@ -1226,12 +1226,10 @@ index_drop(Oid indexId)
 	 * Close rels, but keep locks
 	 */
 	index_close(userIndexRelation);
-
         ImmediateSharedRelationCacheInvalidate(userIndexRelation);
+	RelationForgetRelation(indexId,GetDatabaseId());
 
 	heap_close(userHeapRelation, NoLock);
-
-	RelationForgetRelation(indexId,GetDatabaseId());
 
 	/* does something only if it is a temp index */
 	remove_temp_relation(indexId);

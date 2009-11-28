@@ -2221,6 +2221,8 @@ vac_open_indexes(Relation relation, int *nindexes, Relation ** Irel)
 		Oid             indexoid = lfirsti(indexoidscan);
 
 		(*Irel)[i] = index_open(indexoid);
+                /*  make sure that a fresh block count is acquired, see freespace.c:RelationGetNumberofBlocks */
+                (*Irel)[i]->rd_nblocks = 0;
 		/*
 		 * be extra careful this should not be needed with heap lock
 		 * but who knows

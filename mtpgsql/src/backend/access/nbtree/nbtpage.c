@@ -174,7 +174,6 @@ _bt_tryroot(Relation rel, bool create)
 			return InvalidBuffer;
 		}
 
-		/* trade in our read lock for a write lock */
 		metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
                 metapg = BufferGetPage(metabuf);
                 metad = BTPageGetMeta(metapg);

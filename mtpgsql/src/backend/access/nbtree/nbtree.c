@@ -807,7 +807,6 @@ btrecoverpage(Relation rel, BlockNumber block) {
 Datum
 btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes)
 {
-	BlockNumber num_pages;
 	long		tuples_removed,tuples_aborted;
 	long		num_index_tuples;
 	IndexScanDesc scan;
@@ -971,15 +970,7 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes)
         }
 
 	btendscan(scan);
-        /*
-        SyncRelation(rel);
-*/
-	num_pages = RelationGetNumberOfBlocks(rel) ;
 
-/*
-	elog(DEBUG,"Index %s pages: %d used pages: %d tuples removed:%d tuples aborted:%d",
-		RelationGetRelationName(rel),num_pages,used_pages,tuples_removed, tuples_aborted);
-*/
 	return LongGetDatum(tuples_removed - tuples_aborted);
 }
 /*
@@ -1091,14 +1082,15 @@ _bt_check_nextpage(Relation rel, BlockNumber left,BlockNumber parent, BlockNumbe
     if ( !BufferIsValid(buffer) ) return false;
     
     page = BufferGetPage(buffer);
-    if ( PageIsNew(page) ) {
+    target = (BTPageOpaque)PageGetSpecialPointer(page);
+
+    if ( PageIsNew(page) || BTreeInvalidParent(target) ) {
         if ( right == RelationGetNumberOfBlocks(rel) - 1 ) {
             _bt_relbuf(rel,buffer);
             smgrtruncate(rel->rd_smgr,right);
         }
         return false;
     }
-    target = (BTPageOpaque)PageGetSpecialPointer(page);
 
     if ( left != target->btpo_prev ) {
         result = false;
@@ -1142,14 +1134,18 @@ _bt_fixsplit(Relation rel,BlockNumber left, BlockNumber parent, BlockNumber righ
         for ( current=P_FIRSTDATAKEY(opaque);current <= PageGetMaxOffsetNumber(page);current=OffsetNumberNext(current) ) {
             BTItem item = (BTItem)PageGetItem(page, PageGetItemId(page, current));
             ItemPointer pointer = &item->bti_itup.t_tid;
-            if ( !found && left == ItemPointerGetBlockNumber(pointer) ) {
-                found = true;
-            } else if (  right == ItemPointerGetBlockNumber(pointer) ) {
-                PageIndexTupleDelete(page,current);
-                current = OffsetNumberPrev(current);
+            BlockNumber blk = ItemPointerGetBlockNumber(pointer);
+            if ( !found ) {
+                if ( left == blk ) found = true;
+            } else if ( right == P_NONE ) {
+               right = blk;
+               break;
             } else {
-                right = ItemPointerGetBlockNumber(pointer);
-                break;
+               PageIndexTupleDelete(page,current);
+               current = OffsetNumberPrev(current);
+               if (  right == blk ) {
+                   right = P_NONE;
+               }
             }
         }
         _bt_wrtbuf(rel, buffer);
@@ -1160,11 +1156,13 @@ _bt_fixsplit(Relation rel,BlockNumber left, BlockNumber parent, BlockNumber righ
         opaque->btpo_next = right;
         _bt_wrtbuf(rel,buffer);
 
-        buffer = _bt_getbuf(rel,right,BT_WRITE);
-        page = BufferGetPage(buffer);
-        opaque = (BTPageOpaque)PageGetSpecialPointer(page);
-        opaque->btpo_prev = left;
-        _bt_wrtbuf(rel,buffer);
+        if ( right != P_NONE ) {
+            buffer = _bt_getbuf(rel,right,BT_WRITE);
+            page = BufferGetPage(buffer);
+            opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+            opaque->btpo_prev = left;
+            _bt_wrtbuf(rel,buffer);
+        }
     }
 
     return right;

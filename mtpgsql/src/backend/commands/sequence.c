@@ -346,7 +346,7 @@ read_info(char *caller, SeqTable elm, Buffer *buf)
 	Form_pg_sequence seq;
 
 	if (RelationGetNumberOfBlocks(elm->rel) != 1)
-		elog(ERROR, "%s.%s: invalid number of blocks in sequence",
+		elog(ERROR, "%s.%s: invalid number of blocks in sequence ",
 			 elm->name, caller);
 
 	*buf = ReadBuffer(elm->rel, 0);

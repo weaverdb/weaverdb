@@ -614,6 +614,7 @@ mmdread(Relation reln, BlockNumber blocknum, char *buffer)
                     elog(NOTICE,"too many zero tries rel:%s,db:%u,blk no.:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum);
                     return SM_FAIL;
                 }
+                elog(DEBUG,"partial read amt:%d,rel:%s,db:%u,blk no.:%llu",r,RelationGetRelationName(reln),GetDatabaseId(),blocknum);
             } else {
                 nbytes += r;
                 buffer += r;

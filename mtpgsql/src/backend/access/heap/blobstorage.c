@@ -554,7 +554,9 @@ write_pipeline_segment_blob(Datum pointer, bytea * data)
             if ( !BufferIsValid(buffer) ) {
                 blob_log(rel,"bad tail pointer blk: %ld offset: %d",
                     ItemPointerGetBlockNumber(&header->tail_pointer),ItemPointerGetOffsetNumber(&header->tail_pointer));
+                elog(ERROR,"writing stream");
             }
+            
             LockHeapTuple(rel,buffer,&tp,TUPLE_LOCK_WRITE);
             seg = (segment_header*) GETSTRUCT(&tp);
             ItemPointerCopy(&start,&seg->forward);

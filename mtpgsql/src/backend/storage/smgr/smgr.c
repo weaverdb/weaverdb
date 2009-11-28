@@ -287,9 +287,11 @@ smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 
 	status = (*(smgrsw[info->which].smgr_read)) (info, blocknum, buffer);
 
-	if (status == SM_FAIL)
-		elog(NOTICE, "cannot read block %ld of %s-%s",
-			 blocknum, NameStr(info->relname), NameStr(info->dbname));
+	if (status != SM_SUCCESS) {
+		elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
+			 blocknum, NameStr(info->relname), NameStr(info->dbname),status);
+                status = SM_FAIL;
+        }
 
 	return status;
 }

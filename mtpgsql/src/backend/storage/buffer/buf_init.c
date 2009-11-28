@@ -204,6 +204,7 @@ InitBufferPool(IPCKey key)
                     buf->wio_lock = false;
                     buf->e_waiting = 0;
                     buf->w_waiting = 0;
+                    buf->u_waiting = 0;
                     buf->r_waiting = 0;
                     buf->p_waiting = 0;
                     

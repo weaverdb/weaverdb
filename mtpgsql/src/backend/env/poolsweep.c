@@ -355,12 +355,10 @@ Poolsweep(void *args) {
                 poolsweep_log(item->relid, "starting freespace scan job");
                 lazy_freespace_scan_rel(item->relid);                
             } else if (item->jobtype == DEFRAG_JOB) {
-/*
                 FragArgs* args = item->arg;
                 poolsweep_log(item->relid, "starting defrag job");
                 lazy_fragmentation_scan_rel(item->relid, false,(args->useblobs) ? BLOB_MOVE : NORMAL, args->max);
                 pfree(args);
-*/
             } else if (item->jobtype == ANALYZE_JOB) {
                 poolsweep_log(item->relid, "starting analyze job");
                 analyze_rel(item->relid);
@@ -382,12 +380,10 @@ Poolsweep(void *args) {
                 poolsweep_log(item->relid, "starting vacuumdb job");
                 lazy_vacuum_database(false);
             } else if (item->jobtype == COMPACT_JOB) {
-/*
                 FragArgs* args = item->arg;
                 poolsweep_log(item->relid, "starting compact job");
                 lazy_fragmentation_scan_rel(item->relid, true,(args->useblobs) ? BLOB_MOVE : NORMAL, args->max);
                 pfree(args);
-*/
              } else if ( item->jobtype == ALLOCATE_JOB ) {
                 Relation rel = RelationIdGetRelation(item->relid, DEFAULTDBOID);
                 poolsweep_log(item->relid, "starting space allocation job");

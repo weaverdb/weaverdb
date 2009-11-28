@@ -1191,12 +1191,6 @@ RelationInvalidateCatalogCacheTuple(Relation relation,
 		if (relationId != ccp->relationId)
 			continue;
 
-#ifdef NOT_USED
-		/* OPT inline simplification of CatalogCacheIdInvalidate */
-		if (!PointerIsValid(function))
-			function = CatalogCacheIdInvalidate;
-#endif
-
 		(*function) (ccp->id,
 				 CatalogCacheComputeTupleHashIndex(ccp, relation, tuple),
 					 &tuple->t_self);

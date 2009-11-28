@@ -23,8 +23,8 @@
 #include "access/blobstorage.h"
 
 
-static ItemId RelationGetItemId
-    (Relation rel, ItemPointer pointer, bool readonly, Buffer * usedbuffer);
+static Buffer RelationGetTupleData
+   (Relation rel, HeapTuple tuple, bool readonly, Buffer buffer);
 /*
  * amputunique	- place tuple at tid
  *	 Currently on errors, calls elog.  Perhaps should return -1?
@@ -176,11 +176,11 @@ manager may be old and incorrect.   MKS 12.31.2001
         return lastblock;
 }
 
-ItemId
-RelationGetItemId(Relation rel, ItemPointer pointer, bool readonly, Buffer * usedbuffer) {
+Buffer
+RelationGetTupleData(Relation rel, HeapTuple tuple, bool readonly, Buffer buffer) {
         Page dp = NULL;
         ItemId lp = NULL;
-        Buffer buffer;
+	ItemPointer pointer = &tuple->t_self;
         
         if ( readonly ) {
             BufferDesc* desc = LocalBufferSpecialAlloc(rel,ItemPointerGetBlockNumber(pointer));
@@ -195,8 +195,8 @@ RelationGetItemId(Relation rel, ItemPointer pointer, bool readonly, Buffer * use
                 }
             }
             buffer = BufferDescriptorGetBuffer(desc);
-        } else if ( BufferIsValid(*usedbuffer) ) {
-            buffer = ReleaseAndReadBuffer(*usedbuffer, rel, ItemPointerGetBlockNumber(pointer));
+        } else if ( BufferIsValid(buffer) ) {
+            buffer = ReleaseAndReadBuffer(buffer, rel, ItemPointerGetBlockNumber(pointer));
         } else {
             buffer = ReadBuffer(rel, ItemPointerGetBlockNumber(pointer));
         }
@@ -217,41 +217,36 @@ RelationGetItemId(Relation rel, ItemPointer pointer, bool readonly, Buffer * use
                 if ( offnum <= PageGetMaxOffsetNumber(dp) ) {
                     lp = PageGetItemId(dp, offnum);
                     if ( !ItemIdIsUsed(lp) ) lp = NULL;
-               }
+                }
         }
-        LockBuffer((rel),buffer, BUFFER_LOCK_UNLOCK); 
-        if ( ItemIdIsValid(lp) ) {
-            *usedbuffer = buffer;
-        } else {
-            ReleaseBuffer(rel, buffer);
-            *usedbuffer = InvalidBuffer;
-        }
-        return lp;
+        LockBuffer((rel),buffer, BUFFER_LOCK_UNLOCK);
+        if ( BufferIsValid(buffer) ) {
+            if ( ItemIdIsValid(lp) ) {
+                 tuple->t_data = (HeapTupleHeader) PageGetItem(dp, lp);
+                 tuple->t_len = ItemIdGetLength(lp);
+            } else {
+                 ReleaseBuffer(rel,buffer);
+                 buffer = InvalidBuffer;
+            }   
+	}
+        return buffer;
  }
 
 Buffer
 RelationGetHeapTuple(Relation rel, HeapTuple tuple) {
-    Buffer   buffer = InvalidBuffer;
-    return RelationGetHeapTupleWithBuffer(rel, tuple, buffer);
+    return RelationGetHeapTupleWithBuffer(rel, tuple, InvalidBuffer);
 }
 
 
 Buffer
-RelationGetHeapTupleWithBuffer(Relation rel, HeapTuple tuple, Buffer tagbuffer) {
-    Buffer   buffer = tagbuffer;
-    ItemId itemid = RelationGetItemId(rel, &tuple->t_self, ((rel->rd_rel->relkind == RELKIND_RELATION) && (tuple->t_info == TUPLE_READONLY)), &buffer);
+RelationGetHeapTupleWithBuffer(Relation rel, HeapTuple tuple, Buffer inbuffer) {
     tuple->t_datamcxt = NULL;
     tuple->t_datasrc = NULL;
     tuple->t_info = 0;
     tuple->t_data = NULL;
-    tuple->t_len = 0;	
-    if ( ItemIdIsValid(itemid) ) {
-        tuple->t_data = (HeapTupleHeader) PageGetItem(BufferGetPage(buffer), itemid);
-        tuple->t_len = ItemIdGetLength(itemid);
-        return buffer;
-    } else {
-        return InvalidBuffer;
-    }
+    tuple->t_len = 0;
+    
+    return RelationGetTupleData(rel, tuple, ((rel->rd_rel->relkind == RELKIND_RELATION) && (tuple->t_info == TUPLE_READONLY)), inbuffer);
 }
 
 void

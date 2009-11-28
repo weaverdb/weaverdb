@@ -65,7 +65,7 @@ PG_EXTERN int	ShowPinTrace;
 #define BUFFER_LOCK_REF_EXCLUSIVE               4
 
 /*  bit flag set if lock should fail instead of block  */
-#define BUFFER_LOCK_FAIL_FAST			8	
+#define BUFFER_LOCK_UPGRADE			8	
 #define BUFFER_LOCK_WRITEIO                     16   /*  blocks exclusive locks until write io is finished */
 
 

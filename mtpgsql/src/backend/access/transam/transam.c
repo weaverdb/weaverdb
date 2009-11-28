@@ -340,8 +340,6 @@ TransRecover(Relation logrelation)
 	int i = 0;
 	Buffer		buffer = InvalidBuffer;			/* buffer associated with block */
 	Block		block;			/* block containing xstatus */
-	Env*   		myenv = GetEnv();
-	LOCKTAG 	tag;
 
 	elog(DEBUG,"--Scanning Transacation Log--");
 	MasterWriteLock();
@@ -362,10 +360,12 @@ TransRecover(Relation logrelation)
 		if ( localblock != masterblock ) {
 			if ( BufferIsValid(buffer) ) {
 				ReleaseBuffer(logrelation,buffer);
+                                buffer = InvalidBuffer;
 			}
 			masterblock = localblock;
-			buffer = ReadBuffer(logrelation,localblock);
-                        if (!BufferIsValid(buffer) ) elog(ERROR,"bad buffer read in transaction logging");
+                        while (!BufferIsValid(buffer) ) {
+                            buffer = ReadBuffer(logrelation,localblock);
+                        }
 			block = BufferGetBlock(buffer);
 		}
 

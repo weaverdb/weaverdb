@@ -137,10 +137,11 @@ typedef struct sbufdesc
         bool            wio_lock;                /* only set when DBWriter takes a writeio lock which is the same as a share lock */
         unsigned        w_owner;
 	unsigned	r_locks;		/* # of shared locks */
-        unsigned	e_waiting;
-        unsigned	w_waiting;
-        unsigned	r_waiting;
-        unsigned	p_waiting;        
+        unsigned	e_waiting;              /*  waiting for exclusive lock   */
+        unsigned	w_waiting;              /*  waiting for write lock   */
+        unsigned	u_waiting;              /*  waiting for upgrade lock   */
+        unsigned	r_waiting;              /*  waiting for read lock   */
+        unsigned	p_waiting;              /*  waiting for page exclusive lock   */
 
         unsigned        bias;
 
