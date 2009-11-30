@@ -407,9 +407,11 @@ BufferDesc * GetFreeBuffer(Relation rel) {
              */
             Assert(head->refCount == 0);
             Assert(head->pageaccess == 0);
-   /*         Assert(head->freeNext == DETACHED_DESCRIPTOR);
+   /*
+    *       Assert(head->freeNext == DETACHED_DESCRIPTOR);
             Assert(!(head->locflags & BM_FREE));
-    */        head->locflags &= ~(BM_VALID);
+    */
+            head->locflags &= ~(BM_VALID);
             head->refCount = 1;
             head->pageaccess = 1;
             head->used = false;
