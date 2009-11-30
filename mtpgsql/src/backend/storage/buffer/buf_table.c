@@ -125,28 +125,6 @@ BufTableDelete(BufferDesc *buf)
 	return TRUE;
 }
 
-bool
-BufTableInsert(BufferDesc *buf)
-{
-	BufferLookupEnt  *result;
-	bool		found;
-
-        pthread_mutex_lock(&(buf->cntx_lock.guard));
-	
-	buf->locflags |= (BM_VALID);
-	buf->locflags &= ~(BM_DELETED);
-
-	result = LockedHashSearch(buf->kind, &(buf->tag),buf->buf_id, HASH_ENTER, &found);
-
-	if (!result || found)
-	{
-                elog(FATAL,"BufTableInsert:bad result %d\n",buf->buf_id);
-	}
-
-        pthread_mutex_unlock(&(buf->cntx_lock.guard));
-	return TRUE;
-}
-
 bool 
 BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block) {
 	BufferLookupEnt  *result;
@@ -157,7 +135,9 @@ BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block) {
 	 * BM_DELETED keeps us from removing buffer twice.
 	 */
         pthread_mutex_lock(&(buf->cntx_lock.guard));
-	
+        
+        Assert(!(buf->locflags & BM_VALID));
+
         if (!(buf->locflags & BM_DELETED) ) {
             result = LockedHashSearch(buf->kind, &(buf->tag), 0, HASH_REMOVE, &found);
 	    buf->locflags |= BM_DELETED;	
@@ -182,12 +162,14 @@ BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block) {
 /*  we can go ahead and say this is a valid insert when 
  *  the buffer is not found or replacing itself  
  **/
-	if (!found)
-	{
+	if (!found) {
             used = true;
 	    buf->locflags |= (BM_VALID);
 	    buf->locflags &= ~(BM_DELETED);	
 	} else {
+  /*  the buffer is no longer valid, it's been deleted from the table  */
+            CLEAR_BUFFERTAG(&buf->tag);
+            buf->kind = RELKIND_INVALID;
             used = false;
         }
 

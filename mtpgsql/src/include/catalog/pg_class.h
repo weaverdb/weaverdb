@@ -181,8 +181,9 @@ DESCR("");
 #define		  RELKIND_RELATION		  'r'		/* cataloged heap */
 #define		  RELKIND_SPECIAL		  's'		/* special (non-heap) */
 #define		  RELKIND_SEQUENCE		  'S'		/* SEQUENCE relation */
-#define		  RELKIND_UNCATALOGED	  'u'		/* temporary heap */
+#define		  RELKIND_UNCATALOGED             'u'		/* temporary heap */
 #define		  RELKIND_LONGVALUE		  'v'		/* moved off huge values */
 #define		  RELKIND_BIGBLOCK		  'b'		/* big block size buffer */
+#define		  RELKIND_INVALID		  'I'		/* big block size buffer */
 
 #endif	 /* PG_RELATION_H */

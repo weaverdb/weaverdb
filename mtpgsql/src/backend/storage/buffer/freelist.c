@@ -286,7 +286,6 @@ int ManualPin(BufferDesc* buf, bool pageaccess) {
         buf->p_waiting--;
     }
     if ( buf->locflags & BM_VALID ) {
-
         if ( pageaccess ) buf->pageaccess++;
         if ( buf->refCount++ == 0 ) {
             buf->used = true;
@@ -407,10 +406,7 @@ BufferDesc * GetFreeBuffer(Relation rel) {
              */
             Assert(head->refCount == 0);
             Assert(head->pageaccess == 0);
-   /*
-    *       Assert(head->freeNext == DETACHED_DESCRIPTOR);
-            Assert(!(head->locflags & BM_FREE));
-    */
+ 
             head->locflags &= ~(BM_VALID);
             head->refCount = 1;
             head->pageaccess = 1;

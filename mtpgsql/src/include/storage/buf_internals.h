@@ -209,7 +209,6 @@ PG_EXTERN void InitFreeList(bool init);
 PG_EXTERN void InitBufTable(int tables);
 PG_EXTERN BufferDesc *BufTableLookup(char kind, BufferTag *tagPtr);
 PG_EXTERN bool BufTableDelete(BufferDesc *buf);
-PG_EXTERN bool BufTableInsert(BufferDesc *buf);
 PG_EXTERN bool  BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block);
 /* bufmgr.c */
 PG_EXTERN BufferDesc *BufferDescriptors;

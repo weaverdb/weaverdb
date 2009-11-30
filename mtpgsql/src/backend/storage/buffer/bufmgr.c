@@ -319,7 +319,7 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
             freebuffer = GetFreeBuffer(reln);
 
             if ( freebuffer == NULL ) {
-                    elog(FATAL,"Freebuffer returned NULL");
+                elog(FATAL,"Freebuffer returned NULL");
             }
             InboundBufferIO(freebuffer);
             
@@ -333,9 +333,11 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
                 buf = freebuffer;
                 return buf;
             } else {
+                freebuffer->blind.dbname[0] = '\0';
+                freebuffer->blind.relname[0] = '\0';
                 /*  a valid buffer was found during replace, clean up and cycle around again */
-                CancelInboundBufferIO(freebuffer);
                 BufferReplaceMiss(newTag.relId.relId, newTag.relId.dbId, RelationGetRelationName(reln));
+                CancelInboundBufferIO(freebuffer);
                 PutFreeBuffer(freebuffer);
                 buf = NULL;
             }
