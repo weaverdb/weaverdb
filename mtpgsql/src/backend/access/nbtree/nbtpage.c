@@ -94,29 +94,15 @@ Buffer
 _bt_getroot(Relation rel, int access)
 {
     Buffer root = InvalidBuffer;
-    BlockNumber rootblock = InvalidBlockNumber;
     bool create = (access == BT_WRITE);
-    int attempts = 0;
-    bool fixedroot = false;
    
     while ( !BufferIsValid(root) ) {
-        attempts++;
         root = _bt_tryroot(rel,create);
         if ( BufferIsValid(root) ) {
             Page rootpage = BufferGetPage(root);
             BTPageOpaque rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
             if (!P_ISROOT(rootopaque)) {
-                elog(DEBUG,"moved btree root page %ld %ld %d",rootblock,BufferGetBlockNumber(root),attempts);
-                if ( rootblock == BufferGetBlockNumber(root) ) {
-                    if ( attempts > 20 ) {
-                        LockBuffer((rel) ,root, BUFFER_LOCK_UNLOCK);
-                        LockBuffer((rel) ,root, BT_WRITE);
-                        root = _bt_fixroot(rel,root,true);
-                        fixedroot = true;
-                    }
-                } else {
-                    rootblock = BufferGetBlockNumber(root);
-                }
+                elog(DEBUG,"moved btree root page %ld %ld %d",BufferGetBlockNumber(root),rootopaque->btpo_parent,rootopaque->btpo_flags);
                 _bt_relbuf(rel,root);
                 root = InvalidBuffer;
                 /*  try again */
@@ -165,6 +151,7 @@ _bt_tryroot(Relation rel, bool create)
         Assert(metad->btm_version == BTREE_VERSION);
 
         root = metad->btm_root;
+        
         _bt_relbuf(rel,metabuf);
 
 	/* if no root page initialized yet, do it */
