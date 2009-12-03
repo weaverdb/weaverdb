@@ -135,7 +135,6 @@ PG_EXTERN int	SyncRelation(Relation rel);
 PG_EXTERN void InitBufferPool(IPCKey key);
 PG_EXTERN void InitThreadBuffer(void);
 
-PG_EXTERN void ResetBufferUsage(void);
 PG_EXTERN void ResetBufferPool(bool isCommit);
 PG_EXTERN int	BufferPoolCheckLeak(void);
 PG_EXTERN int BufferPoolCountHolds();
@@ -171,7 +170,7 @@ PG_EXTERN void TerminateBufferIO(BufferDesc *buf);
 PG_EXTERN Block BufferGetBlock(Buffer buffer);
 
 PG_EXTERN void IncrBufferRefCount(Relation rel, Buffer buffer);
-PG_EXTERN bool CheckBufferId(BufferDesc* buf, BlockNumber block, int relid, int dbid);
+PG_EXTERN bool CheckBufferId(BufferDesc* buf, BlockNumber block, Oid relid, Oid dbid);
 PG_EXTERN BufferCxt GetBufferCxt();
 
 

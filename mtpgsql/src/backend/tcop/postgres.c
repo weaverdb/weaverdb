@@ -1706,8 +1706,6 @@ ResetUsage(void)
 
 	getrusage(RUSAGE_SELF, &Save_r);
 	gettimeofday(&Save_t, &tz);
-	ResetBufferUsage();
-/*	  ResetTupleCount(); */
 }
 
 void

@@ -81,6 +81,7 @@ static bool SyncShadowPage(BufferDesc* bufHdr);
 
 static void UnpinBuffer(BufferCxt cxt, BufferDesc *buf);
 static int PinBuffer(BufferCxt cxt, BufferDesc *buf);
+static void InvalidateBuffer(BufferCxt cxt, BufferDesc* buf);
 
 static void BufferHit(Buffer buf, Oid relid, Oid dbid, char* name);
 static void BufferMiss(Oid relid, Oid dbid, char* name);
@@ -159,10 +160,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
             char   data[BLCKSZ];
         } buffer;
         
-        if ( reln->rd_rel->relkind == RELKIND_RELATION ||
-        reln->rd_rel->relkind == RELKIND_UNCATALOGED ) {
-            elog(FATAL, "heap relations need to be allocated in the Freespace allocator %s", RelationGetRelationName(reln));
-        }
+        Assert ( reln->rd_rel->relkind != RELKIND_RELATION && reln->rd_rel->relkind != RELKIND_UNCATALOGED );
         
         MemSet(buffer.data, 0x00, BLCKSZ);
         PageInit((Page)buffer.data, BLCKSZ, 0);
@@ -199,11 +197,11 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     if ( !isLocalBuf ) {
         if ( !ReadBufferIO(bufHdr) )  {
             elog(DEBUG, "read buffer failed in io start bufid:%d dbid:%d relid:%d blk:%d\n",
-            bufHdr->buf_id,
-            bufHdr->tag.relId.dbId,
-            bufHdr->tag.relId.relId,
-            bufHdr->tag.blockNum);
-           BufTableDelete(bufHdr);
+                bufHdr->buf_id,
+                bufHdr->tag.relId.dbId,
+                bufHdr->tag.relId.relId,
+                bufHdr->tag.blockNum);
+           InvalidateBuffer(RelationGetBufferCxt(reln),bufHdr);
            UnpinBuffer(RelationGetBufferCxt(reln), bufHdr);
            return InvalidBuffer;
         }
@@ -247,7 +245,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                 bufHdr->tag.relId.relId,
                 bufHdr->tag.blockNum);
             ErrorBufferIO(bufHdr);
-            BufTableDelete(bufHdr);
+            InvalidateBuffer(RelationGetBufferCxt(reln),bufHdr);
             UnpinBuffer(RelationGetBufferCxt(reln), bufHdr);
         }
         return InvalidBuffer;
@@ -291,7 +289,6 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
          no idea what state it's in until we pin it    */
         if ( buf != NULL ) {
             if ( !PinBuffer(RelationGetBufferCxt(reln), buf) ) {
-                BufTableDelete(buf);
                 BufferPinInvalid(buf->buf_id, buf->tag.relId.relId, buf->tag.relId.dbId, buf->blind.relname);
                 buf = NULL;
             } else {
@@ -305,7 +302,6 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
                             BufferHit(buf->buf_id, buf->tag.relId.relId, buf->tag.relId.dbId, buf->blind.relname);
                             return buf;
                         } else {
-                            BufTableDelete(buf);
                             UnpinBuffer(RelationGetBufferCxt(reln), buf);
                             buf = NULL;
                         }
@@ -318,9 +314,7 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
         } else {
             freebuffer = GetFreeBuffer(reln);
 
-            if ( freebuffer == NULL ) {
-                elog(FATAL,"Freebuffer returned NULL");
-            }
+            Assert ( freebuffer != NULL );
             InboundBufferIO(freebuffer);
             
             if ( BufTableReplace(freebuffer, reln, blockNum) ) {
@@ -408,11 +402,7 @@ WriteBuffer(Relation rel, Buffer buffer) {
         io mutex once
      */
 
-    if ( !DirtyBufferIO(bufHdr) ) {
-        UnpinBuffer(bufenv,bufHdr);
-        elog(FATAL,"Buffer write failed");
-        return FALSE;
-    }
+    Assert ( DirtyBufferIO(bufHdr) );
     
     /*  we are manually unpinning the buffer by decrementing PrivateRefCount by one.
      *	if PrivateRefCount hits zero, past control of unpinning the shared ref count to
@@ -468,9 +458,7 @@ we don't have to lock  */
         bufdb = bufHdr->tag.relId.dbId;
         relId = bufHdr->tag.relId.relId;
         
-        if ( relId != RelationGetRelid(rel) ) {
-            elog(FATAL, "incorrect direct buffer write");
-        }
+        Assert ( relId == RelationGetRelid(rel) );
         
         RelationGetBufferCxt(rel)->DidWrite = true;
         GetTransactionInfo()->SharedBufferChanged = true;
@@ -567,54 +555,17 @@ BlockNumber blockNum) {
             } else {
                 DecrLocalRefCount(-buffer - 1);
             }
-        } else {
-            LockRelId  *lrelId = &relation->rd_lockInfo.lockRelId;
-            
+        } else {            
             bufHdr = &BufferDescriptors[buffer - 1];
             if ( CheckBufferId(bufHdr, blockNum, relation->rd_id, GetDatabaseId()) ) {
                 if ( WaitBufferIO(false, bufHdr) ) {
                     return buffer;
-                } else {
-                    BufTableDelete(bufHdr);
                 }
             }
-
-            BufferEnv* env = RelationGetBufferCxt(relation);
-            UnpinBuffer(env,bufHdr);
+            UnpinBuffer(RelationGetBufferCxt(relation),bufHdr);
         }
     }
     return ReadBuffer(relation, blockNum);
-}
-
-
-/*
- * WaitIO -- Block until the IO_IN_PROGRESS flag on 'buf' is cleared.
- *
- * Should be entered with buffer manager spinlock held; releases it before
- * waiting and re-acquires it afterwards.
- *
- * OLD NOTES:
- *		Because IO_IN_PROGRESS conflicts are
- *		expected to be rare, there is only one BufferIO
- *		lock in the entire system.	All processes block
- *		on this semaphore when they try to use a buffer
- *		that someone else is faulting in.  Whenever a
- *		process finishes an IO and someone is waiting for
- *		the buffer, BufferIO is signaled (SignalIO).  All
- *		waiting processes then wake up and check to see
- *		if their buffer is now ready.  This implementation
- *		is simple, but efficient enough if WaitIO is
- *		rarely called by multiple processes simultaneously.
- *
- * NEW NOTES:
- *		The above is true only on machines without test-and-set
- *		semaphores (which we hope are few, these days).  On better
- *		hardware, each buffer has a spinlock that we can wait on.
- */
-
-void
-ResetBufferUsage() {
-    
 }
 
 /* ----------------------------------------------
@@ -772,8 +723,7 @@ InvalidateRelationBuffers(Relation rel) {
         if ( PinBuffer(bufcxt, buf) ) {
             /* Now we can do what we came for */
             if ( CheckBufferId(buf, InvalidBlockNumber, relid, dbid) ) {
-		ClearBufferIO(buf);
-                BufTableDelete(buf);
+                InvalidateBuffer(bufcxt,buf);
             }
             UnpinBuffer(bufcxt, buf);
         }
@@ -805,8 +755,7 @@ DropBuffers(Oid dbid) {
         if ( PinBuffer(bufcxt, buf) ) {
             /* Now we can do what we came for */
             if ( CheckBufferId(buf, InvalidBlockNumber, -1, dbid) ) {
-                ClearBufferIO(buf);
-                BufTableDelete(buf);
+                InvalidateBuffer(bufcxt,buf);
             }
             UnpinBuffer(bufcxt, buf);
         }
@@ -1146,10 +1095,7 @@ InboundBufferIO(BufferDesc *buf) {
     bool dirty = false;
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
-    if (buf->ioflags & BM_IOOP_MASK)  {
-        pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        elog(FATAL,"Buffer in inconsistent write state for inbound %d",buf->ioflags);
-    }
+    Assert( !(buf->ioflags & BM_IOOP_MASK) );
     
     buf->ioflags = 0;
     buf->ioflags |= (BM_INBOUND);
@@ -1183,16 +1129,10 @@ ReadBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     bool valid = true;
     
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
-	/* wait for previous IO to complete */
-    if ( buf->ioflags & BM_IOOP_MASK) {
-        pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        elog(FATAL,"Buffer in inconsistent write state for reading %d",buf->ioflags);
-    }
+	/* we would not be reading in the buffer is some other io is occuring */
+    Assert( !(buf->ioflags & BM_IOOP_MASK) );
     
-    if ( !BufferIsLocal(BufferDescriptorGetBuffer(buf)) && !(buf->ioflags & BM_INBOUND) ) {
-        pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        elog(FATAL,"Buffer is not inbound");
-    }
+    Assert( BufferIsLocal(BufferDescriptorGetBuffer(buf)) || (buf->ioflags & BM_INBOUND) );
     
     if ( !( buf->ioflags & BM_IO_ERROR ) ) {
         buf->ioflags &= ~( BM_INBOUND );
@@ -1415,12 +1355,14 @@ AbortBufferIO(void) {
 }
 
 bool
-CheckBufferId(BufferDesc* buf, BlockNumber block, int relid, int dbid) {
+CheckBufferId(BufferDesc* buf, BlockNumber block, Oid relid, Oid dbid) {
     bool  valid = true;
     pthread_mutex_lock(&(buf->cntx_lock.guard));
+
+    Assert(buf->refCount > 0);
     
     if ( relid != -1 && buf->tag.relId.relId != relid ) valid = false;
-    if ( dbid != (Oid) 0 && buf->tag.relId.dbId != dbid ) valid = false;
+    if ( dbid != (Oid)0 && buf->tag.relId.dbId != dbid ) valid = false;
     if (  BlockNumberIsValid(block) && buf->tag.blockNum != block ) valid = false;
     if ( !(buf->locflags & BM_VALID) ) valid = false;
     
@@ -1480,7 +1422,6 @@ void IncrBufferRefCount(Relation rel, Buffer buffer) {
 int
 PinBuffer(BufferCxt cxt, BufferDesc *buf) {
     int valid = 1;
-    long		b;
     
     if (cxt->PrivateRefCount[buf->buf_id] == 0) {
         valid = ManualPin(buf, true);
@@ -1508,6 +1449,11 @@ UnpinBuffer(BufferCxt cxt, BufferDesc *buf) {
     }
 }
 
+void
+InvalidateBuffer(BufferCxt cxt,BufferDesc *buf) {
+    ClearBufferIO(buf);
+    BufTableDelete(buf);
+}
 
 BufferCxt
 GetBufferCxt() {

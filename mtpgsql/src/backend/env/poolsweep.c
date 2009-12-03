@@ -522,6 +522,9 @@ AddJobRequest(JobType type, char *relname, char *dbname, Oid relid, Oid dbid, Po
         dbid = GetDatabaseId();
         dbname = GetDatabaseName();
     }
+    
+    if ( IsShutdownProcessingMode() ) return -1;
+
     pthread_mutex_lock(&list_guard);
     sweep = sweeplist;
 
@@ -529,7 +532,10 @@ AddJobRequest(JobType type, char *relname, char *dbname, Oid relid, Oid dbid, Po
     /* first member is now active or null, proceed with the
     rest of the list */
     while (sweep != NULL) {        
-	if ( IsShutdownProcessingMode() ) return -1;
+	if ( IsShutdownProcessingMode() ) {
+            pthread_mutex_unlock(&list_guard);
+            return -1;
+        }
         
         if ( !sweep->activesweep ) {
             sweep = ShutdownPoolsweep(sweep);

@@ -108,18 +108,23 @@ BufTableDelete(BufferDesc *buf)
 	 * BM_DELETED keeps us from removing buffer twice.
 	 */
         pthread_mutex_lock(&(buf->cntx_lock.guard));
-	if (buf->locflags & BM_DELETED) {
+
+        if (buf->locflags & BM_DELETED) {
                 pthread_mutex_unlock(&(buf->cntx_lock.guard));
 		return TRUE;
         }
 
-	buf->locflags |= (BM_DELETED);
+        buf->locflags |= (BM_DELETED);
+        buf->locflags &= ~(BM_VALID);
 
 	result = LockedHashSearch (buf->kind, &(buf->tag), 0, HASH_REMOVE, &found);
 
 	if (!(result && found)) {
                 elog(FATAL,"BufTableDelete:buffer not in table %d\n",buf->buf_id);
 	}
+
+        CLEAR_BUFFERTAG(&buf->tag);
+        buf->kind = RELKIND_INVALID;
 
         pthread_mutex_unlock(&(buf->cntx_lock.guard));
 	return TRUE;

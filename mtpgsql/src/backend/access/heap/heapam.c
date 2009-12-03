@@ -94,10 +94,10 @@
 #include "utils/relcache.h"
 #include "access/blobstorage.h"
 
-static void
+static Buffer
 NextGenGetTup(Relation relation,
 		   HeapTuple tuple,
-		   Buffer *buffer,
+		   Buffer buffer,
 		   Snapshot snapshot,
 		   int nkeys,
 		   ScanKey key);
@@ -541,17 +541,9 @@ heap_getnext(HeapScanDesc scandesc)
 	 * ----------------
 	 */
 
-/*
-        heapgettup(scan->rs_rd,
+        scan->rs_cbuf = NextGenGetTup(scan->rs_rd,
                            &(scan->rs_ctup),
-                           &scan->rs_cbuf,
-                           scan->rs_snapshot,
-                           scan->rs_nkeys,
-                           scan->rs_key);
-*/
-        NextGenGetTup(scan->rs_rd,
-                           &(scan->rs_ctup),
-                           &scan->rs_cbuf,
+                           scan->rs_cbuf,
                            scan->rs_snapshot,
                            scan->rs_nkeys,
                            scan->rs_key);
@@ -1004,10 +996,10 @@ heap_restrpos(HeapScanDesc scan)
 }
 
 
-static void
+static Buffer
 NextGenGetTup(Relation relation,
 		   HeapTuple tuple,
-		   Buffer *buffer,
+		   Buffer target,
 		   Snapshot snapshot,
 		   int nkeys,
 		   ScanKey key)
@@ -1024,13 +1016,13 @@ NextGenGetTup(Relation relation,
 	 * ----------------
 	 */
 	if (total_pages == 0) {
-		ItemPointerSetInvalid(&tuple->t_self);
-		tuple->t_datamcxt = NULL;
-		tuple->t_datasrc = NULL;
-		tuple->t_info = 0;
-		tuple->t_data = NULL;
-		tuple->t_len = 0;
-		return;
+            ItemPointerSetInvalid(&tuple->t_self);
+            tuple->t_datamcxt = NULL;
+            tuple->t_datasrc = NULL;
+            tuple->t_info = 0;
+            tuple->t_data = NULL;
+            tuple->t_len = 0;
+            return InvalidBuffer;
 	}
         
         if (total_pages == InvalidBlockNumber) {
@@ -1053,16 +1045,15 @@ NextGenGetTup(Relation relation,
 
         if (page >= total_pages)
         {
-                if (BufferIsValid(*buffer))
-                        ReleaseBuffer(relation, *buffer);
-                *buffer = InvalidBuffer;
+                if (BufferIsValid(target))
+                        ReleaseBuffer(relation,target);
                 tuple->t_datamcxt = NULL;
                 tuple->t_datasrc = NULL;
                 tuple->t_info = 0;
                 tuple->t_data = NULL;
 		tuple->t_len = 0;
 		ItemPointerSetInvalid(&tuple->t_self);
-                return;
+                return InvalidBuffer;
         }
 
         /* ----------------
@@ -1074,13 +1065,13 @@ NextGenGetTup(Relation relation,
         while (page < total_pages) {
             Page   dp = NULL;
             
-            *buffer = ReleaseAndReadBuffer(*buffer, relation, page);
+            target = ReleaseAndReadBuffer(target, relation, page);
         
-            if (!BufferIsValid(*buffer))
+            if (!BufferIsValid(target))
                     elog(ERROR, "heapgettup: failed ReadBuffer");
             
-           LockBuffer(relation,*buffer,BUFFER_LOCK_SHARE);     
-           dp = BufferGetPage(*buffer);
+           LockBuffer(relation,target,BUFFER_LOCK_SHARE);
+           dp = BufferGetPage(target);
            lines = PageGetMaxOffsetNumber(dp);
             
             for (;lineoff <= lines;lineoff = OffsetNumberNext(lineoff))
@@ -1092,38 +1083,28 @@ NextGenGetTup(Relation relation,
                     tuple->t_info = 0;
                     ItemPointerSet(&tuple->t_self,page,lineoff);
                     if ( !(tuple->t_data->t_infomask & HEAP_BLOB_SEGMENT) ) {
-                        if  ( HeapTupleSatisfies(relation, *buffer, tuple,  snapshot, nkeys, key) ) {
-                            LockBuffer(relation,*buffer,BUFFER_LOCK_UNLOCK);
-                            return;
+                        if  ( HeapTupleSatisfies(relation, target, tuple,  snapshot, nkeys, key) ) {
+                            LockBuffer(relation,target,BUFFER_LOCK_UNLOCK);
+                            return target;
                         }
                     }
                 }
             }
-            LockBuffer(relation,*buffer,BUFFER_LOCK_UNLOCK);
+            LockBuffer(relation,target,BUFFER_LOCK_UNLOCK);
  
             page = nextpage(page);
             lineoff = FirstOffsetNumber;            
         }
-        if ( BufferIsValid(*buffer) ) {
-           ReleaseBuffer(relation,*buffer);
+        if ( BufferIsValid(target) ) {
+           ReleaseBuffer(relation,target);
         }
-        *buffer = InvalidBuffer;
+        
         tuple->t_datamcxt = NULL;
         tuple->t_datasrc = NULL;
         tuple->t_info = 0;
         tuple->t_data = NULL;
 	tuple->t_len = 0;
 	ItemPointerSetInvalid(&tuple->t_self);
-        return;
+        return InvalidBuffer;
 }
-/*
-OffsetNumber BufferGetMaxOffset(Relation relation, Buffer buffer) {
-    Page dp = BufferGetPage(buffer);
-    OffsetNumber lines;
-    LockBuffer((relation),buffer, BUFFER_LOCK_SHARE);
-    dp = (Page) BufferGetPage(buffer);
-    lines = PageGetMaxOffsetNumber((Page) dp);
-    LockBuffer((relation),buffer, BUFFER_LOCK_UNLOCK);    
-    return lines;
-}
-*/
+
