@@ -211,8 +211,8 @@ smgrextend(SmgrInfo info, char *buffer, long count)
 	if (status == SM_FAIL) {
 		elog(NOTICE, "%s-%s: cannot extend.  Check free disk space.",
 			 NameStr(info->relname),NameStr(info->dbname));
-        return -1;
-    }
+            return -1;
+        }
 
 	return info->nblocks;
 }

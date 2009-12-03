@@ -323,8 +323,10 @@ vfdextend(SmgrInfo info, char *buffer, long count)
 	}
 
 	for ( run=0;run < count;run++ ) {
-            if ((nbytes = FileWrite(fd, buffer, BLCKSZ)) != BLCKSZ)
+            nbytes = FileWrite(fd, buffer, BLCKSZ);
+            if (nbytes != BLCKSZ)
             {
+                elog(NOTICE,"file extend failed %d does not equal block size",nbytes);
                 if (nbytes > 0)
                 {
                     FileTruncate(fd, pos);
@@ -415,8 +417,7 @@ int
 vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 {
 	long		seekpos;
-	long		nbytes = 0;
-        int             spins = 0;
+	int		blit = 0;
         File            fd = info->fd;
         int status =  SM_SUCCESS;
 	char*		msg = NULL;
@@ -436,31 +437,23 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
             status = SM_FAIL_SEEK;
         }
 
-        while ( nbytes < BLCKSZ && status == SM_SUCCESS ) {
-            int r = FileRead(fd, buffer, BLCKSZ - nbytes);
-            if ( spins++ > 99 ) {
-                MemSet(buffer, 0, BLCKSZ - nbytes);
- //               elog(NOTICE,"too many read spins %d rel:%s,db:%s,blk no.:%llu",nbytes,NameStr(info->dbname),NameStr(info->relname),blocknum);
-                nbytes = BLCKSZ;
-                status = SM_FAIL_SPINS;
-            } else if (r < 0) {
-//                elog(NOTICE,"bad read %d db:%s,rel:%s,blk no.:%llu",errno,NameStr(info->dbname),NameStr(info->relname),blocknum);
-                status = SM_FAIL_BASE;
-            } else if ( r == 0 && nbytes == 0 ) {
-                long checkpos = FileSeek(fd,0L,SEEK_END);
-                if ( seekpos >= checkpos ) {
-                    MemSet(buffer, 0, BLCKSZ);
-                    nbytes = BLCKSZ;
-                } else {
-                    if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-                        status = SM_FAIL_SEEK;
-                    }
+        blit = FileRead(fd, buffer, BLCKSZ - nbytes);
+        if (blit < 0) {
+            elog(NOTICE,"bad read %d db:%s,rel:%s,blk no.:%llu",errno,NameStr(info->dbname),NameStr(info->relname),blocknum);
+            status = SM_FAIL_BASE;
+        } else if ( blit == 0 ) {
+            long checkpos = FileSeek(fd,0L,SEEK_END);
+            if ( seekpos >= checkpos ) {
+                if ( seekpos > checkpos ) {
+                    elog(NOTICE,"read past end of file rel: %ld %ld",NameStr(info->relname),seekpos,checkpos);
                 }
+                MemSet(buffer, 0, BLCKSZ);
             } else {
-                nbytes += r;
-                buffer += r;
+                if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
+                    status = SM_FAIL_SEEK;
+                }
             }
-	}
+        }
 
         FileUnpin(fd, 3);
 	return status;

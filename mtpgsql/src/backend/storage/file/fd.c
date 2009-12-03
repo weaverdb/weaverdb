@@ -876,40 +876,65 @@ FileUnlink(File file)
 int
 FileRead(File file, char *buffer, int amount)
 {
-	long			returnCode;
+	ssize_t			blit;
+        int                     request = amount;
         Vfd*    target = GetVirtualFD(file);
 	Assert(FileIsValid(file));
 
 	CheckFileAccess(file);
-	returnCode = read(target->fd, buffer, amount);
         
-	if ( returnCode > 0 ) target->seekPos += returnCode;
+	while ( amount > 0 ) {
+            blit = read(target->fd, buffer, amount);
+            if ( blit < 0 ) {
+                perror("FileRead");
+                return -1;
+            } else if ( blit == 0 ) {
+                /* EOF  */
+                elog(NOTICE,"end of file read %s",target->fileName);
+                target->seekPos += (request - amount);
+                return (request - amount);
+            }
+            amount -= blit;
+            buffer += blit;
+        }
+        
+	target->seekPos += request;
 
-	return returnCode;
+	return request;
 }
 
 int
 FileWrite(File file, char *buffer, int amount)
 {
-	long			returnCode;
 	Vfd*  target = GetVirtualFD(file);
+        int request = amount;
 
 	CheckFileAccess(file);
-        
-	returnCode = write(target->fd, buffer, amount);
-	if (returnCode > 0)
-		target->seekPos += returnCode;
+
+        while ( amount > 0 ) {
+            ssize_t blit = write(target->fd, buffer, amount);
+            if ( blit < 0 ) {
+                perror("FileWrite");
+                return -1;
+            } else if ( blit == 0 ) {
+                elog(NOTICE,"partial write %s",target->fileName);
+                return (request - amount);
+            }
+            buffer += blit;
+            amount -= blit;
+        }
 
 	/* mark the file as needing fsync */
 	target->fdstate |= FD_DIRTY;
 
-	return returnCode;
+	return request;
 }
 
 long
 FileSeek(File file, long offset, int whence)
 {
 	Vfd* target = GetVirtualFD(file);
+        off_t blit = 0;
 	
 	if (target->fd == VFD_CLOSED)
 	{
@@ -923,7 +948,13 @@ FileSeek(File file, long offset, int whence)
 				break;
 			case SEEK_END:
 				CheckFileAccess(file);
-				target->seekPos = lseek(target->fd, offset, whence);
+				blit = lseek(target->fd, offset, whence);
+                                if ( blit < 0 ) {
+                                    perror("FileSeek");
+                                    return -1;
+                                } else {
+                                    target->seekPos = blit;
+                                }
 				break;
 			default:
 				elog(DEBUG, "FileSeek: invalid whence: %d", whence);
@@ -932,8 +963,14 @@ FileSeek(File file, long offset, int whence)
 	}
 	else {
 		CheckFileAccess(file);
-		target->seekPos = lseek(target->fd, offset, whence);
-	}
+                blit = lseek(target->fd, offset, whence);
+                if ( blit < 0 ) {
+                    perror("FileSeek");
+                    return -1;
+                } else {
+                    target->seekPos = blit;
+                }
+        }
 
 	return target->seekPos;
 }
