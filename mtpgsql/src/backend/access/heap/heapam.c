@@ -1062,7 +1062,7 @@ NextGenGetTup(Relation relation,
 	 * ----------------
 	 */
 
-        while (page < total_pages) {
+        while (page < total_pages && !IsShutdownProcessingMode()) {
             Page   dp = NULL;
             
             target = ReleaseAndReadBuffer(target, relation, page);

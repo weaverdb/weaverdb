@@ -890,7 +890,6 @@ FileRead(File file, char *buffer, int amount)
                 return -1;
             } else if ( blit == 0 ) {
                 /* EOF  */
-                elog(NOTICE,"end of file read %s",target->fileName);
                 target->seekPos += (request - amount);
                 return (request - amount);
             }

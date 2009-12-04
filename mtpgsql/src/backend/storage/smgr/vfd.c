@@ -437,7 +437,7 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
             status = SM_FAIL_SEEK;
         }
 
-        blit = FileRead(fd, buffer, BLCKSZ - nbytes);
+        blit = FileRead(fd, buffer, BLCKSZ);
         if (blit < 0) {
             elog(NOTICE,"bad read %d db:%s,rel:%s,blk no.:%llu",errno,NameStr(info->dbname),NameStr(info->relname),blocknum);
             status = SM_FAIL_BASE;

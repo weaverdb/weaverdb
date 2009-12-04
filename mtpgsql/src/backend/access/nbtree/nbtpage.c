@@ -158,7 +158,7 @@ _bt_tryroot(Relation rel, bool create)
 	if (root == P_NONE) {
 		/* If access = BT_READ, caller doesn't want us to create root yet */
 		if (!create) {
-			return InvalidBuffer;
+                    return InvalidBuffer;
 		}
 
 		metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
@@ -169,8 +169,7 @@ _bt_tryroot(Relation rel, bool create)
 		 * between the time we released the read lock and acquired the
 		 * write lock, above, we must avoid doing it again.
 		 */
-		if (metad->btm_root == P_NONE)
-		{
+		if (metad->btm_root == P_NONE) {
 			/*
 			 * Get, initialize, write, and leave a lock of the appropriate
 			 * type on the new root page.  Since this is the first page in

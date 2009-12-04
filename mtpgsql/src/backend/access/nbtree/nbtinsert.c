@@ -519,13 +519,6 @@ _bt_insertonpg(Relation rel,
 				if (BTreeInvalidParent(lpageop))
 				{
                                         elog(ERROR, "bt_insertonpg[%s]: no root page found", RelationGetRelationName(rel));
-/*
-					_bt_wrtbuf(rel, rbuf);
-					_bt_wrtnorelbuf(rel, buf);
-					elog(NOTICE, "bt_insertonpg[%s]: root page unfound - fixing upper levels", RelationGetRelationName(rel));
-					_bt_fixup(rel, buf);
-					goto formres;
-*/
 				}
 
 				/*
@@ -570,12 +563,6 @@ _bt_insertonpg(Relation rel,
 			{
                                 elog(ERROR, "_bt_getstackbuf: my bits moved right off the end of the world!"
 						 "\n\tRecreate index %s.", RelationGetRelationName(rel));
-/*
-				pfree(new_item);
-				elog(NOTICE, "bt_insertonpg[%s]: parent page unfound - fixing branch", RelationGetRelationName(rel));
-				_bt_fixbranch(rel, bknum, rbknum, stack);
-				goto formres;
-*/
 			}
 			/* Recursively update the parent */
 			newres = _bt_insertonpg(rel, pbuf, stack->bts_parent,
