@@ -997,7 +997,7 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             Assert(!(BL_R_LOCK & buflock));
         case BUFFER_LOCK_UPGRADE:
             Assert(!(BL_W_LOCK & buflock));
-            while ( buf->r_locks > buf->u_waiting || buf->w_lock ) {
+            while ( (buf->r_locks > buf->u_waiting) || buf->w_lock ) {
                 buf->w_waiting++;
                 if ( BL_R_LOCK & buflock ) buf->u_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));

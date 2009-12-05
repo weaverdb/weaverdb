@@ -98,7 +98,7 @@ _bt_getroot(Relation rel, int access)
     bool create = (access == BT_WRITE);
    
     while ( !BufferIsValid(root) ) {
-        root = _bt_tryroot(rel,create);
+        root = (BlockNumberIsValid(rootparent)) ? _bt_getbuf(rel,rootparent,BT_READ) : _bt_tryroot(rel,create);
         if ( BufferIsValid(root) ) {
             Page rootpage = BufferGetPage(root);
             BTPageOpaque rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
