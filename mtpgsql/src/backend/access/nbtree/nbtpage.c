@@ -93,6 +93,7 @@ _bt_metapinit(Relation rel)
 Buffer
 _bt_getroot(Relation rel, int access)
 {
+    BlockNumber rootparent = InvalidBlockNumber;
     Buffer root = InvalidBuffer;
     bool create = (access == BT_WRITE);
    
@@ -103,8 +104,10 @@ _bt_getroot(Relation rel, int access)
             BTPageOpaque rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
             if (!P_ISROOT(rootopaque)) {
                 elog(DEBUG,"moved btree root page %ld %ld %d",BufferGetBlockNumber(root),rootopaque->btpo_parent,rootopaque->btpo_flags);
+                rootparent = rootopaque->btpo_parent;
                 _bt_relbuf(rel,root);
                 root = InvalidBuffer;
+                Assert(!(rootparent == BTREE_METAPAGE));
                 /*  try again */
             }
         } else {

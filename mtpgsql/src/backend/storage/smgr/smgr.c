@@ -32,7 +32,7 @@ typedef struct f_smgr
 	int			(*smgr_shutdown) (void);		/* may be NULL */
 	int			(*smgr_create) (SmgrInfo info);
 	int			(*smgr_unlink) (SmgrInfo info);
-	int			(*smgr_extend) (SmgrInfo info, char *buffer, long count);
+	int			(*smgr_extend) (SmgrInfo info, char *buffer, int count);
 	int			(*smgr_open) (SmgrInfo info);
 	int			(*smgr_close) (SmgrInfo info);
 	int			(*smgr_read) (SmgrInfo info, BlockNumber blocknum,
@@ -202,11 +202,9 @@ smgrunlink(SmgrInfo info)
  *		failure.
  */
 long
-smgrextend(SmgrInfo info, char *buffer, long count)
+smgrextend(SmgrInfo info, char *buffer, int count)
 {
-	int			status;
-
-	status = (*(smgrsw[info->which].smgr_extend)) (info, buffer, count);
+	int status = (*(smgrsw[info->which].smgr_extend)) (info, buffer, count);
 
 	if (status == SM_FAIL) {
 		elog(NOTICE, "%s-%s: cannot extend.  Check free disk space.",

@@ -299,9 +299,10 @@ vfdunlink(SmgrInfo info)
  *		appropriate.
  */
 int
-vfdextend(SmgrInfo info, char *buffer, long count)
+vfdextend(SmgrInfo info, char *buffer, int count)
 {
-	long		pos, nbytes,run;
+	off_t		pos;
+        int             run;
         File                    fd;
 
 	fd = info->fd;
@@ -323,7 +324,7 @@ vfdextend(SmgrInfo info, char *buffer, long count)
 	}
 
 	for ( run=0;run < count;run++ ) {
-            nbytes = FileWrite(fd, buffer, BLCKSZ);
+            int nbytes = FileWrite(fd, buffer, BLCKSZ);
             if (nbytes != BLCKSZ)
             {
                 elog(NOTICE,"file extend failed %d does not equal block size",nbytes);
@@ -340,7 +341,7 @@ vfdextend(SmgrInfo info, char *buffer, long count)
         
         FileUnpin(fd, 1);
         
-        info->nblocks = (pos / BLCKSZ) + count;
+        info->nblocks = (BlockNumber)((pos / BLCKSZ) + count);
 
 	return SM_SUCCESS;
 }

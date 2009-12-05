@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/1"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/1">
+        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/access/heap/blobstorage.c</file>
+        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/env/vacuumlazy.c</file>
+        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/env/freespace.c</file>
+        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/storage/buffer/bufmgr.c</file>
+        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/storage/smgr/smgr.c</file>
+        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/storage/smgr/vfd.c</file>
+    </open-files>
 </project-private>

@@ -1117,9 +1117,12 @@ _bt_fixsplit(Relation rel,BlockNumber left, BlockNumber parent, BlockNumber righ
         BTPageOpaque opaque = (BTPageOpaque)PageGetSpecialPointer(page);
         if ( !P_ISROOT(opaque) ) {
             buffer = _bt_fixroot(rel, buffer, true);
+            right = BufferGetBlockNumber(buffer);
+            _bt_wrtbuf(rel,buffer);
+        } else {
+            right = BufferGetBlockNumber(buffer);
+            _bt_relbuf(rel,buffer);
         }
-        right = BufferGetBlockNumber(buffer);
-        _bt_relbuf(rel,buffer);
 
         buffer = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
         BTPageGetMeta(PageGetSpecialPointer(BufferGetPage(buffer)))->btm_root = right;

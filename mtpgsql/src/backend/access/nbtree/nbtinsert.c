@@ -1298,8 +1298,7 @@ _bt_fixroot(Relation rel, Buffer oldrootbuf, bool release)
 
 		newitemoff = OffsetNumberNext(PageGetMaxOffsetNumber(page));
 
-		if (PageGetFreeSpace(page) < itemsz)
-		{
+		if (PageGetFreeSpace(page) < itemsz) {
 			Buffer		newbuf;
 			OffsetNumber firstright;
 			OffsetNumber itup_off;
@@ -1317,9 +1316,9 @@ _bt_fixroot(Relation rel, Buffer oldrootbuf, bool release)
 			buf = newbuf;
 			page = BufferGetPage(buf);
 			opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-		}
-		else
+		} else {
 			_bt_insertuple(rel, buf, itemsz, btitem, newitemoff);
+                }
 
 		/* give up left buffer */
 		_bt_wrtbuf(rel, leftbuf);
@@ -1399,7 +1398,7 @@ _bt_fixtree(Relation rel, BlockNumber blkno)
 			{
 				elog(NOTICE, "bt_fixtree[%s]: fixing root page", RelationGetRelationName(rel));
 				buf = _bt_fixroot(rel, buf, true);
-				_bt_relbuf(rel, buf);
+				_bt_wrtbuf(rel, buf);
 				return;
 			}
 			/* Have to go up one level */
@@ -1800,7 +1799,7 @@ _bt_fixup(Relation rel, Buffer buf)
 	 */
 	elog(NOTICE, "bt_fixup[%s]: fixing root page", RelationGetRelationName(rel));
 	buf = _bt_fixroot(rel, buf, true);
-	_bt_relbuf(rel, buf);
+	_bt_wrtbuf(rel, buf);
 }
 
 static OffsetNumber

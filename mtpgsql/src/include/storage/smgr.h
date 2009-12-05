@@ -40,7 +40,7 @@ PG_EXTERN int	smgrshutdown(void);
 PG_EXTERN SmgrInfo  smgrcreate(int16 which, char *dbname, char *relname, 
 			  Oid dbid, Oid relid);
 PG_EXTERN int	smgrunlink(SmgrInfo info);
-PG_EXTERN long	smgrextend(SmgrInfo info, char *buffer, long count);
+PG_EXTERN long	smgrextend(SmgrInfo info, char *buffer, int count);
 PG_EXTERN SmgrInfo  smgropen(int16 which, char *dbname, char *relname,
 			  Oid dbid, Oid relid);
 PG_EXTERN int	smgrclose(SmgrInfo info);
@@ -95,7 +95,7 @@ PG_EXTERN int	vfdinit(void);
 PG_EXTERN int	vfdshutdown(void);
 PG_EXTERN int	vfdcreate(SmgrInfo info);
 PG_EXTERN int	vfdunlink(SmgrInfo info);
-PG_EXTERN int	vfdextend(SmgrInfo info, char *buffer, long count);
+PG_EXTERN int	vfdextend(SmgrInfo info, char *buffer, int count);
 PG_EXTERN int	vfdopen(SmgrInfo info);
 PG_EXTERN int	vfdclose(SmgrInfo info);
 PG_EXTERN int	vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer);
