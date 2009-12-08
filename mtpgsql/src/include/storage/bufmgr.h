@@ -65,7 +65,6 @@ PG_EXTERN int	ShowPinTrace;
 #define BUFFER_LOCK_REF_EXCLUSIVE               4
 
 /*  bit flag set if lock should fail instead of block  */
-#define BUFFER_LOCK_UPGRADE			8	
 #define BUFFER_LOCK_WRITEIO                     16   /*  blocks exclusive locks until write io is finished */
 
 
@@ -159,13 +158,13 @@ PG_EXTERN int LockBuffer(Relation rel, Buffer buffer, int mode);
 PG_EXTERN bool BufferHasError(Buffer buf);
 
 PG_EXTERN void AbortBufferIO(void);
-PG_EXTERN bool ErrorBufferIO(BufferDesc* buf);
+PG_EXTERN void ErrorBufferIO(IOStatus locks, BufferDesc* buf);
 PG_EXTERN bool IsDirtyBufferIO(BufferDesc* buf);
         
-PG_EXTERN bool ReadBufferIO(BufferDesc *buf);
-PG_EXTERN bool WriteBufferIO(BufferDesc *buf, bool flush);
-PG_EXTERN bool LogBufferIO(BufferDesc *buf);
-PG_EXTERN void TerminateBufferIO(BufferDesc *buf);
+PG_EXTERN IOStatus ReadBufferIO(BufferDesc *buf);
+PG_EXTERN IOStatus WriteBufferIO(BufferDesc *buf, bool flush);
+PG_EXTERN IOStatus LogBufferIO(BufferDesc *buf);
+PG_EXTERN void TerminateBufferIO(IOStatus locks, BufferDesc *buf);
 
 PG_EXTERN Block BufferGetBlock(Buffer buffer);
 

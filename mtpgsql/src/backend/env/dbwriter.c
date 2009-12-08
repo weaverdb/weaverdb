@@ -760,8 +760,8 @@ int LogTransactions(WriteGroup cart) {
      * block */
     Block           block;	/* block containing xstatus */
     BlockNumber     masterblock = InvalidBlockNumber;
-    LOCKTAG         tag;
     BufferDesc     *bufHdr;
+
     
     if (cart->numberOfTrans == 0)
         return 0;
@@ -779,19 +779,20 @@ int LogTransactions(WriteGroup cart) {
         
         if (localblock != masterblock) {
             if (masterblock != InvalidBlockNumber) {
-                int status = STATUS_OK;
-                if ( WriteBufferIO(bufHdr, true) ) {
+                int      status = STATUS_OK;
+                IOStatus iostatus = WriteBufferIO(bufHdr, true);
+                if ( iostatus ) {
                     if (bufHdr->data == 0)
                         elog(FATAL, "[DBWriter] bad buffer block in TransactionLogging");
                     
                     status = smgrflush(cart->LogRelation->rd_smgr, masterblock, (char *) MAKE_PTR(bufHdr->data));
                     
                     if ( status == SM_FAIL ) {
-                        ErrorBufferIO(bufHdr);
+                        ErrorBufferIO(iostatus, bufHdr);
                         elog(FATAL, "LogTransactions: cannot write %lu for %s-%s",
                                 bufHdr->tag.blockNum, bufHdr->blind.relname, bufHdr->blind.dbname);
                     } else {
-                        TerminateBufferIO(bufHdr);
+                        TerminateBufferIO(iostatus, bufHdr);
                     }
                 }
                 ReleaseBuffer(cart->LogRelation, buffer);
@@ -816,15 +817,16 @@ int LogTransactions(WriteGroup cart) {
     
     if (masterblock != InvalidBlockNumber) {
         int status = STATUS_OK;
-        if ( WriteBufferIO(bufHdr, true) ) {
+        IOStatus        iostatus = WriteBufferIO(bufHdr, true);
+        if ( iostatus ) {
             status = smgrflush(cart->LogRelation->rd_smgr, masterblock, (char *) MAKE_PTR(bufHdr->data));
             
             if ( status == SM_FAIL ) {
-                ErrorBufferIO(bufHdr);
+                ErrorBufferIO(iostatus,bufHdr);
                 elog(FATAL, "LogTransactions: cannot write %lu for %s-%s",
                         bufHdr->tag.blockNum, bufHdr->blind.relname, bufHdr->blind.dbname);
             } else {
-                TerminateBufferIO(bufHdr);
+                TerminateBufferIO(iostatus,bufHdr);
             }
         }
         
@@ -972,10 +974,10 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
 int LogBuffers(WriteGroup list, PassType type) {
     int             i;
     BufferDesc     *bufHdr;
-    int             status;
     int             releasecount = 0;
     int             buffer_hits = 0;
-    
+    IOStatus        iostatus;
+
     smgrbeginlog();
     for (i = 0, bufHdr = BufferDescriptors; i < NBuffers; i++, bufHdr++) {
         
@@ -1004,8 +1006,9 @@ int LogBuffers(WriteGroup list, PassType type) {
             } else if ( type == HEAP_PASS ) {
                 if ( bufHdr->kind != RELKIND_RELATION ) continue;
             }
-            
-            if ( LogBufferIO(bufHdr) ) {
+
+            iostatus = LogBufferIO(bufHdr);
+            if ( iostatus ) {
                 PageInsertChecksum((Page) MAKE_PTR(bufHdr->data));
                 buffer_hits++;
                 if ( SM_FAIL == smgrlog(
@@ -1019,10 +1022,10 @@ int LogBuffers(WriteGroup list, PassType type) {
                         (char *) MAKE_PTR(bufHdr->data)
                     )
                 ) {
-                    ErrorBufferIO(bufHdr);
+                    ErrorBufferIO(iostatus,bufHdr);
                 } else {
                     list->logged[i] = true;
-                    TerminateBufferIO(bufHdr);
+                    TerminateBufferIO(iostatus,bufHdr);
                 }
             } else {
                 /*
@@ -1041,8 +1044,9 @@ int LogBuffers(WriteGroup list, PassType type) {
                 }
             }
         } else {
+            iostatus = LogBufferIO(bufHdr);
             
-            if (LogBufferIO(bufHdr)) {
+            if (iostatus) {
                 elog(NOTICE, "log buffers - this should not happen");
                 elog(NOTICE, "dbid:%d relid:%d blk:%d\n",
                         list->descriptions[i].relId.dbId,
@@ -1052,7 +1056,7 @@ int LogBuffers(WriteGroup list, PassType type) {
                         list->descriptions[i].relId.dbId,
                         list->descriptions[i].relId.relId,
                         bufHdr->tag.blockNum);
-                TerminateBufferIO(bufHdr);
+                TerminateBufferIO(iostatus,bufHdr);
             }
         }
     }
@@ -1077,10 +1081,12 @@ int SyncBuffers(WriteGroup list) {
     BufferDesc     *bufHdr;
     int             releasecount = 0;
     int buffer_hits = 0;
-    bool            multiuser = IsMultiuser();
-    
+    IOStatus        iostatus;
+    int status = STATUS_OK;
+
+
     for (i = 0, bufHdr = BufferDescriptors; i < NBuffers; i++, bufHdr++) {
-        /* Ignore buffers that were not dirtied by me */
+      /* Ignore buffers that were not dirtied by me */
         if (!list->buffers[i])
             continue;
         
@@ -1091,18 +1097,17 @@ int SyncBuffers(WriteGroup list) {
              * buffer
              */
             if (
-                    bufHdr->tag.relId.relId == list->LogRelation->rd_id ||
-                    bufHdr->tag.relId.relId == list->VarRelation->rd_id
+                bufHdr->tag.relId.relId == list->LogRelation->rd_id ||
+                bufHdr->tag.relId.relId == list->VarRelation->rd_id
                 ) {
                 /* VarRel should always be flushing out writes */
                 /* LogRel should only get here due to soft commits holding
                  * a reference to the buffer though actually write to
                  * disk of the sync group
                  */
-                
-                if (WriteBufferIO(bufHdr, true)) {
-                    int status = SM_FAIL;
-                    
+
+                iostatus = WriteBufferIO(bufHdr, true);
+                if (iostatus) {
                     SmgrInfo target = NULL;
                     
                     if ( bufHdr->tag.relId.relId == list->VarRelation->rd_id ) {
@@ -1113,23 +1118,21 @@ int SyncBuffers(WriteGroup list) {
                         target = list->LogRelation->rd_smgr;
                     }
                     
-                    status = smgrflush(list->LogRelation->rd_smgr, bufHdr->tag.blockNum,
-                            (char *) MAKE_PTR(bufHdr->data));
-                    
+                    status = smgrflush(list->LogRelation->rd_smgr, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
                     
                     if (status == SM_FAIL) {
-                        ErrorBufferIO(bufHdr);
+                        ErrorBufferIO(iostatus, bufHdr);
                         elog(FATAL, "BufferSync: cannot write %lu for %s-%s",
                                 bufHdr->tag.blockNum, bufHdr->blind.relname, bufHdr->blind.dbname);
                     } else {
                         buffer_hits++;
-                        TerminateBufferIO(bufHdr);
+                        TerminateBufferIO(iostatus, bufHdr);
                     }
                     
                 }
             } else {
                 PathCache*   cache = NULL;
-                
+
                 cache = GetPathCache(list, bufHdr->blind.relname, bufHdr->blind.dbname, bufHdr->tag.relId.relId, bufHdr->tag.relId.dbId);
                 if (cache->keepstats && cache->tolerance > 0.0) {
                     /*
@@ -1140,9 +1143,9 @@ int SyncBuffers(WriteGroup list) {
                      */
                     cache->accesses += ((list->release[i] * cache->tolerance) * (hgc_update / hgc_factor));
                 }
-                
-                if (WriteBufferIO(bufHdr, false)) {
-                    int status = STATUS_OK;
+
+                iostatus = WriteBufferIO(bufHdr, false);
+                if ( iostatus ) {
                     
                     buffer_hits++;
                     cache->commit = true;
@@ -1164,25 +1167,27 @@ int SyncBuffers(WriteGroup list) {
                     }
                     
                     if ( status == SM_FAIL ) {
-                        ErrorBufferIO(bufHdr);
+                        ErrorBufferIO(iostatus, bufHdr);
                         elog(FATAL, "BufferSync: cannot write %lu for %s-%s",
                                 bufHdr->tag.blockNum, bufHdr->blind.relname, bufHdr->blind.dbname);
                     } else {
-                        TerminateBufferIO(bufHdr);
+                        TerminateBufferIO(iostatus, bufHdr);
                     }
                 }
             }
         } else {
-            if (WriteBufferIO(bufHdr, true)) {
+            iostatus = WriteBufferIO(bufHdr, true);
+            if (iostatus) {
                 elog(NOTICE, "already out dbid:%d relid:%d blk:%d\n",
                         list->descriptions[i].relId.dbId,
                         list->descriptions[i].relId.relId,
                         list->descriptions[i].blockNum);
                 elog(NOTICE, "now dbid:%d relid:%d blk:%d\n",
                         bufHdr->tag.relId.dbId, bufHdr->tag.relId.relId, bufHdr->tag.blockNum);
-                TerminateBufferIO(bufHdr);
+                TerminateBufferIO(iostatus, bufHdr);
             }
         }
+        
         while(list->release[i] > 0) {
             ManualUnpin(bufHdr, false);
             list->release[i]--;
@@ -1197,10 +1202,7 @@ int SyncBuffers(WriteGroup list) {
 void FlushAllDirtyBuffers() {
     int             i;
     WriteGroup     cart = NULL;
-    int             position;
-    pthread_t       tid = pthread_self();
     int             releasecount = 0;
-    double          calc;
     
     if (IsDBWriter()) {
         

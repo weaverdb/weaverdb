@@ -99,7 +99,6 @@ static void ShowBufferIO(int id, int io);
 static bool DirtyBufferIO(BufferDesc* header);
 static bool WaitBufferIO(bool write_mode, BufferDesc *buf);
 
-
 static SectionId   buffer_section_id = SECTIONID("BMGR");
 
 #ifdef TLS
@@ -150,6 +149,8 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     bool		found;
     bool		isLocalBuf;
     BlockNumber         check = blockNum;
+    BufferEnv* bufenv = RelationGetBufferCxt(reln);
+    IOStatus            iostatus;
     
     extend = (blockNum == P_NEW);
     isLocalBuf = reln->rd_myxactonly;
@@ -195,14 +196,15 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     }
     
     if ( !isLocalBuf ) {
-        if ( !ReadBufferIO(bufHdr) )  {
+        iostatus = ReadBufferIO(bufHdr);
+        if ( !iostatus )  {
             elog(DEBUG, "read buffer failed in io start bufid:%d dbid:%d relid:%d blk:%d\n",
                 bufHdr->buf_id,
                 bufHdr->tag.relId.dbId,
                 bufHdr->tag.relId.relId,
                 bufHdr->tag.blockNum);
-           InvalidateBuffer(RelationGetBufferCxt(reln),bufHdr);
-           UnpinBuffer(RelationGetBufferCxt(reln), bufHdr);
+           InvalidateBuffer(bufenv,bufHdr);
+           UnpinBuffer(bufenv, bufHdr);
            return InvalidBuffer;
         }
     }
@@ -244,9 +246,9 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                 bufHdr->tag.relId.dbId,
                 bufHdr->tag.relId.relId,
                 bufHdr->tag.blockNum);
-            ErrorBufferIO(bufHdr);
-            InvalidateBuffer(RelationGetBufferCxt(reln),bufHdr);
-            UnpinBuffer(RelationGetBufferCxt(reln), bufHdr);
+            ErrorBufferIO(iostatus,bufHdr);
+            InvalidateBuffer(bufenv,bufHdr);
+            UnpinBuffer(bufenv, bufHdr);
         }
         return InvalidBuffer;
     }
@@ -255,7 +257,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     SyncShadowPage(bufHdr);
     if ( !isLocalBuf ) {
     /* If anyone was waiting for IO to complete, wake them up now */
-        TerminateBufferIO(bufHdr);
+        TerminateBufferIO(iostatus,bufHdr);
     }
 
     return BufferDescriptorGetBuffer(bufHdr);
@@ -273,7 +275,7 @@ static BufferDesc *
 BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
     BufferDesc 	*buf = NULL;		/* identity of requested block */
     BufferTag	newTag;			/* identity of requested block */
-    
+    BufferEnv*  bufenv = RelationGetBufferCxt(reln);
     
     /* create a new tag so we can lookup the buffer */
     /* assume that the relation is already open */
@@ -288,7 +290,7 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
         /*   if buf != NULL we have a buffer but we have
          no idea what state it's in until we pin it    */
         if ( buf != NULL ) {
-            if ( !PinBuffer(RelationGetBufferCxt(reln), buf) ) {
+            if ( !PinBuffer(bufenv, buf) ) {
                 BufferPinInvalid(buf->buf_id, buf->tag.relId.relId, buf->tag.relId.dbId, buf->blind.relname);
                 buf = NULL;
             } else {
@@ -302,12 +304,12 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
                             BufferHit(buf->buf_id, buf->tag.relId.relId, buf->tag.relId.dbId, buf->blind.relname);
                             return buf;
                         } else {
-                            UnpinBuffer(RelationGetBufferCxt(reln), buf);
+                            UnpinBuffer(bufenv, buf);
                             buf = NULL;
                         }
                 } else {
                     BufferPinMiss(buf->buf_id, buf->tag.relId.relId, buf->tag.relId.dbId, buf->blind.relname);
-                    UnpinBuffer(RelationGetBufferCxt(reln), buf);
+                    UnpinBuffer(bufenv, buf);
                     buf = NULL;
                 }
             }
@@ -320,8 +322,8 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
             if ( BufTableReplace(freebuffer, reln, blockNum) ) {
                 strcpy(freebuffer->blind.dbname, GetDatabaseName());
                 strcpy(freebuffer->blind.relname, RelationGetPhysicalRelationName(reln));
-                RelationGetBufferCxt(reln)->PrivateRefCount[freebuffer->buf_id] = 1;
-                RelationGetBufferCxt(reln)->total_pins++;
+                bufenv->PrivateRefCount[freebuffer->buf_id] = 1;
+                bufenv->total_pins++;
                 *foundPtr = FALSE;
                 BufferMiss(newTag.relId.relId, newTag.relId.dbId, RelationGetRelationName(reln));
                 buf = freebuffer;
@@ -379,9 +381,7 @@ int
 WriteBuffer(Relation rel, Buffer buffer) {
     BufferDesc *bufHdr;
     BufferEnv* bufenv = RelationGetBufferCxt(rel);
-    
-    
-    
+
     if (BufferIsLocal(buffer))
         return WriteLocalBuffer(buffer, TRUE);
     
@@ -447,7 +447,8 @@ DirectWriteBuffer(Relation rel, Buffer buffer, bool release) {
     Oid			bufdb;
     Oid			relId;
     BufferEnv* bufenv = RelationGetBufferCxt(rel);
-    int			status = STATUS_OK;        
+    int			status = STATUS_OK;
+    IOStatus            iostatus;
         
         bufenv->DidWrite = true;
         
@@ -460,7 +461,7 @@ we don't have to lock  */
         
         Assert ( relId == RelationGetRelid(rel) );
         
-        RelationGetBufferCxt(rel)->DidWrite = true;
+        bufenv->DidWrite = true;
         GetTransactionInfo()->SharedBufferChanged = true;
         
         /*
@@ -468,9 +469,8 @@ we don't have to lock  */
          * other backend changes its contents while we write it;
          * see comments in BufferSync().
          */
-        
-
-        if ( WriteBufferIO(bufHdr,true) ) {
+        iostatus = WriteBufferIO(bufHdr,true);
+        if ( iostatus ) {
             if ( rel->rd_rel->relkind != RELKIND_SPECIAL )  {
                 PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
             }
@@ -479,19 +479,18 @@ we don't have to lock  */
             (char *) MAKE_PTR(bufHdr->data));
 
             if (status == SM_FAIL) {
-                ErrorBufferIO(bufHdr);
+                ErrorBufferIO(iostatus,bufHdr);
                 elog(NOTICE, "FlushBuffer: cannot flush block %u of the relation %s",
                 bufHdr->tag.blockNum, bufHdr->blind.relname);
             } else {
                 /* copy new page to shadow */
                 SyncShadowPage(bufHdr);
-                TerminateBufferIO(bufHdr);
+                TerminateBufferIO(iostatus,bufHdr);
             }
         }
         
         if (release) {
-            BufferEnv* env = RelationGetBufferCxt(rel);
-            UnpinBuffer(env,bufHdr);
+            UnpinBuffer(bufenv,bufHdr);
         }
         
         return ( status == SM_FAIL ) ? STATUS_ERROR : STATUS_OK;
@@ -504,9 +503,7 @@ we don't have to lock  */
 int
 WriteNoReleaseBuffer(Relation rel, Buffer buffer) {
     BufferDesc *bufHdr;
-    
-    
-    
+
     if (BufferIsLocal(buffer))
         return WriteLocalBuffer(buffer, FALSE);
     
@@ -784,9 +781,7 @@ PrintBufferDescs() {
             buf->blind.relname, buf->tag.blockNum, buf->ioflags,
             buf->refCount, env->PrivateRefCount[i]);
         }
-    }
-    else {
-        BufferEnv*   env = GetBufferCxt();
+    } else {
         /* interactive backend */
         for (i = 0; i < NBuffers; ++i, ++buf) {
             printf("[%-2d] (%s, %d) flags=0x%x, refcnt=%d %ld)\n",
@@ -926,24 +921,23 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
     int             locking_error = 0;
 
     Assert(BufferIsValid(buffer));
+
     if (BufferIsLocal(buffer))
         return locking_error;
-    
-     if ( rel != NULL ) {
-        if ( RelationGetBufferCxt(rel) == NULL ) rel->buffer_cxt = GetBufferCxt();
+
+    if ( rel != NULL ) {
         buflock = RelationGetBufferCxt(rel)->BufferLocks[buffer - 1];
+    } else {
+
     }
-    
+
     buf = &(BufferDescriptors[buffer - 1]);
     
-    if ( pthread_mutex_lock(&(buf->cntx_lock.guard)) ) {
-        elog(ERROR, "Buffer Locking Error 1");
-    }
+    pthread_mutex_lock(&(buf->cntx_lock.guard));
     
     switch (mode) {
         case BUFFER_LOCK_UNLOCK:
-            if ( rel == NULL && buf->wio_lock ) {
-                buf->wio_lock = false;
+            if ( rel == NULL ) {
                 buflock |= BL_R_LOCK;
             }
             buflock = UnlockIndividualBuffer(buflock, buf);
@@ -976,15 +970,13 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
                locking_error = BL_NOLOCK;
                break;
             } else {
-                buf->wio_lock = true;
                 /*  fallthrough to share lock */
             }
         case BUFFER_LOCK_SHARE:
             /*  don't wait for e_waiting b/c it is usless unless pins wait for buf->e-waiting  */
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
-
-            while( buf->w_lock || ( buf->w_waiting + buf->e_waiting ) > 0 ) {
+            while( buf->w_lock || (( buf->w_waiting + buf->e_waiting ) > 0) ) {
                 buf->r_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->r_waiting--;
@@ -995,14 +987,11 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             break;
         case BUFFER_LOCK_EXCLUSIVE:
             Assert(!(BL_R_LOCK & buflock));
-        case BUFFER_LOCK_UPGRADE:
             Assert(!(BL_W_LOCK & buflock));
-            while ( (buf->r_locks > buf->u_waiting) || buf->w_lock ) {
+            while ( (buf->r_locks > 0) || buf->w_lock ) {
                 buf->w_waiting++;
-                if ( BL_R_LOCK & buflock ) buf->u_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->w_waiting--;
-                if ( BL_R_LOCK & buflock ) buf->u_waiting--;
             }
             buf->w_owner = GetEnv()->eid;
             buf->w_lock = true;
@@ -1028,8 +1017,7 @@ bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc * buf) {
         if ( buf->r_locks == 0 ) {
             signal = true;
         }
-    } 
-    if (buflock & BL_W_LOCK) {
+    } else if (buflock & BL_W_LOCK) {
         if (buf->e_lock ) {
             Assert(buf->pageaccess <= buf->e_waiting + 1);
             if ( buf->p_waiting > 0 ) {
@@ -1124,9 +1112,9 @@ CancelInboundBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     return dirty;  
 }
 
-bool
+IOStatus
 ReadBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
-    bool valid = true;
+    IOStatus iostatus = BL_NOLOCK;
     
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 	/* we would not be reading in the buffer is some other io is occuring */
@@ -1138,22 +1126,25 @@ ReadBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
         buf->ioflags &= ~( BM_INBOUND );
         buf->ioflags |= (BM_READ_IN_PROGRESS);
     } else {
-        valid = false;
+        iostatus = 0;
     }
     
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
 
-    DTRACE_PROBE4(mtpg,buffer__readbufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,valid);   
+    DTRACE_PROBE4(mtpg,buffer__readbufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,iostatus);
 
-    return valid;
+    return iostatus;
 }
 
-bool
+IOStatus
 LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     int dirty = 0;
+    IOStatus  iostatus = BL_NOLOCK;
     
-    int locked = LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_WRITEIO);
-    
+    if ( 0 == LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_WRITEIO) ) {
+        iostatus = BL_R_LOCK;
+    }
+
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
     while ( buf->ioflags & BM_IOOP_MASK ) {
@@ -1163,7 +1154,8 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     if ( (buf->ioflags & BM_IO_ERROR) ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-        return false;
+        iostatus = 0;
+        return iostatus;
     }
 
     dirty = (buf->ioflags & BM_DIRTY);
@@ -1179,16 +1171,20 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     
     if ( !dirty ) {
         LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        iostatus = 0;
     }
     
-    return ( dirty ) ? true : false;
+    return iostatus;
 }
 
-bool
+IOStatus
 WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
     int dirty = 0;
+    IOStatus  iostatus = BL_NOLOCK;
     
-    LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_WRITEIO);
+    if ( 0 == LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_WRITEIO) ) {
+        iostatus = BL_R_LOCK;
+    } 
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1199,7 +1195,8 @@ WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
     if ( (buf->ioflags & BM_IO_ERROR) ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-        return false;
+        iostatus = 0;
+        return iostatus;
     }
 
 /*  flushes are always dirty  */
@@ -1230,9 +1227,10 @@ WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
     
     if ( !dirty ) {
         LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        iostatus = 0;
     }
     
-    return ( dirty ) ? true : false;
+    return iostatus;
 }
 
 bool
@@ -1264,8 +1262,8 @@ IsDirtyBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     return dirty;
 }
 
-bool 
-ErrorBufferIO(BufferDesc *buf) {
+void
+ErrorBufferIO(IOStatus iostatus, BufferDesc *buf) {
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1275,8 +1273,11 @@ ErrorBufferIO(BufferDesc *buf) {
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
 
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-    
-    return false;
+
+    if ( iostatus & BL_R_LOCK ) {
+        Assert(iostatus == BL_R_LOCK);
+        LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+    }
 }
 
 bool 
@@ -1310,8 +1311,7 @@ ClearBufferIO(BufferDesc *buf) {
  *
  */
 void
-TerminateBufferIO(BufferDesc *buf) {
-    bool unlock = FALSE;
+TerminateBufferIO(IOStatus iostatus, BufferDesc *buf) {
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
     
     ShowBufferIO(buf->buf_id,buf->ioflags);
@@ -1320,9 +1320,8 @@ TerminateBufferIO(BufferDesc *buf) {
 /*  if IO is happening alert waiters they need to check state  */
         if ( buf->ioflags & BM_LOG_IN_PROGRESS ) {
             buf->ioflags |= BM_LOGGED;
-            unlock = TRUE;
         } else if ( buf->ioflags & BM_WRITE_IN_PROGRESS ) {
-            unlock = TRUE;
+
         }
         buf->ioflags &= ~(BM_IOOP_MASK);
         pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
@@ -1330,7 +1329,8 @@ TerminateBufferIO(BufferDesc *buf) {
   
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
     
-    if ( unlock ) {
+    if ( iostatus & BL_R_LOCK ) {
+        Assert(iostatus == BL_R_LOCK);
         LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
     }    
 }
@@ -1460,7 +1460,7 @@ GetBufferCxt() {
     /*  ignore cleanup, its done by the memory context  */
     BufferEnv* env = buffers_global;
     MemoryContext oldcxt;
-    
+
     if ( env == NULL ) {
         env = AllocateEnvSpace(buffer_section_id, sizeof(BufferEnv));
 
@@ -1487,6 +1487,7 @@ GetBufferCxt() {
         
         buffers_global = env;
     }
+
     return env;
 }
 

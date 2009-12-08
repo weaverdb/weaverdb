@@ -813,7 +813,6 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes)
 	BTScanOpaque so;
 	ItemPointer current;
 
-        BufferCxt bufcxt = RelationGetBufferCxt(rel);
 	long used_pages = 0;
 
 	tuples_removed = 0;	

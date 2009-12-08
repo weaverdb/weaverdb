@@ -38,7 +38,7 @@ typedef struct BufferTrigger {
     void*               args;
 } BufferTrigger;
 
-typedef struct bufenv   *BufferCxt;
+typedef struct bufenv           *BufferCxt;
 typedef struct SnapshotHolder   *SnapshotCxt;
 
 typedef struct LockRelId

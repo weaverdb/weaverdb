@@ -139,7 +139,6 @@ typedef struct sbufdesc
 	unsigned	r_locks;		/* # of shared locks */
         unsigned	e_waiting;              /*  waiting for exclusive lock   */
         unsigned	w_waiting;              /*  waiting for write lock   */
-        unsigned	u_waiting;              /*  waiting for upgrade lock   */
         unsigned	r_waiting;              /*  waiting for read lock   */
         unsigned	p_waiting;              /*  waiting for page exclusive lock   */
 
@@ -159,6 +158,8 @@ typedef struct sbufdesc
 #define BL_RI_LOCK			(1 << 2)
 #define BL_W_LOCK			(1 << 3)
 #define BL_NOLOCK               (1 << 4)
+
+typedef         bits8          IOStatus;
 /*
  *	mao tracing buffer allocation
  */
