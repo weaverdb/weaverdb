@@ -308,6 +308,7 @@ WBegin(OpaqueWConn conn, long trans)
     
     if ( connection->transaction_owner != 0 ) {
         SetError(connection,454,"CONTEXT","transaction owner already set");
+        return err;
     }
 
     READY(connection,err);
