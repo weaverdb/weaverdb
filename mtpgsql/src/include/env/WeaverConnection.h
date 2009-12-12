@@ -107,12 +107,13 @@ typedef struct Connection {
     struct Connection*              parent;             
     int                             child_count;
     int                             child_trans;
-    pthread_t                       transaction_owner;
 
-    pthread_mutex_t                 child_lock;
-    
     int 		processed;
     int                 abortonly;
+    
+    pthread_t                       transaction_owner;
+    pthread_mutex_t                 child_lock;
+
 } * WConn;
 
 #ifdef __cplusplus
