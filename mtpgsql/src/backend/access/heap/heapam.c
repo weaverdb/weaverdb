@@ -229,15 +229,17 @@ heap_open(Oid relationId, LOCKMODE lockmode)
 	/* The relcache does all the real work... */
 	r = RelationIdGetRelation(relationId,DEFAULTDBOID);
 
+	if (!RelationIsValid(r))
+		elog(ERROR, "Relation %u does not exist", relationId);
+
 	/* Under no circumstances will we return an index as a relation. */
-	if (RelationIsValid(r) && r->rd_rel->relkind == RELKIND_INDEX)
+	if (r->rd_rel->relkind == RELKIND_INDEX)
 		elog(ERROR, "%s is an index relation", RelationGetRelationName(r));
+
+        r->rd_nblocks = RelationGetNumberOfBlocks(r);
 
 	if (lockmode == NoLock)
 		return r;				/* caller must check RelationIsValid! */
-
-	if (!RelationIsValid(r))
-		elog(ERROR, "Relation %u does not exist", relationId);
 
 	LockRelation(r, lockmode);
 

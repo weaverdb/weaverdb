@@ -177,8 +177,9 @@ static HTAB* CreateFDHash(MemoryContext cxt);
 static Vfd* HashScanFD(FileName  filename, int fileflags, int filemode, bool * allocated);
 static bool HashDropFD(Vfd* target);
 
-static int ActivateFile(Vfd* file);
+static void ActivateFile(Vfd* file);
 static void  RetireFile(Vfd* file);
+static void CheckFileAccess(Vfd* target);
 
 static bool ReleaseFileIfNeeded();
 
@@ -196,6 +197,7 @@ static long pg_nofile(void);
 static int GetRealFileCount();
 
 static void closeAllVfds();
+
 
 /*
  * pg_fsync --- same as fsync except does nothing if -F switch was given
@@ -359,14 +361,13 @@ HashDropFD(Vfd * target) {
     return found;
 }
 
-static int
+static void
 ActivateFile(Vfd* vfdP)
 {
-	int			returnValue;
-
-
+    bool opened = false;
 	while (vfdP->fd == VFD_CLOSED)
 	{
+            opened = true;
              ReleaseFileIfNeeded();
 
             /*
@@ -382,7 +383,7 @@ ActivateFile(Vfd* vfdP)
 /* try again */
             } else if (vfdP->fd < 0) {
                     pthread_mutex_unlock(&RealFiles.guard);
-                    return vfdP->fd;
+                    return;
             } else {
 /*  freshly opened file, optimize */
                     if ( vfdoptimize ) {
@@ -397,13 +398,13 @@ ActivateFile(Vfd* vfdP)
        }
 
         /* seek to the right position */
-        if ( vfdP->seekPos != 0L)
+        if ( opened && vfdP->seekPos != 0L)
         {
-                returnValue = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
-                Assert(returnValue != -1);
+            off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
+            if ( check != vfdP->seekPos ) {
+                elog(NOTICE,"bad file activation during seek filename:%s, current: %d, seeked: %d",vfdP->fileName,vfdP->seekPos,check);
+            }
         }
-
-	return 0;
 }
 
 /*
@@ -631,25 +632,18 @@ filepath(char* buf, char *filename, int len)
 	return buf;
 }
 
-static int
-CheckFileAccess(File file) {
-	int			returnValue = 0;
-        Vfd                     *target = GetVirtualFD(file);
-
-        if ( (target->refCount > 1) && target->owner != pthread_self() ) {
-            elog(ERROR,"unlocked file access");
-        }
+static void
+CheckFileAccess(Vfd* target) {
+        Assert(target->owner == pthread_self() );
 
 	if (target->fd == VFD_CLOSED)
 	{
-            returnValue = ActivateFile(target);
+            ActivateFile(target);
 	}
 
         target->usage_count++;
         time(&target->access_time);
         target->sweep_valid = false;
-
-	return returnValue;
 }
 
 
@@ -698,7 +692,7 @@ fileNameOpenFile(FileName fileName,
                     pthread_mutex_lock(&vfdP->pin);
                     DTRACE_PROBE2(mtpg,file__opened,vfdP->refCount,vfdP->fileName);
                     if ( vfdP->fd == VFD_CLOSED ) {
-                        realfd = ActivateFile(vfdP);
+                        ActivateFile(vfdP);
                     }
                     pthread_mutex_unlock(&vfdP->pin);
                 }
@@ -816,9 +810,7 @@ OpenTemporaryFile(void)
 void
 FileClose(File file)
 {
-	int			returnValue;
 	Vfd* target 	=	GetVirtualFD(file);
-            Env* env = GetEnv();
         bool    free = false;
        
         if ( target->private ) {
@@ -831,6 +823,7 @@ FileClose(File file)
 
         if (target->fdstate & FD_TEMPORARY) {
             int track =  0;
+            Env* env = GetEnv();
 
             for ( track=0;track<MAX_PRIVATE_FILES;track++) {
                 if ( env->temps[track] == file ) env->temps[track] = 0;
@@ -854,6 +847,14 @@ FileClose(File file)
         }
 
         pthread_mutex_unlock(&target->pin);
+}
+
+char*
+FileName(File file) {
+    	Vfd* target 	=	GetVirtualFD(file);
+
+	Assert(FileIsValid(file));
+        return target->fileName;
 }
 
 /*
@@ -881,7 +882,7 @@ FileRead(File file, char *buffer, int amount)
         Vfd*    target = GetVirtualFD(file);
 	Assert(FileIsValid(file));
 
-	CheckFileAccess(file);
+	CheckFileAccess(target);
         
 	while ( amount > 0 ) {
             blit = read(target->fd, buffer, amount);
@@ -908,7 +909,7 @@ FileWrite(File file, char *buffer, int amount)
 	Vfd*  target = GetVirtualFD(file);
         int request = amount;
 
-	CheckFileAccess(file);
+	CheckFileAccess(target);
 
         while ( amount > 0 ) {
             ssize_t blit = write(target->fd, buffer, amount);
@@ -934,6 +935,8 @@ FileSeek(File file, long offset, int whence)
 {
 	Vfd* target = GetVirtualFD(file);
         off_t blit = 0;
+
+        Assert(target->owner == pthread_self() );
 	
 	if (target->fd == VFD_CLOSED)
 	{
@@ -946,7 +949,7 @@ FileSeek(File file, long offset, int whence)
 				target->seekPos += offset;
 				break;
 			case SEEK_END:
-				CheckFileAccess(file);
+                                CheckFileAccess(target);
 				blit = lseek(target->fd, offset, whence);
                                 if ( blit < 0 ) {
                                     perror("FileSeek");
@@ -959,9 +962,8 @@ FileSeek(File file, long offset, int whence)
 				elog(DEBUG, "FileSeek: invalid whence: %d", whence);
 				break;
 		}
-	}
-	else {
-		CheckFileAccess(file);
+	} else {
+		CheckFileAccess(target);
                 blit = lseek(target->fd, offset, whence);
                 if ( blit < 0 ) {
                     perror("FileSeek");
@@ -970,21 +972,21 @@ FileSeek(File file, long offset, int whence)
                     target->seekPos = blit;
                 }
         }
-
 	return target->seekPos;
 }
 
 int
 FileTruncate(File file, long offset)
 {
-	int			returnCode;
+        int			returnCode;
+        Vfd*        target = GetVirtualFD(file);
 
-	Assert(FileIsValid(file));
+        Assert(FileIsValid(file));
 
-	CheckFileAccess(file);
+	CheckFileAccess(target);
 	FileSync(file);
 
-	returnCode = ftruncate(GetVirtualFD(file)->fd, offset);
+	returnCode = ftruncate(target->fd, offset);
         
 	return returnCode;
 }
@@ -1024,7 +1026,9 @@ FileSync(File file)
 	int			returnCode;
 	Vfd* target = GetVirtualFD(file);
 	
-	if (!(target->fdstate & FD_DIRTY))
+        Assert(target->owner == pthread_self() );
+
+        if (!(target->fdstate & FD_DIRTY))
 	{
 		/* Need not sync if file is not dirty. */
 		returnCode = 0;
@@ -1045,10 +1049,7 @@ FileSync(File file)
 		 */
 		if (target->fd == VFD_CLOSED)
 		{
-                    returnCode = ActivateFile(target);
-                    if (returnCode != 0) {
-                            elog(ERROR,"bad activate");
-                    }
+                    ActivateFile(target);
 		}
 		returnCode = pg_fsync(target->fd);
 		if (returnCode == 0)
@@ -1070,9 +1071,7 @@ FilePin(File file,int key)
         target->owner = pthread_self();
         target->key = key;
 	
-	if ( target->owner == 0 ) {
-		elog(ERROR,"file not locked %d",key);
-	}
+	Assert( target->owner != 0 );
 }
 
 int

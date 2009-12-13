@@ -63,6 +63,7 @@ PG_EXTERN int FileOptimize(File file);
 PG_EXTERN int FileNormalize(File file);
 
 PG_EXTERN File OpenTemporaryFile(void);
+PG_EXTERN char* FileName(File file);
 PG_EXTERN void FileClose(File file);
 PG_EXTERN void FileUnlink(File file);
 PG_EXTERN int	FileRead(File file, char *buffer, int amount);

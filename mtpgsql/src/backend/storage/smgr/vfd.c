@@ -254,7 +254,6 @@ vfdcreate(SmgrInfo info)
 int
 vfdunlink(SmgrInfo info)
 {
-	int			nblocks;
 	int			fd;
 
 	/*
@@ -274,8 +273,7 @@ vfdunlink(SmgrInfo info)
 	 * happened yet.
 	 */
 	fd = info->fd;
-	if (fd < 0)					/* should not happen */
-		elog(ERROR, "vfdunlink: vfdnblocks didn't open relation");
+	Assert(fd >= 0);				/* should not happen */
 
         FileBaseSync(fd,0);
         
@@ -309,7 +307,9 @@ vfdextend(SmgrInfo info, char *buffer, int count)
 
         FilePin(fd, 1);
 
-	if ((pos = FileSeek(fd, 0L, SEEK_END)) < 0) {
+	pos = FileSeek(fd, 0L, SEEK_END);
+
+        if ( pos < 0 ) {
             FileUnpin(fd, 1);
             return SM_FAIL;
         }
@@ -433,25 +433,24 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 
         FilePin(fd, 3);
 	if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-//            msg = palloc(2048);
-//            elog(NOTICE,"bad seek %d db:%s,rel:%s,blk no.:%llu",seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
+            elog(NOTICE,"bad read seek filename:%s, %d db:%s,rel:%s,blk no.:%llu",FileName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
             status = SM_FAIL_SEEK;
-        }
-
-        blit = FileRead(fd, buffer, BLCKSZ);
-        if (blit < 0) {
-            elog(NOTICE,"bad read %d db:%s,rel:%s,blk no.:%llu",errno,NameStr(info->dbname),NameStr(info->relname),blocknum);
-            status = SM_FAIL_BASE;
-        } else if ( blit == 0 ) {
-            long checkpos = FileSeek(fd,0L,SEEK_END);
-            if ( seekpos >= checkpos ) {
-                if ( seekpos > checkpos ) {
-                    elog(NOTICE,"read past end of file rel: %s %ld %ld",NameStr(info->relname),seekpos,checkpos);
-                }
-                MemSet(buffer, 0, BLCKSZ);
-            } else {
-                if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-                    status = SM_FAIL_SEEK;
+        } else {
+            blit = FileRead(fd, buffer, BLCKSZ);
+            if (blit < 0) {
+                elog(NOTICE,"bad read %d filename:%s, db:%s,rel:%s,blk no.:%llu",errno,FileName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum);
+                status = SM_FAIL_BASE;
+            } else if ( blit == 0 ) {
+                long checkpos = FileSeek(fd,0L,SEEK_END);
+                if ( seekpos >= checkpos ) {
+                    if ( seekpos > checkpos ) {
+                        elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileName(fd), NameStr(info->relname),seekpos,checkpos);
+                    }
+                    MemSet(buffer, 0, BLCKSZ);
+                } else {
+                    if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
+                        status = SM_FAIL_SEEK;
+                    }
                 }
             }
         }
@@ -690,7 +689,6 @@ vfdbeginlog() {
 
 int
 vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
-    long ret;
         
     if ( SegmentStore.header.count == max_blocks ) {
         _vfddumplogtodisk();
@@ -770,7 +768,6 @@ _vfddumplogtodisk() {
 
 int
 vfdcommitlog() {
-    int count;
     
     _vfddumplogtodisk();
     FileSync(log_file);
