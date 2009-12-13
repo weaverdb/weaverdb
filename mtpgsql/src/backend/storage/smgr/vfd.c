@@ -382,6 +382,7 @@ vfdopen(SmgrInfo info)
 			return SM_FAIL;
 		}
 	}
+        Assert(strcmp(path,FileGetName(fd)) == 0);
 	info->unlinked = false;
         info->fd = fd;
 
@@ -428,7 +429,6 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 	int		blit = 0;
         File            fd = info->fd;
         int status =  SM_SUCCESS;
-	char*		msg = NULL;
 
 
 	seekpos = (long) (BLCKSZ * (blocknum));
@@ -439,6 +439,7 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
         }
 
         FilePin(fd, 3);
+        Assert(strstr(FileGetName(fd),NameStr(info->relname))!=NULL);
 	if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
             elog(NOTICE,"bad read seek filename:%s, %d db:%s,rel:%s,blk no.:%llu",FileGetName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
             status = SM_FAIL_SEEK;

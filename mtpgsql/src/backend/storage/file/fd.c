@@ -304,38 +304,37 @@ HashScanFD(FileName filename, int fileflags, int filemode, bool * allocated) {
     bool        found;
     VfdEntry*    entry;
     Vfd*        target = NULL;
-	int count = 0;
 
     pthread_mutex_lock(&VfdPool.guard);
 
     entry = hash_search(VfdPool.hash,filename,HASH_ENTER,&found);
 
-    if ( found ) target = entry->vfd;
-
-    if ( target != NULL ) {
-	bool over = false;
-/* don't need to lock the refCount b/c this is the only place 
-    it should be incremented 
-*/
-        if ( target->refCount >= vfdsharemax ) {
-            target->pooled = false;
-            target = NULL;
+    if ( found ) {
+        if ( entry->vfd->refCount >= vfdsharemax ) {
+            entry = NULL;
         } else {
-            count = target->refCount++;
+            target = entry->vfd;
+            Assert(strcmp(target->fileName,filename) == 0);
+            target->refCount++;
         }
     }
         
     if ( target == NULL ) {
-        entry->vfd = AllocateVfd(filename,fileflags,filemode,false);
-        entry->vfd->pooled = true;
-        *allocated = true;
+        target = AllocateVfd(filename,fileflags,filemode,false);
+        if ( entry != NULL ) {
+            target->pooled = true;
+            entry->vfd = target;
+            *allocated = true;
+        } else {
+            target->pooled = false;
+        }
    } 
 
-   DTRACE_PROBE3(mtpg,file__search,filename,found,count);
+   DTRACE_PROBE3(mtpg,file__search,filename,found,target->refCount);
 
-        pthread_mutex_unlock(&VfdPool.guard);
+   pthread_mutex_unlock(&VfdPool.guard);
 
-    return entry->vfd;
+   return target;
 }
 
 static bool
@@ -385,8 +384,8 @@ ActivateFile(Vfd* vfdP)
             } else if (vfdP->fd < 0) {
                    vfdP->fd = VFD_CLOSED;
                     pthread_mutex_unlock(&RealFiles.guard);
-                    elog(NOTICE,"vfd activate file failed for filename: %s",vfdP->fileName);
-                    return;
+                    elog(NOTICE,"vfd activate file failed for filename: %s, fd: %d",vfdP->fileName,vfdP->fd);
+                    sleep(5);
             } else {
 /*  freshly opened file, optimize */
                     if ( vfdoptimize ) {
@@ -549,7 +548,6 @@ AllocateVfd(FileName name,int fileflags,int filemode, bool private)
 			position < (VfdCache.size + newCacheSize);
 			position+=vfdmultiple) 
 		{	
-			int counter = 0;
 			section = position / vfdmultiple;
 			VfdCache.pointers[section] = block + ( position - VfdCache.size );
 			InitializeBlock(position);
@@ -584,6 +582,7 @@ AllocateVfd(FileName name,int fileflags,int filemode, bool private)
         target->seekPos = 0;
         target->fdstate = 0x0;
 /*  allocating so reference it  */
+        Assert(target->refCount == 0);
         target->refCount = 1;
         target->fd = VFD_CLOSED;
 	target->nextFree = -1;
@@ -639,10 +638,8 @@ static void
 CheckFileAccess(Vfd* target) {
         Assert(phtread_equal(target->owner,pthread_self()));
 
-	if (target->fd == VFD_CLOSED)
-	{
-            ActivateFile(target);
-	}
+        ActivateFile(target);
+	Assert(target->fd != VFD_CLOSED)
 
         target->usage_count++;
         time(&target->access_time);
@@ -655,13 +652,11 @@ fileNameOpenFile(FileName fileName,
 				 int fileFlags,
 				 int fileMode)
 {
-	Vfd		   *vfdP;
+	Vfd		   *vfdP == NULL;
 	errno = 0;
         bool                allocated = false;
         bool                private = ( IsDBWriter() || IsPoolsweep() || IsBootstrapProcessingMode()
                         || (fileFlags & (O_CREAT | O_EXCL | O_TRUNC)) ) ? true : false;
-
-        bool                valid = false;
 
 
 	if (fileName == NULL) {
@@ -674,7 +669,7 @@ fileNameOpenFile(FileName fileName,
             private = true;
         }
 
-        while ( !valid ) {
+        while ( vfdP == NULL ) {
             if ( !private ) {
                 vfdP = HashScanFD(fileName,fileFlags,fileMode,&allocated);
             } else {
@@ -686,26 +681,14 @@ fileNameOpenFile(FileName fileName,
                 vfdP->fileMode != fileMode) ) { 
             /* test failed, relase this Vfd and get a private Vfd */
                 private = true;
-                valid = false;
                 FileClose(vfdP->id);
+                vfdP = NULL;
             }  else {
-                int realfd = 0;
-                valid = true;
                 if ( private ) {
                     pthread_mutex_lock(&vfdP->pin);
                     DTRACE_PROBE2(mtpg,file__opened,vfdP->refCount,vfdP->fileName);
-                    if ( vfdP->fd == VFD_CLOSED ) {
-                        ActivateFile(vfdP);
-                    }
+                    ActivateFile(vfdP);
                     pthread_mutex_unlock(&vfdP->pin);
-                }
-        /*  if fd < 0 there is a problem   */
-                if ( realfd < 0 ) {
-                    /*
-                    perror("file open");
-                    elog(NOTICE,"error for real fd");
-                    */
-                    return realfd;
                 }
             }
         }
