@@ -137,6 +137,7 @@ vfdinit()
         elog(FATAL,"unable to access vfd logfile");
     }
     FileOptimize(log_file);
+    FilePin(log_file,0);
     FileSeek(log_file,0,SEEK_SET);
     
     index_file = PathNameOpenFile(idxpath, O_RDWR | O_CREAT , 0600);
@@ -144,6 +145,7 @@ vfdinit()
         elog(FATAL,"unable to access vfd logfile");
     }
     FileOptimize(index_file);
+    FilePin(index_file,0);
     FileSeek(index_file,0,SEEK_SET);
     
     scratch_size = (BLCKSZ * max_blocks);
@@ -170,6 +172,9 @@ vfdinit()
  
     index_log = NULL;
     index_count = 0;
+
+    FileUnpin(log_file,0);
+    FileUnpin(index_file,0);
     
     return SM_SUCCESS;
 }
@@ -177,6 +182,8 @@ vfdinit()
 int
 vfdshutdown()
 {
+    FilePin(log_file,0);
+    FilePin(index_file,0);
     if ( log_file > 0 ) {
         LogBuffer.LogHeader.header_magic = HEADER_MAGIC;
         LogBuffer.LogHeader.log_id = log_count;
@@ -198,9 +205,9 @@ vfdshutdown()
         FileWrite(index_file,IndexStore.data,BLCKSZ);
         FileClose(index_file);
     }    
-    
     os_free(scratch_space);
-    
+    FileUnpin(log_file,0); 
+    FileUnpin(index_file,0); 
     return SM_SUCCESS;
 }
 
@@ -433,18 +440,18 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 
         FilePin(fd, 3);
 	if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-            elog(NOTICE,"bad read seek filename:%s, %d db:%s,rel:%s,blk no.:%llu",FileName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
+            elog(NOTICE,"bad read seek filename:%s, %d db:%s,rel:%s,blk no.:%llu",FileGetName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
             status = SM_FAIL_SEEK;
         } else {
             blit = FileRead(fd, buffer, BLCKSZ);
             if (blit < 0) {
-                elog(NOTICE,"bad read %d filename:%s, db:%s,rel:%s,blk no.:%llu",errno,FileName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum);
+                elog(NOTICE,"bad read %d filename:%s, db:%s,rel:%s,blk no.:%llu",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum);
                 status = SM_FAIL_BASE;
             } else if ( blit == 0 ) {
                 long checkpos = FileSeek(fd,0L,SEEK_END);
                 if ( seekpos >= checkpos ) {
                     if ( seekpos > checkpos ) {
-                        elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileName(fd), NameStr(info->relname),seekpos,checkpos);
+                        elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
                     }
                     MemSet(buffer, 0, BLCKSZ);
                 } else {
@@ -675,7 +682,7 @@ vfdbeginlog() {
     LogBuffer.LogHeader.log_id = log_count++;
     LogBuffer.LogHeader.completed = false;
     LogBuffer.LogHeader.segments = 0;  
-    
+    FilePin(log_file,0); 
     log_pos = FileSeek(log_file,0,SEEK_END);
         
     FileWrite(log_file,LogBuffer.block,BLCKSZ);
@@ -683,7 +690,7 @@ vfdbeginlog() {
     
     SegmentStore.header.count = 0;
     IndexStore.header.count = 0;
-    
+    FileUnpin(log_file,0); 
     return SM_SUCCESS;
 }
 
@@ -730,7 +737,7 @@ _vfddumpindextomemory() {
 int
 _vfddumpindextodisk() {
     int ret = 0;
-
+    FilePin(index_file,0);
     FileSeek(index_file,0,SEEK_SET); 
     if ( index_log ) {
         FileWrite(index_file,index_log,BLCKSZ * index_count);
@@ -747,7 +754,7 @@ _vfddumpindextodisk() {
         IndexStore.header.count = 0;
     }
     FileTruncate(index_file,ret * BLCKSZ);
-    
+    FileUnpin(index_file,0); 
     return ret;
 }
     
@@ -759,10 +766,11 @@ _vfddumplogtodisk() {
     
     SegmentStore.header.segment_magic = SEGMENT_MAGIC;
     SegmentStore.header.seg_id = LogBuffer.LogHeader.segments++;
+    FilePin(log_file,0);
     ret += FileWrite(log_file,SegmentStore.data,BLCKSZ);
     ret += FileWrite(log_file,scratch_space,BLCKSZ * SegmentStore.header.count);
     SegmentStore.header.count = 0;
-    
+    FileUnpin(log_file,0); 
     return SegmentStore.header.count;
 }
 
@@ -770,13 +778,14 @@ int
 vfdcommitlog() {
     
     _vfddumplogtodisk();
+    FilePin(log_file,0);
     FileSync(log_file);
     
     LogBuffer.LogHeader.completed = true;
     FileSeek(log_file,log_pos,SEEK_SET);
     FileWrite(log_file,LogBuffer.block,BLCKSZ);
     FileSync(log_file);
-    
+    FileUnpin(log_file,0); 
     return SM_SUCCESS;
 }
 
@@ -790,11 +799,11 @@ vfdexpirelogs() {
        index_count = 0;
     }
     IndexStore.header.count = 0;
-
+    FilePin(log_file,0);
     FileTruncate(log_file,0);
     FileSeek(log_file,0,SEEK_SET);
     FileSync(log_file);
-    
+    FileUnpin(log_file,0); 
     log_pos = 0;
     return SM_SUCCESS;
 }
@@ -815,6 +824,7 @@ vfdreplaylogs() {
         vfd_log("Log File not valid. exiting.");
         return SM_SUCCESS;
     }
+    FilePin(log_file,0);
     end = FileSeek(log_file,0,SEEK_END);
     FileSeek(log_file,0,SEEK_SET);
     
@@ -858,7 +868,7 @@ vfdreplaylogs() {
         logged = true; 
     }
     log_count = LogBuffer.LogHeader.log_id + 1;
-         
+    FileUnpin(log_file,0);
     if ( !logged ) _vfdreplayindexlog();
     
     return SM_SUCCESS;
@@ -868,6 +878,7 @@ static int
 _vfdreplayindexlog() {
     int x =0;
     long count = BLCKSZ;
+    FilePin(index_file,0);
     while ( count == BLCKSZ ) {
         if ( IndexStore.header.index_magic != INDEX_MAGIC ) break;
 
@@ -878,6 +889,7 @@ _vfdreplayindexlog() {
 
         count = FileRead(index_file,IndexStore.data,BLCKSZ);
     }
+    FileUnpin(index_file,0);
 }
 
 static long
@@ -914,10 +926,12 @@ _vfdreplaysegment() {
                 if ( cdb != info->dbid || crel != info->relid) {
                     char* path = relpath_blind(NameStr(info->dbname),NameStr(info->relname),info->dbid,info->relid);
                     if ( fd > 0 ) {
+                        FileUnpin(fd,0);
                         FileClose(fd);
                     }
                     fd = FileNameOpenFile(path, O_WRONLY | O_LARGEFILE, 0600);
-                    cdb = info->dbid;
+                    FilePin(fd,0);
+	            cdb = info->dbid;
                     crel = info->relid;
                     pfree(path);
                 }
@@ -933,7 +947,10 @@ _vfdreplaysegment() {
                 }
             }  
         }
-        if ( fd > 0 ) FileClose(fd);
+        if ( fd > 0 ) {
+            FileUnpin(fd,0);
+            FileClose(fd);
+        }
         
         return total; 
 }

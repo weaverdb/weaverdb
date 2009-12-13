@@ -850,7 +850,7 @@ FileClose(File file)
 }
 
 char*
-FileName(File file) {
+FileGetName(File file) {
     	Vfd* target 	=	GetVirtualFD(file);
 
 	Assert(FileIsValid(file));
