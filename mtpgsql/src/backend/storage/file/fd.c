@@ -637,10 +637,10 @@ filepath(char* buf, char *filename, int len)
 
 static void
 CheckFileAccess(Vfd* target) {
-        Assert(phtread_equal(target->owner,pthread_self()));
+        Assert(pthread_equal(target->owner,pthread_self()));
 
         ActivateFile(target);
-	Assert(target->fd != VFD_CLOSED)
+	Assert(target->fd != VFD_CLOSED);
 
         target->usage_count++;
         time(&target->access_time);
@@ -653,7 +653,7 @@ fileNameOpenFile(FileName fileName,
 				 int fileFlags,
 				 int fileMode)
 {
-	Vfd		   *vfdP == NULL;
+	Vfd		   *vfdP = NULL;
 	errno = 0;
         bool                allocated = false;
         bool                private = ( IsDBWriter() || IsPoolsweep() || IsBootstrapProcessingMode()
@@ -924,7 +924,7 @@ FileSeek(File file, long offset, int whence)
 	Vfd* target = GetVirtualFD(file);
         off_t blit = 0;
 
-        Assert(phtread_equal(target->owner,pthread_self()));
+        Assert(pthread_equal(target->owner,pthread_self()));
 	
 	if (target->fd == VFD_CLOSED)
 	{
@@ -1014,7 +1014,7 @@ FileSync(File file)
 	int			returnCode;
 	Vfd* target = GetVirtualFD(file);
 	
-        Assert(phtread_equal(target->owner,pthread_self()));
+        Assert(pthread_equal(target->owner,pthread_self()));
 
         if (!(target->fdstate & FD_DIRTY))
 	{
