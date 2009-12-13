@@ -379,10 +379,13 @@ ActivateFile(Vfd* vfdP)
             vfdP->fd = open(vfdP->fileName, vfdP->fileFlags, vfdP->fileMode);
             if (vfdP->fd < 0 && (errno == EMFILE || errno == ENFILE))
             {
+                vfdP->fd = VFD_CLOSED;
                     errno = 0;
 /* try again */
             } else if (vfdP->fd < 0) {
+                   vfdP->fd = VFD_CLOSED;
                     pthread_mutex_unlock(&RealFiles.guard);
+                    elog(NOTICE,"vfd activate file failed for filename: %s",vfdP->fileName);
                     return;
             } else {
 /*  freshly opened file, optimize */
@@ -634,7 +637,7 @@ filepath(char* buf, char *filename, int len)
 
 static void
 CheckFileAccess(Vfd* target) {
-        Assert(target->owner == pthread_self() );
+        Assert(phtread_equal(target->owner,pthread_self()));
 
 	if (target->fd == VFD_CLOSED)
 	{
@@ -936,7 +939,7 @@ FileSeek(File file, long offset, int whence)
 	Vfd* target = GetVirtualFD(file);
         off_t blit = 0;
 
-        Assert(target->owner == pthread_self() );
+        Assert(phtread_equal(target->owner,pthread_self()));
 	
 	if (target->fd == VFD_CLOSED)
 	{
@@ -1026,7 +1029,7 @@ FileSync(File file)
 	int			returnCode;
 	Vfd* target = GetVirtualFD(file);
 	
-        Assert(target->owner == pthread_self() );
+        Assert(phtread_equal(target->owner,pthread_self()));
 
         if (!(target->fdstate & FD_DIRTY))
 	{
