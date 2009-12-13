@@ -311,7 +311,8 @@ HashScanFD(FileName filename, int fileflags, int filemode, bool * allocated) {
 
     if ( found ) {
         if ( entry->vfd->refCount >= vfdsharemax ) {
-            entry = NULL;
+            entry->vfd->pooled = false;
+            entry->vfd = NULL;
         } else {
             target = entry->vfd;
             Assert(strcmp(target->fileName,filename) == 0);
@@ -800,6 +801,7 @@ FileClose(File file)
         bool    free = false;
        
         if ( target->private ) {
+            Assert(target->refCount == 1);
             free = true;
         } else {
             free = HashDropFD(target);
