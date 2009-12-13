@@ -639,7 +639,7 @@ CheckFileAccess(Vfd* target) {
         Assert(pthread_equal(target->owner,pthread_self()));
 
         ActivateFile(target);
-	Assert(target->fd != VFD_CLOSED)
+	Assert(target->fd != VFD_CLOSED);
 
         target->usage_count++;
         time(&target->access_time);
@@ -652,7 +652,7 @@ fileNameOpenFile(FileName fileName,
 				 int fileFlags,
 				 int fileMode)
 {
-	Vfd		   *vfdP == NULL;
+	Vfd		   *vfdP = NULL;
 	errno = 0;
         bool                allocated = false;
         bool                private = ( IsDBWriter() || IsPoolsweep() || IsBootstrapProcessingMode()
