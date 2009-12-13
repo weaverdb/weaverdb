@@ -772,8 +772,9 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
 		Page            page;
                 bool            changed = false;
 
-		if (GetProcessingMode() == ShutdownProcessing)
-			elog(ERROR, "shutting down");
+                if (IsShutdownProcessingMode()) {
+                        elog(ERROR, "shutting down");
+                }
                 
 		if ( !vacrelstats->freespace_scan && !vacrelstats->force_trim && (blkno % 5 == 0) ) {
                         UnlockRelation(onerel,ShareUpdateExclusiveLock);
@@ -1121,7 +1122,7 @@ lazy_scan_index(Relation indrel, Relation heap, LVRelStats * vacrelstats)
 			notemptypages++;
 			cpage = ItemPointerGetBlockNumber(&iscan->currentItemData);
 		}
-		if (GetProcessingMode() == ShutdownProcessing)
+		if (IsShutdownProcessingMode())
 			elog(ERROR, "shutting down");
 	}
 
@@ -1612,7 +1613,7 @@ lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_inf
 
                 MemoryContextResetAndDeleteChildren(page_cxt);
                 
-		if (GetProcessingMode() == ShutdownProcessing) {
+		if (IsShutdownProcessingMode()) {
 			elog(ERROR, "shutting down");
 		}
 
@@ -1700,7 +1701,7 @@ lazy_relink_blobs(Relation onerel, BlockNumber upper_limit, FragRepairInfo* repa
 				
 		ReleaseBuffer(onerel, buf);
                 
-		if (GetProcessingMode() == ShutdownProcessing) {
+		if (IsShutdownProcessingMode()) {
 			elog(ERROR, "shutting down");
 		}
 
@@ -1782,7 +1783,7 @@ lazy_repair_fragmentation(Relation onerel, FragRepairInfo* repair_info) {
                 
                 MemoryContextResetAndDeleteChildren(page_cxt);
                 
-		if (GetProcessingMode() == ShutdownProcessing) {
+		if (IsShutdownProcessingMode()) {
 			elog(ERROR, "shutting down");
 		}
 
@@ -2572,7 +2573,7 @@ lazy_vacuum_database(bool verbose)
 		CommitTransaction();
 		StartTransaction();
 
-		if ((GetProcessingMode() == ShutdownProcessing)) {
+		if (IsShutdownProcessingMode()) {
 			elog(ERROR, "system is shutting down");
 		}
 		lazy_open_vacuum_rel(cur->vrl_relid, true, true);

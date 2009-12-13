@@ -752,6 +752,8 @@ WRollback(OpaqueWConn conn)
     if ( connection->stage == STMT_INVALID ) {
         elog(ERROR,"connection is currently in an invalid state for commit");
     }
+/*  WResetQuery should not spend time trying to shutdown the executor so set the plan to NULL */
+    connection->plan = NULL;
 
     if ( CurrentXactInProgress() ) {
         WResetQuery(connection);
@@ -767,7 +769,6 @@ WRollback(OpaqueWConn conn)
     
     connection->transaction_owner = 0;
     connection->stage = STMT_INVALID;
-    connection->plan = NULL;
 
     return err;
 }
@@ -1265,7 +1266,6 @@ WHandleError(WConn connection, int sqlError)
 void 
 WResetQuery(WConn connection)
 {
-    int size = 0;
 /*  if we are in abort don't worry about shutting down,
 abort cleanup will take care of it.  */
     if (connection->plan != NULL )

@@ -363,36 +363,7 @@ ExecutorEnd(QueryDesc *queryDesc, EState *estate)
 	Assert(queryDesc != NULL);
 
 	EndPlan(queryDesc->plantree, estate);
-#ifdef NOTUSED 
-	/* XXX - clean up some more from ExecutorStart() - er1p */
-	if (NULL == estate->es_snapshot)
-	{
-		/* nothing to free */
-	}
-	else if ( estate->es_snapshot == SnapshotAny ) {
-		estate->es_snapshot = NULL;
-	}
-	else
-	{
-		if (estate->es_snapshot->xcnt > 0) {
-			pfree(estate->es_snapshot->xip);
-		}
-		pfree(estate->es_snapshot);
-	}
-
-	if (NULL == estate->es_param_exec_vals)
-	{
-		/* nothing to free */
-	}
-	else
-	{
-		pfree(estate->es_param_exec_vals);
-		estate->es_param_exec_vals = NULL;
-	}
-#endif
 }
-
-
 /*
  * ExecCheckQueryPerms
  *		Check access permissions for all relations referenced in a query.

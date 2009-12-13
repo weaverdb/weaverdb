@@ -273,7 +273,7 @@ vc_vacuum(NameData *VacRelP, bool analyze,bool exclusive, List *va_cols, MemoryC
 
 	/* vacuum each heap relation */
 	for (cur = vrl; cur != (VRelList) NULL; cur = cur->vrl_next) {
-            if ( (GetProcessingMode() == ShutdownProcessing) ) {
+            if ( IsShutdownProcessingMode() ) {
                 printf("system is shutting down\n");
                 elog(ERROR,"system is shutting down");
             }

@@ -1036,7 +1036,7 @@ SearchSysCache(struct catcache * cache,
 		if (HeapTupleIsValid(indextp))
 		{
  			oldcxt = MemoryContextSwitchTo(cache->cachecxt);
-           ntp = heap_copytuple(indextp);
+                        ntp = heap_copytuple(indextp);
  			MemoryContextSwitchTo(oldcxt);
 			heap_freetuple(indextp);
 		}
@@ -1121,8 +1121,8 @@ SearchSysCache(struct catcache * cache,
                         
                     for (elt = DLGetTail(cache->cc_lrulist); elt; elt = prevelt)
                     {
-                                prevelt = DLGetPred(elt);
-                                ct = (CatCTup *) DLE_VAL(elt);
+                        prevelt = DLGetPred(elt);
+                        ct = (CatCTup *) DLE_VAL(elt);
                         if ( ct->refcount == 0 ) {
                                 elog(DEBUG, "SearchSysCache(%s): Overflow, LRU removal",RelationGetRelationName(relation));
 				CatCacheRemoveCTup(cache, elt);

@@ -446,7 +446,7 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
             long checkpos = FileSeek(fd,0L,SEEK_END);
             if ( seekpos >= checkpos ) {
                 if ( seekpos > checkpos ) {
-                    elog(NOTICE,"read past end of file rel: %ld %ld",NameStr(info->relname),seekpos,checkpos);
+                    elog(NOTICE,"read past end of file rel: %s %ld %ld",NameStr(info->relname),seekpos,checkpos);
                 }
                 MemSet(buffer, 0, BLCKSZ);
             } else {

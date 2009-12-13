@@ -727,7 +727,9 @@ btrecoverpage(Relation rel, BlockNumber block) {
     HeapTuple    heap;
     Oid         heapid;
     bool        changed = false;
-    
+/*  notthing to check on meta */
+    if ( block == BTREE_METAPAGE ) return NULL;
+
     buffer = _bt_getbuf(rel,block,BT_WRITE);
     page = BufferGetPage(buffer);
     opaque = (BTPageOpaque)PageGetSpecialPointer(page);
@@ -957,7 +959,7 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes)
                     lockedbuf = InvalidBuffer;
                     page = NULL;
                     
-                    if (GetProcessingMode() == ShutdownProcessing)
+                    if (IsShutdownProcessingMode())
                             elog(ERROR, "shutting down");
                 }
              
@@ -1075,6 +1077,7 @@ _bt_check_nextpage(Relation rel, BlockNumber left,BlockNumber parent, BlockNumbe
     Page   page;
     BTPageOpaque target;
     bool result = true;
+    bool truncate = false;
 
     buffer = _bt_getbuf(rel, right ,BT_READ);
 
@@ -1085,10 +1088,9 @@ _bt_check_nextpage(Relation rel, BlockNumber left,BlockNumber parent, BlockNumbe
 
     if ( PageIsNew(page) || BTreeInvalidParent(target) ) {
         if ( right == RelationGetNumberOfBlocks(rel) - 1 ) {
-            _bt_relbuf(rel,buffer);
-            smgrtruncate(rel->rd_smgr,right);
+            truncate = true;
         }
-        return false;
+        result = false;
     }
 
     if ( left != target->btpo_prev ) {
@@ -1105,6 +1107,11 @@ _bt_check_nextpage(Relation rel, BlockNumber left,BlockNumber parent, BlockNumbe
         }
         _bt_relbuf(rel,metabuf);
     }
+
+    if ( truncate ) {
+        smgrtruncate(rel->rd_smgr,right);
+    }
+    
     return result;
 }
 

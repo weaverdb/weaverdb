@@ -19,6 +19,7 @@
 #include <sys/sdt.h>
 #include <sys/varargs.h>
 
+#include "env/freespace.h"
 #include "access/heapam.h"
 #include "access/blobstorage.h"
 #include "access/tuptoaster.h"
@@ -111,6 +112,13 @@ typedef struct {
 	int             first;	/* values[] index of first occurrence */
 }               ScalarMCVItem;
 
+/*
+typedef struct {
+    BlockNumber         count;
+    BlockNumber         limit;
+    Relation    self;
+} ReasonableCount;
+*/
 
 #define swapInt(a,b)	do {int _tmp; _tmp=a; a=b; b=_tmp;} while(0)
 #define swapDatum(a,b)	do {Datum _tmp; _tmp=a; a=b; b=_tmp;} while(0)
@@ -159,7 +167,8 @@ compute_scalar_stats(AnalyzeAttrStats * stats,
 		     Relation onerel, double totalrows,
 		  HeapTuple * rows, int numrows, MemoryContext anl_context);
 static void     update_attstats(Oid relid, int natts, AnalyzeAttrStats ** vacattrstats);
-
+static int     reasonable_read_check(void *args);
+static HeapTuple find_tuple_on_page(Relation onerel, Buffer targbuf, Offset targoffset);
 
 /*
  * analyze_rel() -- analyze one relation
@@ -181,21 +190,8 @@ analyze_rel(Oid relid)
 
 	gettimeofday(&stv, &tz);
 
-	/*
-	 * Race condition -- if the pg_class tuple has gone away since the
-	 * last time we saw it, we don't need to process it.
-	 */
-	/*
-	 * if (!SearchSysCacheExists(RELOID, ObjectIdGetDatum(relid), 0, 0,
-	 * 0)) return;
-	 */
-	/*
-	 * Open the class, getting only a read lock on it, and check
-	 * permissions. Permissions check should match vacuum's check!
-	 */
 	onerel = heap_open(relid, AccessShareLock);
-
-
+        onerel->rd_nblocks = RelationGetNumberOfBlocks(onerel);
 	/*
 	 * Check that it's a plain table; we used to do this in getrels() but
 	 * seems safer to check after we've locked the relation.
@@ -222,8 +218,6 @@ analyze_rel(Oid relid)
 	analyze_log(onerel,"Analyzing with %d attributes",
 	     attr_cnt);
 
-
-	attr_cnt = onerel->rd_att->natts;
 	vacattrstats = (AnalyzeAttrStats **) palloc(attr_cnt *
 						sizeof(AnalyzeAttrStats *));
 	tcnt = 0;
@@ -406,9 +400,9 @@ examine_attribute(Relation onerel, int attnum)
 		pgopform = (Form_pg_operator) GETSTRUCT(func_operator);
 		fmgr_info(pgopform->oprcode, &(stats->f_cmpgt));
 		stats->op_cmpgt = oprid(func_operator);
-	} else
+	} else {
 		stats->f_cmpgt.fn_addr = NULL;
-
+        }
 
 	/*
 	 * Determine the algorithm to use (this will get more complicated
@@ -451,6 +445,18 @@ examine_attribute(Relation onerel, int attnum)
 }
 
 /*
+static int
+reasonable_read_check(void* args) {
+    ReasonableCount*  check = (ReasonableCount*)args;
+
+    if ( check->count++ > check->limit ) {
+        RelationClearReadTrigger(check->self);
+        elog(ERROR,"giving up on analyze, too many empty pages");
+    }
+    return 0;
+}
+*/
+/*
  * acquire_sample_rows -- acquire a random sample of rows from the table
  * 
  * Up to targrows rows are collected (if there are fewer than that many rows in
@@ -469,8 +475,6 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 		    double *totalrows)
 {
 	int             numrows = 0;
-	HeapScanDesc    scan;
-	HeapTuple       tuple;
 	ItemPointer     lasttuple;
 	BlockNumber     lastblock, estblock,targblock;
 	OffsetNumber    lastoffset;
@@ -478,31 +482,67 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 	double          tuplesperpage;
 	double          t;
 	double          rstate;
+        int misses  = 0;
+/*
+        BufferTrigger   reasonable;
+        ReasonableCount rc;
+
+        rc.limit = (BlockNumber)(onerel->rd_nblocks / 100);
+        if ( rc.limit < 1000 ) rc.limit = 1000;
+        rc.self = onerel;
+        rc.count = 0;
+        reasonable.call = reasonable_read_check;
+        reasonable.args = &rc;
+*/
         
-	Assert(targrows > 1);
-        if (GetProcessingMode() == ShutdownProcessing) {
+	Assert(targrows > 0);
+        if (IsShutdownProcessingMode()) {
                 elog(ERROR, "shutting down");
         }
 	/*
 	 * Do a simple linear scan until we reach the target number of rows.
 	 */
-	scan = heap_beginscan(onerel, SnapshotNow, 0, (ScanKey) NULL);
-	tuple = heap_getnext(scan);
-	while (HeapTupleIsValid(tuple)) {
-                rows[numrows++] = heap_copytuple(tuple);
-		if (numrows >= targrows)
-			break;
-		tuple = heap_getnext(scan);
-	}
-	heap_endscan(scan);
+        targblock = 0;
+        lastblock = onerel->rd_nblocks;
+        while (numrows < targrows && targblock < lastblock) {
+            HeapTuple  targtup;
+            OffsetNumber targoff = FirstOffsetNumber;
+            bool        found = false;
 
+            if (IsShutdownProcessingMode()) {
+                    elog(ERROR, "shutting down");
+            }
+
+            Buffer targbuf = ReadBuffer(onerel,targblock++);
+            
+            if (!BufferIsValid(targbuf)) {
+                elog(ERROR, "acquire_sample_rows: ReadBuffer(%s,%u) failed",RelationGetRelationName(onerel), targblock);
+            }
+            LockBuffer((onerel), targbuf, BUFFER_LOCK_SHARE);
+            targtup = find_tuple_on_page(onerel,targbuf,targoff);
+            while ( numrows < targrows && HeapTupleIsValid(targtup) ) {
+                found = true;
+                rows[numrows++] = targtup;
+                targoff = ItemPointerGetOffsetNumber(&targtup->t_self) + 1;
+                targtup = find_tuple_on_page(onerel,targbuf,targoff);
+            }
+            LockBuffer((onerel), targbuf, BUFFER_LOCK_UNLOCK);
+            ReleaseBuffer(onerel,targbuf);
+            if ( !found ) {
+                if ( misses++ > 300 ) {
+                    elog(ERROR,"acquire_sample_rows: giving up on %s, too many empty pages",RelationGetRelationName(onerel));
+                }
+            } else {
+                misses = 0;
+            }
+        }
 	/*
 	 * If we ran out of tuples then we're done, no matter how few we
 	 * collected.  No sort is needed, since they're already in order.
 	 */
-	if (!HeapTupleIsValid(tuple)) {
-		*totalrows = (double) numrows;
-		return numrows;
+	if (numrows != targrows) {
+            *totalrows = (double) numrows;
+            return numrows;
 	}
 	/*
 	 * Otherwise, start replacing tuples in the sample until we reach the
@@ -541,78 +581,62 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 	if (numest == 0) {
 		numest = numrows;	/* don't have a full page? */
 		estblock = lastblock + 1;
-	} else
+	} else {
 		estblock = lastblock;
+        }
 	tuplesperpage = (double) numest / (double) estblock;
 
 	t = (double) numrows;	/* t is the # of records processed so far */
 	rstate = init_selection_state(targrows);
         targblock = 0;
-	while (targblock >= onerel->rd_nblocks) {
-		double          targpos;
-		Buffer          targbuffer;
-		Page            targpage;
-		OffsetNumber    targoffset, maxoffset;
-                bool            replaced = FALSE;
+	while (targblock < onerel->rd_nblocks) {
+            double          targpos;
+            Buffer          targbuf;
+            OffsetNumber    targoffset;
+            bool            replaced = FALSE;
 
-                if (GetProcessingMode() == ShutdownProcessing) {
+            if (IsShutdownProcessingMode()) {
+                    elog(ERROR, "shutting down");
+            }
+            t = select_next_random_record(t, targrows, &rstate);
+            /* Try to read the t'th record in the table */
+            targpos = t / tuplesperpage;
+            targblock = (BlockNumber) targpos;
+            targoffset = ((int) ((targpos - targblock) * tuplesperpage)) +
+                    FirstOffsetNumber;
+            /* Make sure we are past the last selected record */
+            if (targblock <= lastblock) {
+                    targblock = lastblock;
+                    if (targoffset <= lastoffset)
+                            targoffset = lastoffset + 1;
+            }
+            /* Loop to find first valid record at or after given position */
+            while (!replaced && targblock < onerel->rd_nblocks) {
+                HeapTuple   targtup;
+                
+                if (IsShutdownProcessingMode()) {
                         elog(ERROR, "shutting down");
                 }
-                t = select_next_random_record(t, targrows, &rstate);
-		/* Try to read the t'th record in the table */
-		targpos = t / tuplesperpage;
-		targblock = (BlockNumber) targpos;
-		targoffset = ((int) ((targpos - targblock) * tuplesperpage)) +
-			FirstOffsetNumber;
-		/* Make sure we are past the last selected record */
-		if (targblock <= lastblock) {
-			targblock = lastblock;
-			if (targoffset <= lastoffset)
-				targoffset = lastoffset + 1;
-		}
-		/* Loop to find first valid record at or after given position */
-                while (!replaced && targblock >= onerel->rd_nblocks) {
-                    HeapTupleData   targtuple;
-                    bool  replaced = FALSE;
-                    
-                    targtuple.t_len = 0;
-                    targtuple.t_datamcxt = NULL;
-                    targtuple.t_datasrc = NULL;
-                    
-                    targbuffer = ReadBuffer(onerel, targblock);
-                    if (!BufferIsValid(targbuffer)) {
-                        elog(ERROR, "acquire_sample_rows: ReadBuffer(%s,%u) failed",RelationGetRelationName(onerel), targblock);
-                    }
-                    LockBuffer((onerel), targbuffer, BUFFER_LOCK_SHARE);
-                    targpage = BufferGetPage(targbuffer);
-                    maxoffset = PageGetMaxOffsetNumber(targpage);
 
-                    for (;targoffset <= maxoffset;targoffset = OffsetNumberNext(targoffset))
-                    {
-                        ItemId itemid = PageGetItemId(targpage,targoffset);
-                        if ( ItemIdIsUsed(itemid) ) {
-                            targtuple.t_data = (HeapTupleHeader) PageGetItem(targpage, itemid);
-                            targtuple.t_len = ItemIdGetLength(itemid);
-                            ItemPointerSet(&targtuple.t_self,targblock,targoffset);
-                            if ( !(tuple->t_data->t_infomask & HEAP_BLOB_SEGMENT) ) {
-                                if  ( HeapTupleSatisfies(onerel, targbuffer, &targtuple,  SnapshotNow, 0, NULL) ) {
-                                    int k = (int)(targrows * random_fract());
-                                    heap_freetuple(rows[k]);
-                                    rows[k] = heap_copytuple(&targtuple);
-                                    lastblock = targblock;
-                                    lastoffset = targoffset;
-                                    replaced = TRUE;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    LockBuffer(onerel,targbuffer,BUFFER_LOCK_UNLOCK);
-                    ReleaseBuffer(onerel, targbuffer);
-                    targblock++;
-                    targoffset = FirstOffsetNumber;  
+                targbuf = ReadBuffer(onerel, targblock++);
+                if (!BufferIsValid(targbuf)) {
+                    elog(ERROR, "acquire_sample_rows: ReadBuffer(%s,%u) failed",RelationGetRelationName(onerel), targblock-1);
                 }
+                LockBuffer((onerel), targbuf, BUFFER_LOCK_SHARE);
+                targtup = find_tuple_on_page(onerel,targbuf,targoffset);
+                if ( HeapTupleIsValid(targtup) ) {
+                    int k = (int)(targrows * random_fract());
+                    heap_freetuple(rows[k]);
+                    rows[k] = targtup;
+                    lastblock = ItemPointerGetBlockNumber(&targtup->t_self);
+                    lastoffset = ItemPointerGetOffsetNumber(&targtup->t_self);
+                    replaced = TRUE;
+                } else {
+                    targoffset = FirstOffsetNumber;
+                }
+                LockBuffer((onerel), targbuf, BUFFER_LOCK_UNLOCK);
+                ReleaseBuffer(onerel,targbuf);
+            }
 	}
 
 	/*
@@ -628,6 +652,38 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 
 	return numrows;
 }
+
+static HeapTuple
+find_tuple_on_page(Relation onerel, Buffer targbuf, Offset targoffset) {
+    HeapTupleData   targtuple;
+    Offset  maxoffset;
+    BlockNumber   targblock = BufferGetBlockNumber(targbuf);
+    Page    targpage = BufferGetPage(targbuf);
+
+    targtuple.t_len = 0;
+    targtuple.t_datamcxt = NULL;
+    targtuple.t_datasrc = NULL;
+
+    maxoffset = PageGetMaxOffsetNumber(targpage);
+
+    for (;targoffset <= maxoffset;targoffset = OffsetNumberNext(targoffset))
+    {
+        ItemId itemid = PageGetItemId(targpage,targoffset);
+        if ( ItemIdIsUsed(itemid) ) {
+            targtuple.t_data = (HeapTupleHeader) PageGetItem(targpage, itemid);
+            targtuple.t_len = ItemIdGetLength(itemid);
+            ItemPointerSet(&targtuple.t_self,targblock,targoffset);
+            if ( !(targtuple.t_data->t_infomask & HEAP_BLOB_SEGMENT) ) {
+                if  ( HeapTupleSatisfies(onerel, targbuf, &targtuple,  SnapshotNow, 0, NULL) ) {
+                    return heap_copytuple(&targtuple);
+                }
+            }
+        }
+    }
+    
+    return NULL;
+}
+
 
 /* Select a random value R uniformly distributed in 0 < R < 1 */
 static double
@@ -1419,16 +1475,17 @@ compute_scalar_stats(AnalyzeAttrStats * stats,
 							continue;
 						}
 						ncopy = first - src;
-					} else
+					} else {
 						ncopy = values_cnt - src;
-					memmove(&values[dest], &values[src],
-						ncopy * sizeof(ScalarItem));
+                                        }
+					memmove(&values[dest], &values[src],ncopy * sizeof(ScalarItem));
 					src += ncopy;
 					dest += ncopy;
 				}
 				nvals = dest;
-			} else
+			} else {
 				nvals = values_cnt;
+                        }
 			Assert(nvals >= num_hist);
 
 			/* Must copy the target values into anl_context */

@@ -489,7 +489,7 @@ int MasterUnLock()
 int TransactionLock() 
 {
 	Env* env = GetEnv();
-	if ( GetProcessingMode() == ShutdownProcessing ) 
+	if (IsShutdownProcessingMode())
 	{
 		elog(ERROR,"System is shutting down",998);
 	}

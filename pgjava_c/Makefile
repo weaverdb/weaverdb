@@ -99,9 +99,6 @@ clean_java:
 	rm weaver.jar
 clean: clean_java
 	rm libweaver.so
-	rm WeaverStmtManager.o
-	rm BaseWeaverConnection.o
-	rm WeaverValueExtractor.o
 	rm weaver
 clean_legacy:
 	rm libmtpgjava.so

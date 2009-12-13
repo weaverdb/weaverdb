@@ -1475,6 +1475,7 @@ RelationClearRelation(Relation relation, bool rebuildIt)
             relation->rd_smgr = smgropen(DEFAULT_SMGR,GetDatabaseName(),RelationGetRelationName(relation),
                      relation->rd_lockInfo.lockRelId.dbId,
                      relation->rd_lockInfo.lockRelId.relId);
+            relation->rd_nblocks = RelationGetNumberOfBlocks(relation);
             return;
         }
 	/*
@@ -1486,11 +1487,6 @@ RelationClearRelation(Relation relation, bool rebuildIt)
 	 */
 	RelationCacheDelete(relation);
 
-	/* Clear out catcache's entries for this relation */
-	/*   do this elsewhere to make sure you only flush the system
-		cache a minimum number of times
-	SystemCacheRelationFlushed(RelationGetRelid(relation));
-	*/
 	/*
 	 * Free all the subsidiary data structures of the relcache entry. We
 	 * cannot free rd_att if we are trying to rebuild the entry, however,
@@ -1546,7 +1542,6 @@ RelationClearRelation(Relation relation, bool rebuildIt)
 		TupleDesc	old_att = relation->rd_att;
 		RuleLock   *old_rules = relation->rd_rules;
 		TriggerDesc *old_trigdesc = relation->trigdesc;
-		BlockNumber			old_nblocks = relation->rd_nblocks;
 		bool		relDescChanged = false;
 		RelationBuildDescInfo buildinfo;
 		MemoryContext	oldcxt = NULL;
@@ -1732,9 +1727,9 @@ RelationIdInvalidateRelationCache(Oid relationId,Oid databaseId)
 	relation = RelationIdCacheLookup(&relationId);
 
 	if (PointerIsValid(relation)) {
-        entry.reldesc = relation;
-	RelationFlushRelation(&entry, false);
-    }
+            entry.reldesc = relation;
+            RelationFlushRelation(&entry, false);
+        }
 }
 
 /*

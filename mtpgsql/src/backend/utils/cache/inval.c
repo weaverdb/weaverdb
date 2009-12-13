@@ -981,6 +981,5 @@ ImmediateSharedRelationCacheInvalidate(Relation relation)
 		 RelationGetPhysicalRelationName(relation));
 #endif	 /* defined(INVALIDDEBUG) */
 
-	RelationIdImmediateRegisterSharedInvalid(
-							RelOid_pg_class, RelationGetRelid(relation));
+	RelationIdImmediateRegisterSharedInvalid(RelOid_pg_class, RelationGetRelid(relation));
 }
