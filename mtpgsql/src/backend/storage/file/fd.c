@@ -322,13 +322,9 @@ HashScanFD(FileName filename, int fileflags, int filemode, bool * allocated) {
         
     if ( target == NULL ) {
         target = AllocateVfd(filename,fileflags,filemode,false);
-        if ( entry != NULL ) {
-            target->pooled = true;
-            entry->vfd = target;
-            *allocated = true;
-        } else {
-            target->pooled = false;
-        }
+        target->pooled = true;
+        entry->vfd = target;
+        *allocated = true;
    } 
 
    DTRACE_PROBE3(mtpg,file__search,filename,found,target->refCount);
@@ -350,7 +346,12 @@ HashDropFD(Vfd * target) {
     if ( target->refCount == 0 ) {
         if ( target->pooled ) {
             entry = hash_search(VfdPool.hash,(char*)target->fileName,HASH_REMOVE,&found);
-            if ( !found ) printf("not freed %s\n",target->fileName);
+            if ( !found ) {
+                printf("not freed %s\n",target->fileName);
+            } else {
+                Assert(target==entry->vfd);
+                entry->vfd = NULL;
+            }
         } else {
             found = true;
         }
@@ -365,6 +366,7 @@ static void
 ActivateFile(Vfd* vfdP)
 {
     bool opened = false;
+    Assert(vfdP->fd == VFD_CLOSED);
 	while (vfdP->fd == VFD_CLOSED)
 	{
             opened = true;
@@ -639,7 +641,9 @@ static void
 CheckFileAccess(Vfd* target) {
         Assert(pthread_equal(target->owner,pthread_self()));
 
-        ActivateFile(target);
+        if ( target->fd == VFD_CLOSED ) {
+            ActivateFile(target);
+        }
 	Assert(target->fd != VFD_CLOSED);
 
         target->usage_count++;
@@ -688,7 +692,9 @@ fileNameOpenFile(FileName fileName,
                 if ( private ) {
                     pthread_mutex_lock(&vfdP->pin);
                     DTRACE_PROBE2(mtpg,file__opened,vfdP->refCount,vfdP->fileName);
-                    ActivateFile(vfdP);
+                    if ( vfdP->fd == VFD_CLOSED ) {
+                        ActivateFile(vfdP);
+                    }
                     pthread_mutex_unlock(&vfdP->pin);
                 }
             }
