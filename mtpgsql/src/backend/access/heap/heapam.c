@@ -275,17 +275,19 @@ heap_openr(const char *relationName, LOCKMODE lockmode)
 	/* The relcache does all the real work... */
 	r = RelationNameGetRelation(relationName,DEFAULTDBOID);
 
-	/* Under no circumstances will we return an index as a relation. */
-	if (RelationIsValid(r) && r->rd_rel->relkind == RELKIND_INDEX)
-		elog(ERROR, "%s is an index relation", RelationGetRelationName(r));
-
-	if (lockmode == NoLock)
-		return r;				/* caller must check RelationIsValid! */
-
-	if (!RelationIsValid(r)) {
+        if (!RelationIsValid(r)) {
 		elog(ERROR, "Relation '%s' does not exist", relationName);
 	}
-	
+        
+        /* Under no circumstances will we return an index as a relation. */
+	if (r->rd_rel->relkind == RELKIND_INDEX)
+		elog(ERROR, "%s is an index relation", RelationGetRelationName(r));
+
+        r->rd_nblocks = RelationGetNumberOfBlocks(r);
+
+        if (lockmode == NoLock)
+		return r;				/* caller must check RelationIsValid! */
+
 	LockRelation(r, lockmode);
 
 	return r;
@@ -1027,11 +1029,7 @@ NextGenGetTup(Relation relation,
             return InvalidBuffer;
 	}
         
-        if (total_pages == InvalidBlockNumber) {
-            elog(NOTICE,"Invalid total number of blocks");
-            total_pages = RelationGetNumberOfBlocks(relation);
-            relation->rd_nblocks = total_pages;
-        }
+        Assert(total_pages != InvalidBlockNumber);
 
         if (!ItemPointerIsValid(tid))
         {

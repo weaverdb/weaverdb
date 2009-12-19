@@ -85,6 +85,7 @@ typedef struct vfd
         File            newerFile;
         bool            sweep_valid;
         bool            pooled;
+        bool            private;
 	long            usage_count;
         time_t          access_time;
         time_t          newer_access_time;
@@ -93,10 +94,9 @@ typedef struct vfd
 	int		fileFlags;		/* open(2) flags for opening the file */
 	int		fileMode;		/* mode to pass to open(2) */
 	int		refCount;		/*  counting references  */
+        int             key;
 	pthread_mutex_t	pin;
 	pthread_t	owner;
-	int 		private;
-	int 		key;
 } Vfd;
 
 typedef struct {
@@ -110,7 +110,7 @@ typedef struct {
  * Note that VfdCache[0] is not a usable VFD, just a list header.
  */
 #ifndef MAX_FILE_SHARE
-#define MAX_FILE_SHARE 64
+#define MAX_FILE_SHARE 1
 #endif
  #ifndef GROWVFDMULTIPLE
  #define GROWVFDMULTIPLE 		32
@@ -120,11 +120,12 @@ typedef struct {
  #endif
  #define MAXVIRTUALFILES  	GROWVFDMULTIPLE * MAXVFDBLOCKS
  
-static int vfdmultiple = GROWVFDMULTIPLE;
-static int vfdsharemax = MAX_FILE_SHARE;
-static int vfdblockcount = MAXVFDBLOCKS;
+static int vfdmultiple =        GROWVFDMULTIPLE;
+static int vfdsharemax =        MAX_FILE_SHARE;
+static time_t vfdbumptime;
+static int vfdblockcount =      MAXVFDBLOCKS;
 static int vfdmax = 		MAXVIRTUALFILES;
-static bool vfdoptimize = true; 
+static bool vfdoptimize =       true;
  
 static struct {
     Vfd **              pointers;
@@ -194,7 +195,7 @@ static File     FileOpen(FileName fileName, int fileFlags, int fileMode);
 
 static char *filepath(char* buf, char *filename, int len);
 static long pg_nofile(void);
-static int GetRealFileCount();
+static bool CheckRealFileCount();
 
 static void closeAllVfds();
 
@@ -291,7 +292,7 @@ RetireFile(Vfd* vfdP)
 
 	if ( !returnValue ) {
             RealFiles.nfile -= 1;
-            DTRACE_PROBE2(mtpg,file__retired,RealFiles.nfile,vfdP->fileName);
+            DTRACE_PROBE3(mtpg,file__retired,vfdP->id,vfdP->fileName,RealFiles.nfile);
             vfdP->fd = VFD_CLOSED;
 	} else {
             perror("RetireFile");
@@ -327,7 +328,7 @@ HashScanFD(FileName filename, int fileflags, int filemode, bool * allocated) {
         *allocated = true;
    } 
 
-   DTRACE_PROBE3(mtpg,file__search,filename,found,target->refCount);
+   DTRACE_PROBE4(mtpg,file__search,target->id,filename,found,target->refCount);
 
    pthread_mutex_unlock(&VfdPool.guard);
 
@@ -356,6 +357,8 @@ HashDropFD(Vfd * target) {
             found = true;
         }
     }
+
+    DTRACE_PROBE4(mtpg,file__drop,target->id, target->fileName,found,target->refCount);
 
     pthread_mutex_unlock(&VfdPool.guard);
 
@@ -397,7 +400,7 @@ ActivateFile(Vfd* vfdP)
                         FileNormalize(vfdP->id);
                     }
                     RealFiles.nfile += 1;
-                    DTRACE_PROBE2(mtpg,file__activated,RealFiles.nfile,vfdP->fileName);
+                    DTRACE_PROBE3(mtpg,file__activated,vfdP->id,vfdP->fileName,RealFiles.nfile);
             }
             pthread_mutex_unlock(&RealFiles.guard);
        }
@@ -437,7 +440,8 @@ InitVirtualFileSystem()
 
 	if ( share != NULL ) vfdsharemax = atoi(share);
         if ( opti != NULL ) vfdoptimize = (toupper(opti[0]) == 'T') ? true : false;
-	
+
+        time(&vfdbumptime);
 	vfdmax = vfdmultiple * vfdblockcount;
 
         /* initialize header entry first time through */
@@ -499,15 +503,17 @@ InitializeBlock(int start)
 	int counter;
 				
 	for ( counter = start;counter < vfdmultiple + start;counter++) {
-		Vfd*  target = GetVirtualFD(counter);
-		MemSet((char*)target,0,sizeof(Vfd));
-                target->id = counter;
-		target->nextFree = counter + 1;
-		target->fd = VFD_CLOSED;
-                target->usage_count = 0;
-                target->sweep_valid = false;
-                target->newerFile = -1;
-		pthread_mutex_init(&target->pin,&pinattr);
+            Vfd*  target = GetVirtualFD(counter);
+            MemSet((char*)target,0,sizeof(Vfd));
+            target->id = counter;
+            target->nextFree = counter + 1;
+            target->fd = VFD_CLOSED;
+            target->usage_count = 0;
+            target->sweep_valid = false;
+            target->newerFile = -1;
+            target->refCount = 0;
+            target->pooled = false;
+            pthread_mutex_init(&target->pin,&pinattr);
 	}
 	return start;
 }
@@ -521,7 +527,6 @@ AllocateVfd(FileName name,int fileflags,int filemode, bool private)
         Vfd*             target;
         Vfd*            list = GetVirtualFD(0);
         
-
         pthread_mutex_lock(&list->pin);
 	if (list->nextFree == 0)
 	{
@@ -573,7 +578,6 @@ AllocateVfd(FileName name,int fileflags,int filemode, bool private)
 
 	list->nextFree = target->nextFree;	
 
-        memset(target->fileName,0x00,512);
         strncpy(target->fileName,name,strlen(name));
 /*  make sure that if this is file, if shared, 
     does not have exclusive or create or trunc
@@ -590,6 +594,7 @@ AllocateVfd(FileName name,int fileflags,int filemode, bool private)
         target->fd = VFD_CLOSED;
 	target->nextFree = -1;
         target->pooled =  false;
+        target->private = private;
        
         pthread_mutex_unlock(&list->pin);
         
@@ -602,7 +607,10 @@ FreeVfd(Vfd* vfdP)
 {
         Vfd     *list = GetVirtualFD(0);
         pthread_mutex_lock(&list->pin);
-
+        Assert(vfdP->refCount == 0);
+        Assert(vfdP->fd == VFD_CLOSED);
+        Assert(vfdP->pooled == false);
+        memset(vfdP->fileName,0x00,512);
         vfdP->sweep_valid = false;
 	vfdP->nextFree = list->nextFree;
 	list->nextFree = vfdP->id;
@@ -624,14 +632,12 @@ filepath(char* buf, char *filename, int len)
 	/* Not an absolute path name? Then fill in with database path... */
 	if (*filename != SEP_CHAR)
 	{
-		snprintf(buf,len, "%s%c%s", GetDatabasePath(), SEP_CHAR, filename);
-                if ( strlen(buf) == len ) {
-                    elog(ERROR,"file path for file name: %s is too long",filename);
-                }
-	}
-	else
-	{
-		strncpy(buf, filename, len);
+            snprintf(buf,len, "%s%c%s", GetDatabasePath(), SEP_CHAR, filename);
+            if ( strlen(buf) == len ) {
+                elog(ERROR,"file path for file name: %s is too long",filename);
+            }
+	} else {
+            strncpy(buf, filename, len);
 	}
 
 	return buf;
@@ -675,7 +681,7 @@ fileNameOpenFile(FileName fileName,
         }
 
         while ( vfdP == NULL ) {
-            if ( !private ) {
+            if ( !private && vfdsharemax > 1 ) {
                 vfdP = HashScanFD(fileName,fileFlags,fileMode,&allocated);
             } else {
                 vfdP = AllocateVfd(fileName,fileFlags,fileMode,private);
@@ -689,14 +695,7 @@ fileNameOpenFile(FileName fileName,
                 FileClose(vfdP->id);
                 vfdP = NULL;
             }  else {
-                if ( private ) {
-                    pthread_mutex_lock(&vfdP->pin);
-                    DTRACE_PROBE2(mtpg,file__opened,vfdP->refCount,vfdP->fileName);
-                    if ( vfdP->fd == VFD_CLOSED ) {
-                        ActivateFile(vfdP);
-                    }
-                    pthread_mutex_unlock(&vfdP->pin);
-                }
+                DTRACE_PROBE2(mtpg,file__opened,vfdP->id,vfdP->fileName);
             }
         }
 
@@ -806,9 +805,10 @@ FileClose(File file)
 	Vfd* target 	=	GetVirtualFD(file);
         bool    free = false;
        
-        if ( target->private ) {
+        if ( vfdsharemax <= 1 || target->private ) {
             Assert(target->refCount == 1);
             free = true;
+            target->refCount = 0;
         } else {
             free = HashDropFD(target);
         }
@@ -824,13 +824,12 @@ FileClose(File file)
             }
 	}
 	
-        DTRACE_PROBE3(mtpg,file__closed,file,target->refCount,target->fileName);
+        DTRACE_PROBE2(mtpg,file__closed,file,target->fileName);
       
         if ( free ) {
             if ( target->fd != VFD_CLOSED ) {
                 RetireFile(target);
             }
-
             /*
              * Delete the file if it was temporary
              */
@@ -977,7 +976,6 @@ FileTruncate(File file, long offset)
 
         Assert(FileIsValid(file));
 
-	CheckFileAccess(target);
 	FileSync(file);
 
 	returnCode = ftruncate(target->fd, offset);
@@ -1020,8 +1018,6 @@ FileSync(File file)
 	int			returnCode;
 	Vfd* target = GetVirtualFD(file);
 	
-        Assert(pthread_equal(target->owner,pthread_self()));
-
         if (!(target->fdstate & FD_DIRTY))
 	{
 		/* Need not sync if file is not dirty. */
@@ -1041,10 +1037,7 @@ FileSync(File file)
 		 * file to the front of the LRU ring; we aren't expecting to
 		 * access it again soon.
 		 */
-		if (target->fd == VFD_CLOSED)
-		{
-                    ActivateFile(target);
-		}
+                CheckFileAccess(target);
 		returnCode = pg_fsync(target->fd);
 		if (returnCode == 0)
                     target->fdstate &= ~FD_DIRTY;
@@ -1312,7 +1305,7 @@ ReleaseFileIfNeeded() {
     time_t access;
     
 
-    while (GetRealFileCount() >= RealFiles.maxfiles) {
+    while (CheckRealFileCount()) {
  /*  first try and use hints fro a previous scan */
        close = GetVirtualFD(0)->newerFile;
        if ( close > 0 ) {
@@ -1374,14 +1367,32 @@ GetVfdPoolSize() {
     return size;
 }
 
-static int 
-GetRealFileCount() {
+static bool
+CheckRealFileCount() {
     int size = 0;
+
     pthread_mutex_lock(&RealFiles.guard);
     size = RealFiles.nfile + RealFiles.numAllocatedFiles;
-    DTRACE_PROBE2(mtpg,file__maxcheck,size,RealFiles.maxfiles);
+    DTRACE_PROBE3(mtpg,file__maxcheck,vfdsharemax,size,RealFiles.maxfiles);
+    if ( (size >= RealFiles.maxfiles * 0.9) && vfdsharemax < 64) {
+        time_t      check;
+
+        time(&check);
+        if ( difftime(check,vfdbumptime) > (60.0 * 5.0) ) {/* 5 min */
+            time(&vfdbumptime);
+            vfdsharemax += 1;
+        }
+    } else if ( size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1 ) {
+        time_t      check;
+
+        time(&check);
+        if ( difftime(check,vfdbumptime) > (60.0 * 10.0) ) {/* 10 min */
+            time(&vfdbumptime);
+            vfdsharemax -= 1;
+        }
+    }
     pthread_mutex_unlock(&RealFiles.guard);
-    return size;
+    return (size >= RealFiles.maxfiles);
 }
 
 void

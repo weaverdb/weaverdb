@@ -1475,7 +1475,10 @@ RelationClearRelation(Relation relation, bool rebuildIt)
             relation->rd_smgr = smgropen(DEFAULT_SMGR,GetDatabaseName(),RelationGetRelationName(relation),
                      relation->rd_lockInfo.lockRelId.dbId,
                      relation->rd_lockInfo.lockRelId.relId);
+            relation->rd_nblocks = 0;
+/*
             relation->rd_nblocks = RelationGetNumberOfBlocks(relation);
+*/
             return;
         }
 	/*
@@ -1597,7 +1600,7 @@ RelationClearRelation(Relation relation, bool rebuildIt)
 			FreeTriggerDesc(old_trigdesc);
 			relDescChanged = true;
 		}
-		relation->rd_nblocks = InvalidBlockNumber;
+		relation->rd_nblocks = 0;
                 
 		if (relDescChanged && old_refcnt > 0) {
 			elog(NOTICE, "RelationClearRelation: relation %u modified while in use %d",
@@ -1609,7 +1612,9 @@ RelationClearRelation(Relation relation, bool rebuildIt)
                          relation->rd_lockInfo.lockRelId.dbId,
                          relation->rd_lockInfo.lockRelId.relId);
                 
+/*
                 relation->rd_nblocks = RelationGetNumberOfBlocks(relation);
+*/
                 
 	}
 

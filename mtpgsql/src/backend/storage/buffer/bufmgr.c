@@ -968,15 +968,22 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             Assert((rel == NULL));
             if ( buf->w_lock && IsWaitingForFlush(buf->w_owner) ) {
                locking_error = BL_NOLOCK;
-               break;
             } else {
-                /*  fallthrough to share lock */
+                /* only wait for a write lock to finish, anything else would be problematic due to the test above  */
+                while( buf->w_lock ) {
+                    buf->r_waiting++;
+                    pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
+                    buf->r_waiting--;
+                }
+                (buf->r_locks)++;
+                buflock |= BL_R_LOCK;
             }
+            break;
         case BUFFER_LOCK_SHARE:
-            /*  don't wait for e_waiting b/c it is usless unless pins wait for buf->e-waiting  */
+            /*  don't wait for e_waiting b/c it is useless unless pins wait for buf->e-waiting  */
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
-            while( buf->w_lock || (( buf->w_waiting + buf->e_waiting ) > 0) ) {
+            while( buf->w_lock || buf->w_waiting > 0 ) {
                 buf->r_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->r_waiting--;

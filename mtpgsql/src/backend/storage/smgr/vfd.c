@@ -182,9 +182,8 @@ vfdinit()
 int
 vfdshutdown()
 {
-    FilePin(log_file,0);
-    FilePin(index_file,0);
     if ( log_file > 0 ) {
+        FilePin(log_file,0);
         LogBuffer.LogHeader.header_magic = HEADER_MAGIC;
         LogBuffer.LogHeader.log_id = log_count;
         LogBuffer.LogHeader.completed = false;
@@ -193,21 +192,22 @@ vfdshutdown()
         log_pos = FileSeek(log_file,0,SEEK_END);
 
         FileWrite(log_file,LogBuffer.block,BLCKSZ);
+        FileUnpin(log_file,0);
         FileClose(log_file);
     }
     
     if ( index_file > 0 ) {
+        FilePin(index_file,0);
         IndexStore.header.index_magic = INDEX_MAGIC;
         IndexStore.header.count = 0;  
 
         FileSeek(index_file,0,SEEK_END);
 
         FileWrite(index_file,IndexStore.data,BLCKSZ);
+        FileUnpin(index_file,0);
         FileClose(index_file);
     }    
     os_free(scratch_space);
-    FileUnpin(log_file,0); 
-    FileUnpin(index_file,0); 
     return SM_SUCCESS;
 }
 
@@ -519,9 +519,13 @@ vfdflush(SmgrInfo info, BlockNumber blocknum, char *buffer)
 
 	/* write and sync the block */
 	status = SM_SUCCESS;
-	if (FileWrite(fd, buffer, BLCKSZ) != BLCKSZ
-		|| FileSync(fd) < 0)
+	if (FileWrite(fd, buffer, BLCKSZ) == BLCKSZ ) {
+            if (FileSync(fd) < 0) {
 		status = SM_FAIL;
+            }
+        } else {
+            status = SM_FAIL;
+        }
             
         FileUnpin(fd, 5);
 	return status;

@@ -103,8 +103,8 @@ LocalBufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr)
 
 	if (blockNum == P_NEW)
 	{
-		blockNum = reln->rd_nblocks;
-		reln->rd_nblocks++;
+		blockNum = RelationGetNumberOfBlocks(reln);
+                reln->rd_nblocks = blockNum + 1;
 	}
 
 	/* a low tech search for now -- not optimized for scans */
