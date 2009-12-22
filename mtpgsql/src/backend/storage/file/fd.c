@@ -122,7 +122,6 @@ typedef struct {
  
 static int vfdmultiple =        GROWVFDMULTIPLE;
 static int vfdsharemax =        MAX_FILE_SHARE;
-static time_t vfdbumptime;
 static int vfdblockcount =      MAXVFDBLOCKS;
 static int vfdmax = 		MAXVIRTUALFILES;
 static bool vfdoptimize =       true;
@@ -160,6 +159,7 @@ static struct {
     int                 nfile;
     int                 numAllocatedFiles;
     int                 maxfiles;
+    int                 checks;
     FILE *              allocatedFiles[MAX_ALLOCATED_FILES];
     pthread_mutex_t     guard;
 } RealFiles;
@@ -441,7 +441,6 @@ InitVirtualFileSystem()
 	if ( share != NULL ) vfdsharemax = atoi(share);
         if ( opti != NULL ) vfdoptimize = (toupper(opti[0]) == 'T') ? true : false;
 
-        time(&vfdbumptime);
 	vfdmax = vfdmultiple * vfdblockcount;
 
         /* initialize header entry first time through */
@@ -1378,16 +1377,15 @@ CheckRealFileCount() {
         time_t      check;
 
         time(&check);
-        if ( difftime(check,vfdbumptime) > (60.0 * 5.0) ) {/* 5 min */
-            time(&vfdbumptime);
+        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {/* 5 min */
+            RealFiles.check = 0;
             vfdsharemax += 1;
         }
     } else if ( size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1 ) {
         time_t      check;
 
-        time(&check);
-        if ( difftime(check,vfdbumptime) > (60.0 * 10.0) ) {/* 10 min */
-            time(&vfdbumptime);
+        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {/* 5 min */
+            RealFiles.checks == 0;
             vfdsharemax -= 1;
         }
     }
