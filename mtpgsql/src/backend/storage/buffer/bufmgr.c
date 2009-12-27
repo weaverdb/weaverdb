@@ -1019,12 +1019,14 @@ bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc * buf) {
     bool  signal = false;
 
     if (buflock & BL_R_LOCK) {
+        Assert(buf->r_locks > 0);
         (buf->r_locks)--;
         buflock &= ~BL_R_LOCK;
         if ( buf->r_locks == 0 ) {
             signal = true;
         }
     } else if (buflock & BL_W_LOCK) {
+        Assert(buf->w_lock);
         if (buf->e_lock ) {
             Assert(buf->pageaccess <= buf->e_waiting + 1);
             if ( buf->p_waiting > 0 ) {
@@ -1160,7 +1162,9 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 
     if ( (buf->ioflags & BM_IO_ERROR) ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        if ( iostatus & BL_R_LOCK ) {
+            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        }
         iostatus = 0;
         return iostatus;
     }
@@ -1177,7 +1181,9 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     DTRACE_PROBE4(mtpg,buffer__logbufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
     
     if ( !dirty ) {
-        LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        if ( iostatus & BL_R_LOCK ) {
+            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        }
         iostatus = 0;
     }
     
@@ -1201,7 +1207,9 @@ WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
 
     if ( (buf->ioflags & BM_IO_ERROR) ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        if ( iostatus == BL_R_LOCK) {
+            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        }
         iostatus = 0;
         return iostatus;
     }
@@ -1233,7 +1241,9 @@ WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
     DTRACE_PROBE4(mtpg,buffer__writebufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
     
     if ( !dirty ) {
-        LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        if ( iostatus & BL_R_LOCK) {
+            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
+        }
         iostatus = 0;
     }
     
