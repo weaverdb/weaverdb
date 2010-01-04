@@ -453,6 +453,7 @@ InitVirtualFileSystem()
 #endif		
 /*  set the max number of user fd's  */
         RealFiles.maxfiles = pg_nofile();
+        RealFiles.checks = RealFiles.maxfiles;
 
         VfdCache.cxt = GetEnvMemoryContext();
 
@@ -1374,17 +1375,12 @@ CheckRealFileCount() {
     size = RealFiles.nfile + RealFiles.numAllocatedFiles;
     DTRACE_PROBE3(mtpg,file__maxcheck,vfdsharemax,size,RealFiles.maxfiles);
     if ( (size >= RealFiles.maxfiles * 0.9) && vfdsharemax < 64) {
-        time_t      check;
-
-        time(&check);
-        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {/* 5 min */
-            RealFiles.check = 0;
+        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
+            RealFiles.checks = 0;
             vfdsharemax += 1;
         }
     } else if ( size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1 ) {
-        time_t      check;
-
-        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {/* 5 min */
+        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
             RealFiles.checks == 0;
             vfdsharemax -= 1;
         }
