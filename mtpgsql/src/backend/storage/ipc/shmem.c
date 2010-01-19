@@ -314,8 +314,10 @@ ShmemAlloc(Size size, void* cxt)
 
 	SpinRelease(ShmemLock);
 
-	if (!newSpace)
+	if (!newSpace) {
 		elog(NOTICE, "ShmemAlloc: out of memory ");
+                newSpace = os_malloc(size);
+        }
 	return newSpace;
 }
 
