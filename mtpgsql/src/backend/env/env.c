@@ -585,23 +585,6 @@ sectionid_hash(void* key,int size) {
 	return TRANSFORMSID(put);
 }
 
-int   ReleaseEnvSpace(SectionId id)
-{
-    HTAB* env = GetEnv()->global_hash;
-    bool found =FALSE;
-    EnvEntry* entry;
-    
-    if ( env == NULL ) {
-        elog(FATAL,"no global environment");
-    }
-    entry = (EnvEntry*)hash_search(env,id,HASH_REMOVE,&found); 
-/* must free the env ourselves  */
-    if ( entry->global_size > 0 ) 
-    	pfree(entry->global_pointer);
-    entry->global_size = 0;
-    return 0;   
-}
-
 void* GetEnvSpace(SectionId id)
 {
     HTAB* env = GetEnv()->global_hash;

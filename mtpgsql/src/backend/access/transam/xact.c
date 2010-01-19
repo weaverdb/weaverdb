@@ -189,7 +189,7 @@ static TransactionInfo* InitializeTransactionGlobals(void);
 
 /*  Thread Local Storage cache for TransactionInfo  */
 #ifdef TLS
-TLS  TransactionInfo*  transaction_info = NULL;
+TLS  TransactionInfo*  trans_info = NULL;
 #else
 #define trans_info GetEnv()->transaction_info
 #endif

@@ -905,9 +905,8 @@ WDisposeConnection(OpaqueWConn conn)
     if (setjmp(connection->env->errorContext) == 0)
             ThreadReleaseSpins(GetMyThread());
     if (setjmp(connection->env->errorContext) == 0)
-            MemoryContextDestroyEnv();
-    if (setjmp(connection->env->errorContext) == 0)
             DestroyThread();
+
 
     connection->validFlag = -1;
     SetEnv(NULL);

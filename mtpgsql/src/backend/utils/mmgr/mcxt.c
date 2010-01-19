@@ -114,7 +114,6 @@ MemoryContextInitEnv(void)
 void 
 MemoryContextDestroyEnv(void)
 {
-    ReleaseEnvSpace(mem_section_id);
     memory_globals = NULL;
 }
 

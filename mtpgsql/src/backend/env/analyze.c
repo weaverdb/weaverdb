@@ -1543,7 +1543,6 @@ compute_scalar_stats(AnalyzeAttrStats * stats,
 			stats->numnumbers[slot_idx] = 1;
 			slot_idx++;
 		}
-		AnalyzeDestroyEnv();
 	}
 	/* We don't need to bother cleaning up any of our temporary palloc's */
 }
@@ -1771,14 +1770,14 @@ update_attstats(Oid relid, int natts, AnalyzeAttrStats ** vacattrstats)
 AnalyzeGlobals *
 AnalyzeInitEnv(void)
 {
-        analyze_globals = (AnalyzeGlobals *) AllocateEnvSpace(analyze_section_id, sizeof(AnalyzeGlobals));
+        analyze_globals = (AnalyzeGlobals *) palloc(sizeof(AnalyzeGlobals));
         return analyze_globals;
 }
 
 void
 AnalyzeDestroyEnv(void)
 {
-	ReleaseEnvSpace(analyze_section_id);
+	pfree(analyze_globals);
         analyze_globals = NULL;
 }
 

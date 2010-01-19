@@ -498,7 +498,6 @@ void* DBWriter(void *jones) {
     ThreadReleaseSpins(GetMyThread());
     
     DestroyThread();
-    MemoryContextDestroyEnv();
     
     SetEnv(NULL);
     DestroyEnv(env);

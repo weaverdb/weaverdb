@@ -213,7 +213,6 @@ void SetEnv(void* env);
 void DestroyEnv(void* env);
 
 void* AllocateEnvSpace(SectionId id,size_t size);
-int   ReleaseEnvSpace(SectionId id);
 void* GetEnvSpace(SectionId id);
 
 int InitSystem(bool  isPrivate);

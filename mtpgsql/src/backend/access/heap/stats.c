@@ -41,7 +41,6 @@ static void InitHeapAccessStatistics(void);
 *
 */
 static void HeapStatsInitEnv(void);
-static void HeapStatsDestroyEnv(void);
 static HeapAccessStatistics HeapStatsGetEnv(void);
 
 static SectionId  stats_id = SECTIONID("HSTA");
@@ -57,12 +56,6 @@ void HeapStatsInitEnv(void)
     HeapAccessStatistics stats = AllocateEnvSpace(stats_id,sizeof(HeapAccessStatisticsData));
 	memset(stats,0x00,sizeof(HeapAccessStatisticsData));
 	stats_global = stats;
-}
-
-void HeapStatsDestroyEnv(void)
-{
-    ReleaseEnvSpace(stats_id);
-    stats_global = NULL;
 }
 
 static HeapAccessStatistics HeapStatsGetEnv(void)

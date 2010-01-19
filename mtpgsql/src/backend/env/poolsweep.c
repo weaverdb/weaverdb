@@ -429,7 +429,6 @@ Poolsweep(void *args) {
     ThreadReleaseLocks(false);
     ThreadReleaseSpins(GetMyThread());
     DestroyThread();
-    MemoryContextDestroyEnv();
     
      SetEnv(NULL);
      DestroyEnv(env);

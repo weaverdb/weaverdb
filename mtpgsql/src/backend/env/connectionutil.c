@@ -602,7 +602,6 @@ wrapupweaverbackend()
 	ThreadReleaseSpins(GetMyThread());
 		
 	DestroyThread();
-        MemoryContextDestroyEnv();
 	
 	proc_exit(-1);  
 	

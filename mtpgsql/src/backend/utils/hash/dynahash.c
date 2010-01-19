@@ -135,14 +135,6 @@ static HashMemory* GetHashContext(void)
     return hash_globals;
 }
 
-static void DestroyHashMemoryContext(void)
-{
-    HashMemory*  data = (HashMemory*)GetEnvSpace(hash_mem_id);
-    MemoryContextDelete(data->DynaHashCxt);
-        hash_globals = NULL;
-    ReleaseEnvSpace(hash_mem_id);
-}
-
 HTAB *
 hash_create(const char *tabname, long nelem, HASHCTL *info, int flags)
 {

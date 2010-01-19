@@ -363,7 +363,6 @@ CloseDolConnection(DolConnection conn) {
         
         ThreadReleaseLocks(false);
         ThreadReleaseSpins(GetMyThread());
-        MemoryContextDestroyEnv();
         DestroyThread();
 	
         return sqlError;
