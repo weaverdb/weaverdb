@@ -285,8 +285,9 @@ WDestroyConnection(OpaqueWConn conn)
             pthread_mutex_unlock(&conn->child_lock);
         }
         
-        if (conn->validFlag >= 0)
+        if (conn->validFlag >= 0) {
             WDisposeConnection(conn);
+        }
         if (conn->env != NULL) {
             DestroyEnv(conn->env);
             conn->env = NULL;

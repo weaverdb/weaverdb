@@ -161,6 +161,10 @@ InitThreadGlobal(IPCKey key, int maxBackends)
 
 		ProcGlobal->freeProcs = INVALID_OFFSET;
 		ProcGlobal->groupleader = getpid();
+                ProcGlobal->free = 0;
+                ProcGlobal->alloc = 0;
+                ProcGlobal->created = 0;
+                ProcGlobal->count = 0;
 	} else {
 		if ( ProcGlobal->count == 64 ) return;
 		ProcGlobal->subs[ProcGlobal->count++] = getpid();
@@ -201,6 +205,7 @@ InitThread(ThreadType tt)
 	{
 		env->thread = (THREAD *) MAKE_PTR(myOffset);
 		ProcGlobal->freeProcs = env->thread->links.next;
+                ProcGlobal->free -= 1;
 	}
 	else
 	{
@@ -220,8 +225,9 @@ InitThread(ThreadType tt)
 
 		/* this cannot be initialized until after the buffer pool */
 		SHMQueueInit(&(env->thread->lockQueue),&env->thread->gate);
+                ProcGlobal->created += 1;
 	}
-
+        ProcGlobal->alloc += 1;
 	/*
 	 * zero out the spin lock counts and set the sLocks field for
 	 * ProcStructLock to 1 as we have acquired this spinlock above but
@@ -355,6 +361,8 @@ DestroyThread()
 	
 	thread->links.next = ProcGlobal->freeProcs;
 	ProcGlobal->freeProcs = MAKE_OFFSET(thread);
+        ProcGlobal->free += 1;
+        ProcGlobal->alloc -= 1;
 
 	SpinRelease(ProcStructLock);
 }

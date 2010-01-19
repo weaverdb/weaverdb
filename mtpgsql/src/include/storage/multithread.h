@@ -45,6 +45,9 @@ typedef struct procglobal
 	pid_t		groupleader;
 	pid_t		subs[64];
 	int		count;
+        int             free;
+        int             alloc;
+        int             created;
 /*	sema_t*		semMap[MAX_PROC_SEMS];    */
 
 	/*
