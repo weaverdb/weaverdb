@@ -48,7 +48,6 @@
 #include <sys/file.h>
 #include <math.h>
 #include <signal.h>
-#include <sys/sdt.h>
 
 #include "postgres.h"
 

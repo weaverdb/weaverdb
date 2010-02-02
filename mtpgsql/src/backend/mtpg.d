@@ -43,6 +43,8 @@ provider mtpg {
 	probe dbwriter__accesses(string,string,double*,double*);
 	probe dbwriter__vacuumactivation(string,string,long);
         probe dbwriter__indexdirty(string,long);
+        probe thread__create(int,int,int,int);  /*  type, created, allocated, free  */
+        probe thread__destroy(int,int,int,int);  
 	probe vacuum__msg(string,long,long);  /* fmt,relation,database */
 	probe blob__msg(string,long,long);  /* fmt,relation,database */
 	probe poolsweep__msg(string,long,long);  /* fmt,relid */

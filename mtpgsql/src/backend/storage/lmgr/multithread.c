@@ -50,6 +50,7 @@
  * $Header: /cvs/weaver/mtpgsql/src/backend/storage/lmgr/multithread.c,v 1.3 2007/03/20 03:07:39 synmscott Exp $
  */
 #include <sys/time.h>
+#include <sys/sdt.h>
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
@@ -250,6 +251,7 @@ InitThread(ThreadType tt)
         newthread.thread = GetEnv()->eid;
         memcpy(&env->thread->tid,&newthread,sizeof(ThreadId));
 	
+        DTRACE_PROBE4(mtpg,thread__create,tt,ProcGlobal->created,ProcGlobal->alloc,ProcGlobal->free);
 	SpinRelease(ProcStructLock);
 
         env->thread->ttype = tt;
@@ -364,6 +366,7 @@ DestroyThread()
         ProcGlobal->free += 1;
         ProcGlobal->alloc -= 1;
 
+        DTRACE_PROBE4(mtpg,thread__destroy,thread->ttype,ProcGlobal->created,ProcGlobal->alloc,ProcGlobal->free);
 	SpinRelease(ProcStructLock);
 }
 
