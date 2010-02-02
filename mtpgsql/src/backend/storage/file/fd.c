@@ -860,7 +860,9 @@ FileUnlink(File file)
 
 	Vfd* virtf = GetVirtualFD(file);
         pthread_mutex_lock(&virtf->pin);
-        RetireFile(virtf);
+        if ( virtf->fd != VFD_CLOSED ) {
+            RetireFile(virtf);
+        }
         unlink(virtf->fileName);
         pthread_mutex_unlock(&virtf->pin);
 
