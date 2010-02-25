@@ -645,16 +645,21 @@ filepath(char* buf, char *filename, int len)
 
 static void
 CheckFileAccess(Vfd* target) {
-        Assert(pthread_equal(target->owner,pthread_self()));
+    if ( target->owner == 0 ) {
+        target->owner = pthread_self();
+    }
 
-        if ( target->fd == VFD_CLOSED ) {
-            ActivateFile(target);
-        }
-	Assert(target->fd != VFD_CLOSED);
+    Assert(pthread_equal(target->owner,pthread_self()));
 
-        target->usage_count++;
-        time(&target->access_time);
-        target->sweep_valid = false;
+    if ( target->fd == VFD_CLOSED ) {
+        ActivateFile(target);
+    }
+    
+    Assert(target->fd != VFD_CLOSED);
+
+    target->usage_count++;
+    time(&target->access_time);
+    target->sweep_valid = false;
 }
 
 

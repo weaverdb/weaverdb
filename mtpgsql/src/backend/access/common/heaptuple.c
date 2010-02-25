@@ -97,9 +97,9 @@ DataFill(char *data,
 
 	for (i = 0; i < numberOfAttributes; i++) {
 		if (bit != NULL) {
-			if (bitmask != CSIGNBIT)
+			if (bitmask != CSIGNBIT) {
 				bitmask <<= 1;
-			else {
+                        } else {
 				bitP += 1;
 				*bitP = 0x0;
 				bitmask = 1;
@@ -275,36 +275,6 @@ heap_sysattrbyval(AttrNumber attno)
 
 	return byval;
 }
-
-#ifdef NOT_USED
-/*
- * ---------------- heap_getsysattr ----------------
- */
-Datum
-heap_getsysattr(HeapTuple tup, Buffer b, int attnum)
-{
-	switch (attnum) {
-	case SelfItemPointerAttributeNumber:
-		return (Datum) & tup->t_ctid;
-	case ObjectIdAttributeNumber:
-		return (Datum) (Oid) tup->t_oid;
-	case MinTransactionIdAttributeNumber:
-		return (Datum) & tup->t_xmin;
-	case MinCommandIdAttributeNumber:
-		return (Datum) (long) tup->t_cmin;
-	case MaxTransactionIdAttributeNumber:
-		return (Datum) & tup->t_xmax;
-	case MaxCommandIdAttributeNumber:
-		return (Datum) (long) tup->t_cmax;
-	case MoveTransactionIdAttributeNumber:
-		return (Datum) & tup->progress->t_vtrans;
-	default:
-		elog(ERROR, "heap_getsysattr: undefined attnum %d", attnum);
-	}
-	return (Datum) NULL;
-}
-
-#endif
 
 /*
  * ---------------- nocachegetattr
@@ -544,41 +514,6 @@ heap_copytuple(HeapTuple tuple)
 	return newTuple;
 }
 
-
-#ifdef NOT_USED
-/*
- * ---------------- heap_deformtuple
- * 
- * the inverse of heap_formtuple (see below) ----------------
- */
-void
-heap_deformtuple(HeapTuple tuple,
-		 TupleDesc tdesc,
-		 Datum * values,
-		 char *nulls)
-{
-	int             i;
-	int             natts;
-
-	Assert(HeapTupleIsValid(tuple));
-
-	natts = tuple->t_natts;
-	for (i = 0; i < natts; i++) {
-		bool            isnull;
-
-		values[i] = HeapGetAttr(tuple,
-					i + 1,
-					tdesc,
-					&isnull);
-		if (isnull)
-			nulls[i] = 'n';
-		else
-			nulls[i] = ' ';
-	}
-}
-
-#endif
-
 /*
  * ---------------- heap_formtuple
  * 
@@ -600,8 +535,8 @@ heap_formtuple(TupleDesc tupleDescriptor,
 	       Datum * value,
 	       char *nulls)
 {
-	HeapTuple       tuple;	/* return tuple */
-	HeapTupleHeader td;	/* tuple data */
+	HeapTuple       tuple;	
+	HeapTupleHeader td;	
 	int             bitmaplen;
 	int             len;
 	int             hoff;
@@ -619,7 +554,7 @@ heap_formtuple(TupleDesc tupleDescriptor,
             } else if (tupleDescriptor->attrs[i]->attstorage == 'e' ) {
                 if (ISBUFFERED(DatumGetPointer(value[i]))) {
                     hasbuffered = true;
-                } else if (ISINDIRECT(DatumGetPointer(value[i]))) {
+                } if (ISINDIRECT(DatumGetPointer(value[i]))) {
                     hasindirect = true;
                 }
             }
@@ -899,33 +834,29 @@ static TransactionId dummy_move_id = InvalidTransactionId;
 Datum
 HeapGetAttr(HeapTuple tup, int attnum, TupleDesc tupleDesc, bool * isnull)
 {
-	if (isnull)
-		*isnull = false;
+	if (isnull) *isnull = false;
 	if ((tup) == NULL ||
 	    (attnum) < FirstLowInvalidHeapAttributeNumber ||
 	    (attnum) == 0) {
-		if (isnull)
-			*isnull = true;
+		if (isnull) *(isnull) = true;
 		return (Datum) NULL;
 	}
 	if ((attnum) > (int) (tup)->t_data->t_natts) {
-		if (isnull)
-			*(isnull) = true;
-		return (Datum) NULL;
+            if (isnull) *(isnull) = true;
+            return (Datum) NULL;
 	}
 	if ((attnum) > 0) {
 		if (HeapTupleNoNulls(tup)) {
-			if ((tupleDesc)->attrs[(attnum) - 1]->attcacheoff != -1 || (attnum) == 1) {
-				Datum           value = HeapFetchAtt(&((tupleDesc)->attrs[(attnum) - 1]),
-								     (char *) (tup)->t_data + (tup)->t_data->t_hoff +
-								     (((attnum) != 1) ? (tupleDesc)->attrs[(attnum) - 1]->attcacheoff : 0));
-				return value;
-			}
-			return nocachegetattr((tup), (attnum), (tupleDesc), (isnull));
+                    if ((tupleDesc)->attrs[(attnum) - 1]->attcacheoff != -1 || (attnum) == 1) {
+                        Datum  value = HeapFetchAtt(&((tupleDesc)->attrs[(attnum) - 1]),
+                                 (char *) (tup)->t_data + (tup)->t_data->t_hoff +
+                                 (((attnum) != 1) ? (tupleDesc)->attrs[(attnum) - 1]->attcacheoff : 0));
+                        return value;
+                    }
+                    return nocachegetattr((tup), (attnum), (tupleDesc), (isnull));
 		}
 		if (att_isnull((attnum) - 1, (tup)->t_data->t_bits)) {
-			if (isnull)
-				*(isnull) = true;
+			if (isnull) *(isnull) = true;
 			return (Datum) NULL;
 		} else {
 			return nocachegetattr((tup), (attnum), (tupleDesc), (isnull));

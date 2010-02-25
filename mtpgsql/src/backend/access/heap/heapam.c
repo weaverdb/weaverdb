@@ -771,7 +771,7 @@ heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snaps
         UnlockHeapTuple(relation,buffer,&tp);
     
 	if ( HeapTupleHasBlob(&tp) ) {
-		delete_tuple_blob(relation,&tp);
+		delete_tuple_blob(relation,&tp,NULL);
 	}
 	/* invalidate caches */
 	RelationInvalidateHeapTuple(relation, &tp);
@@ -858,7 +858,7 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
 	RelationMark4RollbackHeapTuple(relation, newtup);
     	
 	if ( HeapTupleHasBlob(&oldtup) ) {
-		delete_tuple_blob(relation,&oldtup);
+            delete_tuple_blob(relation,&oldtup,newtup);
 	}
 	/* invalidate caches */
 	RelationInvalidateHeapTuple(relation, &oldtup);

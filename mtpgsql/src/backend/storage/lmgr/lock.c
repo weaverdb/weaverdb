@@ -904,7 +904,6 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 	HOLDERTAG	holdertag;
 	bool		wakeupNeeded = true;
         THREAD*          thread = GetMyThread();
-        bool remove = true;
 
 #ifdef LOCK_DEBUG
 	if (lockmethod == USER_LOCKMETHOD && Trace_userlocks)
@@ -1023,7 +1022,6 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 		 * ------------------
 		 */
 		Assert(lockMethodTable->lockHash->hash == tag_hash);
-                remove = true;
 	} else {
             if (wakeupNeeded)
 		ThreadLockWakeup(lockmethod, lock);
@@ -1031,12 +1029,7 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 
        }
 
-        if ( remove ) {
-           /*  hash remove destroys the protection lock  */
-            SearchLockTable(lockmethod, &lock->tag,HASH_REMOVE);
-       } else {
-            ReleaseLockProtection(lock);
-       }
+        SearchLockTable(lockmethod, &lock->tag,HASH_REMOVE);
 
        return TRUE;
 }
@@ -1091,7 +1084,6 @@ LockReleaseAll(LOCKMETHOD lockmethod, THREAD *proc,
 	do
 	{
 		bool		wakeupNeeded = false;
-		bool		remove = false;
 
 		/* ---------------------------
 		 * XXX Here we assume the shared memory queue is circular and
@@ -1195,7 +1187,6 @@ LockReleaseAll(LOCKMETHOD lockmethod, THREAD *proc,
 			 */
 			LOCK_PRINT("LockReleaseAll: deleting", lock, 0);
 			Assert(lockMethodTable->lockHash->hash == tag_hash);
-                        remove = true;
 		} else {
                     if (wakeupNeeded) {
 			ThreadLockWakeup(lockmethod, lock);
@@ -1203,11 +1194,7 @@ LockReleaseAll(LOCKMETHOD lockmethod, THREAD *proc,
 
                 }
                 
-                if ( remove ) {
-                    SearchLockTable(lockmethod,&(lock->tag),HASH_REMOVE);
-                } else {
-                    ReleaseLockProtection(lock);
-                }
+                SearchLockTable(lockmethod,&(lock->tag),HASH_REMOVE);
 next_item:
 		holder = nextHolder;
 	} while (holder);
@@ -1226,7 +1213,7 @@ next_item:
 LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
     LOCKMETHODTABLE* table = LockMethodTable[tid];
     pthread_mutex_t*        table_lock;
-    LOCK*            target = NULL;
+    LOCK*            target = (LOCK*)lid;
 	bool		found;
 
         if (!table)
@@ -1240,14 +1227,12 @@ LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
         pthread_mutex_lock(table_lock);
 
         if ( action == HASH_REMOVE ) {
+            target->removing -= 1;
     /*  make sure someone didn't grab the entry while not locked */        
-            LOCK* lock = (LOCK*)lid;
-            lock->removing -= 1;
-            if ( lock->refs || lock->removing ) {
-    /*  it's been grabbed, fail fast */
+            if ( target->refs || target->removing ) {
                 pthread_mutex_unlock(table_lock);
-    /*  drop the protection lock cause it won't be destroyed  */
-                ReleaseLockProtection(lock);
+   /*  drop the protection lock cause it won't be destroyed  */
+                ReleaseLockProtection(target);
                 return NULL;
             }
         }
@@ -1279,6 +1264,7 @@ LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
             target->refs += 1;
         } else if ( action == HASH_REMOVE ) {
             pthread_mutex_destroy(&target->protection);
+            target = NULL;
         } else {
 /*  HASH_FIND  is the start of a remove  */
             target->refs -= 1;
@@ -1292,7 +1278,6 @@ LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
         }
 
         return target;
-        
 }
 
 void 
@@ -1320,9 +1305,9 @@ HOLDER* SearchHolderTable(LOCKMETHOD tid, HOLDERTAG* lid, HASHACTION action) {
             if ( !found ) elog(NOTICE,"Holder Table Corrupted (Remove not found)");
             target = NULL;
         } else if ( action == HASH_ENTER && !found ) {
-		target->nHolding = 0;
-                MemSet((char *) target->holders, 0, sizeof(int) * MAX_LOCKMODES);
-                ThreadAddLock(&target->queue);
+            target->nHolding = 0;
+            MemSet((char *) target->holders, 0, sizeof(int) * MAX_LOCKMODES);
+            ThreadAddLock(&target->queue);
 	}
 
         pthread_mutex_unlock(table_lock);

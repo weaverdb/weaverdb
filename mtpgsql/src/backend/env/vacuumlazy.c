@@ -1483,7 +1483,7 @@ repair_relink_blobs(Relation onerel, FragRepairInfo* repair_info) {
                         }
                         repair_insert_index_for_entry(onerel, newtup, repair_info);
                         
-                        delete_tuple_blob(onerel,&tuple);
+                        delete_tuple_blob(onerel,&tuple,newtup);
                     
                         WriteBuffer(onerel,buf);
                         moved++;
@@ -1591,9 +1591,8 @@ lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_inf
                                         newtup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
                                         newtup->t_data->t_infomask |= (HEAP_MOVED_IN | HEAP_XMAX_INVALID);
                                         RelationPutHeapTupleAtFreespace(onerel,newtup,0);
-                                        
                                         repair_insert_index_for_entry(onerel, newtup, repair_info);
-                                        delete_tuple_blob(onerel,&tuple);
+                                        delete_tuple_blob(onerel,&tuple,newtup);
                                         added++;
                                     }
                                     LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);

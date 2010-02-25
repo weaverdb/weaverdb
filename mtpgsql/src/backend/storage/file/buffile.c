@@ -167,17 +167,21 @@ BufFileLoadBuffer(BufFile *file)
 	 * May need to reposition physical file.
 	 */
 	thisfile = file->file;
+        FilePin(thisfile,0);
 	if (file->curOffset != file->offset)
 	{
-		if (FileSeek(thisfile, file->curOffset, SEEK_SET) != file->curOffset)
-			return;				/* seek failed, read nothing */
-		file->offset = file->curOffset;
+            if (FileSeek(thisfile, file->curOffset, SEEK_SET) != file->curOffset) {
+                FileUnpin(thisfile,0);
+                return;				/* seek failed, read nothing */
+            }
+            file->offset = file->curOffset;
 	}
 
 	/*
 	 * Read whatever we can get, up to a full bufferload.
 	 */
 	file->nbytes = FileRead(thisfile, file->buffer, sizeof(file->buffer));
+        FileUnpin(thisfile,0);
 	if (file->nbytes < 0)
 		file->nbytes = 0;
 	file->offset += file->nbytes;
@@ -214,13 +218,17 @@ BufFileDumpBuffer(BufFile *file)
 		 * May need to reposition physical file.
 		 */
 		thisfile = file->file;
+                FilePin(thisfile,0);
 		if (file->curOffset != file->offset)
 		{
-			if (FileSeek(thisfile, file->curOffset, SEEK_SET) != file->curOffset)
-				return;			/* seek failed, give up */
+			if (FileSeek(thisfile, file->curOffset, SEEK_SET) != file->curOffset) {
+                            FileUnpin(thisfile,0);
+                            return;			/* seek failed, give up */
+                        }
 			file->offset = file->curOffset;
 		}
 		bytestowrite = FileWrite(thisfile, file->buffer, bytestowrite);
+                FileUnpin(thisfile,0);
 		if (bytestowrite <= 0)
 			return;				/* failed to write */
 		file->offset += bytestowrite;

@@ -282,7 +282,7 @@ InitShmem(unsigned int key, unsigned int size,int maxBackends)
  *		to be compatable with malloc().
  */
 void *
-ShmemAlloc(Size size, void* cxt)
+ShmemAlloc(Size size)
 {
 	unsigned long tmpFree;
 	long	   *newSpace;
@@ -297,20 +297,19 @@ ShmemAlloc(Size size, void* cxt)
 	if (size % sizeof(double))
 		size += sizeof(double) - (size % sizeof(double));
 		
-	*ShmemFreeStart += sizeof(double) - (*ShmemFreeStart % sizeof(double));
+	SpinAcquire(ShmemLock);
+
+        *ShmemFreeStart += sizeof(double) - (*ShmemFreeStart % sizeof(double));
 
 	Assert(*ShmemFreeStart);
 
-	SpinAcquire(ShmemLock);
-
 	tmpFree = *ShmemFreeStart + size;
-	if (tmpFree <= ShmemSize)
-	{
+	if (tmpFree <= ShmemSize) {
 		newSpace = (long *) MAKE_PTR(*ShmemFreeStart);
 		*ShmemFreeStart += size;
-	}
-	else
+	} else {
 		newSpace = NULL;
+        }
 
 	SpinRelease(ShmemLock);
 
@@ -345,8 +344,8 @@ ShmemIsValid(unsigned long addr)
  */
 HTAB *
 ShmemInitHash(char *name,		/* table string name for shmem index */
-			  long init_size,	/* initial table size */
-			  long max_size,	/* max size of the table */
+			  int init_size,	/* initial table size */
+			  int max_size,	/* max size of the table */
 			  HASHCTL *infoP,	/* info about key and bucket size */
 			  int hash_flags)	/* info about infoP */
 {
@@ -496,7 +495,7 @@ ShmemPIDDestroy(int pid)
  *		initialized).
  */
 long *
-ShmemInitStruct(char *name, unsigned long size, bool *foundPtr)
+ShmemInitStruct(char *name, Size size, bool *foundPtr)
 {
 	ShmemIndexEnt *result,
 				item;
@@ -526,7 +525,7 @@ ShmemInitStruct(char *name, unsigned long size, bool *foundPtr)
 			/* in POSTMASTER/Single process */
 
 			*foundPtr = FALSE;
-			return (long *) ShmemAlloc(size,NULL);
+			return (long *) ShmemAlloc(size);
 		}
 		else
 		{
@@ -574,7 +573,7 @@ ShmemInitStruct(char *name, unsigned long size, bool *foundPtr)
 	else
 	{
 		/* It isn't in the table yet. allocate and initialize it */
-		structPtr = ShmemAlloc((long) size,NULL);
+		structPtr = ShmemAlloc(size);
 		if (!structPtr)
 		{
 			/* out of memory */
@@ -583,8 +582,7 @@ ShmemInitStruct(char *name, unsigned long size, bool *foundPtr)
 			SpinRelease(ShmemIndexLock);
 			*foundPtr = FALSE;
 
-			elog(NOTICE, "ShmemInitStruct: cannot allocate '%s'",
-				 name);
+			elog(NOTICE, "ShmemInitStruct: cannot allocate '%s'",name);
 			return NULL;
 		}
 		result->size = size;

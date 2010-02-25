@@ -1445,8 +1445,7 @@ ExecReplace(TupleTableSlot *slot,
 	ItemPointerData ctid;
 	int			result;
 	int			numIndices;
-	Env*  env 		= GetEnv();
-TransactionInfo* t_info = GetTransactionInfo();
+        TransactionInfo* t_info = GetTransactionInfo();
 	/*
 	 * abort the operation if not running transactions
 	 */
@@ -1564,76 +1563,6 @@ lreplace:;
 	if (resultRelationDesc->trigdesc)
 		ExecARUpdateTriggers(estate, tupleid, tuple);
 }
-
-#ifdef NOT_USED
-static HeapTuple
-ExecAttrDefault(Relation rel, HeapTuple tuple)
-{
-	int			ndef = rel->rd_att->constr->num_defval;
-	AttrDefault *attrdef = rel->rd_att->constr->defval;
-	ExprContext *econtext = makeNode(ExprContext);
-	HeapTuple	newtuple;
-	Node	   *expr;
-	bool		isnull;
-	bool		isdone;
-	Datum		val;
-	Datum	   *replValue = NULL;
-	char	   *replNull = NULL;
-	char	   *repl = NULL;
-	int			i;
-
-	econtext->ecxt_scantuple = NULL;	/* scan tuple slot */
-	econtext->ecxt_innertuple = NULL;	/* inner tuple slot */
-	econtext->ecxt_outertuple = NULL;	/* outer tuple slot */
-	econtext->ecxt_relation = NULL;		/* relation */
-	econtext->ecxt_relid = 0;	/* relid */
-	econtext->ecxt_param_list_info = NULL;		/* param list info */
-	econtext->ecxt_param_exec_vals = NULL;		/* exec param values */
-	econtext->ecxt_range_table = NULL;	/* range table */
-	for (i = 0; i < ndef; i++)
-	{
-		if (!heap_attisnull(tuple, attrdef[i].adnum))
-			continue;
-		expr = (Node *) stringToNode(attrdef[i].adbin);
-
-		val = ExecEvalExpr(expr, econtext, &isnull, &isdone);
-
-		pfree(expr);
-
-		if (isnull)
-			continue;
-
-		if (repl == NULL)
-		{
-			repl = (char *) palloc(rel->rd_att->natts * sizeof(char));
-			replNull = (char *) palloc(rel->rd_att->natts * sizeof(char));
-			replValue = (Datum *) palloc(rel->rd_att->natts * sizeof(Datum));
-			MemSet(repl, ' ', rel->rd_att->natts * sizeof(char));
-		}
-
-		repl[attrdef[i].adnum - 1] = 'r';
-		replNull[attrdef[i].adnum - 1] = ' ';
-		replValue[attrdef[i].adnum - 1] = val;
-
-	}
-
-	pfree(econtext);
-
-	if (repl == NULL)
-		return tuple;
-
-	newtuple = heap_modifytuple(tuple, rel, replValue, replNull, repl);
-
-	pfree(repl);
-	heap_freetuple(tuple);
-	pfree(replNull);
-	pfree(replValue);
-
-	return newtuple;
-
-}
-
-#endif
 
 static char *
 ExecRelCheck(Relation rel, HeapTuple tuple, EState *estate)

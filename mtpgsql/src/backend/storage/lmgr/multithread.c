@@ -180,11 +180,7 @@ InitThreadGlobal(IPCKey key, int maxBackends)
 void
 InitThread(ThreadType tt)
 {
-	int counter = 0;
-	bool		found = false;
-	unsigned long location,
-				myOffset;
-				
+	unsigned long myOffset;
 	ThreadId		newthread;
 	TransactionId   xid = InvalidTransactionId;
         ThreadGlobals* env = GetThreadGlobals();
@@ -217,7 +213,7 @@ InitThread(ThreadType tt)
 		 * cleanup dead processes).
 		 */
 
-		env->thread = (THREAD *) ShmemAlloc(sizeof(THREAD),NULL);
+		env->thread = (THREAD *) ShmemAlloc(sizeof(THREAD));
 		if (env->thread == NULL)
 		{
 			SpinRelease(ProcStructLock);

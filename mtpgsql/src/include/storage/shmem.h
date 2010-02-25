@@ -65,13 +65,13 @@ typedef struct SHM_QUEUE
 PG_EXTERN void ShmemIndexReset(void);
 PG_EXTERN void ShmemCreate(unsigned int key, unsigned int size);
 PG_EXTERN int	InitShmem(unsigned int key, unsigned int size, int maxBackends);
-PG_EXTERN void *ShmemAlloc(Size size,void* cxt);
+PG_EXTERN void *ShmemAlloc(Size size);
 PG_EXTERN int	ShmemIsValid(unsigned long addr);
-PG_EXTERN HTAB *ShmemInitHash(char *name, long init_size, long max_size,
+PG_EXTERN HTAB *ShmemInitHash(char *name, int init_size, int max_size,
 			  HASHCTL *infoP, int hash_flags);
 PG_EXTERN bool ShmemPIDLookup(int pid, SHMEM_OFFSET *locationPtr);
 PG_EXTERN SHMEM_OFFSET ShmemPIDDestroy(int pid);
-PG_EXTERN long *ShmemInitStruct(char *name, unsigned long size,
+PG_EXTERN long *ShmemInitStruct(char *name, Size size,
 				bool *foundPtr);
 
 

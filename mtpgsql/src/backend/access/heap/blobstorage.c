@@ -44,7 +44,7 @@ typedef struct blobseg {
 	int32           seg_length;
         bool            seg_blobhead;
 	char           *seg_data;
-}               blob_segment_data;
+} blob_segment_data;
 
 typedef struct blobhead {
         int32           pointer_length;
@@ -1363,13 +1363,13 @@ prioritize_blobs(Relation rel, HeapTuple tuple, int16 attnum)
 }
 
 int
-delete_tuple_blob(Relation rel, HeapTuple tuple)
+delete_tuple_blob(Relation rel, HeapTuple tuple, HeapTuple newtup)
 {
     bool            isNull = false;
     TupleDesc       atts = rel->rd_att;
-
+    Relation        storerel;
     int             c = 0;
-    int count =0;
+    int             count =0;
 
     for (c = 0; c < atts->natts; c++) {
         if (atts->attrs[c]->attstorage == 'e') {
@@ -1378,8 +1378,18 @@ delete_tuple_blob(Relation rel, HeapTuple tuple)
                 ItemPointerData    latest_data;
                 blob_header     header;
                 ItemPointer latest = &latest_data;
+/*  if the tuples of old and new point to the same blob, don't erase it  */
+                if ( newtup != NULL ) {
+                    Datum           checkblob = HeapGetAttr(tuple, atts->attrs[c]->attnum, atts, &isNull);
+                    if ( !isNull && ISINDIRECT(checkblob)) {
+                        if ( memcmp(DatumGetPointer(blob),DatumGetPointer(checkblob),sizeof(blob_header)) == 0 ) {
+                            continue;
+                        }
+                    }
+                }
+
                 memmove(&header,DatumGetPointer(blob),sizeof(blob_header));
-                Relation storerel = RelationIdGetRelation(header.relid,DEFAULTDBOID);
+                storerel = RelationIdGetRelation(header.relid,DEFAULTDBOID);
                 LockRelation(storerel,AccessShareLock);
                 ItemPointerCopy(&header.forward_pointer,latest);
                 count += delete_blob_segments(storerel, &header.forward_pointer,(tuple->t_data->t_infomask & HEAP_MOVED_OUT));
