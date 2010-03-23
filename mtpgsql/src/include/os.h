@@ -31,7 +31,7 @@ extern char*	tzname[2];
 #define			PDP_ENDIAN		3412
 #endif
 #ifndef			BYTE_ORDER
-#define			BYTE_ORDER		BIG_ENDIAN
+#define			BYTE_ORDER		LITTLE_ENDIAN
 #endif
 
 #ifdef __cplusplus

@@ -120,7 +120,7 @@ endif
 
 
 ifneq ($(PORTNAME), win)
-postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o
+postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o bootstrap/SUBSYS.o
 	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o -lmtpg $(LDFLAGS) $(LIBS)
 else
 postgres: $(DLLOBJS) $(SRCDIR)/utils/dllinit.o postgres.def libpostgres.a
@@ -159,6 +159,9 @@ postgres.o: $(OBJS)
 	
 main/SUBSYS.o:
 	$(MAKE) -C $(SRCDIR)/backend/main all
+
+bootstrap/SUBSYS.o:
+	$(MAKE) -C $(SRCDIR)/backend/bootstrap all
 
 mtpg.o: ${OBJS} mtpg.d
 	/usr/sbin/dtrace -G -64 -s mtpg.d $(OBJS)
@@ -298,7 +301,7 @@ ifeq ($(MAKE_DLL), true)
 	rm -f postgres.dll postgres.def libpostgres.a
 endif
 endif
-	for i in $(DIRS); do $(MAKE) -C $$i clean;  done;$(MAKE) -Cmain clean;
+	for i in $(DIRS); do $(MAKE) -C $$i clean;  done; $(MAKE) -Cmain clean; $(MAKE) -Cbootstrap clean;
 
 .DEFAULT:
 	for i in $(DIRS); do $(MAKE) -C $$i $@; done

@@ -178,7 +178,7 @@ static HTAB* CreateFDHash(MemoryContext cxt);
 static Vfd* HashScanFD(FileName  filename, int fileflags, int filemode, bool * allocated);
 static bool HashDropFD(Vfd* target);
 
-static void ActivateFile(Vfd* file);
+static bool ActivateFile(Vfd* file);
 static void  RetireFile(Vfd* file);
 static void CheckFileAccess(Vfd* target);
 
@@ -365,54 +365,53 @@ HashDropFD(Vfd * target) {
     return found;
 }
 
-static void
+static bool
 ActivateFile(Vfd* vfdP)
 {
-    bool opened = false;
     Assert(vfdP->fd == VFD_CLOSED);
-	while (vfdP->fd == VFD_CLOSED)
-	{
-            opened = true;
-             ReleaseFileIfNeeded();
-
-            /*
-             * The open could still fail for lack of file descriptors, eg due
-             * to overall system file table being full.  So, be prepared to
-             * release another FD if necessary...
-             */
-            pthread_mutex_lock(&RealFiles.guard);
-            vfdP->fd = open(vfdP->fileName, vfdP->fileFlags, vfdP->fileMode);
-            if (vfdP->fd < 0 && (errno == EMFILE || errno == ENFILE))
+    errno = 0;
+    while (vfdP->fd == VFD_CLOSED && errno == 0)
+    {
+         ReleaseFileIfNeeded();
+        /*
+         * The open could still fail for lack of file descriptors, eg due
+         * to overall system file table being full.  So, be prepared to
+         * release another FD if necessary...
+         */
+        pthread_mutex_lock(&RealFiles.guard);
+        vfdP->fd = open(vfdP->fileName, vfdP->fileFlags, vfdP->fileMode);
+        if (vfdP->fd < 0 ) {
+            vfdP->fd = VFD_CLOSED;
+           if (errno == EMFILE || errno == ENFILE)
             {
-                vfdP->fd = VFD_CLOSED;
-                    errno = 0;
 /* try again */
-            } else if (vfdP->fd < 0) {
-                   vfdP->fd = VFD_CLOSED;
-                    pthread_mutex_unlock(&RealFiles.guard);
-                    elog(NOTICE,"vfd activate file failed for filename: %s, fd: %d",vfdP->fileName,vfdP->fd);
-                    sleep(5);
+                 errno = 0;
             } else {
+                /*  exit loop  */
+            }
+        } else {
 /*  freshly opened file, optimize */
-                    if ( vfdoptimize ) {
-                        FileOptimize(vfdP->id);
-                    } else {
-                        FileNormalize(vfdP->id);
-                    }
-                    RealFiles.nfile += 1;
-                    DTRACE_PROBE3(mtpg,file__activated,vfdP->id,vfdP->fileName,RealFiles.nfile);
+            if ( vfdoptimize ) {
+                FileOptimize(vfdP->id);
+            } else {
+                FileNormalize(vfdP->id);
             }
-            pthread_mutex_unlock(&RealFiles.guard);
-       }
-
-        /* seek to the right position */
-        if ( opened && vfdP->seekPos != 0L)
-        {
-            off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
-            if ( check != vfdP->seekPos ) {
-                elog(NOTICE,"bad file activation during seek filename:%s, current: %d, seeked: %d",vfdP->fileName,vfdP->seekPos,check);
-            }
+            RealFiles.nfile += 1;
+            DTRACE_PROBE3(mtpg,file__activated,vfdP->id,vfdP->fileName,RealFiles.nfile);
         }
+        pthread_mutex_unlock(&RealFiles.guard);
+   }
+
+    /* seek to the right position */
+    if (vfdP->seekPos != 0L && errno == 0)
+    {
+        off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
+        if ( check != vfdP->seekPos ) {
+            elog(NOTICE,"bad file activation during seek filename:%s, current: %d, seeked: %d",vfdP->fileName,vfdP->seekPos,check);
+        }
+    }
+
+    return (vfdP->fd != VFD_CLOSED);
 }
 
 /*
@@ -690,7 +689,17 @@ fileNameOpenFile(FileName fileName,
                 vfdP = HashScanFD(fileName,fileFlags,fileMode,&allocated);
             } else {
                 vfdP = AllocateVfd(fileName,fileFlags,fileMode,private);
-                allocated = true;
+                /* activate your file to make sure that it can be created, this is important in bootstrap mode 
+                 * because if the allocation fails, we try again with file creation 
+                 */
+                if ( ActivateFile(vfdP) ) {
+                    allocated = true;
+                } else {
+                    Assert(vfdP->refCount == 1);
+                    vfdP->refCount = 0;
+                    FreeVfd(vfdP);
+                    return VFD_CLOSED;
+                }
            }
                 
             if ( !private && !allocated && (vfdP->fileFlags != fileFlags ||
