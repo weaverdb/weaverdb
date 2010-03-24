@@ -116,28 +116,6 @@ typedef ItemPointerData *ItemPointer;
 	(pointer)->ip_posid = offNum \
 )
 /*
- * ItemPointerSetBlockNumber
- *		Sets a disk item pointer to the specified block.
- */
- /*
-#define ItemPointerSetBlockNumber(pointer, blockNumber) \
-( \
-	AssertMacro(PointerIsValid(pointer)), \
-	BlockIdSet(&((pointer)->ip_blkid), blockNumber) \
-)
-*/
-/*
- * ItemPointerSetOffsetNumber
- *		Sets a disk item pointer to the specified offset.
- */
- /*
-#define ItemPointerSetOffsetNumber(pointer, offsetNumber) \
-( \
-	AssertMacro(PointerIsValid(pointer)), \
-	(pointer)->ip_posid = (offsetNumber) \
-)
-*/
-/*
  * ItemPointerCopy
  *		Copies the contents of one disk item pointer to another.
  */
