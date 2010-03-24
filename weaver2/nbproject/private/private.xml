@@ -2,6 +2,16 @@
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/1"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/1">
-        <file>file:/whs/space/mscott/axon/weaver2/mtpgsql/src/backend/commands/variable.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/bootstrap/bootstrap.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/access/heap/heapam.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/storage/file/fd.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/utils/cache/relcache.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/storage/buffer/bufmgr.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/bootstrap/bootparse.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/env/dbwriter.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/include/storage/itemptr.h</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/include/os.h</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/main/main.c</file>
+        <file>file:/export/home/mscott/axon/weaver2/mtpgsql/src/backend/access/common/heaptuple.c</file>
     </open-files>
 </project-private>

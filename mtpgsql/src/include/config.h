@@ -172,7 +172,7 @@
  * search.
  * For further information see README.GEQO <utesch@aut.tu-freiberg.de>.
  */
-#define GEQO
+/*  #define GEQO   */
 
 /*
  * Define this if you want psql to _always_ ask for a username and a password

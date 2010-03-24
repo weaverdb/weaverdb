@@ -790,6 +790,7 @@ cleanup()
 {
 	static int	beenhere = 0;
 
+        elog(DEBUG,"endian: %d mask: %h offset: %d",BYTE_ORDER,BlockNumberMask,BlockNumberShift);
 	if (!beenhere)
 		beenhere = 1;
 	else

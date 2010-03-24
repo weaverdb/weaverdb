@@ -35,15 +35,14 @@ typedef union ItemPointerData
 } ItemPointerData;
 
 #define OffsetNumberMask		(0xffff)		/* valid uint16 bits */
+#define BlockNumberMask		(0x0000ffffffffffffL)
 	
 #if BYTE_ORDER == LITTLE_ENDIAN  
 
-#define BlockNumberMask		(0xffffffffffff0000L)	
 #define BlockNumberShift   16
 
 #elif BYTE_ORDER == BIG_ENDIAN
 
-#define BlockNumberMask		(0x0000ffffffffffffL)	
 #define BlockNumberShift   0
 
 #endif
@@ -81,7 +80,7 @@ typedef ItemPointerData *ItemPointer;
  */
 #define ItemPointerGetBlockNumber(pointer) \
 ( \
-	(BlockIdGetBlockNumber(&(pointer)->ip_blkid) << BlockNumberShift) & BlockNumberMask \
+	((BlockIdGetBlockNumber(&(pointer)->ip_blkid)*1l) >> BlockNumberShift) \
 )
 
 /*
@@ -105,7 +104,7 @@ typedef ItemPointerData *ItemPointer;
 #define ItemPointerSet(pointer, blockNumber, offNum) \
 ( \
 	AssertMacro(PointerIsValid(pointer)), \
-	BlockIdSet(&((pointer)->ip_blkid), (blockNumber >> BlockNumberShift)), \
+	BlockIdSet(&((pointer)->ip_blkid), (1l*blockNumber) << BlockNumberShift), \
 	(pointer)->ip_posid = offNum \
 )
 /* set item pointer but don't check from validity so offset can be set to zero
@@ -113,7 +112,7 @@ typedef ItemPointerData *ItemPointer;
 */
 #define ItemPointerSetUnchecked(pointer, blockNumber, offNum) \
 ( \
-	BlockIdSet(&((pointer)->ip_blkid), (blockNumber >> BlockNumberShift)), \
+	BlockIdSet(&((pointer)->ip_blkid), (1l*blockNumber) << BlockNumberShift), \
 	(pointer)->ip_posid = offNum \
 )
 /*

@@ -419,7 +419,6 @@
           <logicalFolder name="file" displayName="file" projectFiles="true">
             <itemPath>../mtpgsql/src/backend/storage/file/buffile.c</itemPath>
             <itemPath>../mtpgsql/src/backend/storage/file/fd.c</itemPath>
-            <itemPath>../mtpgsql/src/backend/storage/file/newfile</itemPath>
           </logicalFolder>
           <logicalFolder name="ipc" displayName="ipc" projectFiles="true">
             <itemPath>../mtpgsql/src/backend/storage/ipc/ipc.c</itemPath>
