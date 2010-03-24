@@ -212,7 +212,11 @@ usage(void)
 	proc_exit(1);
 }
 
+static void* GetStruct(HeapTuple tuple) {
 
+    void* id = GETSTRUCT(tuple);
+    return id;
+}
 
 int
 BootstrapMain(int argc, char *argv[])
@@ -444,7 +448,8 @@ boot_openrel(char *relname)
 		scan = heap_beginscan(rel, SnapshotNow, 0, (ScanKey) NULL);
 		i = 0;
 		while (HeapTupleIsValid(tup = heap_getnext(scan)))
-			++i;
+                    ++i;
+
 		heap_endscan(scan);
 		app = Typ = ALLOC(struct typmap *, i + 1);
 		while (i-- > 0)
@@ -497,9 +502,9 @@ boot_openrel(char *relname)
 		{
 			Form_pg_attribute at = attrtypes[i];
 
-			printf("create attribute %d name %s len %d num %d type %d\n",
+			printf("create attribute %d name %s len %d num %d type %d align %c\n",
 				   i, NameStr(at->attname), at->attlen, at->attnum,
-				   at->atttypid
+				   at->atttypid,at->attalign
 				);
 			fflush(stdout);
 		}
@@ -640,6 +645,7 @@ InsertOneTuple(Oid objectid)
 
 	tupDesc = CreateTupleDesc(numattr, attrtypes);
 	tuple = heap_formtuple(tupDesc, (Datum *) values, Blanks);
+        GetStruct(tuple);
 	pfree(tupDesc);				/* just free's tupDesc, not the attrtypes */
 
 	if (objectid != (Oid) 0)

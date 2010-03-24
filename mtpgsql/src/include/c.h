@@ -281,7 +281,6 @@ typedef unsigned long Datum;	/* XXX sizeof(long) >= sizeof(void *) */
 typedef Datum TupleCount;
 typedef Datum *DatumPtr;
 
-#if BYTE_ORDER == BIG_ENDIAN
 #ifdef _LP64
 #define GET_1_BYTE(datum)	(((Datum) (datum)) & 0x00000000000000ff)
 #define GET_2_BYTES(datum)	(((Datum) (datum)) & 0x000000000000ffff)
@@ -299,25 +298,6 @@ typedef Datum *DatumPtr;
 #define SET_2_BYTES(value)	(((Datum) (value)) & 0x0000ffff)
 #define SET_4_BYTES(value)	(((Datum) (value)) & 0xffffffff)
 #endif
-#elif BYTE_ORDER == LITTLE_ENDIAN
-#ifdef _LP64
-#define GET_1_BYTE(datum)	(((Datum) (datum)) & 0xff00000000000000)
-#define GET_2_BYTES(datum)	(((Datum) (datum)) & 0xffff000000000000)
-#define GET_4_BYTES(datum)	(((Datum) (datum)) & 0xffffffff00000000)
-#define GET_8_BYTES(datum)	(((Datum) (datum)) & 0xffffffffffffffff)
-#define SET_1_BYTE(value)	(((Datum) (value)) & 0xff00000000000000)
-#define SET_2_BYTES(value)	(((Datum) (value)) & 0xffff000000000000)
-#define SET_4_BYTES(value)	(((Datum) (value)) & 0xffffffff00000000)
-#define SET_8_BYTES(value)	(((Datum) (value)) & 0xffffffffffffffff)
-#else
-#define GET_1_BYTE(datum)	(((Datum) (datum)) & 0xff000000)
-#define GET_2_BYTES(datum)	(((Datum) (datum)) & 0xffff0000)
-#define GET_4_BYTES(datum)	(((Datum) (datum)) & 0xffffffff)
-#define SET_1_BYTE(value)	(((Datum) (value)) & 0xff000000)
-#define SET_2_BYTES(value)	(((Datum) (value)) & 0xffff0000)
-#define SET_4_BYTES(value)	(((Datum) (value)) & 0xffffffff)
-#endif
-#endif  /* BYTE_ORDER  */
 /*
  * DatumGetChar
  *		Returns character value of a datum.

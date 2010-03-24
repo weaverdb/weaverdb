@@ -111,7 +111,7 @@ DataFill(char *data,
 			}
 			*bitP |= bitmask;
 		}
-		data = (char *) att_align((long) data, att[i]->attlen, att[i]->attalign);
+		data = (char *) att_align((char*) data, att[i]->attlen, att[i]->attalign);
 		switch (att[i]->attlen) {
 		case -1:
 			*infomask |= HEAP_HASVARLENA;
@@ -123,19 +123,19 @@ DataFill(char *data,
 				DatumGetChar(value[i]) : *((char *) value[i]);
 			break;
 		case sizeof(int16):
-			*(short *) data = (att[i]->attbyval ?
+			*((short *) data) = (att[i]->attbyval ?
 					   DatumGetInt16(value[i]) :
-					   *((short *) value[i]));
+					   *((int16*) value[i]));
 			break;
 		case sizeof(int32):
-			*(int32 *) data = (att[i]->attbyval ?
+			*((int32 *) data) = (att[i]->attbyval ?
 					   DatumGetInt32(value[i]) :
 					   *((int32 *) value[i]));
 			break;
 #ifdef _LP64
 		case sizeof(long):
 			if (att[i]->attbyval) {
-				*(long *) data = DatumGetInt64(value[i]);
+				*((long *) data) = DatumGetInt64(value[i]);
 				break;
 			} else {
 				/* fall through to the default */
@@ -147,7 +147,7 @@ DataFill(char *data,
 				(int4) (att[i]->attlen));
 			break;
 		}
-		data = (char *) att_addlength((long) data, att[i]->attlen, value[i]);
+		data = (char *) att_addlength((char*) data, att[i]->attlen, value[i]);
 	}
 }
 
@@ -784,10 +784,10 @@ HeapKeyTest(HeapTuple tuple,
 		 * (cur_keys->sk_argument == atp); else
 		 */
 		if (cur_keys->sk_flags & SK_COMMUTE)
-			test = (long) FMGR_PTR2(&cur_keys->sk_func,
+			test = (char*) FMGR_PTR2(&cur_keys->sk_func,
 						cur_keys->sk_argument, atp);
 		else
-			test = (long) FMGR_PTR2(&cur_keys->sk_func,
+			test = (char*) FMGR_PTR2(&cur_keys->sk_func,
 						atp, cur_keys->sk_argument);
 
 		if (!test == !(cur_keys->sk_flags & SK_NEGATE)) {
