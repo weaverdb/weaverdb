@@ -17,6 +17,7 @@
 
 #include "env/env.h"
 
+#include "env/connectionutil.h"
 #include "env/dbwriter.h"
 #include "access/heapam.h"
 #include "catalog/catname.h"
@@ -39,8 +40,10 @@ typedef struct header {
 } Header;
 
 #define  VAR_OID_PREFETCH  64
-#define VAR_XID_PREFETCH		( 1024 * 32 )
+#define VAR_XID_PREFETCH		( 512 )
 
+static int                              xid_prefetch = VAR_XID_PREFETCH;
+static int                              oid_prefetch = VAR_OID_PREFETCH;
 static int 				nextoid;
 static int 				oid_queue_count;
 static pthread_mutex_t	oid_access;
@@ -114,7 +117,7 @@ VariableRelationGetNextXid(void)
 	var = (VariableRelationContents) BufferGetBlock(buf);
 
 	xid = var->nextXidData;
-	var->nextXidData += VAR_XID_PREFETCH;
+	var->nextXidData += xid_prefetch;
 
 	FlushBuffer(VariableRelation,buf,TRUE);
 	UnlockRelation(VariableRelation,AccessExclusiveLock);
@@ -217,11 +220,11 @@ VariableRelationGetNextOid(void)
 
 		if (OidIsValid(var->nextOid)) {
 			oid_ret = var->nextOid;
-			var->nextOid += VAR_OID_PREFETCH;
+			var->nextOid += oid_prefetch;
 			FlushBuffer(VariableRelation,buf,TRUE);
 		} else {
 			oid_ret = BootstrapObjectIdData;
-			var->nextOid = BootstrapObjectIdData + VAR_OID_PREFETCH;
+			var->nextOid = BootstrapObjectIdData + oid_prefetch;
 			FlushBuffer(VariableRelation, buf,TRUE);
 		}
 
@@ -286,7 +289,7 @@ GetNewTransactionId(void)
 			SpinAcquire(OidGenLockId);	/* not good for concurrency... */
 
 			ShmemVariableCache->nextXid = nextid;
-			ShmemVariableCache->xid_count = VAR_XID_PREFETCH;
+			ShmemVariableCache->xid_count = xid_prefetch;
 		} else {
 			SpinRelease(OidGenLockId);
 			usleep(50);
@@ -348,7 +351,7 @@ GetNewObjectId(void) /* place to return the new object id */
 			pthread_mutex_unlock(&oid_access);
 			nextoid = VariableRelationGetNextOid() + 1;
 			pthread_mutex_lock(&oid_access);
-			oid_queue_count = VAR_OID_PREFETCH;
+			oid_queue_count = oid_prefetch;
 		} else {
 			pthread_mutex_unlock(&oid_access);
 			usleep(50);
@@ -387,9 +390,22 @@ InitTransactionLowWaterMark()
 
 
 /*	LockRelation(VariableRelation,ExclusiveLock);   */
-	
+        if ( IsMultiuser() ) {
+            char* pre = GetProperty("transaction_prefetch");
+            char* oid = GetProperty("objectid_prefetch");
+            if ( pre != NULL ) {
+                xid_prefetch = atoi(pre);
+            } else {
+                xid_prefetch *= VAR_XID_PREFETCH;
+            }
+            if ( xid_prefetch <= 0 ) xid_prefetch = VAR_XID_PREFETCH * VAR_XID_PREFETCH;
+            if ( oid != NULL ) {
+                oid_prefetch = atoi(oid);
+            }
+            if ( oid_prefetch <= 0 ) oid_prefetch = oid_prefetch;
+        }
 	first = ReadBuffer(VariableRelation,1);
-    if (!BufferIsValid(first) ) elog(ERROR,"bad buffer read in variable logging");
+        if (!BufferIsValid(first) ) elog(ERROR,"bad buffer read in variable logging");
 	fb = BufferGetBlock(first);
 	header = (Header*)fb;
 	

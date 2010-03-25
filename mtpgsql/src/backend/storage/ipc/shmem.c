@@ -87,6 +87,9 @@ static int	ShmemBootstrap = FALSE;		/* flag becomes true when shared
 
 static HTAB *ShmemIndex = NULL;
 
+static void* ShmemHashAlloc(Size size,void* parent) {
+    return ShmemAlloc(size);
+}
 /* ---------------------
  * ShmemIndexReset() - Resets the shmem index to NULL....
  * useful when the postmaster destroys existing shared memory
@@ -363,7 +366,7 @@ ShmemInitHash(char *name,		/* table string name for shmem index */
 	infoP->dsize = infoP->max_dsize = hash_select_dirsize(max_size);
 	
 /*	infoP->segbase = (long *) ShmemBase;  */
-	infoP->alloc = ShmemAlloc;
+        infoP->alloc = ShmemHashAlloc;
 	infoP->free = NULL;
 	hash_flags |= HASH_SHARED_MEM | HASH_DIRSIZE;
 

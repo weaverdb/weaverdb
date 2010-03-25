@@ -241,7 +241,7 @@ transformExpr(ParseState *pstate, Node *expr, int precedence)
 
 							expr->typeOid = BOOLOID;
 							expr->opType = AND_EXPR;
-							expr->args = makeList(lexpr, rexpr, -1);
+							expr->args = makeList(lexpr, rexpr, (void*)-1);
 							result = (Node *) expr;
 						}
 						break;
@@ -259,7 +259,7 @@ transformExpr(ParseState *pstate, Node *expr, int precedence)
 									 typeidTypeName(exprType(rexpr)), typeidTypeName(BOOLOID));
 							expr->typeOid = BOOLOID;
 							expr->opType = OR_EXPR;
-							expr->args = makeList(lexpr, rexpr, -1);
+							expr->args = makeList(lexpr, rexpr, (void*)-1);
 							result = (Node *) expr;
 						}
 						break;
@@ -273,7 +273,7 @@ transformExpr(ParseState *pstate, Node *expr, int precedence)
 									 typeidTypeName(exprType(rexpr)), typeidTypeName(BOOLOID));
 							expr->typeOid = BOOLOID;
 							expr->opType = NOT_EXPR;
-							expr->args = makeList(rexpr, -1);
+							expr->args = makeList(rexpr, (void*)-1);
 							result = (Node *) expr;
 						}
 						break;

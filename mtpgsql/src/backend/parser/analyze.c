@@ -1902,7 +1902,7 @@ A_Expr_to_Expr(Node *ptr, bool *intersect_present)
 
 							expr->typeOid = BOOLOID;
 							expr->opType = OR_EXPR;
-							expr->args = makeList(lexpr, rexpr, -1);
+							expr->args = makeList(lexpr, rexpr, (void*)-1);
 							result = (Node *) expr;
 							break;
 						}
@@ -1914,7 +1914,7 @@ A_Expr_to_Expr(Node *ptr, bool *intersect_present)
 
 							expr->typeOid = BOOLOID;
 							expr->opType = AND_EXPR;
-							expr->args = makeList(lexpr, rexpr, -1);
+							expr->args = makeList(lexpr, rexpr, (void*)-1);
 							result = (Node *) expr;
 							break;
 						}
@@ -1925,7 +1925,7 @@ A_Expr_to_Expr(Node *ptr, bool *intersect_present)
 
 							expr->typeOid = BOOLOID;
 							expr->opType = NOT_EXPR;
-							expr->args = makeList(rexpr, -1);
+							expr->args = makeList(rexpr, (void*)-1);
 							result = (Node *) expr;
 							break;
 						}

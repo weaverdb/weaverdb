@@ -2691,11 +2691,11 @@ oper_argtypes:	name
 				   elog(ERROR,"parser: argument type missing (use NONE for unary operators)");
 				}
 		| name ',' name
-				{ $$ = makeList(makeString($1), makeString($3), -1); }
+				{ $$ = makeList(makeString($1), makeString($3), (void*)-1); }
 		| NONE ',' name			/* left unary */
-				{ $$ = makeList(NULL, makeString($3), -1); }
+				{ $$ = makeList(NULL, makeString($3), (void*)-1); }
 		| name ',' NONE			/* right unary */
-				{ $$ = makeList(makeString($1), NULL, -1); }
+				{ $$ = makeList(makeString($1), NULL, (void*)-1); }
 		;
 
 
@@ -5270,7 +5270,7 @@ extract_arg:  datetime						{ $$ = $1; }
 /* position_list uses b_expr not a_expr to avoid conflict with general IN */
 
 position_list:  b_expr IN b_expr
-				{	$$ = makeList($3, $1, -1); }
+				{	$$ = makeList($3, $1, (void*)-1); }
 		| /*EMPTY*/
 				{	$$ = NIL; }
 		;

@@ -784,10 +784,10 @@ HeapKeyTest(HeapTuple tuple,
 		 * (cur_keys->sk_argument == atp); else
 		 */
 		if (cur_keys->sk_flags & SK_COMMUTE)
-			test = (char*) FMGR_PTR2(&cur_keys->sk_func,
+			test = (long) FMGR_PTR2(&cur_keys->sk_func,
 						cur_keys->sk_argument, atp);
 		else
-			test = (char*) FMGR_PTR2(&cur_keys->sk_func,
+			test = (long) FMGR_PTR2(&cur_keys->sk_func,
 						atp, cur_keys->sk_argument);
 
 		if (!test == !(cur_keys->sk_flags & SK_NEGATE)) {

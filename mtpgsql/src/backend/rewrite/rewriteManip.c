@@ -350,7 +350,7 @@ AddQual(Query *parsetree, Node *qual)
 	if (old == NULL)
 		parsetree->qual = copy;
 	else
-		parsetree->qual = (Node *) make_andclause(makeList(old, copy, -1));
+		parsetree->qual = (Node *) make_andclause(makeList(old, copy, (void*)-1));
 
 	/*
 	 * Make sure query is marked correctly if added qual has sublinks or
@@ -381,7 +381,7 @@ AddHavingQual(Query *parsetree, Node *havingQual)
 	if (old == NULL)
 		parsetree->havingQual = copy;
 	else
-		parsetree->havingQual = (Node *) make_andclause(makeList(old, copy, -1));
+		parsetree->havingQual = (Node *) make_andclause(makeList(old, copy, (void*)-1));
 
 	/*
 	 * Make sure query is marked correctly if added qual has sublinks or

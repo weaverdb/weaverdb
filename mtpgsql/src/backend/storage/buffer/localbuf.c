@@ -28,6 +28,8 @@
 #include "postgres.h"
 
 #include "env/env.h"
+
+#include "env/freespace.h"
 #include "storage/localbuf.h"
 
 #include "executor/execdebug.h"

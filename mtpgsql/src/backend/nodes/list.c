@@ -38,7 +38,7 @@ makeList(void *elem,...)
 	List	   *temp = NIL;
 	List	   *tempcons = NIL;
 
-	va_start(args, elem);
+        va_start(args, elem);
 
 	temp = elem;
 	while (temp != (void *) -1)

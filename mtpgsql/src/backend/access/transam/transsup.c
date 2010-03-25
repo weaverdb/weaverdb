@@ -104,7 +104,7 @@ TransComputeBlockNumber(Relation relation,		/* relation to test */
 	if ( compublock > 8192 ) {
 		elog(NOTICE,"Transaction Log is very large vacuum all databases soon. transaction id %lu block number %u",(transactionId),compublock);
         }
-
+/*        printf("id: %d block: %d\n",transactionId,compublock);     */
         return compublock;
 }
 
