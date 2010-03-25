@@ -1,3 +1,7 @@
+SUNOS=true
+PORTNAME=sunos
+CPU=amd64
+
 %.so: %.o
 	$(LD) -G -Bdynamic -o $@ $<
 MK_NO_LORDER=true
@@ -8,7 +12,7 @@ CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
 CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS
 CFLAGS+= -DDEBUGLOGS
 # performance
-#CFLAGS+= -xO4 -xtarget=amd64 -m64 -KPIC 
+#CFLAGS+= -xO4 -xtarget=${CPU} -m64 -KPIC 
 #CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS -xipo
 
 #for java
@@ -23,12 +27,9 @@ BKIOPTS+= -DNOARRAY -I../../include -I..
 #CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/solaris
 AROPT= crs
 CFLAGS_SL= 
-LDFLAGS= -L/usr/lib/64 -L/usr/lib/sparcv9 
+LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU} 
 LIBS= -lgen -lnsl -lsocket -lrt -lm -lumem
-#LIBS+= -ltermcap -lcrypt -lc -lcurses -lrt
-SUNOS=true
-PORTNAME=sunos
-CPU=amd64
+
 INSTALL= $(SRCDIR)/install-sh -c 
 POSTGRESDIR=$(SRCDIR)/mtpg
 

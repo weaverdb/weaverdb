@@ -1,3 +1,12 @@
+SUNOS=true
+PORTNAME=sunos
+
+CPU=amd64
+ENDIAN=LITTLE_ENDIAN
+
+#CPU=sparcv9
+#ENDIAN=BIG_ENDIAN
+
 %.so: %.o
 	$(LD) -G -Bdynamic -o $@ $<
 MK_NO_LORDER=true
@@ -5,10 +14,10 @@ CC=cc
 CPP=CC
 #debug new SUNspro Express
 CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
-CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS
+CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS -DBYTE_ORDER=${ENDIAN}
 CFLAGS+= -DDEBUGLOGS
 # performance
-#CFLAGS+= -xO4 -xtarget=amd64 -m64 -KPIC 
+#CFLAGS+= -xO4 -xtarget=${CPU} -m64 -KPIC
 #CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS -xipo
 
 #for java
@@ -22,13 +31,11 @@ BKIOPTS+= -DNOARRAY -I../../include -I..
 #CFLAGS+= -DMEMORY_CONTEXT_CHECKING
 #CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/solaris
 AROPT= crs
-CFLAGS_SL= 
-LDFLAGS= -L/usr/lib/64 -L/usr/lib/amd64
+CFLAGS_SL=
+LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU}
 LIBS= -lgen -lnsl -lsocket -lrt -lm -lumem
-SUNOS=true
-PORTNAME=sunos
-CPU=amd64
-INSTALL= $(SRCDIR)/install-sh -c 
+
+INSTALL= $(SRCDIR)/install-sh -c
 POSTGRESDIR=$(SRCDIR)/mtpg
 
 LEAK_DETECT=0

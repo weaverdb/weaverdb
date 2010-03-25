@@ -39,8 +39,8 @@ typedef struct header {
 	LogBase		databases;
 } Header;
 
-#define  VAR_OID_PREFETCH  64
-#define VAR_XID_PREFETCH		( 512 )
+#define  VAR_OID_PREFETCH  8
+#define VAR_XID_PREFETCH		( 8 )
 
 static int                              xid_prefetch = VAR_XID_PREFETCH;
 static int                              oid_prefetch = VAR_OID_PREFETCH;
@@ -396,11 +396,13 @@ InitTransactionLowWaterMark()
             if ( pre != NULL ) {
                 xid_prefetch = atoi(pre);
             } else {
-                xid_prefetch *= VAR_XID_PREFETCH;
+                xid_prefetch *= 1024;
             }
-            if ( xid_prefetch <= 0 ) xid_prefetch = VAR_XID_PREFETCH * VAR_XID_PREFETCH;
+            if ( xid_prefetch <= 0 ) xid_prefetch = VAR_XID_PREFETCH * 1024;
             if ( oid != NULL ) {
                 oid_prefetch = atoi(oid);
+            } else {
+                oid_prefetch *= VAR_OID_PREFETCH;
             }
             if ( oid_prefetch <= 0 ) oid_prefetch = oid_prefetch;
         }

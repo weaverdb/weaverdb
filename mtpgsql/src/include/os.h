@@ -25,7 +25,7 @@ extern char*	tzname[2];
 #define			BIG_ENDIAN		4321
 #endif
 #ifndef			LITTLE_ENDIAN
-#define			LITTLE_ENDIAN	1234
+#define			LITTLE_ENDIAN           1234
 #endif
 #ifndef			PDP_ENDIAN
 #define			PDP_ENDIAN		3412
