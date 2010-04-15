@@ -926,9 +926,7 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
 
     if ( rel != NULL ) {
         buflock = RelationGetBufferCxt(rel)->BufferLocks[buffer - 1];
-    } else {
-
-    }
+    } 
 
     buf = &(BufferDescriptors[buffer - 1]);
     
@@ -1008,7 +1006,9 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
     }
     pthread_mutex_unlock(&(buf->cntx_lock.guard));
     
-    if ( rel != NULL ) RelationGetBufferCxt(rel)->BufferLocks[buffer-1] = buflock;
+    if ( rel != NULL ) {
+        RelationGetBufferCxt(rel)->BufferLocks[buffer-1] = buflock;
+    }
     
     return locking_error;
     
@@ -1028,15 +1028,8 @@ bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc * buf) {
         Assert(buf->w_lock);
         if (buf->e_lock ) {
             Assert(buf->pageaccess <= buf->e_waiting + 1);
-            if ( buf->p_waiting > 0 ) {
-                pthread_cond_broadcast(&buf->cntx_lock.gate);
-            } else if ( buf->e_waiting > 0 ) {
-                pthread_cond_signal(&buf->cntx_lock.gate);
-            }
-            signal = false;
-        } else  {
-            signal = true;
         }
+        signal = true;
         buf->e_lock = false;
         buf->w_lock = false;
         buf->w_owner = 0;
@@ -1044,7 +1037,7 @@ bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc * buf) {
     }
 
     if ( signal ) {
-        if ( buf->r_waiting > 0 ) {
+        if ( buf->r_waiting + buf->p_waiting > 0) {
             pthread_cond_broadcast(&buf->cntx_lock.gate);
         } else if ( (buf->w_waiting + buf->e_waiting) > 0 ) {
             pthread_cond_signal(&buf->cntx_lock.gate);
