@@ -17,7 +17,7 @@
 SRCDIR=..
 include ${SRCDIR}/Makefile.global
 
-CFLAGS = -g -O2
+CFLAGS = -g
 CPPFLAGS = 
 DEFS = -DHAVE_CONFIG_H
 LDFLAGS = 
@@ -52,7 +52,7 @@ srcdir = .
 
 LN_S = ln -s
 YACC = bison -y
-CC = gcc
+CC = cc
 AR = ar
 RANLIB = ranlib
 INSTALL = /usr/bin/ginstall -c

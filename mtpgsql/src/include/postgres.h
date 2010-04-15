@@ -193,7 +193,7 @@ extern varattrib *heap_tuple_untoast_attr(varattrib * attr);
 typedef union nameData
 {
 	char		data[NAMEDATALEN];
-	double			alignmentDummy;
+	int			alignmentDummy;
 } NameData;
 typedef NameData *Name;
 

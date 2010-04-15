@@ -321,6 +321,7 @@ extern void initweaverbackend(char* vars)
 	GetRawDatabaseInfo(dbname,&GetEnv()->DatabaseId, datpath);
 	elog(DEBUG,"Database id is %u",GetEnv()->DatabaseId);
 	elog(DEBUG,"Build date is %s", BUILDTIME);
+	elog(DEBUG,"Build byte order is %d", BYTE_ORDER);
 
 	memset(datpath,0,MAXPGPATH);
 
