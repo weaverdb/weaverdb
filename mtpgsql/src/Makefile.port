@@ -1,11 +1,11 @@
 SUNOS=true
 PORTNAME=sunos
 
-CPU=amd64
-ENDIAN=LITTLE_ENDIAN
+#CPU=amd64
+#ENDIAN=LITTLE_ENDIAN
 
-#CPU=sparcv9
-#ENDIAN=BIG_ENDIAN
+CPU=sparcv9
+ENDIAN=BIG_ENDIAN
 
 %.so: %.o
 	$(LD) -G -Bdynamic -o $@ $<

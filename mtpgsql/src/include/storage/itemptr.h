@@ -80,7 +80,7 @@ typedef ItemPointerData *ItemPointer;
  */
 #define ItemPointerGetBlockNumber(pointer) \
 ( \
-	((BlockIdGetBlockNumber(&(pointer)->ip_blkid)*1l) >> BlockNumberShift) \
+	((BlockIdGetBlockNumber(&(pointer)->ip_blkid)*1l) >> BlockNumberShift) & BlockNumberMask \
 )
 
 /*
