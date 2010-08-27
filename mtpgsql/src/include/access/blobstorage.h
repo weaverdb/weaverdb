@@ -26,8 +26,6 @@ BlockNumber store_tuple_blob(Relation rel, HeapTuple direct, int16 attnum);
 BlockNumber span_buffered_blob(Relation rel,HeapTuple direct);
 
 HeapTuple vacuum_respan_tuple_blob(Relation rel, HeapTuple tuple, bool exclude_self);
-int vacuum_dup_chain_blob(Relation storerel, ItemPointer front, BlockNumber * last_moved);
-HeapTuple vacuum_relink_tuple_blob(Relation rel, HeapTuple tuple);
 
 Size sizeof_tuple_blob(Relation rel, HeapTuple tuple);
 Size sizeof_max_tuple_blob();
@@ -48,15 +46,5 @@ bool
 read_pipeline_segment_blob(Datum pipe, char* target,int * length, int limit);
 bool
 write_pipeline_segment_blob(Datum pipe, bytea * data);
-
-#ifdef NOTUSED
-BlockNumber respan_tuple_blob(Relation rel, HeapTuple tuple);
-
-HeapTuple rebuild_tuple_blob(Relation rel, HeapTuple tuple);
-
-Datum fix_header_blob(Relation rel, Datum pointer);
-BlockNumber find_blob_lastblock(Relation rel, HeapTuple tuple);
-#endif /* NOTUSED */
-
 
 #endif  /* BLOBSTORAGE_H */

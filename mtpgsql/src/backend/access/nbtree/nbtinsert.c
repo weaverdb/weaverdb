@@ -254,7 +254,7 @@ _bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
                                 if (buf != InvalidBuffer) {
                                     _bt_relbuf(rel, buf);  
                                 }
-								GetEnv()->errorcode = 909;
+                                GetEnv()->errorcode = 909;
                                 elog(ERROR, "Cannot insert a duplicate key into unique index %s hxid %lld",
                                                  RelationGetRelationName(rel),htup.t_data->t_xmin);
                             }

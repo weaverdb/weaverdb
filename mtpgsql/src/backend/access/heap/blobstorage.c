@@ -96,31 +96,20 @@ typedef struct bloblist {
 
 typedef blob_segment_data *blob_segment;
 
-typedef struct dupingpack {
-    HeapTuple   tuple;
-    Buffer          buffer;
-    BlockNumber     limit;
-    BlockNumber     max;
-} DupingPack;
-
 Size    segment_size = 0;
 
 static HeapTuple store_segment(Relation rel, blob_segment segment, BlockNumber limit);
-static int  delete_segment(Relation rel, ItemPointer pointer, bool moved);
+static int  delete_segment(Relation rel, ItemPointer pointer);
 static int get_segment(Relation rel, ItemPointer pointer, bool read_only, char *target, int limit);
 static bool store_blob_segments(Relation rel, bytea * data, ItemPointer start, ItemPointer end);
 static blob_list * prioritize_blobs(Relation rel, HeapTuple tuple, int16 attnum);
-static int delete_blob_segments(Relation rel, ItemPointer first, bool moved);
+static int delete_blob_segments(Relation rel, ItemPointer first);
 static Relation find_storage_relation(Relation rel,HeapTuple tuple,int16 attnum);
 static int  delete_indirect_blob(Datum item);
 
-static bool vacuum_check_update_pointer(Relation relation, Buffer targetbuffer, HeapTuple target, ItemPointer forward);
 static bool lock_segment_for_update(Relation relation, Buffer*  buf, HeapTuple tuple);
-static bool vacuum_link_end(Relation rel, ItemPointer forward);
 
 static void unlock_segment(Relation relation, Buffer buf, HeapTuple tuple);
-
-static DupingPack* vacuum_dup_segment(Relation rel, DupingPack* pack);
 
 static void  blob_log(Relation rel, char* pattern, ...);
 
@@ -196,67 +185,38 @@ store_segment(Relation rel, blob_segment segment, BlockNumber limit)
 }
 
 int
-delete_segment(Relation rel, ItemPointer pointer, bool moved)
+delete_segment(Relation rel, ItemPointer pointer)
 {
 	HeapTupleData   tp;
 	Buffer          buffer = InvalidBuffer;
-	int             count;
-	ItemPointerData target;
 	TransactionId	myXID;
 	CommandId	myCID;
         
-        ItemPointerCopy(pointer,&target);
         ItemPointerSetInvalid(pointer);
 
         myXID = GetCurrentTransactionId();
         myCID = GetCurrentCommandId();
 
-        /* store transaction information of xact deleting the tuple */
-        while ( ItemPointerIsValid(&target) ) {
-		bool delete = TRUE;
+        ItemPointerCopy(&target,&tp.t_self);
+        tp.t_info = 0;
+        buffer = RelationGetHeapTuple(rel,&tp);
+        if ( !BufferIsValid(buffer) ) return count;
+        LockHeapTuple(rel,buffer,&tp,TUPLE_LOCK_WRITE);
+        tp.t_data->t_xmax = myXID;
 
-	        ItemPointerCopy(&target,&tp.t_self); 
-                tp.t_info = 0;
-                buffer = RelationGetHeapTuple(rel,&tp);
-		if ( !BufferIsValid(buffer) ) return count;
-		LockHeapTuple(rel,buffer,&tp,TUPLE_LOCK_WRITE);
-		tp.t_data->t_xmax = myXID;
+        tp.t_data->progress.cmd.t_cmax = myCID;
 
-                if ( !moved ) tp.t_data->progress.cmd.t_cmax = myCID;
-		else tp.t_data->t_infomask |= (HEAP_MOVED_OUT);
+        tp.t_data->t_infomask &= ~(HEAP_MARKED_FOR_UPDATE | HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID);
 
-                tp.t_data->t_infomask &= ~(HEAP_MARKED_FOR_UPDATE | HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID);
-                /*tp.t_data->t_infomask |= HEAP_MARKED_FOR_UPDATE;*/
-                /*  the next target to test is the copied segment */
-                ItemPointerCopy(&tp.t_data->t_ctid, &target);
-                /* set the forward pointer only if this is the first time though  */
-                if ( !ItemPointerIsValid(pointer) ) {
-                    ItemPointerCopy(&((segment_header *) GETSTRUCT(&tp))->forward,pointer);
-                }
-
-                if ( !vacuum_check_update_pointer(rel, buffer, &tp, &target) ) {
-      /*  the chain ends here because this is not a moved tuple, last man starnding 
-          is not deleted for a moved chain */
-                    if ( moved ) {
-                        delete = false;
-			tp.t_data->t_xmax = InvalidTransactionId;
-                        tp.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_MARKED_FOR_UPDATE);
-                        tp.t_data->t_infomask |= (HEAP_XMAX_INVALID);
-                    }
-                   
-                   ItemPointerSetInvalid(&target);
-                }
-		LockHeapTuple(rel,buffer,&tp,TUPLE_LOCK_UNLOCK);
-                
-                if ( delete ) {
-                    WriteBuffer(rel, buffer);
-                    count++;
-                } else {
-                    ReleaseBuffer(rel, buffer);
-                }
+        /* set the forward pointer only if this is the first time though  */
+        if ( !ItemPointerIsValid(pointer) ) {
+            ItemPointerCopy(&((segment_header *) GETSTRUCT(&tp))->forward,pointer);
         }
-    /*  tell the caller if this needs to be called again  */
-	return count;
+
+        LockHeapTuple(rel,buffer,&tp,TUPLE_LOCK_UNLOCK);
+
+        WriteBuffer(rel, buffer);
+        return 1;
 }
 
 
@@ -705,7 +665,7 @@ delete_indirect_blob(Datum item)
 	link = header.forward_pointer;
 
 	while ( ItemPointerIsValid(&link) ) {
-            pos+=delete_segment(rel, &link, false);
+            pos+=delete_segment(rel, &link);
 	}
 
         UnlockRelation(rel,AccessShareLock);
@@ -740,291 +700,6 @@ sizeof_tuple_blob(Relation rel, HeapTuple tuple)
 	return t_size;
 }
 
-DupingPack*
-vacuum_dup_segment(Relation rel, DupingPack* pack) {
-        HeapTuple           copy = NULL;
-        ItemPointerData     forward;
-        segment_header*     segment;
-        bool                delete = FALSE;
-        int                 valid_check = ( HEAP_XMAX_INVALID | HEAP_XMIN_COMMITTED );
-        
-        if ( !BufferIsValid(pack->buffer) ) return NULL;
-
-        LockHeapTuple(rel,pack->buffer,pack->tuple,TUPLE_LOCK_READ);
- /*  set any info flags and make sure that the tuple is in a stable state
-  *  if the tuple is not min committed and xmax invalid forget about 
-  *  trying to dupe the chain
-  */       
-        if ( HeapTupleSatisfies(rel,pack->buffer,pack->tuple,SnapshotNow,0,NULL) )  {
-            if ( (pack->tuple->t_data->t_infomask & valid_check) == valid_check ) {
-                segment = (segment_header*)GETSTRUCT(pack->tuple);
-                ItemPointerCopy(&segment->forward,&forward); 
-                                /* copy tuple */
-                copy = heap_copytuple(pack->tuple);
-            }
-        }
-        LockHeapTuple(rel,pack->buffer,pack->tuple,TUPLE_LOCK_UNLOCK);
-        
-        if ( copy == NULL ) {
-     /* end the dup, segment was not stable to dup.  */
-            ReleaseBuffer(rel,pack->buffer);
-            pack->buffer = InvalidBuffer;
-            pack->tuple = NULL;
-            return NULL;
-        }
-        /*
-         * Mark new tuple as moved_in by vacuum and store
-         * xmin in t_cmin and store current XID in xmin
-         */
-        if (!(copy->t_data->t_infomask & HEAP_MOVED_IN)) {
-                copy->t_data->progress.t_vtran = copy->t_data->t_xmin;
-        }
-        copy->t_data->t_xmin = GetCurrentTransactionId();
-        copy->t_data->t_xmax = InvalidTransactionId;
-        copy->t_data->t_infomask &= ~(HEAP_XACT_MASK);
-        copy->t_data->t_infomask |= (HEAP_MOVED_IN | HEAP_XMAX_INVALID);
-
-        pack->limit = RelationPutHeapTupleAtFreespace(rel, copy, pack->limit);
-        
-        LockHeapTuple(rel,pack->buffer,pack->tuple,TUPLE_LOCK_WRITE);
-   /*  make sure the tuple is still stable  */
-        if ( pack->limit < pack->max && ((pack->tuple->t_data->t_infomask & valid_check) == valid_check) ) {
-   /*  mark the old tuple as dup'ed  */
-            ItemPointerCopy(&copy->t_self,&pack->tuple->t_data->t_ctid); 
-            pack->tuple->t_data->t_xmax = GetCurrentTransactionId();
-	    pack->tuple->t_data->t_infomask |= (HEAP_MARKED_FOR_UPDATE | HEAP_UPDATED);
-        } else {
-   /*  delete the inserted tuple and end chain  */
-            delete = TRUE;
-        }
-        LockHeapTuple(rel,pack->buffer,pack->tuple,TUPLE_LOCK_UNLOCK);
-            
-        if ( delete ) {
-            HeapTupleData  delete;
-            
-            delete.t_self = copy->t_self;
-            delete.t_info = 0;
-       /* delete inserted segment and return, moving would not help  */
-       /* move is false because ctid and self are the same which would prevent delete  */
-         /*  have to do this manually b/c of snapshot  issues during vacuum */
-            pack->buffer = RelationGetHeapTupleWithBuffer(rel,&delete,pack->buffer);
-            if ( BufferIsValid(pack->buffer) ) {
-                LockHeapTuple(rel,pack->buffer,&delete,TUPLE_LOCK_WRITE);
-                delete.t_data->t_xmax = GetCurrentTransactionId();
-                delete.t_data->t_infomask &= ~(HEAP_XMAX_INVALID);
-                LockHeapTuple(rel,pack->buffer,&delete,TUPLE_LOCK_UNLOCK);
-                WriteBuffer(rel,pack->buffer);
-                pack->buffer= InvalidBuffer;
-                pack->tuple = NULL;
-            }
-            pack = NULL;
-        } else {
-            WriteBuffer(rel, pack->buffer);
-
-            if ( ItemPointerIsValid(&forward) ) {
-                 ItemPointerCopy(&forward,&pack->tuple->t_self);
-                 pack->tuple->t_info = 0;
-                 pack->buffer = RelationGetHeapTuple(rel,pack->tuple);
-            } else {
-                pack->buffer = InvalidBuffer;
-                pack->tuple = NULL;
-            }
-        }
-
-        heap_freetuple(copy); 
-        
-        return pack;
-}
-
-int
-vacuum_dup_chain_blob(Relation storerel, ItemPointer front, BlockNumber * last_moved) {
-        int                 moved = 0;
-        Buffer              userbuffer = InvalidBuffer;
-        HeapTupleData       tuple;
-        ItemPointerData     target;
-	MemoryContext       parent = MemoryContextGetCurrentContext();
-        bool                dupe = FALSE;
-
-	MemoryContext   blob_context = SubSetContextCreate(parent, "SpanBlobContext");
-	MemoryContextSwitchTo(blob_context);
-        
-        LockRelation(storerel,AccessShareLock);
-        
-        tuple.t_self = *front;
-        tuple.t_info = 0;
-        userbuffer = RelationGetHeapTuple(storerel,&tuple);
-	LockHeapTuple(storerel,userbuffer,&tuple,TUPLE_LOCK_READ); 
-        ItemPointerCopy(&tuple.t_data->t_ctid, &target);
-        dupe = !vacuum_check_update_pointer(storerel, userbuffer, &tuple, &target);
-	LockHeapTuple(storerel,userbuffer,&tuple,TUPLE_LOCK_UNLOCK); 
-        
-        if ( dupe ) {
-            DupingPack      source;
-            DupingPack*     pack = &source;
-            
-            pack->tuple = &tuple;
-            pack->buffer = userbuffer;
-            pack->limit = 0;
-            pack->max = ItemPointerGetBlockNumber(front);
-
-            Assert((tuple.t_data->t_infomask & (HEAP_BLOB_SEGMENT | HEAP_BLOBHEAD)) == 
-                    (HEAP_BLOB_SEGMENT | HEAP_BLOBHEAD));
-    /*  while the target is valid, move blocks */  
-            while ( vacuum_dup_segment(storerel,pack) != NULL ) {
-                moved++;
-                if ( last_moved != NULL ) {
-                    *last_moved = pack->limit;
-                }
-            }
-        } else {
-            ReleaseBuffer(storerel, userbuffer);
-        }
-            
-        UnlockRelation(storerel,AccessShareLock);
-        MemoryContextSwitchTo(parent);
-        MemoryContextDelete(blob_context);
-        return moved;
-}
-
-
-HeapTuple
-vacuum_relink_tuple_blob(Relation rel, HeapTuple tuple)
-{
-	TupleDesc       atts = rel->rd_att;
-
-	int             c = 0;
-	blob_header    *header;
-	Datum          *values;
-	char           *nulls;
-	char           *replaces;
-	bool            isNull = false;
-	HeapTuple       ret_tuple = NULL;
-	BlockNumber     limit = 0;
-	bool		changed = false;
-        int linked = 0;
-
-	MemoryContext   parent = MemoryContextGetCurrentContext();
-
-	MemoryContext   blob_context = SubSetContextCreate(parent, "SpanBlobContext");
-	MemoryContextSwitchTo(blob_context);
-
-	values = palloc(atts->natts * sizeof(Datum));
-	memset(values, 0x00, (atts->natts * sizeof(Datum)));
-	nulls = palloc(atts->natts * sizeof(char));
-	memset(nulls, ' ', (atts->natts * sizeof(char)));
-	replaces = palloc(atts->natts * sizeof(char));
-	memset(replaces, ' ', (atts->natts * sizeof(char)));
-        
-	for (c = 0; c < atts->natts; c++) {
-            isNull = false;
-            if (atts->attrs[c]->attstorage == 'e') {
-                blob_header*     header;
-                ItemPointerData		forward;
-                Buffer          buf = InvalidBuffer;
-                bool            dupe = FALSE;
-
-                header = palloc(sizeof(blob_header));
-                                
-                Datum blob = HeapGetAttr(tuple, atts->attrs[c]->attnum, atts, &isNull);
-
-                if (isNull || !ISINDIRECT(blob) ) {
-                    continue;
-                }
-
-                Relation storerel = find_storage_relation(rel,tuple,atts->attrs[c]->attnum);
-                LockRelation(storerel,AccessShareLock);
-
-                memmove(header, DatumGetPointer(blob),sizeof(blob_header));
-                
-                ItemPointerCopy(&header->forward_pointer,&forward);
-                if ( !ItemPointerIsValid(&forward) ) {
-			RelationClose(storerel);
-			continue;
-		}
-
-                dupe = vacuum_link_end(rel, &forward);
-
-                if ( !dupe ) {     
-                     pfree(header);
-                } else {
-                    changed = true;
-                     ItemPointerCopy(&forward,&header->forward_pointer);
-                     replaces[c] = 'r';
-                     SETINDIRECT(header);
-                     values[c] = PointerGetDatum(header);
-                       	
-			while ( ItemPointerIsValid(&forward) ) {
-				HeapTupleData tupledata;
-                                bool change = false;
-                                
-				ItemPointerCopy(&forward,&tupledata.t_self);
-                                tupledata.t_info = 0;
-				buf = RelationGetHeapTuple(storerel,&tupledata); 
-				segment_header* unit = (segment_header*)GETSTRUCT(&tupledata);
-				ItemPointerCopy(&unit->forward,&forward);
-                        	change = vacuum_link_end(storerel,&forward);
-                                LockHeapTuple(storerel,buf,&tupledata,TUPLE_LOCK_WRITE);
-                                if ( change ) {
-                                    unit->forward = forward;
-                                    linked++;
-                                }
-                                LockHeapTuple(storerel,buf,&tupledata,TUPLE_LOCK_UNLOCK);
-                                if ( change ) WriteBuffer(storerel,buf);
-                                else ReleaseBuffer(storerel,buf);
-                        }
-                    }
-				                                
-                UnlockRelation(storerel,AccessShareLock);
-                RelationClose(storerel);
-            }
-        }
-       
-	MemoryContextSwitchTo(parent);
-	if ( changed ) {
-		ret_tuple = heap_modifytuple(tuple, rel, values, nulls, replaces);
-                ret_tuple->t_data->t_infomask |= tuple->t_data->t_infomask;
-                ret_tuple->t_data->t_infomask |= HEAP_BLOBLINKED;
-		ret_tuple->t_info |= TUPLE_HASBUFFERED;
-	}
-	MemoryContextDelete(blob_context);
-
-	return ret_tuple;
-}
-
-bool
-vacuum_link_end(Relation rel, ItemPointer forward) {
-
-    HeapTupleData       tuple;
-    Buffer              buf;
-    bool		changed = FALSE;
-   
-    if ( !ItemPointerIsValid(forward) ) return false;
-   
-    ItemPointerCopy(forward, &tuple.t_self);
-    tuple.t_info = 0;
-    buf = RelationGetHeapTuple(rel, &tuple);
-   
-    while ( BufferIsValid(buf) ) {
-	bool dupe;
-
-        LockHeapTuple(rel,buf,&tuple,TUPLE_LOCK_READ);
-        ItemPointerCopy(&tuple.t_data->t_ctid,forward);
-        dupe = vacuum_check_update_pointer(rel, buf, &tuple, forward);
-        ItemPointerCopy(forward,&tuple.t_self);
-        LockHeapTuple(rel,buf,&tuple,TUPLE_LOCK_UNLOCK);
-
-        if ( dupe ) {
-            tuple.t_info = 0;
-            buf = RelationGetHeapTupleWithBuffer(rel,&tuple,buf);
-            changed = TRUE;
-        } else {
-	    break;
-        }
-    }
-    ReleaseBuffer(rel,buf);
-    return changed;
-}
-
 HeapTuple
 vacuum_respan_tuple_blob(Relation rel, HeapTuple tuple, bool exclude_self)
 {
@@ -1050,49 +725,49 @@ vacuum_respan_tuple_blob(Relation rel, HeapTuple tuple, bool exclude_self)
 	memset(nulls, ' ', (atts->natts * sizeof(char)));
 	replaces = palloc(atts->natts * sizeof(char));
 	memset(replaces, ' ', (atts->natts * sizeof(char)));
-                        
+
 	for (c = 0; c < atts->natts; c++) {
             isNull = false;
             if (atts->attrs[c]->attstorage == 'e') {
                 Datum blob = HeapGetAttr(tuple, atts->attrs[c]->attnum, atts, &isNull);
                 blob_header     header;
                 memmove(&header, DatumGetPointer(blob),sizeof(blob_header));
-    
+
                 if (isNull || !ISINDIRECT(blob) ) {
                     continue;
                 }
 
                 Relation storerel = find_storage_relation(rel,tuple,atts->attrs[c]->attnum);
-  /*  
-   *    if the store relation is different from the 
+  /*
+   *    if the store relation is different from the
    *    current relation, ignore respanning
    */
                 if ( exclude_self && storerel->rd_id == header.relid ) {
                     RelationClose(storerel);
                     continue;
                 }
-                
+
                 LockRelation(storerel,AccessShareLock);
 
                 Datum read = open_read_pipeline_blob(blob,false);
-                
+
                 int buf_sz = (sizeof_max_tuple_blob() * 5) + VARHDRSZ;
                 bytea* append = palloc(buf_sz);
-                int length = 0; 
+                int length = 0;
 
                 Datum write = open_write_pipeline_blob(storerel);
-                
+
                 while (read_pipeline_segment_blob(read,VARDATA(append),&length,buf_sz - VARHDRSZ)) {
                     SETVARSIZE(append,length + VARHDRSZ);
                     write_pipeline_segment_blob(write,append);
                 }
-                
+
                 replaces[c] = 'r';
                 values[c] = close_write_pipeline_blob(write);
                 close_read_pipeline_blob(read);
-                
+
                 pfree(append);
-                
+
                 UnlockRelation(storerel,AccessShareLock);
                 RelationClose(storerel);
                 changed = true;
@@ -1392,7 +1067,7 @@ delete_tuple_blob(Relation rel, HeapTuple tuple, HeapTuple newtup)
                 storerel = RelationIdGetRelation(header.relid,DEFAULTDBOID);
                 LockRelation(storerel,AccessShareLock);
                 ItemPointerCopy(&header.forward_pointer,latest);
-                count += delete_blob_segments(storerel, &header.forward_pointer,(tuple->t_data->t_infomask & HEAP_MOVED_OUT));
+                count += delete_blob_segments(storerel, &header.forward_pointer);
                 UnlockRelation(storerel,AccessShareLock);
                 RelationClose(storerel);
             }
@@ -1402,7 +1077,7 @@ delete_tuple_blob(Relation rel, HeapTuple tuple, HeapTuple newtup)
 }
 
 int
-delete_blob_segments(Relation rel, ItemPointer first, bool moved)
+delete_blob_segments(Relation rel, ItemPointer first)
 {
 	int pos = 0;
         ItemPointerData link;
@@ -1410,7 +1085,7 @@ delete_blob_segments(Relation rel, ItemPointer first, bool moved)
         ItemPointerCopy(first,&link);
         
 	while (ItemPointerIsValid(&link)) {
-            pos+=delete_segment(rel, &link, moved);
+            pos+=delete_segment(rel, &link);
 	}
         return pos;
 }
@@ -1455,108 +1130,6 @@ void
 unlock_segment(Relation relation, Buffer buf, HeapTuple tuple) {
     UnlockHeapTuple(relation,buf,tuple);
 }
-
-bool
-vacuum_check_update_pointer(Relation relation, Buffer checkbuffer, HeapTuple check, ItemPointer forward)
-{
-        Buffer              buffer = InvalidBuffer;
-        HeapTupleData       target;
-        bool                valid = FALSE;
-        bool                save = FALSE;
-        bool                exit = FALSE;
-        
-        target.t_self = *forward;
-
-        if ( !ItemPointerIsValid(forward) ) return FALSE;
- /*  internal tuple checks */       
-        if ( ItemPointerEquals(&check->t_self,&target.t_self) ) return false;
-
-	if ( check->t_data->t_infomask & HEAP_UPDATED ) {
-            valid = TRUE;
-        } else if ( check->t_data->t_infomask & HEAP_MARKED_FOR_UPDATE ) {
-            if ( check->t_data->t_infomask & HEAP_XMAX_INVALID ) {
-                valid = FALSE;
-            } else if ( check->t_data->t_infomask & HEAP_XMAX_COMMITTED ) {
-                valid = TRUE;
-            } else if ( TransactionIdDidCommit(check->t_data->t_xmax) ) {
-                check->t_data->t_infomask |= (HEAP_UPDATED);
-                if ( TransactionIdDidHardCommit(check->t_data->t_xmax) ) {
-                    check->t_data->t_infomask |= HEAP_XMAX_COMMITTED;
-                }
-                save = TRUE;
-                valid = TRUE;
-            } else if ( TransactionIdDidAbort(check->t_data->t_xmax) ) {
-                check->t_data->t_infomask &= ~(HEAP_UPDATED);
-                check->t_data->t_infomask |= HEAP_XMAX_INVALID;
-                save = TRUE;
-                valid = FALSE;
-            }
-	}
-
-  /* open the forward tuple and see if it matches by brute force (crc) */
-        if ( save ) WriteNoReleaseBuffer(relation,checkbuffer);
-        return valid;
-}
-
-
-#ifdef NOTUSED
-HeapTuple
-rebuild_tuple_blob(Relation rel, HeapTuple tuple)
-{
-	TupleDesc       atts = rel->rd_att;
-
-	int             c = 0;
-	blob_header    *header;
-	Datum          *values;
-	char           *nulls;
-	char           *replaces;
-	bool            isNull = false;
-	Datum           blob;
-	HeapTuple       ret_tuple;
-	MemoryContext   parent = MemoryContextGetCurrentContext();
-	MemoryContext   blob_context = SubSetContextCreate(parent, "RebuildBlobContext");
-
-	MemoryContextSwitchTo(blob_context);
-
-	values = palloc(atts->natts * sizeof(Datum));
-	nulls = palloc(atts->natts * sizeof(char));
-	replaces = palloc(atts->natts * sizeof(char));
-
-	for (c = 0; c < atts->natts; c++) {
-		replaces[c] = ' ';
-		nulls[c] = ' ';
-		if (atts->attrs[c]->attstorage == 'e') {
-			blob = HeapGetAttr(tuple, atts->attrs[c]->attnum, rel->rd_att, &isNull);
-			if (!isNull && ISINDIRECT(blob)) {
-				values[c] = PointerGetDatum(rebuild_indirect_blob(blob));
-				replaces[c] = 'r';
-			}
-		}
-	}
-
-	MemoryContextSwitchTo(parent);
-
-	ret_tuple = heap_modifytuple(tuple, rel, values, nulls, replaces);
-        ret_tuple->t_data->t_infomask |= tuple->t_data->t_infomask;
-	/* delete all the memory allocations */
-	MemoryContextDelete(blob_context);
-	tuple->t_data = ret_tuple->t_data;
-	/*
-	 * if this is a memory allocated tuple delete the old memory segment
-	 */
-	if (tuple->t_datasrc) {
-		pfree(tuple->t_datasrc);
-	}
-	tuple->t_datasrc = ret_tuple;
-        tuple->t_info = 0;
-	tuple->t_len = ret_tuple->t_len;
-        ItemPointerSetInvalid(&tuple->t_self);  /* memory tuple */
-
-	tuple->t_data->t_infomask &= ~(HEAP_BLOBINDIRECT & HEAP_BLOBLINKED);
-
-	return ret_tuple;
-}
-#endif
 
 void  blob_log(Relation rel, char* pattern, ...) {
     char            msg[256];

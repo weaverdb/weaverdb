@@ -80,7 +80,10 @@ static bool ReadyConnection(WConn connection);
     \
     err = setjmp(target->env->errorContext);\
     if (err != 0) {\
-        if (GetTransactionInfo()->SharedBufferChanged) target->abortonly = 1;\
+        if (GetTransactionInfo()->SharedBufferChanged) {\
+            strncpy(connection->env->state, "ABORTONLY", 39);\
+            target->abortonly = 1;\
+        }\
         WHandleError(target,err);\
     } else {\
         target->CDA.rc = 0\

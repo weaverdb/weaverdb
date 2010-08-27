@@ -221,18 +221,12 @@ vac_update_relstats(Oid relid, BlockNumber num_pages, TupleCount num_tuples,
 static bool
 repair_page_fragmentation(Relation onerel, Buffer buffer, FragRepairInfo* repair_info);
 static int 
-repair_relink_blobs(Relation onerel, FragRepairInfo* repair_info);
-static int 
 repair_blob_fragmentation(Relation onerel, FragRepairInfo* repair_info);
 static bool
 repair_insert_index_for_entry(Relation onerel,HeapTuple newtup, FragRepairInfo* repair_info);
 
-static void signal_relinking(Oid storerel);
-
 static BlockNumber
 lazy_repair_fragmentation(Relation onerel, FragRepairInfo* repair_info);
-static BlockNumber
-lazy_relink_blobs(Relation onerel, BlockNumber upper_limit, FragRepairInfo* repair_info);
 static BlockNumber
 lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_info);
 static int
@@ -400,13 +394,6 @@ lazy_fragmentation_scan_rel(Oid relid,bool force, FragMode blobs, int max)
     /*  move any blobs in the relation in blob mode */
                     if ( repair_info.num_blobs > 0 ) {
                         repair_blob_fragmentation(rel,&repair_info);
-                        signal_relinking(RelationGetRelid(rel));
-                    }
-                } else if ( blobs == RELINKING ) {
-    /*  relink blobs in ouside or inside relations in this mode */
-                    lazy_relink_blobs(rel,blk,&repair_info);
-                    if ( repair_info.num_blob_tuples > 0 ) {
-                        repair_relink_blobs(rel,&repair_info);
                     }
                 }
 
@@ -1372,139 +1359,6 @@ repair_page_fragmentation(Relation onerel, Buffer buffer, FragRepairInfo* repair
         return page_altered;
 }
 
-static int 
-repair_blob_fragmentation(Relation onerel, FragRepairInfo* repair_info) {
-        long total_moved = 0;
-        int count = 0;
-	VacRUsage       ru0;
-	char            rubuf[255];
-        int             added = 0;
-  /*  make sure mode is relinking */              
-                
-        vacuum_log(onerel,"start blob movement %s",RelationGetRelationName(onerel));
-        
-        vac_init_rusage(&ru0);
-        
-        for (count=0;count<repair_info->num_blobs;count++) {
-            BlockNumber last_block = InvalidBlockNumber;
-            BlockNumber current = ItemPointerGetBlockNumber(&repair_info->blob_heads[count]);
-
-            int link_moved = vacuum_dup_chain_blob(onerel,&repair_info->blob_heads[count],&last_block);
-            total_moved += link_moved;
-            if ( BlockNumberIsValid(last_block) && last_block > repair_info->last_moved ) {
-                repair_info->last_moved = last_block;
-                if ( (last_block + repair_info->extent) > current ) break;
-            }
-            if ( link_moved == 0 || repair_info->num_moved + total_moved > repair_info->max_moved ) break;
-       }
-        repair_info->num_blobs = count;
-        repair_info->num_moved += total_moved;
-	vacuum_log(onerel, "Rel: blobs: %d segments moved: %ld.", count, total_moved);
-	vacuum_log(onerel, "%s", vac_show_rusage(&ru0, rubuf));
-        
-        return total_moved;
-}
-
-static int 
-repair_relink_blobs(Relation onerel, FragRepairInfo* repair_info) {
-        int count = 0;
-        int moved = 0;
-        BlockNumber last = 0;
- 	VacRUsage       ru0;
-	char            rubuf[255];
-        int             added = 0;
-  /*  make sure mode is relinking */              
-                
-        vacuum_log(onerel,"start blob relinking %s",RelationGetRelationName(onerel));
-        
-        vac_init_rusage(&ru0);
-        
-        for (count=0;count<repair_info->num_blob_tuples;count++) {
-            Buffer buf = InvalidBuffer;
-            HeapTupleData tuple;
-            
-            if (!repair_info->force && (count % 5) == 0) {
-            /*
-             * now check to see if anyone is doing updates or changes to
-             * the system.  If so exit out of this loop
-             */
-                if (NoWaitLockRelation(onerel, ShareLock)) {
-                    UnlockRelation(onerel, ShareLock);
-                } else {
-                    vacuum_log(onerel,"exiting relinking due to concurrent access");
-                    break;
-                }
-            }           
-
-            tuple.t_self = repair_info->blob_tuples[count];
-            tuple.t_info = 0;
-            buf = RelationGetHeapTuple(onerel,&tuple);
-            if ( BufferIsValid(buf) ) {
-                bool valid = TRUE;
-                HeapTuple newtup = NULL;
-                
-                LockHeapTuple(onerel,buf,&tuple,TUPLE_LOCK_WRITE);
-                if ( HeapTupleSatisfiesVacuum(tuple.t_data,repair_info->xmax_recent) == HEAPTUPLE_LIVE ) {
-                    tuple.t_data->t_xmax = GetCurrentTransactionId();
-                    tuple.t_data->t_infomask &=
-                            ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID);
-                    tuple.t_data->t_infomask |= (HEAP_MARKED_FOR_UPDATE);
-                } else {
-                    valid = FALSE;
-                }
-                LockHeapTuple(onerel,buf,&tuple,TUPLE_LOCK_UNLOCK);
-                
-                if ( valid ) newtup = vacuum_relink_tuple_blob(onerel,&tuple);
-
-                if ( newtup != NULL ) {
-                    LockHeapTuple(onerel,buf,&tuple,TUPLE_LOCK_WRITE);
-                    if ( HeapTupleSatisfiesVacuum(tuple.t_data, repair_info->xmax_recent) != HEAPTUPLE_LIVE ) {
-  /* oops, this tuple is no good anymore  */                      
-                          LockHeapTuple(onerel,buf,&tuple,TUPLE_LOCK_UNLOCK);
-                          ReleaseBuffer(onerel,buf);
-                    } else {
-                        tuple.t_data->t_xmax = GetCurrentTransactionId();
-                        tuple.t_data->t_infomask &=
-                                ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE);
-                        tuple.t_data->t_infomask |= (HEAP_MOVED_OUT);
-                        LockHeapTuple(onerel,buf,&tuple,TUPLE_LOCK_UNLOCK);
-
-                        if (!(newtup->t_data->t_infomask & HEAP_MOVED_IN)) {
-                            newtup->t_data->progress.t_vtran = newtup->t_data->t_xmin;
-                        }
-                        newtup->t_data->t_xmin = GetCurrentTransactionId();
-                        newtup->t_data->t_xmax = InvalidTransactionId;
-                        newtup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
-                        newtup->t_data->t_infomask |= (HEAP_MOVED_IN | HEAP_XMAX_INVALID);
-                        
-                        last = RelationPutHeapTupleAtFreespace(onerel,newtup,0);
-                        if ( last > repair_info->last_moved ) {
-                            repair_info->last_moved = last;
-                        }
-                        repair_insert_index_for_entry(onerel, newtup, repair_info);
-                        
-                        delete_tuple_blob(onerel,&tuple,newtup);
-                    
-                        WriteBuffer(onerel,buf);
-                        moved++;
-                    }
-                    heap_freetuple(newtup);
-                    if ( repair_info->num_moved + moved > repair_info->max_moved ) break;
-                } else {
-                    ReleaseBuffer(onerel,buf);
-                }
-            }
-        }
-        repair_info->num_blob_tuples = count;
-        repair_info->num_moved += moved;
-        
-	vacuum_log(onerel, "Rel: blobs count:%d relinked: %d.", count, moved);
-	vacuum_log(onerel, "%s", vac_show_rusage(&ru0, rubuf));        
-        
-        return count;
-}
-
-
 static BlockNumber
 lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_info)
 {
@@ -1622,91 +1476,6 @@ lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_inf
         MemoryContextDelete(page_cxt);
         
 	vacuum_log(onerel, "Rel: Pages: %ld; Tuple(s) respanned: %ld.", marker, added);
-	vacuum_log(onerel, "%s", vac_show_rusage(&ru0, rubuf));
-	/*
-	 * FlushRelationBuffers(onerel,nblocks);
-	 */
-
-        return added;
-}
-
-static BlockNumber
-lazy_relink_blobs(Relation onerel, BlockNumber upper_limit, FragRepairInfo* repair_info)
-{
-	BlockNumber     nblocks, marker;
-
-	VacRUsage       ru0;
-	char            rubuf[255];
-        int             added = 0;
-  /*  make sure mode is relinking */              
-                
-        vacuum_log(onerel,"start relink blobs %s",RelationGetRelationName(onerel));
-        
-        vac_init_rusage(&ru0);
-
-	nblocks = RelationGetNumberOfBlocks(onerel);
-        if ( upper_limit > nblocks ) upper_limit = nblocks;
-        
-	for (marker = upper_limit;
-	     marker > 0;
-	     marker--) {
-                bool page_altered = false;
-		BlockNumber blkno = marker -1;
-                Buffer buf = ReadBuffer(onerel,blkno);
-                Page page = BufferGetPage(buf);
-                OffsetNumber    maxoff,offnum;
-                HTSV_Result state;
-                
-                LockBuffer((onerel), buf, BUFFER_LOCK_SHARE);
-		        
-                maxoff = PageGetMaxOffsetNumber(page);
-        
-                for (offnum = FirstOffsetNumber;
-                        offnum <= maxoff;
-                        offnum = OffsetNumberNext(offnum)) {
-
-                        HeapTupleData   tuple;
-                        ItemId		lp = PageGetItemId(page, offnum);
-                        
-                        if ( !ItemIdIsUsed(lp) ) {
-                             continue;
-                        } else {
-                             tuple.t_datamcxt = NULL;
-                             tuple.t_datasrc = NULL;
-                             tuple.t_info = 0;
-                             ItemPointerSet(&tuple.t_self,blkno,offnum);
-                             tuple.t_data = (HeapTupleHeader) PageGetItem(page, lp);
-                             tuple.t_len = ItemIdGetLength(lp);
-                             
-                            state = HeapTupleSatisfiesVacuum(tuple.t_data,repair_info->xmax_recent);
-                            if ( state != HEAPTUPLE_LIVE ) {
-                                continue;
-                            }   
-                            
-                            if ( HeapTupleHasBlob(&tuple) && !(tuple.t_data->t_infomask & HEAP_BLOB_SEGMENT) ) {
-                                repair_info->blobs_seen = true;
-                                if ( repair_info->num_blob_tuples < repair_info->max_blob_tuples ) {
-                                    ItemPointerCopy(&tuple.t_self,&repair_info->blob_tuples[repair_info->num_blob_tuples]);
-                                    repair_info->num_blob_tuples+=1;
-                                    added++;
-                                } else {
-                                    marker = 0;
-                                    break;
-                                }
-                            }
-                       }
-                }        
-                LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
-				
-		ReleaseBuffer(onerel, buf);
-                
-		if (IsShutdownProcessingMode()) {
-			elog(ERROR, "shutting down");
-		}
-
-	}			/* walk along relation */
-
-	vacuum_log(onerel, "Rel: Pages: %ld have relinkable Tuple(s): %ld.", upper_limit, added);
 	vacuum_log(onerel, "%s", vac_show_rusage(&ru0, rubuf));
 	/*
 	 * FlushRelationBuffers(onerel,nblocks);
@@ -2580,41 +2349,6 @@ lazy_vacuum_database(bool verbose)
 	}
 
 	SetTransactionLowWaterMark(xunder);
-}
-
-void
-signal_relinking(Oid storerel)
-{
-	HeapTuple	tuple;
-	Relation	relation;
-	HeapScanDesc    scan;
-	Oid		extrelid;
-        ScanKeyData         key[1];
-        int             count = 0;
-        
-    Relation checkrel = RelationNameGetRelation(ExtStoreRelationName,DEFAULTDBOID);
-    if ( RelationIsValid(checkrel) ) {
-	fmgr_info(F_OIDEQ, &key[0].sk_func);
-	key[0].sk_nargs = key[0].sk_func.fn_nargs;
-	key[0].sk_argument = ObjectIdGetDatum(storerel);
-        key[0].sk_attno = Anum_pg_extstore_extstore;
-        key[0].sk_procedure = F_OIDEQ;
-                
-	relation = heap_openr(ExtStoreRelationName, AccessShareLock);
-	scan = heap_beginscan(relation, SnapshotNow, 1, key);
-	while (HeapTupleIsValid(tuple = heap_getnext(scan)))
-	{
-		extrelid = ((Form_pg_extstore) GETSTRUCT(tuple))->extrelid;
-                AddRelinkBlobsRequest("",GetDatabaseName(),extrelid,GetDatabaseId());
-                count += 1;
-	}
-	heap_endscan(scan);
-	heap_close(relation, AccessShareLock);
-        RelationClose(checkrel);
-        if ( count == 0 ) {
-            AddRelinkBlobsRequest("",GetDatabaseName(),storerel,GetDatabaseId());
-        }
-    }
 }
 
 void  vacuum_log(Relation rel, char* pattern, ...) {
