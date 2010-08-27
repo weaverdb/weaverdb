@@ -197,10 +197,14 @@ delete_segment(Relation rel, ItemPointer pointer)
         myXID = GetCurrentTransactionId();
         myCID = GetCurrentCommandId();
 
-        ItemPointerCopy(&target,&tp.t_self);
+        ItemPointerCopy(pointer,&tp.t_self);
         tp.t_info = 0;
         buffer = RelationGetHeapTuple(rel,&tp);
-        if ( !BufferIsValid(buffer) ) return count;
+        if ( !BufferIsValid(buffer) ) {
+		blob_log(rel,"delete_segment -- bad forward pointer blk: %ld offset: %d",ItemPointerGetBlockNumber(pointer),ItemPointerGetOffsetNumber(pointer));
+		return 0;
+	}
+
         LockHeapTuple(rel,buffer,&tp,TUPLE_LOCK_WRITE);
         tp.t_data->t_xmax = myXID;
 

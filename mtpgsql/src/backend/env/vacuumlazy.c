@@ -220,8 +220,6 @@ vac_update_relstats(Oid relid, BlockNumber num_pages, TupleCount num_tuples,
 
 static bool
 repair_page_fragmentation(Relation onerel, Buffer buffer, FragRepairInfo* repair_info);
-static int 
-repair_blob_fragmentation(Relation onerel, FragRepairInfo* repair_info);
 static bool
 repair_insert_index_for_entry(Relation onerel,HeapTuple newtup, FragRepairInfo* repair_info);
 
@@ -390,12 +388,6 @@ lazy_fragmentation_scan_rel(Oid relid,bool force, FragMode blobs, int max)
                 LockRelation(rel, ShareUpdateExclusiveLock);
 
                 blk = lazy_repair_fragmentation(rel, &repair_info);
-                if ( blobs == BLOB_MOVE ) {
-    /*  move any blobs in the relation in blob mode */
-                    if ( repair_info.num_blobs > 0 ) {
-                        repair_blob_fragmentation(rel,&repair_info);
-                    }
-                }
 
                 if (repair_info.IRel != NULL) {
                     pfree(repair_info.Idesc);
