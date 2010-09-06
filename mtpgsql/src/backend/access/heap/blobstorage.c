@@ -192,8 +192,6 @@ delete_segment(Relation rel, ItemPointer pointer)
 	TransactionId	myXID;
 	CommandId	myCID;
         
-        ItemPointerSetInvalid(pointer);
-
         myXID = GetCurrentTransactionId();
         myCID = GetCurrentCommandId();
 
@@ -212,10 +210,7 @@ delete_segment(Relation rel, ItemPointer pointer)
 
         tp.t_data->t_infomask &= ~(HEAP_MARKED_FOR_UPDATE | HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID);
 
-        /* set the forward pointer only if this is the first time though  */
-        if ( !ItemPointerIsValid(pointer) ) {
-            ItemPointerCopy(&((segment_header *) GETSTRUCT(&tp))->forward,pointer);
-        }
+        ItemPointerCopy(&((segment_header *) GETSTRUCT(&tp))->forward,pointer);
 
         LockHeapTuple(rel,buffer,&tp,TUPLE_LOCK_UNLOCK);
 
