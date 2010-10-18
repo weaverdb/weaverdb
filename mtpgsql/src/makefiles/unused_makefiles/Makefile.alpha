@@ -1,2 +1,0 @@
-%.so:  %.o
-	$(LD) -shared -expect_unresolved '*' -o $@ $<
