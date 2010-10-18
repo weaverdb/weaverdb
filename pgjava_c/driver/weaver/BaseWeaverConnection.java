@@ -69,11 +69,15 @@ public class BaseWeaverConnection {
     }
 */
     private boolean convertString(String connect) throws SQLException {
-        String name = connect.substring(0, connect.indexOf('/'));
-        String password = connect.substring(connect.indexOf('/') + 1, connect.indexOf('@'));
-        String connection = connect.substring(connect.indexOf('@') + 1);
+        try {
+            String name = connect.substring(0, connect.indexOf('/'));
+            String password = connect.substring(connect.indexOf('/') + 1, connect.indexOf('@'));
+            String connection = connect.substring(connect.indexOf('@') + 1);
 
-        return grabConnection(name, password, connection);
+            return grabConnection(name, password, connection);
+        } catch ( Throwable t ) {
+            throw new SQLException(t);
+        }
     }
 
     public boolean connect(String connString) throws SQLException {
