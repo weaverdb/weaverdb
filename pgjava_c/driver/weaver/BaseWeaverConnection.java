@@ -69,15 +69,18 @@ public class BaseWeaverConnection {
     }
 */
     private boolean convertString(String connect) throws SQLException {
-        try {
-        String name = connect.substring(0, connect.indexOf('/'));
-        String password = connect.substring(connect.indexOf('/') + 1, connect.indexOf('@'));
-        String connection = connect.substring(connect.indexOf('@') + 1);
+        if ( connect == null ) return false;
+        
+        int userbr = connect.indexOf('/');
+        if ( userbr <= 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
+        int passbr = connect.indexOf(userbr,'@');
+        if ( passbr <= 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
+
+        String name = connect.substring(0, userbr);
+        String password = connect.substring(userbr+1, passbr);
+        String connection = connect.substring(passbr + 1);
 
         return grabConnection(name, password, connection);
-        } catch ( Throwable t ) {
-            throw new SQLException(t);
-        }
     }
 
     public boolean connect(String connString) throws SQLException {
