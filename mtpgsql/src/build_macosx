@@ -1,7 +1,0 @@
-#!/bin/sh
-cd mflex;./configure;cd ..
-rm include/os.h
-rm Makefile.port
-ln -s port/macosx.h include/os.h
-ln -s makefiles/Makefile.macosx Makefile.port
-exec make $1

@@ -1,8 +1,0 @@
-#!/bin/sh
-if [ ! -n $MTPG ]
-then
-	MTPG=/usr/local/mtpg;
-fi
-
-$MTPG/bin/stop_db $1;
-$MTPG/bin/start_db $1;
