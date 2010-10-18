@@ -1,0 +1,40 @@
+%.so: %.o
+	$(LD) -G -Bdynamic -o $@ $<
+MK_NO_LORDER=true
+CC=cc
+CPP=CC
+#CFLAGS+= -Xarch=v9 -errchk=longptr64
+#ultrasparc2 platform
+CFLAGS+= -xO2 -xtarget=ultra2 -xarch=v9a 
+#CFLAGS+= -xarch=v9a 
+#ultrasparc3 platform
+#CFLAGS+= -xO2 -xtarget=ultra3 -xarch=v9a 
+#debug
+#CFLAGS+= -g -xarch=v9a
+CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS
+BKIOPTS+= -DNOARRAY
+#CFLAGS+= -DDEBUG_INDEX_INSERT
+#CFLAGS+= -DCACHEDEBUG
+#CFLAGS+= -DHEAPDEBUGALL
+#CFLAGS+= -DCLOBBER_FREED_MEMORY
+#CFLAGS+= -DMEMORY_CONTEXT_CHECKING
+CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/solaris
+AROPT= crs
+CFLAGS_SL= -Kpic
+LIBS= -lgen -lnsl -lm
+#LIBS= -lgen -lnsl -lsocket -lm -lrt 
+#LIBS+= -ltermcap -lcrypt -lc -lcurses -lrt
+SUNOS=true
+PORTNAME=sunos
+CPU=sparc
+INSTALL= $(SRCDIR)/install-sh -c 
+POSTGRESDIR=$(SRCDIR)/mtpg
+
+LEAK_DETECT=0
+
+ifeq ($(LEAK_DETECT),1)
+CFLAGS+= -I$(SRCDIR)/../../gc/include
+CFLAGS+= -L$/usr/ucblib/sparcv9
+CFLAGS+= -DGC_DEBUG=1
+CFLAGS+= -L$(SRCDIR)/../../gc/.libs
+endif

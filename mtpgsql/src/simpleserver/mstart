@@ -1,0 +1,10 @@
+#!/bin/sh
+CLASSPATH=/usr/local/mtpgsql/lib/simpleserver.jar;export CLASSPATH
+DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:/usr/local/mtpgsql/lib;export DYLD_LIBRARY_PATH
+PG_TRANSCAREFUL=FALSE;export PG_TRANSCAREFUL
+PG_WAITTIME=2000;export PG_WAITTIME
+PG_SERVERTYPE=PRIVATE;export PG_SERVERTYPE
+PG_BUFFERCOUNT=1024;export PG_BUFFERCOUNT
+PG_STDLOG=TRUE;export PG_STDLOG
+PG_USEGC=TRUE;export PG_USEGC
+java -classpath ${CLASSPATH} org.mtpgsql.server.SimpleServer

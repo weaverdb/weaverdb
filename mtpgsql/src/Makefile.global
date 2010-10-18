@@ -1,0 +1,287 @@
+# Generated automatically from Makefile.global.in by configure.
+#----------------------------------------------------------------------------
+#
+# Makefile.global--
+#    global configuration for the Makefiles
+#
+# Copyright (c) 1994, Regents of the University of California
+#
+#
+# IDENTIFICATION
+#    $Header: /cvs/weaver/mtpgsql/src/Makefile.global,v 1.1.1.1 2006/08/12 00:11:16 synmscott Exp $
+#
+# NOTES
+#    Essentially all Postgres make files include this file and use the
+#    variables it sets.
+#
+#    To override the default setting, create a Makefile.custom in this
+#    directory and put your defines there. (Makefile.custom is included
+#    near the end of this file).  Sometimes, a variable gets set in
+#    Makefile.global after Makefile.custom has been included, so you can't
+#    simply set that variable in Makefile.custom.  In those cases, there is
+#    often another variable (like CUSTOM_COPT) that you can set in
+#    Makefile.custom that influences the later setting of the true variable
+#    of interest (like CFLAGS) by Makefile.global.
+#
+#
+#    If you change any of these defines you probably have to
+#       make clean; make
+#    since no dependencies are created for these. (of course you can
+#    be crafty and check what files really depend on them and just remake
+#    those).
+#
+#    Before including this file, you must set the SRCDIR variable to the
+#    path of the top of the Postgres source tree (the directory that
+#    contains this file).
+#
+#-------------------------------------------------------------------------
+
+
+##############################################################################
+#
+# CONFIGURATION SECTION
+#
+# Following are settings pertaining to the postgres build and
+# installation.
+# of the port.
+#
+# Ignore BSD_SHLIB if you're not using one of the BSD ports.  But if you
+# are, and it's one that doesn't have shared libraries (NetBSD/vax is an
+# example of this), set BSD_SHLIB to null in Makefile.custom.
+BSD_SHLIB= true
+
+# This is mainly for use on FreeBSD, where we have both a.out and elf
+# systems now.  May be applicable to other systems to?
+
+
+
+
+ELF_SYSTEM= 
+
+LIBPQDIR= $(SRCDIR)/interfaces/libpq
+LIBPGTCLDIR= $(SRCDIR)/interfaces/libpgtcl
+
+LIBPQ= -L$(LIBPQDIR) -lpq
+LIBPGTCL= -L$(LIBPGTCLDIR) -lpgtcl
+
+# For convenience, POSTGRESDIR is where BINDIR, and LIBDIR
+# and other target destinations are rooted.  Of course, each of these is
+# changable separately.
+POSTGRESDIR= /usr/local/mtpgsql
+
+# Where the postgres executables live (changeable by just putting them
+# somewhere else and putting that directory in your shell PATH)
+BINDIR= $(POSTGRESDIR)/bin
+
+# Where libpq.a gets installed.  You must put it where your loader will
+# look for it if you wish to use the -lpq convention.  Otherwise you
+# can just put the absolute pathname to the library at the end of your
+# command line.
+LIBDIR= $(POSTGRESDIR)/lib
+
+# Where the database templates are stored
+#
+TEMPLATEDIR= $(POSTGRESDIR)/lib
+
+# This is the directory where IPC utilities ipcs and ipcrm are located
+#
+IPCS=@ipcs@
+IPCRM=@ipcrm@
+
+# Where the man pages (suitable for use with "man") get installed.
+POSTMANDIR= $(POSTGRESDIR)/man
+
+# Where the formatted documents (e.g., the reference manual) get installed.
+POSTDOCDIR= $(POSTGRESDIR)/doc
+
+# Where the header files necessary to build frontend programs get installed.
+HEADERDIR= $(POSTGRESDIR)/include
+
+# Where the ODBC installation-wide configuration file gets installed.
+# This needs to be a client-side readable area, so can't go in $PGDATA.
+# - thomas 1998-10-05
+ODBCINST= $(POSTGRESDIR)
+
+##############################################################################
+#
+# FEATURES
+#
+# To disable a feature, comment out the entire definition
+# (that is, prepend '#', don't set it to "0" or "no").
+
+# Compile libpq++
+#HAVE_Cplusplus=true
+
+# Comment out ENFORCE_ALIGNMENT if you do NOT want unaligned access to
+# multi-byte types to generate a bus error.
+ENFORCE_ALIGNMENT= true
+
+# Comment out PROFILE to generate a profile version of the binaries
+#PROFILE= -p -non_shared
+
+# If you plan to use Kerberos for authentication...
+#
+# Comment out KRBVERS if you do not use Kerberos.
+# Set KRBVERS to "4" for Kerberos v4, "5" for Kerberos v5.
+# XXX Edit the default Kerberos variables below!
+#
+#KRBVERS= 5
+
+# Globally pass Kerberos file locations.
+# these are used in the postmaster and all libpq applications.
+#
+# Adjust KRBINCS and KRBLIBS to reflect where you have Kerberos
+# include files and libraries installed.
+# PG_KRB_SRVNAM is the name under which POSTGRES is registered in
+# the Kerberos database (KDC).
+# PG_KRB_SRVTAB is the location of the server's keytab file.
+#
+
+
+#
+# Please do not edit USE_TCL and USE_TK by hand.
+#
+USE_TCL= 
+USE_TK= 
+WISH= 
+
+USE_PERL= false
+PERL= perl
+
+#
+# enable native odbc driver support
+USE_ODBC= false
+
+X_CFLAGS= 
+X_LIBS= 
+X11_LIBS= -lX11 
+
+# flag whether multibyte is on/off
+MULTIBYTE=
+
+##############################################################################
+#
+# Installation.
+#
+# For many ports, INSTALL is overridden below.
+RANLIB= ranlib
+
+INSTLOPTS= -m 444
+INSTL_EXE_OPTS= -m 555
+INSTL_LIB_OPTS= -m 644
+INSTL_SHLIB_OPTS= -m 644
+
+##############################################################################
+#
+# For building shell scripts:
+#
+# For many ports, these are overridden below.
+
+# DASH_N is what we put before the text on an echo command when we don't
+# want a trailing newline.  BACKSLASH_C is what we put at the end of the
+# string on a echo command when we don't want a trailing newline.  On
+# some systems, you do echo -n "no newline after this", while on others
+# you do echo "no newline after this\c".
+
+DASH_N= 
+BACKSLASH_C= \\\\c
+
+
+
+#-------------------------------------------------------------
+# See the subdirectory template for default settings for these
+#-------------------------------------------------------------
+CC= cc
+CPP= CC
+YFLAGS= -y -d
+YACC= /usr/sfw/bin/bison
+LEX= ${SRCDIR}/mflex/mflex
+CFLAGS= -I$(SRCDIR)/include -I$(SRCDIR)/backend 
+CFLAGS_SL= -dynamic
+PGSQL_INCLUDES= 
+LDFLAGS=   $(LIBS)
+LDREL= -r
+LDOUT= -o
+DLSUFFIX= .so
+LN_S= ln -s
+TAR= /usr/sbin/tar
+GZCAT= /usr/bin/gzcat
+
+##############################################################################
+#
+# Additional platform-specific settings
+#
+
+# Various grungy items needed to configure some platforms.
+HAVE_POSIX_SIGNALS= 1
+HPUXMATHLIB= 
+
+include $(SRCDIR)/Makefile.port
+
+##############################################################################
+#
+# Customization.
+#
+# This includes your local customizations if Makefile.custom exists
+# in the source directory.  This file doesn't exist in the original
+# distribution so that it doesn't get overwritten when you upgrade.
+ifneq ($(wildcard $(SRCDIR)/Makefile.custom), )
+include $(SRCDIR)/Makefile.custom
+endif
+
+# This goes here so that customization in Makefile.custom is effective
+##############################################################################
+
+ifneq ($(CUSTOM_INSTALL),)
+INSTALL= $(CUSTOM_INSTALL)
+endif
+
+#
+# Flags for CC and LD.
+
+##############################################################################
+# COPT
+#
+# COPT is for options that the sophisticated builder might want to vary
+# from one build to the next, like options to build Postgres with debugging
+# information included.  COPT is meant to be set on the make command line,
+# for example with the command "make COPT=-g".  The value you see set here
+# is the default that gets used if the builder does not give a value for
+# COPT on his make command.
+#
+# There is a nonobvious relationship between -O (optimization) and
+# -Werror (consider all warnings fatal).  On some systems, if you don't
+# optimize, you will always get some warnings because the system header
+# files will include some unreferenced functions in the code.  These are
+# functions that are supposed to be inline, so there wouldn't ordinarily
+# be an "unreferenced" problem, but if you don't enable optimization, no
+# inlining can happen, and hence the problem.  Therefore, we include
+# if you override -O, you override -Werror as well.
+#
+# CUSTOM_COPT is something the user may set in Makefile.custom
+
+# Common values for COPT are: -g for debuggable binaries, -m486 if you are
+# using a i486 or better.
+
+ifneq ($(CUSTOM_CC),)
+  CC= $(CUSTOM_CC)
+endif
+
+ifneq ($(CUSTOM_COPT),)
+  COPT= $(CUSTOM_COPT)
+endif
+
+ifeq ($(CC), gcc)
+CFLAGS+= -Wall -Wmissing-prototypes -Wmissing-declarations
+endif
+
+ifdef COPT
+   CFLAGS+= $(COPT)
+   LDFLAGS+= $(COPT)
+endif
+
+ifdef PROFILE
+   CFLAGS+= $(PROFILE)
+   LDFLAGS+= $(PROFILE)
+endif
+

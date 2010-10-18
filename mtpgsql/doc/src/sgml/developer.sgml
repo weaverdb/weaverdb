@@ -1,0 +1,34 @@
+<!-- $Header: /cvs/weaver/mtpgsql/doc/src/sgml/developer.sgml,v 1.1.1.1 2006/08/12 00:09:48 synmscott Exp $ -->
+<!-- PostgreSQL Developer's Guide -->
+
+<book id="developer">
+ <title>PostgreSQL &version; Developer's Guide</title>
+
+ <bookinfo>
+  <corpauthor>The PostgreSQL Global Development Group</corpauthor>
+  &legal;
+
+  <abstract>
+   <para>
+    This document contains assorted information that can be of use to
+    <productname>PostgreSQL</> developers.
+   </para>
+  </abstract>
+ </bookinfo>
+ 
+ &sources;
+ &arch-dev; 
+ &catalogs;
+ &protocol;
+ &compiler;
+ &bki;
+ &page;
+ &geqo;
+ &nls;
+<!-- appendices -->
+ &cvs;
+ &docguide;
+<![%single-book;[
+ &biblio;
+]]>
+</book>

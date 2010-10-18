@@ -1,0 +1,4 @@
+#!/bin/sh
+BUILD=
+sed "s/SED_TIMESTAMP/`date +'%F %T'`/" include/env/timestamp.temp > include/env/timestamp.h
+

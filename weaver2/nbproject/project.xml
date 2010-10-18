@@ -10,14 +10,6 @@
             <header-extensions>h</header-extensions>
             <sourceEncoding>UTF-8</sourceEncoding>
             <make-dep-projects/>
-            <sourceRootList>
-                <sourceRootElem>../pgjava_c</sourceRootElem>
-                <sourceRootElem>../mtpgsql/src</sourceRootElem>
-            </sourceRootList>
-            <confList>
-                <confElem>Default</confElem>
-                <confElem>NewConfiguration</confElem>
-            </confList>
         </data>
     </configuration>
 </project>
