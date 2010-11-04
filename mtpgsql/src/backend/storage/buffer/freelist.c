@@ -24,13 +24,10 @@
  * Sync: all routines in this file assume that the buffer
  *		semaphore has been acquired by the caller.
  */
+#include <signal.h>
 
 #include "postgres.h"
-
 #include "env/env.h"
-
-#include <signal.h>
-#include <sys/sdt.h>
 
 #include "env/dbwriter.h"
 #ifdef SPIN_IS_MUTEX

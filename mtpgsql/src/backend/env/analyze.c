@@ -12,12 +12,11 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <math.h>
+#include <sys/varargs.h>
+
 #include "postgres.h"
 #include "env/env.h"
-
-#include <math.h>
-#include <sys/sdt.h>
-#include <sys/varargs.h>
 
 #include "env/freespace.h"
 #include "access/heapam.h"

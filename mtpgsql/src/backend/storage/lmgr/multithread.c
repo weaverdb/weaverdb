@@ -50,7 +50,6 @@
  * $Header: /cvs/weaver/mtpgsql/src/backend/storage/lmgr/multithread.c,v 1.3 2007/03/20 03:07:39 synmscott Exp $
  */
 #include <sys/time.h>
-#include <sys/sdt.h>
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>

@@ -26,13 +26,11 @@
  *	All routines in this file assume buffer manager spinlock is
  *	held by their caller.
  */
-#include <sys/sdt.h>
 #include <signal.h>
 #include <time.h>
 #include <pthread.h>
 
 #include "postgres.h"
-
 #include "env/env.h"
 
 #include "storage/bufmgr.h"

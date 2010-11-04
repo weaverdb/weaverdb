@@ -1,7 +1,6 @@
 
 #include <pthread.h>
 #include <unistd.h>
-#include <sys/sdt.h>
 
 #ifdef MACOSX
 #include <semaphore.h>

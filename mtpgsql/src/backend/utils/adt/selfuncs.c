@@ -19,13 +19,11 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <ctype.h>
+#include <math.h>
 
 #include "c.h"
 #include "postgres.h"
-
-#include <sys/sdt.h>
-#include <ctype.h>
-#include <math.h>
 
 #include "access/attnum.h"
 #include "access/heapam.h"
