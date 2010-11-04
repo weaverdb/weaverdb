@@ -31,11 +31,11 @@ extern char*	tzname[2];
 #endif
 
 #ifndef SUNOS
-#define DTRACE_PROBE1(one) ()
-#define DTRACE_PROBE2(one,two) ()
-#define DTRACE_PROBE3(one,two,three) ()
-#define DTRACE_PROBE4(one,two,three,four) ()
-#define DTRACE_PROBE5(one,two,three,four,five) ()
+#define DTRACE_PROBE1(mod,name,one) 
+#define DTRACE_PROBE2(mod,name,one,two) 
+#define DTRACE_PROBE3(mod,name,one,two,three) 
+#define DTRACE_PROBE4(mod,name,one,two,three,four)
+#define DTRACE_PROBE5(mod,name,one,two,three,four,five)
 #endif
 
 #ifdef __cplusplus
