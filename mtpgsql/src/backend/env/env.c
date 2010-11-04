@@ -7,7 +7,9 @@
 #endif
 #include <string.h>
 #include <signal.h>
+#ifdef SUNOS
 #include <umem.h>
+#endif
 
 #include "postgres.h"
 #include "env/env.h"
@@ -73,9 +75,10 @@ int InitSystem(bool  isPrivate) {
 	int counter = 0;
 	
         MyProcPid = getpid();
-
+#ifdef SUNOS
 #ifndef GC_DEBUG
         umem_nofail_callback(memory_fail);
+#endif
 #endif
 	pthread_mutex_init(&envlock,NULL);
 	
@@ -883,7 +886,11 @@ memory_fail(void) {
 
 void*
 base_mem_alloc(size_t size) {
+#ifdef SUNOS
     size_t* pointer = umem_alloc(size + sizeof(size_t), UMEM_NOFAIL);
+#else
+    size_t* pointer = malloc(size + sizeof(size_t));
+#endif
     *pointer = size;
     return (pointer + 1);
 }
@@ -892,20 +899,31 @@ void
 base_mem_free(void * pointer) {
     size_t* mark = pointer;
     mark -= 1;
+#ifdef SUNOS
     umem_free(mark, *mark + sizeof(size_t));
+#else
+    free(mark);
+#endif
 }
 
 
 void*
 base_mem_realloc(void * pointer, size_t size) {
     size_t* mark = pointer;
-
+#ifdef SUNOS
     size_t*  moved = umem_alloc(size + sizeof(size_t), UMEM_NOFAIL);
+#else
+    size_t*  moved = malloc(size + sizeof(size_t));
+#endif
     *moved = size;
 
     if ( mark != NULL ) {
         memmove((moved + 1), mark, *(mark - 1));
+#ifdef SUNOS
         umem_free((mark - 1), *(mark - 1) + sizeof(size_t));
+#else
+	free(mark-1);
+#endif
     }
 
     return (moved + 1);

@@ -16,19 +16,17 @@
  */
 #include <errno.h>
 #include <unistd.h>
-#include <thread.h>
 #include <fcntl.h>
 #include <sys/file.h>
-#include <sys/varargs.h>
 
 #include "postgres.h"
+#include "env/env.h"
 
 #include "catalog/catalog.h"
 #include "miscadmin.h"
 #include "storage/smgr.h"
 #include "storage/smgr_spi.h"
 #include "utils/relcache.h"
-#include "env/env.h"
 #include "env/connectionutil.h"
 
 #undef DIAGNOSTIC
@@ -218,12 +216,11 @@ vfdcreate(SmgrInfo info)
 	char	   *path;
 
 	path = relpath_blind(NameStr(info->dbname),NameStr(info->relname),info->dbid,info->relid);
-
-	fd = FileNameOpenFile(path, O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE, 0600);
+	fd = FileNameOpenFile(path, O_RDWR | O_CREAT | O_EXCL,  0600);
 
 	if (fd < 0)
 	{
-		fd = FileNameOpenFile(path, O_RDWR | O_LARGEFILE, 0600);
+		fd = FileNameOpenFile(path, O_RDWR, 0600);
 
 		if (fd < 0) return -1;
 		if (!IsBootstrapProcessingMode())
@@ -364,13 +361,13 @@ vfdopen(SmgrInfo info)
 
         path = relpath_blind(NameStr(info->dbname),NameStr(info->relname),info->dbid,info->relid);
 
-	fd = FileNameOpenFile(path, O_RDWR | O_LARGEFILE, 0600);
+	fd = FileNameOpenFile(path, O_RDWR, 0600);
 
 	if (fd < 0)
 	{
 		if (IsBootstrapProcessingMode())
 		{
-			fd = FileNameOpenFile(path, O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE, 0600);
+			fd = FileNameOpenFile(path, O_RDWR | O_CREAT | O_EXCL, 0600);
 		}
 		if (fd < 0)
 		{
@@ -934,7 +931,7 @@ _vfdreplaysegment() {
                         FileUnpin(fd,0);
                         FileClose(fd);
                     }
-                    fd = FileNameOpenFile(path, O_WRONLY | O_LARGEFILE, 0600);
+                    fd = FileNameOpenFile(path, O_WRONLY , 0600);
                     FilePin(fd,0);
 	            cdb = info->dbid;
                     crel = info->relid;

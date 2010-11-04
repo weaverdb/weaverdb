@@ -49,7 +49,7 @@
  *
  * $Header: /cvs/weaver/mtpgsql/src/backend/storage/lmgr/multithread.c,v 1.3 2007/03/20 03:07:39 synmscott Exp $
  */
-#include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
@@ -494,7 +494,7 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
 	if ( ThreadEnqueue(lockctl,lockmode,lock,self) ) {
             self->locked = 1;
             while ( self->locked == 1 ) {
-    #ifndef MACOSX
+    #ifdef SUNOS
                     timestruc_t  	t;
     #else
                     struct timespec		t;

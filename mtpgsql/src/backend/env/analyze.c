@@ -13,7 +13,7 @@
  *-------------------------------------------------------------------------
  */
 #include <math.h>
-#include <sys/varargs.h>
+#include <sys/time.h>
 
 #include "postgres.h"
 #include "env/env.h"

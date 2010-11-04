@@ -15,20 +15,21 @@
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef SUNOS
 #include <sys/pset.h>
+#endif
+#include <sys/time.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <ctype.h>
 
-#include "env/connectionutil.h"
-#include "env/timestamp.h"
-
 #include "postgres.h"  
 #include "env/env.h"
 
-#include "config.h"
+#include "env/connectionutil.h"
+#include "env/timestamp.h"
 
 #include "utils/builtins.h"
 
@@ -439,9 +440,11 @@ if ( master ) {
         uid_t		uid;
         struct passwd*		uinfo;
         memset(un,0,sizeof(un));
-#ifndef MACOSX        
+#ifdef SUNOS       
 	cuserid(un);
-#else
+#elif LINUX
+	strncpy(un,getlogin(),255);
+#elif MACOSX
         if ( strlen(un) == 0 ) {
             uid = getuid();
             uinfo = getpwuid(uid);
@@ -493,13 +496,14 @@ GetMaxBackends() {
 
 int
 GetProcessorCount() {
-    long procs;
+    int procs = 1;
     char* prop = NULL;
     
     if ( initialized ) prop = GetProperty("processors");
     if ( prop != NULL ) {
         procs = atoi(prop);
     } else {
+#ifdef SUNOS
         psetid_t  pset;
         procs = sysconf(_SC_NPROCESSORS_ONLN);
         if (pset_bind(PS_QUERY, P_PID, getpid(), &pset) == 0) {
@@ -510,6 +514,7 @@ GetProcessorCount() {
            }
          }
        }
+#endif
     }
     
     return procs;
@@ -537,8 +542,11 @@ checklockfile(void) {
                 } else {
                     pid_t checkid = 0;
                     int size = read(exclusive_lock,check,255);
-                    checkid = atoi(check);
+#ifdef SUNOS
                     checkid = getpgid(checkid);
+#else
+                    checkid = getpgrp();
+#endif
                     if ( checkid < 0 && errno == EPERM ) {
                         printf("Permissions for group lookup not allowed \n");
                         printf("delete %s to force startup\n",lock_name);

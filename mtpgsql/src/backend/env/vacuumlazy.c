@@ -39,7 +39,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/types.h>
-#include <sys/varargs.h>
 
 #include "postgres.h"
 #include "env/env.h"

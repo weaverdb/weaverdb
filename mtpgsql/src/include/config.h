@@ -457,7 +457,6 @@ extern int  inet_aton(const char *cp, struct in_addr * addr);
 #define HAVE_RINT 1 
 
 /* Set to 1 if you have finite() */
-#define HAVE_FINITE 1
 
 /* Set to 1 if you have memmove() */
 #define HAVE_MEMMOVE 1

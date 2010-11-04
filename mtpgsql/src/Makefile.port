@@ -1,14 +1,18 @@
 
 PORTNAME=LINUX
 CPU=amd64
+OS=linux
 ENDIAN=LITTLE_ENDIAN
+LD=/home/mscott/solstudioex1006/prod/lib/ld
 
 #PORTNAME=SUNOS
 #CPU=amd64
+#OS=solaris
 #ENDIAN=LITTLE_ENDIAN
 
 #PORTNAME=SUNOS
 #CPU=sparcv9
+#OS=solaris
 #ENDIAN=BIG_ENDIAN
 
 %.so: %.o
@@ -25,7 +29,7 @@ CFLAGS+= -DDEBUGLOGS
 #CFLAGS+= -mt -xildoff -DNOARRAY -D${PORTNAME} -xipo
 
 #for java
-CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/solaris
+CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${OS}
 BKIOPTS+= -DNOARRAY -I../../include -I..
 
 #CFLAGS+= -DDEBUG_INDEX_INSERT

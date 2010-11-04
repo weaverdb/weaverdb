@@ -39,18 +39,6 @@
 SRCDIR = ..
 include $(SRCDIR)/Makefile.global
 
-DB=${PG_HOME}/pgjava
-TAO=${PG_HOME}/pgtao
-OMNI=${PG_HOME}/pgomni
-OMNI_HOME=/whs/mscott/omni
-
-
-MYINC=\
--I${PG_HOME}/include -I./.  -I${PG_HOME}/backend -I${JAVA_HOME}/include \
--I${JAVA_HOME}/include/solaris
-MACOSINC=\
--I${PG_HOME}/include -I./.  -I${PG_HOME}/backend -I${JAVA_HOME}/Headers 
-
 MYLIBS=\
 -ldl -lpthread -lsocket -lnsl
 
@@ -63,8 +51,6 @@ MACOSPATH=\
 -L${PG_HOME} \
 -L${PG_HOME}/backend \
 -L/usr/lib \
-
-
 
 DIRS =  access catalog commands executor lib libpq \
 	parser nodes optimizer regex rewrite \
@@ -108,7 +94,7 @@ libpostgres.a: $(DLLOBJS) $(SRCDIR)/utils/dllinit.o postgres.def
 	$(DLLTOOL) --dllname postgres.exe --def postgres.def --output-lib $@
 endif
 
-ifneq ($(PORTNAME), macosx)
+ifneq ($(PORTNAME), MACOSX)
 all: postgres libmtpg.a \
 	$(POSTGRES_IMP) global1.bki.source local1_template1.bki.source \
 	global1.description local1_template1.description
@@ -118,18 +104,9 @@ all:  postgres libmtpg.a $(POSTGRES_IMP) global1.bki.source \
 	local1_template1.description
 endif
 
-
-ifneq ($(PORTNAME), win)
 postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o bootstrap/SUBSYS.o
-	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o -lmtpg $(LDFLAGS) $(LIBS)
-else
-postgres: $(DLLOBJS) $(SRCDIR)/utils/dllinit.o postgres.def libpostgres.a
-	dlltool --dllname $@$(X) --output-exp $@.exp --def postgres.def
-	gcc -g -o $@$(X) -Wl,--base-file,$@.base $@.exp $(DLLOBJS) $(DLLLIBS)
-	dlltool --dllname $@$(X) --base-file $@.base --output-exp $@.exp --def postgres.def
-	gcc -g -o $@$(X) $@.exp $(DLLOBJS) $(DLLLIBS)
-	rm $@.exp $@.base
-endif
+	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o \
+-lmtpg $(LDFLAGS) $(LIBS)
 
 #.PHONY: postgres
 
@@ -163,8 +140,13 @@ main/SUBSYS.o:
 bootstrap/SUBSYS.o:
 	$(MAKE) -C $(SRCDIR)/backend/bootstrap all
 
-mtpg.o: ${OBJS} mtpg.d
+ifeq ($(PORTNAME),SUNOS)
+mtpg.o: $(OBJS) mtpg.d
 	/usr/sbin/dtrace -G -64 -s mtpg.d $(OBJS)
+else
+mtpg.o: $(OBJS) 
+	$(CC) $(LDREL) $(LDOUT) mtpg.o $(OBJS)
+endif
 
 ifeq ($(LEAK_DETECT),1)
 libmtpg.a: ${OBJS} mtpg.o
@@ -173,7 +155,7 @@ libmtpg.a: ${OBJS} mtpg.o
 	-o libclearmtpg.a
 	${LD} -r -M$(SRCDIR)/backend/mapfile.txt mtpg.o libclearmtpg.a -o libmtpg.a
 else
-ifneq ($(PORTNAME),macosx)	
+ifeq ($(PORTNAME),SUNOS)	
 libmtpg.a: ${OBJS} mtpg.o
 	${LD} -r ${LDFLAGS} -M$(SRCDIR)/backend/mapfile.txt \
 	${OBJS} ${VERSIONOBJ} mtpg.o \
@@ -185,93 +167,6 @@ libmtpg.a: ${OBJS}
 	libtool -static libmtpg.o -o libmtpg.a
 endif
 endif
-pgtao: $(OBJS) libmtpg.a
-	cc  -g ${MYINC} ${MYLIBS} $(CFLAGS) -c ${OMNI}/connectionutil.c \
-	-o connectionutil.o
-	CC  -g -mt \
-	-zmuldefs  -library=iostream,no%Cstd \
-	-instances=explicit -noex \
-	-I${PG_HOME}/include -I${PG_HOME}/backend \
-	-I${ACE_ROOT} -I${TAO_ROOT} ${MYPATH} \
-	-L${ACE_ROOT}/ace \
-	-ldl -lgen -lposix4 -lsocket -lnsl -lmtpg \
-	${MYLIBS} -lTAO -lACE \
-	connectionutil.o \
-	${TAO}/PreparedStmtImpl.cpp \
-	${TAO}/main.cc \
-	${TAO}/PostgresConnection.cc \
-	${TAO}/PostgresStmtManager.cc \
-	${TAO}/PreparedStmtC.cpp \
-	${TAO}/PreparedStmtS.cpp \
-	-o pgtao
-
-pgomni: $(OBJS) libmtpg.a
-	cc  ${MYINC} $(CFLAGS) -g -c ${OMNI}/connectionutil.c \
-	-o connectionutil.o
-	CC  -g -mt \
-	-zmuldefs \
-	-I${OMNI_HOME}/include  \
-	-I${PG_HOME}/include  \
-	-I${PG_HOME}/backend  \
-	${MYPATH} \
-	-L${OMNI_HOME}/lib/sun \
-	-ltcpwrapGK -lomniORB3 -lomnithread -lmtpg \
-	${MYLIBS} -lsocket \
-	${OMNI}/PostgresStmtManager.cc \
-	${OMNI}/PostgresConnection.cc \
-	${OMNI}/main.cc \
-	${OMNI}/PreparedStmtImpl.cc \
-	${OMNI}/PreparedStmtSK.cc \
-	connectionutil.o \
-	-o pgomni
-
-omniclient:
-	CC  -g -mt \
-	-zmuldefs  \
-	-I${OMNI_HOME}/include  \
-	-I${PG_HOME}/include  \
-	-I${PG_HOME}/backend  \
-	-L${OMNI_HOME}/lib/sun \
-	-ldl -lgen -lsocket -lnsl \
-	-ltcpwrapGK -lomniORB3 -lomnithread -lmtpg \
-	${OMNI}/clienttest.cc \
-	${OMNI}/PreparedStmtSK.cc \
-	-o omniclient
-	CC  -g -mt \
-	-zmuldefs  \
-	-I${OMNI_HOME}/include  \
-	-I${PG_HOME}/include  \
-	-I${PG_HOME}/backend  \
-	-L${OMNI_HOME}/lib/sun \
-	-ldl -lgen -lsocket -lnsl \
-	-ltcpwrapGK -lomniORB3 -lomnithread -lmtpg \
-	${OMNI}/clienttest1.cc \
-	${OMNI}/PreparedStmtSK.cc \
-	-o omniclient1
-	CC  -g -mt \
-	-zmuldefs  \
-	-I${OMNI_HOME}/include  \
-	-I${PG_HOME}/include  \
-	-I${PG_HOME}/backend  \
-	-L${OMNI_HOME}/lib/sun \
-	-ldl -lgen -lsocket -lnsl \
-	-ltcpwrapGK -lomniORB3 -lomnithread -lmtpgsql \
-	${OMNI}/clienttest2.cc \
-	${OMNI}/PreparedStmtSK.cc \
-	-o omniclient2
-	
-taoclient:
-	CC -g -mt \
-	-zmuldefs -library=iostream,no%Cstd \
-	-instances=explicit -noex \
-	-I${PG_HOME}/include -I${PG_HOME}/backend \
-	-I${ACE_ROOT} -I${TAO_ROOT} ${MYPATH} \
-	-L${ACE_ROOT}/ace \
-	-lthread -ldl -lgen -lposix4 -lsocket -lnsl \
-	-lTAO -lACE \
-	${TAO}/PreparedStmtC.cpp \
-	${TAO}/clienttest.cc \
-	-o taoclient
 
 ############################################################################
 # The following targets are specified in make commands that appear in the
