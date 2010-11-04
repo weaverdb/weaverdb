@@ -1,18 +1,17 @@
 
-PORTNAME=LINUX
-CPU=amd64
-OS=linux
-ENDIAN=LITTLE_ENDIAN
-LD=/home/mscott/solstudioex1006/prod/lib/ld
-
-#PORTNAME=SUNOS
+#OS=LINUX
 #CPU=amd64
-#OS=solaris
+#PORTNAME=linux
 #ENDIAN=LITTLE_ENDIAN
 
-#PORTNAME=SUNOS
+OS=SUNOS
+CPU=amd64
+PORTNAME=solaris
+ENDIAN=LITTLE_ENDIAN
+
+#OS=SUNOS
 #CPU=sparcv9
-#OS=solaris
+#PORTNAME=solaris
 #ENDIAN=BIG_ENDIAN
 
 %.so: %.o
@@ -22,14 +21,14 @@ CC=cc
 CPP=CC
 #debug new SUNspro Express
 CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
-CFLAGS+= -mt -xildoff -DNOARRAY -D${PORTNAME} -DBYTE_ORDER=${ENDIAN}
+CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
 CFLAGS+= -DDEBUGLOGS
 # performance
 #CFLAGS+= -xO4 -xtarget=${CPU} -m64 -KPIC
-#CFLAGS+= -mt -xildoff -DNOARRAY -D${PORTNAME} -xipo
+#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo
 
 #for java
-CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${OS}
+CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${PORTNAME}
 BKIOPTS+= -DNOARRAY -I../../include -I..
 
 #CFLAGS+= -DDEBUG_INDEX_INSERT
@@ -37,7 +36,7 @@ BKIOPTS+= -DNOARRAY -I../../include -I..
 #CFLAGS+= -DHEAPDEBUGALL
 #CFLAGS+= -DCLOBBER_FREED_MEMORY
 #CFLAGS+= -DMEMORY_CONTEXT_CHECKING
-#CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/solaris
+#CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
 AROPT= crs
 CFLAGS_SL=
 LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU}

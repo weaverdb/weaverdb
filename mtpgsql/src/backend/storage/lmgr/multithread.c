@@ -54,8 +54,7 @@
 #include <signal.h>
 #include <string.h>
 #include <pthread.h>
-
-#include <sys/types.h>
+#include <errno.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -71,7 +70,6 @@
 
 #include "storage/shmem.h" 
 
-#include <errno.h>
 
 
 void		HandleDeadLock(SIGNAL_ARGS);

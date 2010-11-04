@@ -42,16 +42,6 @@ include $(SRCDIR)/Makefile.global
 MYLIBS=\
 -ldl -lpthread -lsocket -lnsl
 
-MYPATH=\
--L${PG_HOME} \
--L${PG_HOME}/backend \
--L/usr/lib -L/usr/local/lib 
-
-MACOSPATH=\
--L${PG_HOME} \
--L${PG_HOME}/backend \
--L/usr/lib \
-
 DIRS =  access catalog commands executor lib libpq \
 	parser nodes optimizer regex rewrite \
 	storage tcop utils env postmaster
@@ -62,10 +52,6 @@ ifeq ($(PORTNAME),macosx)
 #DIRS += dlcompat
 else
 DIRS += port
-endif
-
-ifdef TIOGA
-DIRS += tioga
 endif
 
 OBJS = $(DIRS:%=%/SUBSYS.o)
@@ -83,18 +69,7 @@ CFLAGS+= $(KRBFLAGS)
 LDFLAGS+= $(KRBLIBS)
 endif
 
-ifeq ($(MAKE_DLL), true)
-DLLOBJS= $(OBJS) $(VERSIONOBJ)
-DLLLIBS= -lcygipc -lcrypt -lcygwin -lkernel32
-
-postgres.def: $(DLLOBJS)
-	$(DLLTOOL) --export-all --output-def $@ $(DLLOBJS)
-
-libpostgres.a: $(DLLOBJS) $(SRCDIR)/utils/dllinit.o postgres.def
-	$(DLLTOOL) --dllname postgres.exe --def postgres.def --output-lib $@
-endif
-
-ifneq ($(PORTNAME), MACOSX)
+ifneq ($(PORTNAME), macosx)
 all: postgres libmtpg.a \
 	$(POSTGRES_IMP) global1.bki.source local1_template1.bki.source \
 	global1.description local1_template1.description
@@ -140,12 +115,12 @@ main/SUBSYS.o:
 bootstrap/SUBSYS.o:
 	$(MAKE) -C $(SRCDIR)/backend/bootstrap all
 
-ifeq ($(PORTNAME),SUNOS)
+ifeq ($(PORTNAME),solaris)
 mtpg.o: $(OBJS) mtpg.d
 	/usr/sbin/dtrace -G -64 -s mtpg.d $(OBJS)
 else
 mtpg.o: $(OBJS) 
-	$(CC) $(LDREL) $(LDOUT) mtpg.o $(OBJS)
+	ar q mtpg.o $(OBJS)
 endif
 
 ifeq ($(LEAK_DETECT),1)
@@ -155,7 +130,7 @@ libmtpg.a: ${OBJS} mtpg.o
 	-o libclearmtpg.a
 	${LD} -r -M$(SRCDIR)/backend/mapfile.txt mtpg.o libclearmtpg.a -o libmtpg.a
 else
-ifeq ($(PORTNAME),SUNOS)	
+ifeq ($(PORTNAME),solaris)
 libmtpg.a: ${OBJS} mtpg.o
 	${LD} -r ${LDFLAGS} -M$(SRCDIR)/backend/mapfile.txt \
 	${OBJS} ${VERSIONOBJ} mtpg.o \
@@ -234,12 +209,6 @@ install-bin: $(BINDIR) postgres$(X) $(POSTGRES_IMP) all
 ifeq ($(MAKE_EXPORTS), true)
 	$(INSTALL) $(INSTLOPTS) $(POSTGRES_IMP) $(LIBDIR)/$(POSTGRES_IMP)
 endif
-ifeq ($(PORTNAME), win)
-ifeq ($(MAKE_DLL), true)
-#	$(INSTALL) $(INSTLOPTS) postgres.dll $(BINDIR)/postgres.dll
-	$(INSTALL) $(INSTLOPTS) libpostgres.a $(LIBDIR)/libpostgres.a
-endif
-endif
 
 install-templates: $(TEMPLATEDIR) \
          global1.bki.source local1_template1.bki.source \
@@ -317,11 +286,6 @@ install-headers: ../include/fmgr.h $(SRCDIR)/include/config.h
           $(HEADERDIR)/WeaverInterface.h
 	$(INSTALL) $(INSTLOPTS) $(SRCDIR)/include/env/connectionutil.h \
           $(HEADERDIR)/connectionutil.h
-ifeq ($(PORTNAME), hpux)
-# is this still necessary?
-	$(INSTALL) $(INSTLOPTS) $(SRCDIR)/backend/port/hpux/fixade.h \
-          $(HEADERDIR)/port/hpux/fixade.h
-endif
 
 $(BINDIR):
 	mkdir $@
