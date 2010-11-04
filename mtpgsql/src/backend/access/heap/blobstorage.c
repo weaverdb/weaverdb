@@ -11,8 +11,6 @@
  *-------------------------------------------------------------------------
 */
 
-#include <sys/varargs.h>
-
 #include "postgres.h"
 #include "env/env.h"
 

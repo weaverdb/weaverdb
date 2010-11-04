@@ -19,16 +19,15 @@
 #include <thread.h>
 #include <fcntl.h>
 #include <sys/file.h>
-#include <sys/varargs.h>
 
 #include "postgres.h"
+#include "env/env.h"
 
 #include "catalog/catalog.h"
 #include "miscadmin.h"
 #include "storage/smgr.h"
 #include "storage/smgr_spi.h"
 #include "utils/relcache.h"
-#include "env/env.h"
 #include "env/connectionutil.h"
 
 #undef DIAGNOSTIC
