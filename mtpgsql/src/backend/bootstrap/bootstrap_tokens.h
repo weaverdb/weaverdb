@@ -103,7 +103,7 @@ typedef union YYSTYPE
 	char		*str;
 	int			ival;
 }
-/* Line 1529 of yacc.c.  */
+/* Line 1489 of yacc.c.  */
 #line 108 "y.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

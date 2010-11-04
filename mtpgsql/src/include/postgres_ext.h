@@ -22,13 +22,7 @@
  */
 #include "os.h"
 
-#ifdef MACOSX
 #include <stdint.h>
-#endif
-
-#ifdef SUNOS
-#include <sys/types.h>
-#endif
 
 #ifndef POSTGRES_EXT_H
 #define POSTGRES_EXT_H

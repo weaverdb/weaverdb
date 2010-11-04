@@ -14,7 +14,7 @@
  *	with any...
  *-------------------------------------------------------------------------
  */
-#include <sys/int_types.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <sys/file.h>
 #include <fcntl.h>				/* For open() flags */

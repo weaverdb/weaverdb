@@ -16,7 +16,7 @@
 #define SUNOS
 #endif
 
-#define MAX_RANDOM_VALUE (0xffffff7f)
+#define MAX_RANDOM_VALUE (0x7fffffff)
 
 typedef pthread_mutex_t slock_t; 
 extern char*	tzname[2];

@@ -220,7 +220,7 @@ typedef union YYSTYPE
 	char		*str;
 	int			ival;
 }
-/* Line 193 of yacc.c.  */
+/* Line 187 of yacc.c.  */
 #line 225 "y.tab.c"
 	YYSTYPE;
 # define Int_yystype YYSTYPE /* obsolescent; will be withdrawn */

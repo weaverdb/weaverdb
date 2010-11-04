@@ -12,10 +12,6 @@
 #define SPIN_IS_MUTEX
 #define HAVE_ISINF
 
-#ifndef SUNOS
-#define SUNOS
-#endif
-
 #define MAX_RANDOM_VALUE (0x7fffffff)
 
 typedef pthread_mutex_t slock_t; 
@@ -29,9 +25,6 @@ extern char*	tzname[2];
 #endif
 #ifndef			PDP_ENDIAN
 #define			PDP_ENDIAN		3412
-#endif
-#ifndef			BYTE_ORDER
-#define			BYTE_ORDER		LITTLE_ENDIAN
 #endif
 
 #ifdef __cplusplus

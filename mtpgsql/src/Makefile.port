@@ -1,11 +1,11 @@
-SUNOS=true
-PORTNAME=sunos
 
-#CPU=amd64
-#ENDIAN=LITTLE_ENDIAN
+PORTNAME=SUNOS
+CPU=amd64
+ENDIAN=LITTLE_ENDIAN
 
-CPU=sparcv9
-ENDIAN=BIG_ENDIAN
+PORTNAME=SUNOS
+#CPU=sparcv9
+#ENDIAN=BIG_ENDIAN
 
 %.so: %.o
 	$(LD) -G -Bdynamic -o $@ $<
@@ -14,11 +14,11 @@ CC=cc
 CPP=CC
 #debug new SUNspro Express
 CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
-CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS -DBYTE_ORDER=${ENDIAN}
+CFLAGS+= -mt -xildoff -DNOARRAY -D${PORTNAME} -DBYTE_ORDER=${ENDIAN}
 CFLAGS+= -DDEBUGLOGS
 # performance
 #CFLAGS+= -xO4 -xtarget=${CPU} -m64 -KPIC
-#CFLAGS+= -mt -xildoff -DNOARRAY -DSUNOS -xipo
+#CFLAGS+= -mt -xildoff -DNOARRAY -D${PORTNAME} -xipo
 
 #for java
 CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/solaris

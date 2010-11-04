@@ -963,16 +963,7 @@ _vfdreplaysegment() {
 void  vfd_log(char* pattern, ...) {
     char            msg[256];
     va_list         args;
-    /*
-#ifdef SUNOS
-    va_start(args, pattern);
-    vsprintf(msg,pattern,args);
-    DTRACE_PROBE3(mtpg,vfd__msg,msg);
-    va_end(args);
-#else
-    elog(DEBUG,msg);
-#endif
-*/
+
     va_start(args, pattern);
     vsprintf(msg,pattern,args);
     elog(DEBUG,msg);
