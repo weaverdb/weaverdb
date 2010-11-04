@@ -23,7 +23,6 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <ctype.h>
-#include <sys/sdt.h>
 
 #include "postgres.h"
 #include "env/env.h"

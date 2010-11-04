@@ -36,23 +36,18 @@
  *-------------------------------------------------------------------------
  */
 
-#include "env/freespace.h"
-
-
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/types.h>
-#include <sys/sdt.h>
 #include <sys/varargs.h>
 
 #include "postgres.h"
-
 #include "env/env.h"
+
 #include "env/freespace.h"
 #include "env/poolsweep.h"
 #include "env/dbwriter.h"
 #include "env/connectionutil.h"
-
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -60,7 +55,6 @@
 #include "access/xlog.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
-/* #include "storage/freespace.h"  */
 #include "storage/sinval.h"
 #include "storage/lock.h"
 #include "storage/smgr.h"

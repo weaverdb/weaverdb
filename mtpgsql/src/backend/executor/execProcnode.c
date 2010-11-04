@@ -73,7 +73,6 @@
  *		in turn call these routines themselves on their subplans.
  *
  */
-#include <sys/sdt.h>
 
 #include "postgres.h"
 #include "env/env.h"

@@ -11,7 +11,6 @@
  *-------------------------------------------------------------------------
 */
 
-#include <sys/sdt.h>
 #include <sys/varargs.h>
 
 #include "postgres.h"
