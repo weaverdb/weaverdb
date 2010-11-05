@@ -137,8 +137,11 @@ libmtpg.a: ${OBJS} mtpg.o
 	-o libmtpg.a
 else
 libmtpg.a: ${OBJS} 
-	ar ${AROPT} libmtpg.a \
-	${OBJS} ${VERSIONOBJ}
+#	ar ${AROPT} libmtpg.a \
+#	${OBJS} ${VERSIONOBJ}
+	${LD} -r ${LDFLAGS} --version-script=$(SRCDIR)/backend/mapfile.txt \
+	${OBJS} ${VERSIONOBJ} \
+	-o libmtpg.a
 endif
 endif
 

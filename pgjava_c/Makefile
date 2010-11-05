@@ -19,7 +19,7 @@ endif
 
 MYINC=\
 -I${PG_HOME}/include -I./.  -I${PG_HOME}/backend -I${JAVA_HOME}/include \
--I${JAVA_HOME}/include/solaris 
+-I${JAVA_HOME}/include/${PORTNAME} 
 MACOSINC=\
 -I${PG_HOME}/include -I./.  -I${PG_HOME}/backend -I${JAVA_HOME}/include 
 
@@ -35,8 +35,6 @@ endif
 MACOSLIBS=\
 -lpthread 
 
-MYLIBSOLD=\
--ldl -lc -lm -lthread -lw -lrt
 MYPATH=\
 -L${SRCDIR} \
 -L${SRCDIR}/backend \
@@ -64,12 +62,12 @@ weaver: libweaver.so
 	-o weaver
 libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c $(SRCDIR)/backend/libmtpg.a 
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
-	-G \
-	${MYINC} ${MYPATH} ${MYLIBS} -lmtpg -i \
+	-G --version-script=mapfile.txt \
+	${MYINC} ${MYPATH} ${MYLIBS} \
 	WeaverStmtManager.c \
 	BaseWeaverConnection.c \
 	WeaverValueExtractor.c 	\
-	-o libweaver.so
+	-o libweaver.so -lmtpg
 pgjava: libmtpgjava.so
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
 	${MYINC} ${MYPATH} ${MYLIBS} -L. \

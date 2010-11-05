@@ -1,6 +1,4 @@
 {
-	local:
-		*;
 	global:
 		WCreateConnection;
                 WCreateSubConnection;
@@ -29,4 +27,6 @@
 		initweaverbackend;
 		prepareforshutdown;
 		wrapupweaverbackend;
+	local:
+		*;
 };
