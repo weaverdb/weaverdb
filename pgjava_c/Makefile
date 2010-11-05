@@ -60,6 +60,7 @@ weaver: libweaver.so
 	-ljvm \
 	main.c \
 	-o weaver
+ifeq ($(PORTNAME),linux)
 libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c $(SRCDIR)/backend/libmtpg.a 
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
 	-G --version-script=mapfile.txt \
@@ -68,6 +69,17 @@ libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c 
 	BaseWeaverConnection.c \
 	WeaverValueExtractor.c 	\
 	-o libweaver.so -lmtpg
+endif
+ifeq ($(PORTNAME),solaris)
+libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c $(SRCDIR)/backend/libmtpg.a
+	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
+	-G -Mmapfile.txt \
+	${MYINC} ${MYPATH} ${MYLIBS} \
+	WeaverStmtManager.c \
+	BaseWeaverConnection.c \
+	WeaverValueExtractor.c 	\
+	-o libweaver.so -lmtpg
+endif
 pgjava: libmtpgjava.so
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
 	${MYINC} ${MYPATH} ${MYLIBS} -L. \
