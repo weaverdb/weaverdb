@@ -73,7 +73,7 @@ public class BaseWeaverConnection {
         
         int userbr = connect.indexOf('/');
         if ( userbr <= 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
-        int passbr = connect.indexOf(userbr,'@');
+        int passbr = connect.indexOf('@',userbr);
         if ( passbr <= 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
 
         String name = connect.substring(0, userbr);
