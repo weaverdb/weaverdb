@@ -55,7 +55,7 @@ YACC = bison -y
 CC = gcc
 AR = ar
 RANLIB = ranlib
-INSTALL = /usr/bin/install -c
+INSTALL = /usr/bin/ginstall -c
 INSTALL_DATA = ${INSTALL} -m 644
 INSTALL_PROGRAM = ${INSTALL}
 

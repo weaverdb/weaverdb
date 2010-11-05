@@ -39,8 +39,6 @@
 SRCDIR = ..
 include $(SRCDIR)/Makefile.global
 
-MYLIBS=\
--ldl -lpthread -lsocket -lnsl
 
 DIRS =  access catalog commands executor lib libpq \
 	parser nodes optimizer regex rewrite \
@@ -131,14 +129,15 @@ libmtpg.a: ${OBJS} mtpg.o
 	${LD} -r -M$(SRCDIR)/backend/mapfile.txt mtpg.o libclearmtpg.a -o libmtpg.a
 else
 ifeq ($(PORTNAME),solaris)
+#	${LD} -r ${LDFLAGS} -M$(SRCDIR)/backend/mapfile.txt 
 libmtpg.a: ${OBJS} mtpg.o
-	${LD} -r ${LDFLAGS} -M$(SRCDIR)/backend/mapfile.txt \
+	${LD} -r ${LDFLAGS} \
 	${OBJS} ${VERSIONOBJ} mtpg.o \
 	-o libmtpg.a
 else
-libmtpg.a: ${OBJS} 
-#	ar ${AROPT} libmtpg.a \
+#	ar ${AROPT} libmtpg.a 
 #	${OBJS} ${VERSIONOBJ}
+libmtpg.a: ${OBJS} 
 	${LD} -r ${LDFLAGS} --version-script=$(SRCDIR)/backend/mapfile.txt \
 	${OBJS} ${VERSIONOBJ} \
 	-o libmtpg.a

@@ -1,8 +1,35 @@
+ARCH=$(shell uname -s)
+PROC=$(shell uname -p)
 
+ifeq ($(ARCH),SunOS)
+OS=SUNOS
+PORTNAME=solaris
+endif
+
+ifeq ($(ARCH),Linux)
 OS=LINUX
-CPU=amd64
 PORTNAME=linux
+endif
+
+ifeq ($(PROC),i386)
+CPU=amd64
 ENDIAN=LITTLE_ENDIAN
+endif
+
+ifeq ($(PROC),x86_64)
+CPU=amd64
+ENDIAN=LITTLE_ENDIAN
+endif
+
+ifeq ($(PROC),sparc)
+CPU=sparcv9
+ENDIAN=BIG_ENDIAN
+endif
+
+#OS=LINUX
+#CPU=amd64
+#PORTNAME=linux
+#ENDIAN=LITTLE_ENDIAN
 
 #OS=SUNOS
 #CPU=amd64
