@@ -1305,9 +1305,11 @@ closeAllVfds()
                 pthread_mutex_lock(&target->pin);
                 if ( target->refCount > 0 ) {
                     target->refCount = 1;
+                    pthread_mutex_unlock(&target->pin);
                     FileClose(i);
+                } else {
+                    pthread_mutex_unlock(&target->pin);
                 }
-                pthread_mutex_unlock(&target->pin);
         }
     pthread_mutex_unlock(&VfdCache.guard);
 }
