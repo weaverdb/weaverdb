@@ -2,7 +2,7 @@
 #include <jni.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <strings.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>

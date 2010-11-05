@@ -23,8 +23,14 @@ MYINC=\
 MACOSINC=\
 -I${PG_HOME}/include -I./.  -I${PG_HOME}/backend -I${JAVA_HOME}/include 
 
+ifeq ($(PORTNAME),solaris)
 MYLIBS=\
 -lpthread -lrt -lm -lsocket -lnsl -lc -lumem
+endif
+ifeq ($(PORTNAME),linux)
+MYLIBS=\
+-lpthread -lrt -lm -lnsl -lc
+endif
 
 MACOSLIBS=\
 -lpthread 

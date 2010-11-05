@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <math.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "postgres.h"
 #include "env/env.h"

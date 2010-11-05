@@ -39,7 +39,9 @@ static long     log_pos;
 #define HEADER_MAGIC  0xCAFE08072006BABE
 #define SEGMENT_MAGIC  0xABCDEF0123456789
 #define INDEX_MAGIC  0x9876543210FEDCBA
-
+#ifdef LINUX
+#define O_LARGEFILE 0
+#endif
 
 static union  logbuffer {
     struct {

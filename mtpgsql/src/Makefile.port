@@ -1,13 +1,13 @@
 
-#OS=LINUX
-#CPU=amd64
-#PORTNAME=linux
-#ENDIAN=LITTLE_ENDIAN
-
-OS=SUNOS
+OS=LINUX
 CPU=amd64
-PORTNAME=solaris
+PORTNAME=linux
 ENDIAN=LITTLE_ENDIAN
+
+#OS=SUNOS
+#CPU=amd64
+#PORTNAME=solaris
+#ENDIAN=LITTLE_ENDIAN
 
 #OS=SUNOS
 #CPU=sparcv9
@@ -39,8 +39,14 @@ BKIOPTS+= -DNOARRAY -I../../include -I..
 #CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
 AROPT= crs
 CFLAGS_SL=
+ifeq ($(OS),SUNOS) 
 LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU}
-LIBS= -lgen -lnsl -lsocket -lrt -lm -lumem
+LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket
+endif
+ifeq ($(OS),LINUX) 
+LDFLAGS= -L/usr/lib64 
+LIBS= -lnsl -lrt -lm -lcrypt
+endif
 
 INSTALL= $(SRCDIR)/install-sh -c
 POSTGRESDIR=$(SRCDIR)/mtpg

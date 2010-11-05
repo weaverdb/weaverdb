@@ -13,7 +13,7 @@
  *-------------------------------------------------------------------------
  */
 #include <stdlib.h>
-#include <strings.h>
+#include <string.h>
 #include <math.h>
 #include <assert.h>
 #include <stdio.h>

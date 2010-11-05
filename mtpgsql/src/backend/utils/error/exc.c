@@ -100,10 +100,6 @@ ExcPrint(Exception *excP,
 		 ExcData data,
 		 ExcMessage message)
 {
-	/*
-	extern int	errno;
-	extern int	sys_nerr;
-	*/
 #ifdef	lint
 	data = data;
 #endif

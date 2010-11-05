@@ -136,10 +136,9 @@ libmtpg.a: ${OBJS} mtpg.o
 	${OBJS} ${VERSIONOBJ} mtpg.o \
 	-o libmtpg.a
 else
-libmtpg.a: ${OBJS}
-	${LD} $(LDREL) $(LDOUT) libmtpg.o \
+libmtpg.a: ${OBJS} 
+	ar ${AROPT} libmtpg.a \
 	${OBJS} ${VERSIONOBJ}
-	libtool -static libmtpg.o -o libmtpg.a
 endif
 endif
 

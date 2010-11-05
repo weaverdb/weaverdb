@@ -44,6 +44,8 @@
  * Use the raw pqcomm.c routines pq_getstring or pq_getbytes
  * to fetch data without conversion.
  */
+#include <errno.h>
+
 #include "postgres.h"
 #include "env/env.h"
 #include "libpq/libpq.h"

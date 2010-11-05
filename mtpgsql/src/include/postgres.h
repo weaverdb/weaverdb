@@ -220,10 +220,10 @@ typedef uint32_t CommandId;
 	typedef struct CppConcat(FormData_,x)
 
 /* Huh? */
-#define DATA(x) extern int errno
-#define DESCR(x) extern int errno
-#define DECLARE_INDEX(x) extern int errno
-#define DECLARE_UNIQUE_INDEX(x) extern int errno
+#define DATA(x) extern bool multiuser
+#define DESCR(x) extern bool multiuser
+#define DECLARE_INDEX(x) extern bool multiuser
+#define DECLARE_UNIQUE_INDEX(x) extern bool multiuser
 
 #define BUILD_INDICES
 #define BOOTSTRAP

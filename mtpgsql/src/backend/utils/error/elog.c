@@ -40,10 +40,6 @@
 #include "env/dolhelper.h"
 #include "env/connectionutil.h"
 
-/*
-extern int	errno;
-extern int	sys_nerr;
-*/
 
 #ifdef USE_SYSLOG
 /*
