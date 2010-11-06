@@ -1177,10 +1177,10 @@ FileNormalize(File file)
 FILE *
 AllocateFile(char *name, char *mode)
 {
-	FILE	   *file = NULL;
-	int ind = 0;
-	Env* env = GetEnv();
-
+	FILE*	    file = NULL;
+	int         ind = 0;
+	Env*        env = GetEnv();
+        errno = 0;
 	while ( env->falloc[ind] != NULL && ind < MAX_PRIVATE_FILES ) ind++;
 	if ( ind == MAX_PRIVATE_FILES ) {
             elog(ERROR, "AllocateFile: too many private FDs demanded");
