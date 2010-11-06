@@ -1177,7 +1177,7 @@ FileNormalize(File file)
 FILE *
 AllocateFile(char *name, char *mode)
 {
-	FILE	   *file;
+	FILE	   *file = NULL;
 	int ind = 0;
 	Env* env = GetEnv();
 
