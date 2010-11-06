@@ -14,6 +14,7 @@
  */
 #include <math.h>
 #include <sys/time.h>
+#include <stdarg.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -145,7 +146,7 @@ TLS AnalyzeGlobals* analyze_globals = NULL;
 static AnalyzeGlobals *AnalyzeInitEnv();
 static void     AnalyzeDestroyEnv();
 static AnalyzeGlobals *AnalyzeGetEnv();
-static void  analyze_log(Relation rel, char* pattern, ...);
+static void  analyze_log(Relation rel,const char* pattern, ...);
 
 static AnalyzeAttrStats *examine_attribute(Relation onerel, int attnum);
 static int 
@@ -221,7 +222,7 @@ analyze_rel(Oid relid)
 						sizeof(AnalyzeAttrStats *));
 	tcnt = 0;
 	for (i = 1; i <= attr_cnt; i++) {
-		analyze_log(onerel,"examining %s", onerel->rd_att->attrs[i - 1]->attname);
+		analyze_log(onerel,"examining %s", NameStr(onerel->rd_att->attrs[i - 1]->attname));
 		vacattrstats[tcnt] = examine_attribute(onerel, i);
 		if (vacattrstats[tcnt] != NULL)
 			tcnt++;
@@ -1786,7 +1787,7 @@ AnalyzeGetEnv(void)
 	return (AnalyzeGlobals *) analyze_globals;
 }
 
-void  analyze_log(Relation rel, char* pattern, ...) {
+void  analyze_log(Relation rel,const char* pattern, ...) {
     char            msg[256];
     va_list         args;
 
