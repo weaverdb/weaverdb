@@ -1181,35 +1181,32 @@ AllocateFile(char *name, char *mode)
 	int ind = 0;
 	Env* env = GetEnv();
 
-
-        pthread_mutex_lock(&RealFiles.guard);
-
-	if (RealFiles.numAllocatedFiles >= MAX_ALLOCATED_FILES) {
-            pthread_mutex_unlock(&RealFiles.guard);
-            elog(ERROR, "AllocateFile: too many private FDs demanded");
-        }
 	while ( env->falloc[ind] != NULL && ind < MAX_PRIVATE_FILES ) ind++;
 	if ( ind == MAX_PRIVATE_FILES ) {
-            pthread_mutex_unlock(&RealFiles.guard);
             elog(ERROR, "AllocateFile: too many private FDs demanded");
         }
 
-TryAgain:
-	ReleaseFileIfNeeded();
-	if ((file = fopen(name, mode)) == NULL)
-	{
-		if (errno == EMFILE || errno == ENFILE)
-		{
-			errno = 0;
-			goto TryAgain;
-		}
-	}
-	else {
-		RealFiles.allocatedFiles[RealFiles.numAllocatedFiles++] = file;
-		env->falloc[ind] = file;
+        while ( file == NULL && errno == 0 ) {
+            ReleaseFileIfNeeded();
+            file = fopen(name, mode);
+            if (errno == EMFILE || errno == ENFILE)
+            {
+                    errno = 0;
+            }
+        }
+
+        if (file != NULL ) {
+            pthread_mutex_lock(&RealFiles.guard);
+            if (RealFiles.numAllocatedFiles >= MAX_ALLOCATED_FILES) {
+                pthread_mutex_unlock(&RealFiles.guard);
+                fclose(file);
+                elog(ERROR, "AllocateFile: too many private FDs demanded");
+            }
+            RealFiles.allocatedFiles[RealFiles.numAllocatedFiles++] = file;
+            env->falloc[ind] = file;
+            pthread_mutex_unlock(&RealFiles.guard);
 	}
 	
-        pthread_mutex_unlock(&RealFiles.guard);
 	return file;
 }
 
