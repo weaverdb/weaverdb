@@ -109,10 +109,6 @@ typedef struct Environment {
 	Oid			UserId;
 /*  processing mode */
 	ProcessingMode  	Mode;           
-/*  read.c  static var moved  */
-	char*			saved_str;
-/*  from redef.c  static variable   */
-	char			value[256];
 /*  prepkeyset.c   */
 	int			TotalExpr;
 /*     SEGV  in cond handler    */
@@ -131,6 +127,10 @@ typedef struct Environment {
     FILE*			falloc[MAX_PRIVATE_FILES];	
 /*  debug */
     char			CommandInfo[32];
+/*  from redef.c  static variable   */
+    char			buffer[1024];
+/*  read.c  static var moved  */
+    char*			saved_str;
     CommitType                  system_type;
     CommitType                  user_type;
     int*   			stackmark;

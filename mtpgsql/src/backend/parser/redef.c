@@ -3,7 +3,7 @@
 
 #include "redef.h"
 
-#define value GetEnv()->value	
+#define value GetEnv()->buffer
 
 
 char* yytext(void)

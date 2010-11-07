@@ -100,9 +100,9 @@ lsptok(char *string, int *length)
 	
 	if (string != NULL)
 	{
-		saved_str = string;
-		if (length == NULL)
-			return NULL;
+            saved_str = string;
+            if (length == NULL)
+                    return NULL;
 	}
 		
 
