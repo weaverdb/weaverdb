@@ -11,7 +11,15 @@
 #ifndef PS_STATUS_H
 #define PS_STATUS_H
 
-#ifdef HAVE_SETPROCTITLE
+#ifdef NO_PS_STATUS
+
+#undef PS_DEFINE_BUFFER
+#define PS_INIT_STATUS(argc, argv, execname, username, hostname, dbname)
+#define PS_CLEAR_STATUS()
+#define PS_SET_STATUS(status) do { if ((status)); } while (0)
+#define PS_STATUS ""
+
+#elif defined(HAVE_SETPROCTITLE)
 
 extern char Ps_status_buffer[];
 
@@ -95,14 +103,7 @@ extern char Ps_status_buffer[];
 	do { strcpy(Ps_status_buffer, (status)); } while (0)
 
 #define PS_STATUS (Ps_status_buffer)
-#endif
 
-#ifdef NO_PS_STATUS
-#undef PS_DEFINE_BUFFER
-#define PS_INIT_STATUS(argc, argv, execname, username, hostname, dbname)
-#define PS_CLEAR_STATUS()
-#define PS_SET_STATUS(status) do { if ((status)); } while (0)
-#define PS_STATUS ""
-#endif	 /* !linux */
+#endif
 
 #endif	 /* PS_STATUS_H */
