@@ -10,8 +10,13 @@
  *
  *-------------------------------------------------------------------------
  */
-
+#ifdef LINUX
+#define __USE_XOPEN_EXTENDED
+#endif
 #include <unistd.h>
+#ifdef LINUX
+#undef __USE_XOPEN_EXTENDED
+#endif
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -543,6 +548,7 @@ checklockfile(void) {
                     pid_t checkid = 0;
                     int size = read(exclusive_lock,check,255);
 #ifdef SUNOS
+                    checkid = atoi(check);
                     checkid = getpgid(checkid);
 #else
                     checkid = getpgrp();

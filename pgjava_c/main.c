@@ -123,7 +123,11 @@ int main(int argc,char* argv[])
 static int cleanupTempDir(char* path) {
 	FILE *p;
         char msg[512];
+#ifdef SUNOS
         sprintf(msg,"/usr/bin/rm -r %s",path);
+#elif defined(LINUX)
+        sprintf(msg,"/bin/rm -r %s",path);
+#endif
 	if ((p = popen(msg, "r")) == NULL ) {
             perror("SYSTEM FAILURE");
 		return (-1);
