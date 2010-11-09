@@ -10,13 +10,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef LINUX
-#define __USE_XOPEN_EXTENDED
-#endif
 #include <unistd.h>
-#ifdef LINUX
-#undef __USE_XOPEN_EXTENDED
-#endif
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -445,11 +439,9 @@ if ( master ) {
         uid_t		uid;
         struct passwd*		uinfo;
         memset(un,0,sizeof(un));
-#ifdef SUNOS       
+#ifndef MACOSX
 	cuserid(un);
-#elif LINUX
-	strncpy(un,getlogin(),255);
-#elif MACOSX
+#else
         if ( strlen(un) == 0 ) {
             uid = getuid();
             uinfo = getpwuid(uid);
@@ -547,12 +539,10 @@ checklockfile(void) {
                 } else {
                     pid_t checkid = 0;
                     int size = read(exclusive_lock,check,255);
-#ifdef SUNOS
+
                     checkid = atoi(check);
                     checkid = getpgid(checkid);
-#else
-                    checkid = getpgrp();
-#endif
+
                     if ( checkid < 0 && errno == EPERM ) {
                         printf("Permissions for group lookup not allowed \n");
                         printf("delete %s to force startup\n",lock_name);

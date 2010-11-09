@@ -443,12 +443,9 @@ InitVirtualFileSystem()
 
         /* initialize header entry first time through */
         pthread_mutexattr_init(&pinattr);
-#ifdef SUNOS
+#ifndef MACOSX
         pthread_mutexattr_setpshared(&pinattr,PTHREAD_PROCESS_PRIVATE);
         pthread_mutexattr_settype(&pinattr,PTHREAD_MUTEX_ERRORCHECK);
-#elif LINUX
-        pthread_mutexattr_setpshared(&pinattr,PTHREAD_PROCESS_PRIVATE);
-#elif MACOSX
 #endif		
 /*  set the max number of user fd's  */
         RealFiles.maxfiles = pg_nofile();
