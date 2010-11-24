@@ -27,6 +27,10 @@ CPU=sparcv9
 ENDIAN=BIG_ENDIAN
 endif
 
+ifndef JAVA_HOME
+JAVA_HOME=/usr/latest/jdk
+endif
+
 #OS=LINUX
 #CPU=amd64
 #PORTNAME=linux
@@ -56,7 +60,7 @@ CFLAGS+= -DDEBUGLOGS
 #CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo
 
 #for java
-CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${PORTNAME}
+#CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${PORTNAME}
 BKIOPTS+= -DNOARRAY -I../../include -I..
 
 #CFLAGS+= -DDEBUG_INDEX_INSERT
@@ -64,7 +68,7 @@ BKIOPTS+= -DNOARRAY -I../../include -I..
 #CFLAGS+= -DHEAPDEBUGALL
 #CFLAGS+= -DCLOBBER_FREED_MEMORY
 #CFLAGS+= -DMEMORY_CONTEXT_CHECKING
-#CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
+CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
 AROPT= crs
 CFLAGS_SL=
 ifeq ($(OS),SUNOS) 

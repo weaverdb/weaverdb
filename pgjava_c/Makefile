@@ -14,7 +14,9 @@ include ${SRCDIR}/Makefile.global
 ifeq ($(PORTNAME), macosx)
 JAVA_HOME=/Library/Java/Home
 else
+ifndef JAVA_HOME
 JAVA_HOME=/usr/jdk/latest
+endif
 endif
 
 MYINC=\
