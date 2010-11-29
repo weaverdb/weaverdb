@@ -11,7 +11,7 @@
 SRCDIR= ../..
 include ../../Makefile.global
 
-CFLAGS += -I.. -I../../mflex
+CFLAGS += -I.. 
 
 ifeq ($(CC), gcc)
 CFLAGS+= -Wno-error

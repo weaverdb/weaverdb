@@ -1,3 +1,4 @@
+%define api.pure
 %pure_parser
 %{
 
@@ -72,10 +73,12 @@
  * problem, yet.)
  */
 /*  #define __YYSCLASS  */
-/*
-extern List *parsetree;	
-*/
-extern int yylex();
+#define YYLEX_PARAM  yyscanner
+#define YYPARSE_PARAM  yyscanner
+
+extern void yylex_init(void* scanner);
+extern int yylex(void* stype,void* scanner);
+extern void yylex_destroy(void* scanner);
 
 static char *xlateSqlFunc(char *);
 static char *xlateSqlType(char *);
@@ -125,10 +128,6 @@ static void doNegateFloat(Value *v);
 	RuleStmt			*rstmt;
 	InsertStmt			*astmt;
 }
-
-%{
-static void myprinter(FILE* stream,int c,YYSTYPE len);
-%}
 
 %type <node>	stmt
 		AlterTableStmt ClosePortalStmt
@@ -6185,15 +6184,31 @@ xlateSqlType(char *name)
 } /* xlateSqlType() */
 
 
-void parser_init(Oid *typev, char** names, int nargs)
+void parser_init(char* str, Oid *typev, char** names, int nargs)
 {
     ParserInfo* pi = GetParserInfo();
-	pi->QueryIsRule = FALSE;
-	pi->saved_relname[0]= '\0';
 
-	param_type_init(typev, names, nargs);
+    pi->parseString = pstrdup(str);
+    pi->parsetree = NIL;	
+
+    pi->QueryIsRule = FALSE;
+    pi->saved_relname[0]= '\0';
+
+    param_type_init(typev, names, nargs);
+    yylex_init(&pi->yyscanner);
 }
 
+int parser_parse(List** parsetree) {
+    ParserInfo* pi = GetParserInfo();
+    int result = yyparse(pi->yyscanner);
+    *parsetree = pi->parsetree;
+    return result;
+}
+
+void parser_destroy() {
+    ParserInfo* pi = GetParserInfo();
+    yylex_destroy(pi->yyscanner);
+}
 
 /*
  * param_type_init()
@@ -6301,10 +6316,5 @@ doNegateFloat(Value *v)
 		strcpy(newval+1, oldval);
 		v->val.str = newval;
 	}
-}
-
-void myprinter(FILE* stream,int c,YYSTYPE len)
-{
-
 }
 

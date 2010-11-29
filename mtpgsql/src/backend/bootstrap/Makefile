@@ -21,7 +21,7 @@
 SRCDIR= ../..
 include ../../Makefile.global
 
-CFLAGS += -I.. -I../../mflex
+CFLAGS += -I..
 
 ifeq ($(CC), gcc)
 CFLAGS+= -Wno-error
@@ -61,6 +61,7 @@ bootstrap_tokens.h bootparse.c: bootparse.y
 bootscanner.c: bootscanner.l
 	$(LEX) $<
 	grep -v "^#" boot.sed > sedfile
+	mv lex.Int_yy.c lex.yy.c
 	sed -f sedfile < lex.yy.c > bootscanner.c
 	rm -f lex.yy.c sedfile
 

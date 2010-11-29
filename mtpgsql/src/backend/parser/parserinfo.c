@@ -38,10 +38,7 @@ GetParserInfo(void)
 
 ParserInfo*
 InitializeParser(void) {
-
         ParserInfo* info = AllocateEnvSpace(parser_id,sizeof(ParserInfo));
-        info->yy_init = 1;
-        info->Int_yy_init = 1;
 
         parser_info = info;
 

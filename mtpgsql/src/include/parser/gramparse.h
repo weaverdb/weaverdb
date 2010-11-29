@@ -21,14 +21,14 @@ extern "C" {
 #endif 
 /* from scan.l */
 PG_EXTERN void init_io(void);
-/* PG_EXTERN int	yylex(void);  */
 PG_EXTERN void yyerror(const char *message);
 
 /* from gram.y */
 PG_EXTERN Oid	param_type(int t);
 PG_EXTERN Oid	param_type_name(char* t);
-PG_EXTERN void parser_init(Oid *typev, char** names, int nargs);
-PG_EXTERN int	yyparse(void);
+PG_EXTERN void parser_init(char* stmt, Oid *typev, char** names, int nargs);
+PG_EXTERN int	parser_parse(List** parsetree);
+PG_EXTERN void parser_destroy();
 
 #ifdef __cplusplus
 }

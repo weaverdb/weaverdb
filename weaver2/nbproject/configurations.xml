@@ -1275,6 +1275,7 @@
     <conf name="Default" type="0">
       <toolsSet>
         <developmentServer>localhost</developmentServer>
+        <remote-sources-mode>LOCAL_SOURCES</remote-sources-mode>
         <compilerSet>SunStudio|SunStudio</compilerSet>
         <platform>0</platform>
       </toolsSet>
@@ -1293,6 +1294,7 @@
     <conf name="NewConfiguration" type="0">
       <toolsSet>
         <developmentServer>localhost</developmentServer>
+        <remote-sources-mode>LOCAL_SOURCES</remote-sources-mode>
         <compilerSet>SunStudio_12|SunStudio_12</compilerSet>
         <platform>0</platform>
       </toolsSet>
