@@ -524,10 +524,12 @@ other			.
  }
 
  void * yyrealloc (void * ptr, size_t bytes, void* yyscanner) {
+     if ( ptr == NULL ) return palloc(bytes);
      return repalloc (ptr,bytes);
  }
 
- void yyfree (void * ptr, void * yyscanner) {      
+ void yyfree (void * ptr, void * yyscanner) {  
+     if ( ptr == NULL ) return;
      pfree(ptr);
  }
 
