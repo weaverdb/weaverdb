@@ -235,9 +235,6 @@ short Begin( StmtMgr mgr )
     if ( err == 0 ) mgr->transactionId = WGetTransactionId(mgr->theConn);
 
     err = CheckForErrors(mgr);
-    if ( err != 0 ) {
-        WRollback(mgr->theConn);
-    }
     
     return err;
 }

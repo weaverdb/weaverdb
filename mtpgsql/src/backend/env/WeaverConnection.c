@@ -305,13 +305,14 @@ WDestroyConnection(OpaqueWConn conn)
 extern long 
 WBegin(OpaqueWConn conn, long trans)
 {
-    long  err;
+    long err = 0;
     WConn connection = SETUP(conn);
     
     clearerror(connection->env);
     
     if ( connection->transaction_owner != 0 ) {
-        SetError(connection,454,"CONTEXT","transaction owner already set");
+        err = 454;
+        SetError(connection,err,"CONTEXT","transaction owner already set");
         return err;
     }
 
@@ -1205,7 +1206,7 @@ extern Pipe WPipeConnect(OpaqueWConn conn, void* args, pipefunc func)
 {
     WConn connection = SETUP(conn);
     MemoryContext cxt;
-    long err;
+    long err = 0;
     Pipe pipe = NULL;
    
     READY(connection,err);
