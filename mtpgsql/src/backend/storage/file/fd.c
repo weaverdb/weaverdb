@@ -124,6 +124,7 @@ static int vfdsharemax =        MAX_FILE_SHARE;
 static int vfdblockcount =      MAXVFDBLOCKS;
 static int vfdmax = 		MAXVIRTUALFILES;
 static bool vfdoptimize =       true;
+static bool vfdautotune =       false;
  
 static struct {
     Vfd **              pointers;
@@ -350,6 +351,7 @@ HashDropFD(Vfd * target) {
                 printf("not freed %s\n",target->fileName);
             } else {
                 Assert(target==entry->vfd);
+                entry->vfd->pooled = false;
                 entry->vfd = NULL;
             }
         } else {
@@ -435,9 +437,11 @@ InitVirtualFileSystem()
 	
 	char* share = GetProperty("vfdsharemax");
 	char* opti = GetProperty("vfdoptimize");
+	char* autotune = GetProperty("vfdautotune");
 
 	if ( share != NULL ) vfdsharemax = atoi(share);
         if ( opti != NULL ) vfdoptimize = (toupper(opti[0]) == 'T') ? true : false;
+        if ( autotune != NULL ) vfdautotune = (toupper(autotune[0]) == 'T') ? true : false;
 
 	vfdmax = vfdmultiple * vfdblockcount;
 
@@ -1386,17 +1390,20 @@ CheckRealFileCount() {
     pthread_mutex_lock(&RealFiles.guard);
     size = RealFiles.nfile + RealFiles.numAllocatedFiles;
     DTRACE_PROBE3(mtpg,file__maxcheck,vfdsharemax,size,RealFiles.maxfiles);
-    if ( (size >= RealFiles.maxfiles * 0.9) && vfdsharemax < 64) {
-        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
-            RealFiles.checks = 0;
-            vfdsharemax += 1;
-        }
-    } else if ( size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1 ) {
-        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
-            RealFiles.checks == 0;
-            vfdsharemax -= 1;
+    if ( vfdautotune == true ) {
+        if ( (size >= RealFiles.maxfiles * 0.9) && vfdsharemax < 64) {
+            if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
+                RealFiles.checks = 0;
+                vfdsharemax += 1;
+            }
+        } else if ( size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1 ) {
+            if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
+                RealFiles.checks == 0;
+                vfdsharemax -= 1;
+            }
         }
     }
+
     pthread_mutex_unlock(&RealFiles.guard);
     return (size >= RealFiles.maxfiles);
 }

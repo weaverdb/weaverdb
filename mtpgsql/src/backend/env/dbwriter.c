@@ -149,7 +149,7 @@ static void CommitPackage(WriteGroup  cart);
 static int SignalDBWriter(WriteGroup  cart);
 static WriteGroup GetCurrentWriteGroup(bool forcommit);
 static int UnlockWriteGroup(WriteGroup  cart);
-static WriteGroup DBWriterNextTarget(WriteGroup last);
+static WriteGroup GetNextTarget(WriteGroup last);
 static void* DBWriter(void* arg);
 
 static void DBTableInit();
@@ -438,7 +438,7 @@ void* DBWriter(void *jones) {
     while (!stopped) {
         int     releasecount = 0;
         
-        cart = DBWriterNextTarget(last);
+        cart = GetNextTarget(last);
         
         if (setjmp(env->errorContext) != 0) {
             elog(FATAL, "error in dbwriter");
@@ -596,13 +596,13 @@ void AdvanceWriteGroupQueue(WriteGroup cart) {
     } else {
         elog(FATAL, "DB write group in the wrong state");
     }
-    pthread_mutex_unlock(&cart->next->checkpoint);
     
     if ( groups != cart ) {
-        elog(FATAL, "Advance Writer Group called witht he wrong group");
+        elog(FATAL, "Advance Writer Group called with he wrong group");
     }
     
     groups = cart->next;
+    pthread_mutex_unlock(&cart->next->checkpoint);
     
 }
 
@@ -1207,7 +1207,7 @@ void FlushAllDirtyBuffers() {
         while ( releasecount == 0 ) {
             int possible = sync_buffers;
             WriterState  cstate;
-            cart = DBWriterNextTarget(cart);
+            cart = GetNextTarget(cart);
             cstate = cart->currstate;
             cart->currstate = FLUSHING;
             UnlockWriteGroup(cart);
@@ -1307,16 +1307,13 @@ static PathCache* GetPathCache(WriteGroup  cart, char *relname, char *dbname, Oi
     return target;
 }
 
-static WriteGroup DBWriterNextTarget(WriteGroup last) {
+static WriteGroup GetNextTarget(WriteGroup last) {
     /*
      * if currstate is COMPLETED that means there are too many threads or
      * too few write groups, or we are shutting down ( see
      * DestroyWriteGroup )
      */
-    WriteGroup     cart = NULL;
-    bool            cont = true;
-    
-    cart = (last) ? last->next : groups;
+    WriteGroup     cart = (last) ? last->next : groups;
     
     pthread_mutex_lock(&cart->checkpoint);
     

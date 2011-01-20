@@ -310,7 +310,7 @@ Poolsweep(void *args) {
                  */
                 result = pthread_cond_timedwait(&tool->gate, &list_guard, &tv);
                 if (result == ETIMEDOUT) {
-                    if ( tool->idle_count++ == 5 ) {
+                    if ( tool->idle_count++== 5 ) {
                         tool->activesweep = false;
                         activated = false;
                     } else {
