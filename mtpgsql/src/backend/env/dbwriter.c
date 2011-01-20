@@ -598,12 +598,11 @@ void AdvanceWriteGroupQueue(WriteGroup cart) {
     }
     
     if ( groups != cart ) {
-        elog(FATAL, "Advance Writer Group called with he wrong group");
+        elog(FATAL, "Advance Writer Group called with the wrong group");
     }
     
     groups = cart->next;
-    pthread_mutex_unlock(&cart->next->checkpoint);
-    
+    pthread_mutex_unlock(&cart->next->checkpoint);    
 }
 
 int LogWriteGroup(WriteGroup cart) {
@@ -699,7 +698,7 @@ void ResetWriteGroup(WriteGroup cart) {
     
     cart->numberOfTrans = 0;
     cart->dotransaction = true;
-    cart->currstate = NOT_READY;
+//    cart->currstate = NOT_READY;
     cart->isTransFriendly = true;
     cart->flush_run = false;
     cart->loggable = true;
@@ -1253,7 +1252,7 @@ void FlushAllDirtyBuffers() {
         while ( cart->flush_run ) {
             if (pthread_cond_wait(&cart->broadcaster, &cart->checkpoint)) {
                 UnlockWriteGroup(cart);
-                elog(FATAL, "[DBWriter]cannot attach to db write thread");
+                elog(FATAL, "[DBWriter] cannot attach to db write thread");
             }
         }
         
@@ -1323,7 +1322,8 @@ static WriteGroup GetNextTarget(WriteGroup last) {
     if ( cart->LogRelation == NULL )  {
         cart->LogRelation = RelationNameGetRelation(LogRelationName, DEFAULTDBOID);
     }
-    
+    cart->owner = pthread_self();
+    cart->locked = true;    
     return cart;
 }
 
@@ -1412,21 +1412,22 @@ int SignalDBWriter(WriteGroup  cart) {
 WriteGroup GetCurrentWriteGroup(bool forcommit) {
     WriteGroup     cart = NULL;
     
-    cart = groups;
-    pthread_mutex_lock(&cart->checkpoint);
+    cart = GetNextTarget(cart);
     while (
-            ( cart->currstate == RUNNING ||
-            cart->currstate == LOGGED ||
-            cart->currstate == SYNCED ||
-            cart->currstate == FLUSHING ) ||
+            cart != groups || 
+            (
+                cart->currstate == RUNNING ||
+                cart->currstate == LOGGED ||
+                cart->currstate == SYNCED ||
+                cart->currstate == COMPLETED ||
+                cart->currstate == DEAD ||
+                cart->currstate == FLUSHING 
+            ) ||
             ( forcommit && cart->numberOfTrans == maxtrans )
-            ) {
-        pthread_mutex_unlock(&cart->checkpoint);
-        cart = cart->next;
-        pthread_mutex_lock(&cart->checkpoint);
+          ) {
+        UnlockWriteGroup(cart);
+        cart = GetNextTarget(cart);
     }
-    cart->owner = pthread_self();
-    cart->locked = true;
     
     return cart;
 }

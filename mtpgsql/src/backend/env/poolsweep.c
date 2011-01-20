@@ -178,7 +178,6 @@ PoolsweepDestroy() {
 
 Sweeps         *
 StartupPoolsweep(char *dbname, Oid dbid) {
-    int             prio;
     Sweeps         *inst = (Sweeps *) MemoryContextAlloc(sweep_cxt, sizeof(Sweeps));
     Sweeps         *next = NULL;
     char            name[256];
@@ -230,6 +229,8 @@ ShutdownPoolsweep(Sweeps * job) {
     pthread_join(job->thread, &ret);
     
     pthread_mutex_lock(&list_guard);
+    
+    next = job->next;
     MemoryContextDelete(job->context);
     pfree(job);
     
@@ -525,7 +526,6 @@ AddJobRequest(JobType type, char *relname, char *dbname, Oid relid, Oid dbid, Po
 
     pthread_mutex_lock(&list_guard);
     sweep = sweeplist;
-
 
     /* first member is now active or null, proceed with the
     rest of the list */
