@@ -174,7 +174,6 @@ PoolsweepDestroy() {
         while (next != NULL) {
             next = ShutdownPoolsweep(next);
         }
-        MemoryContextDelete(cxt);
     } else {
         printf("no poolsweep context");
     }
