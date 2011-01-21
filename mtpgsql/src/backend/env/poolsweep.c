@@ -166,6 +166,7 @@ PoolsweepDestroy() {
         
     if (!inited)
         return;
+    
     pthread_mutex_lock(&list_guard);
     sweep_cxt = NULL;
     next = sweeplist;
@@ -185,7 +186,7 @@ StartupPoolsweep(char *dbname, Oid dbid) {
     snprintf(name,256,"SweepInstanceCxt -- dbid: %d",dbid);
     
     if ( sweep_cxt == NULL ) {
-        elog(ERROR, "Sweep is shutting down");
+        return NULL;
     } 
     
     inst = (Sweeps *) MemoryContextAlloc(sweep_cxt, sizeof(Sweeps));
@@ -578,7 +579,7 @@ AddJobRequest(JobType type, char *relname, char *dbname, Oid relid, Oid dbid, Po
         add = StartupPoolsweep(dbname, dbid);
     }
     
-    sweepcount = AddJobToSweep(add, type, relname, dbname, relid, dbid, extra);
+    if ( add != NULL ) sweepcount = AddJobToSweep(add, type, relname, dbname, relid, dbid, extra);
     
     pthread_mutex_unlock(&list_guard);
     
