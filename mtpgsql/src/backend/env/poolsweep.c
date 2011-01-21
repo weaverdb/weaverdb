@@ -161,45 +161,46 @@ PoolsweepInit(int priority) {
 
 void
 PoolsweepDestroy() {
-    int             count = 0;
     Sweeps         *next = NULL;
-    
+    MemoryContext   cxt = sweep_cxt;
+        
     if (!inited)
         return;
     pthread_mutex_lock(&list_guard);
+    sweep_cxt = NULL;
     next = sweeplist;
     while (next != NULL) {
         next = ShutdownPoolsweep(next);
     }
-    MemoryContextDelete(sweep_cxt);
-    sweep_cxt = NULL;
+    MemoryContextDelete(cxt);
     pthread_mutex_unlock(&list_guard);
 }
 
 Sweeps         *
 StartupPoolsweep(char *dbname, Oid dbid) {
-    Sweeps         *inst = (Sweeps *) MemoryContextAlloc(sweep_cxt, sizeof(Sweeps));
+    Sweeps         *inst = NULL;
     Sweeps         *next = NULL;
     char            name[256];
-    
+    /*  already holding listguard  */
     snprintf(name,256,"SweepInstanceCxt -- dbid: %d",dbid);
     
+    if ( sweep_cxt == NULL ) {
+        elog(ERROR, "Sweep is shutting down");
+    } 
+    
+    inst = (Sweeps *) MemoryContextAlloc(sweep_cxt, sizeof(Sweeps));
     inst->dbid = dbid;
     strncpy(inst->dbname, dbname, 255);
     inst->next = NULL;
     inst->requests = NULL;
     inst->activesweep = true;
-    
-    if ( sweep_cxt == NULL ) {
-        elog(ERROR, "Sweep is shutting down");
-    }
+    pthread_cond_init(&inst->gate, NULL);
     
     inst->context = AllocSetContextCreate(sweep_cxt,
             name,
             512,
             512,
             1024 * 1024);
-    pthread_cond_init(&inst->gate, NULL);
     
     if (pthread_create(&inst->thread, &sweeperprops, Poolsweep, inst) != 0) {
         elog(FATAL, "could not create pool sweep thread\n");
