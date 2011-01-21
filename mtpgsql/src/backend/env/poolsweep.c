@@ -176,7 +176,7 @@ PoolsweepDestroy() {
         }
         MemoryContextDelete(cxt);
     } else {
-        
+        printf("no poolsweep context");
     }
     pthread_mutex_unlock(&list_guard);
 }
