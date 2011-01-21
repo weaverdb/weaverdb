@@ -235,7 +235,6 @@ ShutdownPoolsweep(Sweeps * job) {
     pthread_join(job->thread, &ret);
     
     pthread_mutex_lock(&list_guard);
-    
     next = job->next;
     MemoryContextDelete(job->context);
     pfree(job);
