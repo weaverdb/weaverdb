@@ -108,7 +108,7 @@ static bool     inited = false;
 static int     concurrent = 1;
 
 static Sweeps  *sweeplist;
-static MemoryContext sweep_cxt;
+static MemoryContext sweep_cxt = NULL;
 
 static Sweeps  *StartupPoolsweep(char *dbname, Oid dbid);
 static Sweeps  *ShutdownPoolsweep(Sweeps * job);
@@ -825,11 +825,11 @@ ResumePoolsweep() {
 void PrintPoolsweepMemory( ) 
 {
 	pthread_mutex_lock(&list_guard);
-
-        size_t total = MemoryContextStats(sweep_cxt);
-        user_log("Total sweep memory: %d",total);
-                
-	pthread_mutex_unlock(&list_guard);
+        if ( sweep_cxt ) {
+            size_t total = MemoryContextStats(sweep_cxt);
+            user_log("Total sweep memory: %d",total);
+        }
+       	pthread_mutex_unlock(&list_guard);
 
 }
 
