@@ -168,12 +168,16 @@ PoolsweepDestroy() {
         return;
     
     pthread_mutex_lock(&list_guard);
-    sweep_cxt = NULL;
-    next = sweeplist;
-    while (next != NULL) {
-        next = ShutdownPoolsweep(next);
+    if ( sweep_cxt != NULL ) {
+        sweep_cxt = NULL;
+        next = sweeplist;
+        while (next != NULL) {
+            next = ShutdownPoolsweep(next);
+        }
+        MemoryContextDelete(cxt);
+    } else {
+        
     }
-    MemoryContextDelete(cxt);
     pthread_mutex_unlock(&list_guard);
 }
 
