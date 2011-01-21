@@ -174,6 +174,7 @@ PoolsweepDestroy() {
         while (next != NULL) {
             next = ShutdownPoolsweep(next);
         }
+        MemoryContextDelete(cxt);
     } else {
         printf("no poolsweep context");
     }
@@ -198,13 +199,12 @@ StartupPoolsweep(char *dbname, Oid dbid) {
     inst->next = NULL;
     inst->requests = NULL;
     inst->activesweep = true;
-    pthread_cond_init(&inst->gate, NULL);
-    
     inst->context = AllocSetContextCreate(sweep_cxt,
-            name,
-            512,
-            512,
-            1024 * 1024);
+        name,
+        512,
+        512,
+        1024 * 1024);
+    pthread_cond_init(&inst->gate, NULL);
     
     if (pthread_create(&inst->thread, &sweeperprops, Poolsweep, inst) != 0) {
         elog(FATAL, "could not create pool sweep thread\n");
@@ -245,16 +245,11 @@ void           *
 Poolsweep(void *args) {
     
     Sweeps         *tool = (Sweeps *) args;
-    int             timerr;
-    char            dbuser[255];
-    int             i = 0;
-    bool            leak = false;
     bool            activated = true;
     bool            invalidate = false;
     Env*            env;
-    
-    env = CreateEnv(NULL);
 
+    env = CreateEnv(NULL);
     tool->env = env;
     
     SetEnv(env);
@@ -436,7 +431,7 @@ Poolsweep(void *args) {
     
      SetEnv(NULL);
      DestroyEnv(env);
-    
+         
     return env;
 }
 
@@ -530,7 +525,10 @@ AddJobRequest(JobType type, char *relname, char *dbname, Oid relid, Oid dbid, Po
 
     pthread_mutex_lock(&list_guard);
     sweep = sweeplist;
-
+    if ( sweep_cxt == NULL ) {
+            pthread_mutex_unlock(&list_guard);
+            return -1;
+    }
     /* first member is now active or null, proceed with the
     rest of the list */
     while (sweep != NULL) {        
