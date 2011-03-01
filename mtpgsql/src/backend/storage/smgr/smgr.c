@@ -226,6 +226,7 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
 {
 	int			fd;
         SmgrInfo                info;
+        int count               =0;
         
         info = MemoryContextAlloc(GetSmgrGlobals()->smgr_cxt,sizeof(SmgrData));
         
@@ -235,10 +236,14 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
         info->relid = relid;
         info->dbid = dbid;        
         
-	if ((fd = (*(smgrsw[which].smgr_open)) (info)) < 0) {
+	while ((fd = (*(smgrsw[which].smgr_open)) (info)) < 0) {
 		elog(NOTICE, "cannot open %s-%s", relname, dbname);
-                pfree(info);
-                info = NULL;
+                perror("SMGR open:");
+                if ( count ++ > 3 ) {
+                        pfree(info);
+                        info = NULL;
+        		elog(FATAL, "cannot open %s-%s", relname, dbname);
+                }
         } else {
 
         }

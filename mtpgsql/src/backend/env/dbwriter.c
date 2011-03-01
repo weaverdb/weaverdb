@@ -1115,7 +1115,7 @@ int SyncBuffers(WriteGroup list) {
                         target = list->LogRelation->rd_smgr;
                     }
                     
-                    status = smgrflush(list->LogRelation->rd_smgr, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
+                    status = smgrflush(target, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
                     
                     if (status == SM_FAIL) {
                         ErrorBufferIO(iostatus, bufHdr);
