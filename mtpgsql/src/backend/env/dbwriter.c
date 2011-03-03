@@ -678,13 +678,10 @@ int FinishWriteGroup(WriteGroup cart) {
 }
 
 void CommitPackage(WriteGroup cart) {
-    
     HashTableWalk(db_table, (HashtFunc)PathCacheCompleteWalker, 0);
 }
 
 void ResetWriteGroup(WriteGroup cart) {
-    int             i = 0;
-    
     Assert(cart->currstate == COMPLETED || cart->currstate == NOT_READY);
     
     memset(cart->buffers, 0, sizeof(bool) * NBuffers);
@@ -753,12 +750,8 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
  
 int LogTransactions(WriteGroup cart) {
     int             i = 0;
-    Buffer          buffer = InvalidBuffer;	/* buffer associated with
-     * block */
+    Buffer          buffer = InvalidBuffer;	/* buffer associated with block */
     Block           block;	/* block containing xstatus */
-    BlockNumber     masterblock = InvalidBlockNumber;
-    BufferDesc     *bufHdr;
-
     
     if (cart->numberOfTrans == 0)
         return 0;
@@ -774,34 +767,15 @@ int LogTransactions(WriteGroup cart) {
         DTRACE_PROBE1(mtpg, dbwriter__commit, cart->transactions[i]);
         localblock = TransComputeBlockNumber(cart->LogRelation, cart->transactions[i]);
         
-        if (localblock != masterblock) {
-            if (masterblock != InvalidBlockNumber) {
-                int      status = STATUS_OK;
-                IOStatus iostatus = WriteBufferIO(bufHdr, true);
-                if ( iostatus ) {
-                    if (bufHdr->data == 0)
-                        elog(FATAL, "[DBWriter] bad buffer block in TransactionLogging");
-                    
-                    status = smgrflush(cart->LogRelation->rd_smgr, masterblock, (char *) MAKE_PTR(bufHdr->data));
-                    
-                    if ( status == SM_FAIL ) {
-                        ErrorBufferIO(iostatus, bufHdr);
-                        elog(FATAL, "LogTransactions: cannot write %lu for %s-%s",
-                                bufHdr->tag.blockNum, bufHdr->blind.relname, bufHdr->blind.dbname);
-                    } else {
-                        TerminateBufferIO(iostatus, bufHdr);
-                    }
-                }
-                ReleaseBuffer(cart->LogRelation, buffer);
+        if (buffer == InvalidBuffer || localblock != BufferGetBlockNumber(buffer)) {
+            if (buffer != InvalidBuffer) {
+                FlushBuffer(cart->LogRelation,buffer,true);
             }
-            masterblock = localblock;
             buffer = ReadBuffer(cart->LogRelation, localblock);
             if (!BufferIsValid(buffer))
                 elog(ERROR, "[DBWriter]bad buffer read in transaction logging");
             
-            
             block = BufferGetBlock(buffer);
-            bufHdr = &BufferDescriptors[buffer - 1];
         }
         /*
          * ---------------- get the block containing the transaction
@@ -812,23 +786,7 @@ int LogTransactions(WriteGroup cart) {
         if ( cart->WaitingThreads[i] != NULL ) ResetThreadState(cart->WaitingThreads[i]);
     }
     
-    if (masterblock != InvalidBlockNumber) {
-        int status = STATUS_OK;
-        IOStatus        iostatus = WriteBufferIO(bufHdr, true);
-        if ( iostatus ) {
-            status = smgrflush(cart->LogRelation->rd_smgr, masterblock, (char *) MAKE_PTR(bufHdr->data));
-            
-            if ( status == SM_FAIL ) {
-                ErrorBufferIO(iostatus,bufHdr);
-                elog(FATAL, "LogTransactions: cannot write %lu for %s-%s",
-                        bufHdr->tag.blockNum, bufHdr->blind.relname, bufHdr->blind.dbname);
-            } else {
-                TerminateBufferIO(iostatus,bufHdr);
-            }
-        }
-        
-        ReleaseBuffer(cart->LogRelation, buffer);
-    }
+    FlushBuffer(cart->LogRelation,buffer,true);
     
     DTRACE_PROBE1(mtpg, dbwriter__logged, i);
     

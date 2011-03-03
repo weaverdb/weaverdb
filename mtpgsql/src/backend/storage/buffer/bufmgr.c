@@ -426,12 +426,9 @@ SyncRelation(Relation rel) {
 
 int
 FlushBuffer(Relation rel, Buffer buffer, bool release) {
-    BufferDesc *bufHdr;
-   
+
     if (BufferIsLocal(buffer))
         return FlushLocalBuffer(buffer, release) ? STATUS_OK : STATUS_ERROR;
-    else 
-        bufHdr = &BufferDescriptors[buffer - 1];
     
     if (BAD_BUFFER_ID(buffer))
         return STATUS_ERROR;
@@ -448,7 +445,11 @@ DirectWriteBuffer(Relation rel, Buffer buffer, bool release) {
     int			status = STATUS_OK;
     IOStatus            iostatus;
         
-        bufenv->DidWrite = true;
+        if ( bufenv != NULL ) {
+            bufenv->DidWrite = true;
+        } else {
+            Assert(IsDBWriter());
+        }
         
         bufHdr = &BufferDescriptors[buffer - 1];
         /*  rely on the fact that the buffer is already pinned so
@@ -459,8 +460,9 @@ we don't have to lock  */
         
         Assert ( relId == RelationGetRelid(rel) );
         
-        bufenv->DidWrite = true;
-        GetTransactionInfo()->SharedBufferChanged = true;
+        if ( bufenv != NULL ) {
+            GetTransactionInfo()->SharedBufferChanged = true;
+        }
         
         /*
          * Grab a read lock on the buffer to ensure that no
@@ -473,8 +475,7 @@ we don't have to lock  */
                 PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
             }
 
-            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum,
-            (char *) MAKE_PTR(bufHdr->data));
+            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
 
             if (status == SM_FAIL) {
                 ErrorBufferIO(iostatus,bufHdr);

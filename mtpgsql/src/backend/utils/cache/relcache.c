@@ -872,7 +872,6 @@ equalRuleLocks(RuleLock *rlock1, RuleLock *rlock2) {
 static Relation
 RelationBuildDesc(RelationBuildDescInfo buildinfo,
         Relation oldrelation) {
-    File fd;
     Relation relation;
     u_int natts;
     Oid relid;
