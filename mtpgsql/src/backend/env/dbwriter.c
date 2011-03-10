@@ -114,8 +114,8 @@ struct writegroups {
     bool				locked;
     bool                                flush_run;
     /*  for convenience, cache these here  */
-    Relation                            LogRelation;
-    Relation                            VarRelation;
+    Oid                            LogId;
+    Oid                            VarId;
     
     char*                               snapshot;
     
@@ -363,8 +363,8 @@ WriteGroup CreateWriteGroup(int trans, int buffers) {
     
     ResetWriteGroup(cart);
     
-    cart->LogRelation = NULL;
-    cart->VarRelation = NULL;
+    cart->LogId = RelOid_pg_log;
+    cart->VarId = RelOid_pg_variable;
     
     cart->LastSoftXid = InvalidTransactionId;
     
@@ -752,9 +752,12 @@ int LogTransactions(WriteGroup cart) {
     int             i = 0;
     Buffer          buffer = InvalidBuffer;	/* buffer associated with block */
     Block           block;	/* block containing xstatus */
-    
+     Relation        LogRelation;
+   
     if (cart->numberOfTrans == 0)
         return 0;
+     
+    LogRelation = RelationNameGetRelation(LogRelationName,DEFAULTDBOID);
     
     for (i = 0; i < cart->numberOfTrans; i++) {
         BlockNumber     localblock = InvalidBlockNumber;
@@ -765,13 +768,13 @@ int LogTransactions(WriteGroup cart) {
             elog(FATAL, "zero transaction id");
         }
         DTRACE_PROBE1(mtpg, dbwriter__commit, cart->transactions[i]);
-        localblock = TransComputeBlockNumber(cart->LogRelation, cart->transactions[i]);
+        localblock = TransComputeBlockNumber(LogRelation, cart->transactions[i]);
         
         if (buffer == InvalidBuffer || localblock != BufferGetBlockNumber(buffer)) {
             if (buffer != InvalidBuffer) {
-                FlushBuffer(cart->LogRelation,buffer,true);
+                FlushBuffer(LogRelation,buffer,true);
             }
-            buffer = ReadBuffer(cart->LogRelation, localblock);
+            buffer = ReadBuffer(LogRelation, localblock);
             if (!BufferIsValid(buffer))
                 elog(ERROR, "[DBWriter]bad buffer read in transaction logging");
             
@@ -786,7 +789,8 @@ int LogTransactions(WriteGroup cart) {
         if ( cart->WaitingThreads[i] != NULL ) ResetThreadState(cart->WaitingThreads[i]);
     }
     
-    FlushBuffer(cart->LogRelation,buffer,true);
+    FlushBuffer(LogRelation,buffer,true);
+    RelationClose(LogRelation);
     
     DTRACE_PROBE1(mtpg, dbwriter__logged, i);
     
@@ -946,8 +950,8 @@ int LogBuffers(WriteGroup list, PassType type) {
                 list->descriptions[i].relId.relId,
                 list->descriptions[i].relId.dbId) ) {
             
-            if (list->descriptions[i].relId.relId == list->LogRelation->rd_id ||
-                    list->descriptions[i].relId.relId == list->VarRelation->rd_id) {
+            if (list->descriptions[i].relId.relId == list->LogId ||
+                    list->descriptions[i].relId.relId == list->VarId) {
                 /* skip these, they do not belong in the
              log and we don't want them replayed
                  */
@@ -1052,8 +1056,8 @@ int SyncBuffers(WriteGroup list) {
              * buffer
              */
             if (
-                bufHdr->tag.relId.relId == list->LogRelation->rd_id ||
-                bufHdr->tag.relId.relId == list->VarRelation->rd_id
+                bufHdr->tag.relId.relId == list->LogId ||
+                bufHdr->tag.relId.relId == list->VarId
                 ) {
                 /* VarRel should always be flushing out writes */
                 /* LogRel should only get here due to soft commits holding
@@ -1065,12 +1069,10 @@ int SyncBuffers(WriteGroup list) {
                 if (iostatus) {
                     SmgrInfo target = NULL;
                     
-                    if ( bufHdr->tag.relId.relId == list->VarRelation->rd_id ) {
-                        elog(NOTICE, "this should not happen");
-                        target = list->VarRelation->rd_smgr;
-                    } else if ( bufHdr->tag.relId.relId == list->LogRelation->rd_id ) {
-                        /*  these are soft commits but flush them out */
-                        target = list->LogRelation->rd_smgr;
+                    if ( bufHdr->tag.relId.relId == list->VarId ) {
+                        continue;
+                    } else if ( bufHdr->tag.relId.relId == list->LogId ) {
+                        continue;
                     }
                     
                     status = smgrflush(target, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
@@ -1274,12 +1276,6 @@ static WriteGroup GetNextTarget(WriteGroup last) {
     
     pthread_mutex_lock(&cart->checkpoint);
     
-    if ( cart->VarRelation == NULL )  {
-        cart->VarRelation = RelationNameGetRelation(VariableRelationName, DEFAULTDBOID);
-    }
-    if ( cart->LogRelation == NULL )  {
-        cart->LogRelation = RelationNameGetRelation(LogRelationName, DEFAULTDBOID);
-    }
     cart->owner = pthread_self();
     cart->locked = true;    
     return cart;
