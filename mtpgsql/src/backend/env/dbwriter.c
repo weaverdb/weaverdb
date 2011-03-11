@@ -757,7 +757,7 @@ int LogTransactions(WriteGroup cart) {
     if (cart->numberOfTrans == 0)
         return 0;
      
-    LogRelation = RelationNameGetRelation(LogRelationName,DEFAULTDBOID);
+    LogRelation = RelationIdGetRelation(cart->LogId,DEFAULTDBOID);
     
     for (i = 0; i < cart->numberOfTrans; i++) {
         BlockNumber     localblock = InvalidBlockNumber;
@@ -897,7 +897,7 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
     UnlockWriteGroup(cart);
     
     if ( setxid ) {
-        Relation        LogRelation = RelationNameGetRelation(LogRelationName, DEFAULTDBOID);
+        Relation        LogRelation = RelationIdGetRelation(cart->LogId, DEFAULTDBOID);
         if (setstate == XID_COMMIT ) {
             setstate = XID_SOFT_COMMIT;
             DTRACE_PROBE1(mtpg, dbwriter__softcommit, xid);
@@ -1067,13 +1067,7 @@ int SyncBuffers(WriteGroup list) {
 
                 iostatus = WriteBufferIO(bufHdr, true);
                 if (iostatus) {
-                    Relation target;
-                    
-                    if ( bufHdr->tag.relId.relId == list->VarId ) {
-                        target = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
-                    } else if ( bufHdr->tag.relId.relId == list->LogId ) {
-                        target = RelationNameGetRelation(LogRelationName,DEFAULTDBOID);
-                    }
+                    Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
                     
                     status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
                     
