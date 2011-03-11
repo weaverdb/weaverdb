@@ -1067,15 +1067,15 @@ int SyncBuffers(WriteGroup list) {
 
                 iostatus = WriteBufferIO(bufHdr, true);
                 if (iostatus) {
-                    SmgrInfo target = NULL;
+                    Relation target;
                     
                     if ( bufHdr->tag.relId.relId == list->VarId ) {
-                        continue;
+                        target = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
                     } else if ( bufHdr->tag.relId.relId == list->LogId ) {
-                        continue;
+                        target = RelationNameGetRelation(LogRelationName,DEFAULTDBOID);
                     }
                     
-                    status = smgrflush(target, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
+                    status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
                     
                     if (status == SM_FAIL) {
                         ErrorBufferIO(iostatus, bufHdr);
@@ -1086,6 +1086,7 @@ int SyncBuffers(WriteGroup list) {
                         TerminateBufferIO(iostatus, bufHdr);
                     }
                     
+                    RelationClose(target);
                 }
             } else {
                 PathCache*   cache = NULL;
