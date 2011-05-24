@@ -990,7 +990,6 @@ ExecutePlan(EState *estate,
 	ItemPointerData tuple_ctid;
 	int			current_tuple_count;
 	TupleTableSlot *result;
-	Env*		env = GetEnv();
     TransactionInfo* t_info;
 
 	/*
@@ -1351,8 +1350,7 @@ ExecDelete(TupleTableSlot *slot,
 	Relation	resultRelationDesc;
 	ItemPointerData ctid;
 	int			result;
-	Env*  env 	= GetEnv();
-TransactionInfo* t_info = GetTransactionInfo();
+        TransactionInfo* t_info = GetTransactionInfo();
 	/*
 	 * get the result relation information
 	 */

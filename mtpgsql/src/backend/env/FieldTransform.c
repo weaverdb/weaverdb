@@ -178,7 +178,7 @@ TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
                 break;
             case INT8OID:
                 if (desc->atttypid == XIDOID) IndirectLongCopyValue(output,value);
-                else if (desc->atttypid == OIDOID) IndirectLongCopyValue(output,value);
+                else if (desc->atttypid == OIDOID) IndirectLongCopyValue(output,&value);
                 break;
             case FLOAT8OID:
                 if (desc->atttypid == FLOAT4OID) DirectDoubleCopyValue(output,(double)*(float*)DatumGetPointer(value));

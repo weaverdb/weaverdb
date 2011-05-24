@@ -82,7 +82,6 @@ CreateWeaverStmtManager( const char* name, const char * paslong, const char* con
     mgr->stackSize = 0;
 
     if ( mgr->theConn && WIsValidConnection(mgr->theConn) ) {
-        short x;
         int counter = 0;
 
         mgr->holdingArea = 0;

@@ -99,7 +99,6 @@ extern OpaqueWConn
 WCreateConnection(const char *tName, const char *pass, const char *conn)
 {
         int             sqlError = 0;
-        long            opCode;
         char            dbpath[512];
         Oid             dbid = InvalidOid;
         WConn          connection = NULL;
@@ -161,26 +160,35 @@ WCreateConnection(const char *tName, const char *pass, const char *conn)
                 short           winner = false;
                 HeapTuple       ht = NULL;
                 char            isNull = true;
-
-                ht = SearchSysCacheTuple(SHADOWNAME, PointerGetDatum(tName), 0, 0, 0);
-                if (HeapTupleIsValid(ht)) {
-                    Datum           dpass = SysCacheGetAttr(SHADOWNAME, ht, Anum_pg_shadow_passwd, &isNull);
-                    if (!isNull) {
-                            char            cpass[256];
-                            memset(cpass, 0, 256);
-                            strncpy(cpass, (char *) DatumGetPointer(dpass + 4), (*(int *) dpass) - 4);
-                            winner = (strcmp(pass, cpass) == 0);
-                            if (!winner) {
-                                    strncpy(connection->env->errortext, "user password does not match", 255);
-                                    sqlError = 1702;
-                            }
+                
+                if ( strlen(tName) > 0 ) {
+                    ht = SearchSysCacheTuple(SHADOWNAME, PointerGetDatum(tName), 0, 0, 0);
+                    if (HeapTupleIsValid(ht)) {
+                        Datum           dpass = SysCacheGetAttr(SHADOWNAME, ht, Anum_pg_shadow_passwd, &isNull);
+                        if (!isNull) {
+                                char            cpass[256];
+                                memset(cpass, 0, 256);
+                                strncpy(cpass, (char *) DatumGetPointer(dpass + 4), (*(int *) dpass) - 4);
+                                winner = (strcmp(pass, cpass) == 0);
+                                if (!winner) {
+                                        strncpy(connection->env->errortext, "user password does not match", 255);
+                                        sqlError = 1702;
+                                }
+                        } else {
+                                winner = true;
+                        }
                     } else {
-                            winner = true;
+                        sqlError = 1703;
+                        strncpy(connection->env->errortext, "user does not exist", 255);
+                        winner = false;
                     }
                 } else {
-                    sqlError = 1703;
-                    strncpy(connection->env->errortext, "user does not exist", 255);
-                    winner = false;
+                    if ( GetBoolProperty("allow_anonymous") ) {
+                        winner = true;
+                    } else { 
+                        strncpy(connection->env->errortext, "anonymous connections not allowed", 255);
+                        sqlError = 1704;                        
+                    }
                 }
         }
 
@@ -351,8 +359,6 @@ extern long
 WParsingFunc(OpaqueWConn conn, const char *smt)
 {
         WConn          connection = SETUP(conn);
-        List           *querytree_list = NULL;
-        List           *plantree_list = NULL;
         int             c = 0;
         long            err = 0;
         int stmtlen = strlen(smt);
@@ -583,10 +589,6 @@ WFetch(OpaqueWConn conn)
 
     int             pos = 0;
 
-    long            check;
-    unsigned long   rows;
-    unsigned short  stats;
-
     if ( CheckForCancel() ) {
         elog(ERROR,"Query Cancelled");
     }
@@ -614,7 +616,7 @@ WFetch(OpaqueWConn conn)
     } else {
         HeapTuple       tuple = slot->val;
         TupleDesc       tdesc = slot->ttc_tupleDescriptor;
-
+        
         while (connection->output[pos].index != 0 && pos <= MAX_ARGS) {
             Datum       val = (Datum) NULL;
             char            isnull = 0;
@@ -1277,8 +1279,7 @@ abort cleanup will take care of it.  */
 
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
 #ifdef MEMORY_CONTEXT_CHECKING
-    size = MemoryContextStats(MemoryContextGetEnv()->QueryContext);
-    fprintf(stderr, "memory at query: %d\n", size);
+    fprintf(stderr, "memory at query: %d\n",  MemoryContextStats(MemoryContextGetEnv()->QueryContext));
 #endif
     MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
     memset(connection->output, 0, sizeof(Output) * MAX_ARGS);
@@ -1368,6 +1369,7 @@ FillExecArgs(WConn connection)
                 memcpy((char *) paramLI->value, connection->input[k].target, connection->input[k].varSize);
                 break;
             case VARCHAROID:
+            case BYTEAOID:
             case TEXTOID:
             case BLOBOID:
             case JAVAOID:

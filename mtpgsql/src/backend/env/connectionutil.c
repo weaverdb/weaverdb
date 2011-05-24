@@ -99,7 +99,7 @@ extern void initweaverbackend(char* vars)
 {
         char*       dbname = NULL;
 	char	   *reason;
-	char	   *fullpath,datpath[MAXPGPATH],control[MAXPGPATH],xlogdir[MAXPGPATH];
+	char	   datpath[MAXPGPATH],control[MAXPGPATH],xlogdir[MAXPGPATH];
         char*       lasts;
 
         char*       key = strtok_r(vars,"=",&lasts);
@@ -566,9 +566,10 @@ checklockfile(void) {
         return 1;
 }
 
-extern void 
+extern bool 
 prepareforshutdown()
 {
+    if ( !isinitialized() ) return false;
 	SetEnv(env);
         
     pthread_mutex_lock(&init_lock);
@@ -584,6 +585,8 @@ prepareforshutdown()
 	MasterWriteLock(); 
         
     SetEnv(NULL);
+    
+    return true;
 }
 
 extern void
@@ -724,6 +727,7 @@ char* GetProperty(char* key) {
 int GetIntProperty(char* key) {
     char* val = GetProperty(key);
     if ( val == NULL ) return 0;
+    if ( toupper(val[0]) == 'T') return 1;
     return atoi(val);
 }
 
@@ -731,6 +735,13 @@ double GetFloatProperty(char* key) {
     char* val = GetProperty(key);
     if ( val == NULL ) return 0;
     return atof(val);
+}
+
+bool GetBoolProperty(char* key) {
+    char* val = GetProperty(key);
+    if ( val == NULL) return false;
+    if ( toupper(val[0]) == 'T') return true;
+    return false;
 }
 
 bool PropertyIsValid(char* key) {

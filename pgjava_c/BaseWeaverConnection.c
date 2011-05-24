@@ -112,23 +112,23 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
 JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_close(JNIEnv *env,jobject talkerObject)
 {
 /*  shutdown any threads resources still hanging around */
-	prepareforshutdown();
-        
-        shuttingdown = true;
-        
-	for (int x = 0;x<GetMaxBackends();x++) {
-		if (theManagers[x] != NULL ) {
-			Init(theManagers[x],clean_input,clean_output);
-			DestroyWeaverStmtManager(theManagers[x]);
-			theManagers[x] = NULL;
-		}
-		if ( javaSideLog[x] != NULL ) {
-			(*env)->DeleteGlobalRef(env,javaSideLog[x]);
-			javaSideLog[x] = NULL;    
-		}
-	}
+	if ( prepareforshutdown() ) {
+            shuttingdown = true;
 
-	wrapupweaverbackend();
+            for (int x = 0;x<GetMaxBackends();x++) {
+                    if (theManagers[x] != NULL ) {
+                            Init(theManagers[x],clean_input,clean_output);
+                            DestroyWeaverStmtManager(theManagers[x]);
+                            theManagers[x] = NULL;
+                    }
+                    if ( javaSideLog[x] != NULL ) {
+                            (*env)->DeleteGlobalRef(env,javaSideLog[x]);
+                            javaSideLog[x] = NULL;    
+                    }
+            }
+
+            wrapupweaverbackend();
+        }
         DropCache(env);
         
 	pthread_mutex_destroy(&allocator);
@@ -835,7 +835,7 @@ static StmtMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
 	jsize connlen = (*env)->GetStringUTFLength(env,connection);
 
 	if (( passlen > 63 || namelen > 63 || connlen > 63 ) ||
-        ( passlen == 0 || namelen == 0 || connlen == 0 ) )
+        ( passlen < 0 || namelen < 0 || connlen <= 0 ) )
         {
             if (!(*env)->ExceptionOccurred(env) ) 
                 (*env)->ThrowNew(env,Cache->exception,"User not valid");

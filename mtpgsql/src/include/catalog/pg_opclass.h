@@ -99,6 +99,8 @@ DATA(insert OID =  714 (	circle_ops		718   ));
 DESCR("");
 DATA(insert OID =  754 (	int8_ops		 20   ));
 DESCR("");
+DATA(insert OID = 957 (	bytea_ops	   17   ));
+DESCR("");
 DATA(insert OID = 1076 (	bpchar_ops	   1042   ));
 DESCR("");
 DATA(insert OID = 1077 (	varchar_ops    1043   ));

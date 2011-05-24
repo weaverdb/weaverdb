@@ -52,7 +52,7 @@ all: libweaver.so weaver java_bits
 legacy: libmtpgjava.so pgjava 
 # think about using malloc mtmalloc as memory management libs
 java_bits:
-	${JAVA_HOME}/bin/javac driver/weaver/*.java
+	${JAVA_HOME}/bin/javac -g driver/weaver/*.java
 	# ${JAVA_HOME}/bin/javac driver/weaver/*.java driver/weaver/jdbc/*.java
 	${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class 
 	# ${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class driver/weaver/jdbc/*.class

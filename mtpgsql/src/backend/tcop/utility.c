@@ -82,10 +82,6 @@ ProcessUtility(Node *parsetree,
 {
 	char	   *commandTag = NULL;
 	char	   *relname;
-	char	   *relationName;
-	char	   *userName;
-
-	userName = GetPgUserName();
 
 	switch (nodeTag(parsetree))
 	{
@@ -216,7 +212,7 @@ ProcessUtility(Node *parsetree,
 					/* close rel, but keep lock until end of xact */
 					heap_close(rel, NoLock);
 #ifdef USEACL
-					if (!pg_ownercheck(userName, relname, RELNAME))
+					if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 						elog(ERROR, "you do not own class \"%s\"",
 							 relname);
 #endif
@@ -256,7 +252,7 @@ ProcessUtility(Node *parsetree,
 				heap_close(rel, NoLock);
 
 #ifdef USEACL
-				if (!pg_ownercheck(userName, relname, RELNAME))
+				if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 					elog(ERROR, "you do not own class \"%s\"", relname);
 #endif
 				TruncateRelation(relname);
@@ -321,7 +317,7 @@ ProcessUtility(Node *parsetree,
 					elog(ERROR, "ALTER TABLE: relation \"%s\" is a system catalog",
 						 relname);
 #ifdef USEACL
-				if (!pg_ownercheck(userName, relname, RELNAME))
+				if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 					elog(ERROR, "permission denied");
 #endif
 
@@ -355,7 +351,7 @@ ProcessUtility(Node *parsetree,
 					renameatt(relname,	/* relname */
 							  stmt->column,		/* old att name */
 							  stmt->newname,	/* new att name */
-							  userName,
+							  GetPgUserName(),
 							  stmt->inh);		/* recursive? */
 				}
 			}
@@ -423,7 +419,7 @@ ProcessUtility(Node *parsetree,
 							 relname);
 					/* close rel, but keep lock until end of xact */
 					heap_close(rel, NoLock);
-					if (!pg_ownercheck(userName, relname, RELNAME))
+					if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 						elog(ERROR, "you do not own class \"%s\"",
 							 relname);
 					ChangeAcl(relname, aip, modechg);
@@ -502,7 +498,7 @@ ProcessUtility(Node *parsetree,
 
 #ifdef USEACL
 				relname = stmt->object->relname;
-				aclcheck_result = pg_aclcheck(relname, userName, ACL_RU);
+				aclcheck_result = pg_aclcheck(relname, GetPgUserName(), ACL_RU);
 				if (aclcheck_result != ACLCHECK_OK)
 					elog(ERROR, "%s: %s", relname, aclcheck_error_strings[aclcheck_result]);
 #endif
@@ -547,7 +543,7 @@ ProcessUtility(Node *parsetree,
 							elog(ERROR, "class \"%s\" is a system catalog index",
 								 relname);
 #ifdef USEACL
-						if (!pg_ownercheck(userName, relname, RELNAME))
+						if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 							elog(ERROR, "%s: %s", relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif
 						RemoveIndex(relname);
@@ -560,7 +556,7 @@ ProcessUtility(Node *parsetree,
 #ifdef USEACL
 
 							relationName = RewriteGetRuleEventRel(rulename);
-							aclcheck_result = pg_aclcheck(relationName, userName, ACL_RU);
+							aclcheck_result = pg_aclcheck(relationName, GetPgUserName(), ACL_RU);
 							if (aclcheck_result != ACLCHECK_OK)
 								elog(ERROR, "%s: %s", relationName, aclcheck_error_strings[aclcheck_result]);
 #endif
@@ -581,7 +577,7 @@ ProcessUtility(Node *parsetree,
 #ifdef USEACL
 							ruleName = MakeRetrieveViewRuleName(viewName);
 							relationName = RewriteGetRuleEventRel(ruleName);
-							if (!pg_ownercheck(userName, relationName, RELNAME))
+							if (!pg_ownercheck(GetPgUserName(), relationName, RELNAME))
 								elog(ERROR, "%s: %s", relationName, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 							pfree(ruleName);
 #endif
@@ -926,7 +922,7 @@ ProcessUtility(Node *parsetree,
 						}
 						
 #ifdef USEACL
-						if (!pg_ownercheck(userName, relname, RELNAME))
+						if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 							elog(ERROR, "%s: %s", relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif
 						ReindexIndex(relname, stmt->force, stmt->exclusive);
@@ -948,7 +944,7 @@ ProcessUtility(Node *parsetree,
 						*/
 						}
 #ifdef USEACL
-						if (!pg_ownercheck(userName, relname, RELNAME))
+						if (!pg_ownercheck(GetPgUserName(), relname, RELNAME))
 							elog(ERROR, "%s: %s", relname, aclcheck_error_strings[ACLCHECK_NOT_OWNER]);
 #endif
 						ReindexTable(relname, stmt->force, stmt->exclusive);

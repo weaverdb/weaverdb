@@ -242,11 +242,11 @@ transformStmt(ParseState *pstate, Node *parseTree)
 
 		case T_DeleteStmt:
 			result = transformDeleteStmt(pstate, (DeleteStmt *) parseTree);
-			break;
+                        break;
 
 		case T_UpdateStmt:
 			result = transformUpdateStmt(pstate, (UpdateStmt *) parseTree);
-			break;
+                        break;
 
 		case T_SelectStmt:
 			if (!((SelectStmt *) parseTree)->portalname)

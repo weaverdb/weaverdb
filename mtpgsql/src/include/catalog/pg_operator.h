@@ -608,6 +608,13 @@ DATA(insert OID = 1361 (  "+"	   PGUID 0 b t f 1082 1266 1184    0	0 0 0 datetim
 DATA(insert OID = 1363 (  "+"	   PGUID 0 b t f 1083 1082 1184    0	0 0 0 timedate_pl - - ));
 DATA(insert OID = 1366 (  "+"	   PGUID 0 b t f 1266 1082 1184    0	0 0 0 timetzdate_pl - - ));
 
+/* bytea operators */
+DATA(insert OID = 1500 ( "<"	   PGUID 0 b t f 17 17	16 1503 1504  0 0 bytealt scalarltsel scalarltjoinsel ));
+DATA(insert OID = 1501 ( "<="	   PGUID 0 b t f 17 17	16 1504 1503  0 0 byteale scalarltsel scalarltjoinsel ));
+DATA(insert OID = 1502 ( "="	   PGUID 0 b t t 17 17	16 1502 1505 1500 1500 byteaeq eqsel eqjoinsel ));
+DATA(insert OID = 1503 ( ">"	   PGUID 0 b t f 17 17	16 1500 1501  0 0 byteagt scalargtsel scalargtjoinsel ));
+DATA(insert OID = 1504 ( ">="	   PGUID 0 b t f 17 17	16 1501 1500  0 0 byteage scalargtsel scalargtjoinsel ));
+DATA(insert OID = 1505 ( "<>"	   PGUID 0 b t f 17 17	16 1505 1502  0 0 byteane neqsel neqjoinsel ));
 /* additional geometric operators - thomas 97/04/18 */
 //DATA(insert OID = 1420 (  "@@"	  PGUID 0 l t f    0  718  600	  0    0	0	 0 circle_center - - ));
 //DATA(insert OID = 1500 (  "="	  PGUID 0 b t f  718  718	16 1500 1501 1502 1502 circle_eq eqsel eqjoinsel ));

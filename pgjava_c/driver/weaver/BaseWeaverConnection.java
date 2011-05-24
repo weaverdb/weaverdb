@@ -30,6 +30,9 @@ public class BaseWeaverConnection {
     public int resultField = 0;
     String errorText = "";
     String state = "";
+    
+    String current_stmt = null;
+    long stmt_id;
     /*
     private StreamingType streamingPersonality = StreamingType.STREAMING_STREAMS;
     private int streaming_size = 64 * 1024;
@@ -70,11 +73,11 @@ public class BaseWeaverConnection {
 */
     private boolean convertString(String connect) throws SQLException {
         if ( connect == null ) return false;
-        
+        if ( connect.startsWith("@") ) connect = "/" + connect;
         int userbr = connect.indexOf('/');
-        if ( userbr <= 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
+         if ( userbr < 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
         int passbr = connect.indexOf('@',userbr);
-        if ( passbr <= 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
+        if ( passbr < 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
 
         String name = connect.substring(0, userbr);
         String password = connect.substring(userbr+1, passbr);
@@ -140,11 +143,23 @@ public class BaseWeaverConnection {
         inputs.clear();
         for ( BoundOutput bo : outputs.values() ) bo.deactivate();
         outputs.clear();
+        current_stmt = null;
+    }
+    
+    public String getParsedStatement() {
+        return current_stmt;
     }
 
     public long parse(String stmt) throws SQLException {
         clearBinds();
-        return parseStatement(stmt);
+        current_stmt = stmt;
+        stmt_id = parseStatement(stmt);
+        return stmt_id;
+    }
+    
+    public long parseIfNew(String stmt) throws SQLException {
+        if ( stmt.equals(current_stmt) ) return stmt_id;
+        return parse(stmt);
     }
 
     public long begin() throws SQLException {

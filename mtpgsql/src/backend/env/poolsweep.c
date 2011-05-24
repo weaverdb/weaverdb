@@ -160,6 +160,31 @@ PoolsweepInit(int priority) {
 }
 
 void
+StopPoolsweepsForDB(Oid dbid) {
+    Sweeps         *next = NULL;
+    Sweeps         *last = NULL;
+        
+    if (!inited)
+        return;
+    
+    pthread_mutex_lock(&list_guard);
+    if ( sweep_cxt != NULL ) {
+        next = sweeplist;
+        while (next != NULL) {
+            if ( next->dbid == dbid ) {
+                next = ShutdownPoolsweep(next);
+                if ( last == NULL ) sweeplist = next;
+                else last->next = next;
+            } else {
+                next = next->next;
+            }
+            last = next;
+        }
+    } 
+    pthread_mutex_unlock(&list_guard);
+}
+
+void
 PoolsweepDestroy() {
     Sweeps         *next = NULL;
     MemoryContext   cxt = sweep_cxt;
@@ -763,7 +788,6 @@ IsPoolsweep() {
 void
 DropVacuumRequests(Oid relid, Oid dbid) {
     Sweeps         *job = NULL;
-    bool            valid = false;
     
     pthread_mutex_lock(&list_guard);
     

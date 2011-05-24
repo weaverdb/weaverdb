@@ -435,13 +435,13 @@ InitVirtualFileSystem()
 {
 	int counter;
 	
-	char* share = GetProperty("vfdsharemax");
-	char* opti = GetProperty("vfdoptimize");
-	char* autotune = GetProperty("vfdautotune");
+	int share = GetIntProperty("vfdsharemax");
+	bool opti = GetBoolProperty("vfdoptimize");
+	bool autotune = GetBoolProperty("vfdautotune");
 
-	if ( share != NULL ) vfdsharemax = atoi(share);
-        if ( opti != NULL ) vfdoptimize = (toupper(opti[0]) == 'T') ? true : false;
-        if ( autotune != NULL ) vfdautotune = (toupper(autotune[0]) == 'T') ? true : false;
+	if ( share != 0 ) vfdsharemax = share;
+        vfdoptimize = opti;
+        vfdautotune = autotune;
 
 	vfdmax = vfdmultiple * vfdblockcount;
 

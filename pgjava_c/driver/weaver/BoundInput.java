@@ -212,9 +212,14 @@ public class BoundInput<T> extends Bound<T> {
         if (stream_holder instanceof ReadableByteChannel) {
             return ((ReadableByteChannel) stream_holder).read(data);
         } else {
-            byte[] open = new byte[data.limit()];
-            data.get(open);
-            return ((InputStream) stream_holder).read(open);
+            if ( data.hasArray() ) {
+                 return ((InputStream) stream_holder).read(data.array(),data.arrayOffset() + data.position(),data.remaining());
+            } else {
+                byte[] open = new byte[data.limit()];
+                int count = ((InputStream) stream_holder).read(open);
+                if ( count > 0 ) data.put(open,0,count);
+                return count;
+            }
         }
     }
 }

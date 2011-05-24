@@ -126,7 +126,6 @@ coerce_type(ParseState *pstate, Node *node, Oid inputTypeId,
 		 */
 		FuncCall   *n = makeNode(FuncCall);
 		Type		targetType = typeidType(targetTypeId);
-                HeapTuple       copy = heap_copytuple(targetType);
                 MemoryContext   cxt = NULL;
 
 		n->funcname = typeTypeName(targetType);

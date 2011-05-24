@@ -120,9 +120,13 @@ public class BoundOutput<T> extends Bound<T> {
         if (value instanceof WritableByteChannel) {
             ((WritableByteChannel) value).write(data);
         } else {
-            byte[] open = new byte[data.limit()];
-            data.get(open);
-            ((OutputStream) value).write(open);
+            if ( data.hasArray() ) {
+                ((OutputStream) value).write(data.array(),data.position() + data.arrayOffset(),data.remaining());
+            } else {
+                byte[] open = new byte[data.remaining()];
+                data.get(open);
+                ((OutputStream) value).write(open);
+            }
         }
     }
 }

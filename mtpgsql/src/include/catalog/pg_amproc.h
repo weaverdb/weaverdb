@@ -90,6 +90,7 @@ DATA(insert OID = 0 (403  432  357 1));
 DATA(insert OID = 0 (403  435  404 1));
 DATA(insert OID = 0 (403  754  842 1));
 DATA(insert OID = 0 (403 1076 1078 1));
+DATA(insert OID = 0 (403 17 1512 1));
 DATA(insert OID = 0 (403 1077 1079 1));
 DATA(insert OID = 0 (403 1114 1092 1));
 DATA(insert OID = 0 (403 1115 1107 1));

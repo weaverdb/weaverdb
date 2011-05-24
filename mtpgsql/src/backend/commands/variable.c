@@ -1717,10 +1717,8 @@ GetCostInfo(void)
 
 CostInfo*
 InitializeCostInfo(void) {
-    char* usehelpers = GetProperty("use_helperthreads");
-    
-    bool thread_helpers = ( usehelpers != NULL && toupper(*usehelpers) == 'T' ) ? true : false;
-    
+    bool thread_helpers = GetBoolProperty("use_helperthreads");
+        
     CostInfo* info = AllocateEnvSpace(cost_id,sizeof(CostInfo));
 
     info->effective_cache_size = PropertyIsValid("effective_cache_size") ? GetFloatProperty("effective_cache_size") : DEFAULT_EFFECTIVE_CACHE_SIZE;

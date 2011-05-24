@@ -30,7 +30,10 @@ superuser(void)
 	privileges.
 --------------------------------------------------------------------------*/
 	HeapTuple	utup;
-
+        char*           username = GetPgUserName();
+        
+        if ( strlen(username) <= 0 ) return false;
+        
 	utup = SearchSysCacheTuple(SHADOWNAME,
 							   PointerGetDatum(GetPgUserName()),
 							   0, 0, 0);

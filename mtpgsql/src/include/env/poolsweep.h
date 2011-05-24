@@ -32,6 +32,7 @@ void AddRespanRequest(char* rname,char* dbname,Oid relid,Oid dbid);
 void AddMoveRequest(char* rname,char* dbname,Oid relid,Oid dbid);
 void AddAllocateSpaceRequest(char* rname,char* dbname,Oid relid,Oid dbid);
 void AddWaitRequest(char* dbname, Oid dbid);
+void StopPoolsweepsForDB(Oid dbid);
 bool ContainsVacuumRequest(Oid relid,Oid dbid);
 void DropVacuumRequests(Oid relid,Oid dbid);
 bool IsPoolsweep(void);

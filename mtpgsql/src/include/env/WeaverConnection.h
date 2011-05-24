@@ -95,9 +95,6 @@ typedef struct Connection {
     Oid                 targs[MAX_ARGS];
     int                 nargs;
 
-    short		openCursor;
-    short		indie;
-
 /*   Query Stuff   */		
     PreparedPlan*	plan;
     Output		output[MAX_ARGS];

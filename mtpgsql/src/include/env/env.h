@@ -106,7 +106,7 @@ typedef struct Environment {
 	char* 			DatabasePath;  
 	Oid			DatabaseId;
 	char* 			UserName;
-	Oid			UserId;
+	int			UserId;
 /*  processing mode */
 	ProcessingMode  	Mode;           
 /*  prepkeyset.c   */

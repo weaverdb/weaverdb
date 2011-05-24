@@ -328,7 +328,6 @@ static Oid	UserId = InvalidOid;
 int
 GetUserId()
 {
-	AssertState(OidIsValid(GetEnv()->UserId));
 	return GetEnv()->UserId;
 }
 
@@ -337,8 +336,6 @@ SetUserId()
 {
 	HeapTuple	userTup;
 	char	   *userName;
-
-	AssertState(!OidIsValid(GetEnv()->UserId));	/* only once */
 
 	/*
 	 * Don't do scans if we're bootstrapping, none of the system catalogs
@@ -351,14 +348,18 @@ SetUserId()
 	}
 
 	userName = GetPgUserName();
-	userTup = SearchSysCacheTuple(SHADOWNAME,
-								  PointerGetDatum(userName),
-								  0, 0, 0);
-	if (!HeapTupleIsValid(userTup))
-		elog(FATAL, "SetUserId: user '%s' is not in '%s'",
-			 userName,
-			 ShadowRelationName);
-	GetEnv()->UserId = (Oid) ((Form_pg_shadow) GETSTRUCT(userTup))->usesysid;
+        if ( strlen(userName) > 0 ) {
+            userTup = SearchSysCacheTuple(SHADOWNAME,
+                                                                      PointerGetDatum(userName),
+                                                                      0, 0, 0);
+            if (!HeapTupleIsValid(userTup))
+                    elog(FATAL, "SetUserId: user '%s' is not in '%s'",
+                             userName,
+                             ShadowRelationName);
+            GetEnv()->UserId =  ((Form_pg_shadow) GETSTRUCT(userTup))->usesysid;
+        } else {
+            GetEnv()->UserId = 0;
+        }
 }
 
 /*-------------------------------------------------------------------------

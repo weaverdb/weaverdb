@@ -245,6 +245,16 @@ DATA(insert OID = 0 (  403 432 565 4 ));
 DATA(insert OID = 0 (  403 432 563 5 ));
 
 /*
+ *	nbtree bytea_ops
+ */
+
+DATA(insert OID = 0 (  403 957 1500 1 ));
+DATA(insert OID = 0 (  403 957 1501 2 ));
+DATA(insert OID = 0 (  403 957 1502 3 ));
+DATA(insert OID = 0 (  403 957 1503 4 ));
+DATA(insert OID = 0 (  403 957 1504 5 ));
+
+/*
  *	nbtree bpchar_ops
  */
 
@@ -401,6 +411,8 @@ DATA(insert OID = 0 (  405 1181   93 1 ));
 DATA(insert OID = 0 (  405	431   98 1 ));
 /* bpchar_ops */
 DATA(insert OID = 0 (  405 1076 1054 1 ));
+/* bytea_ops */
+DATA(insert OID = 0 (  405 957 1502 1 ));
 /* varchar_ops */
 DATA(insert OID = 0 (  405 1077 1062 1 ));
 /* date_ops */

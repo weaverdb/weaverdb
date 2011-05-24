@@ -254,7 +254,7 @@ Env* CreateEnv(Env* parent) {
 /*    lock.c  */
 	env->holdLock = 0;
     	
-	env->UserId = InvalidOid;
+	env->UserId = 0;
 	
 	env->UserName = NULL;
 	env->UserId = InvalidOid;
@@ -691,6 +691,7 @@ bool IsTransactionCareful() {
 
         switch ( check ) {
                 case CAREFUL_COMMIT:
+                case SYNCED_COMMIT:
                 case FAST_CAREFUL_COMMIT:
                         return true;
         }

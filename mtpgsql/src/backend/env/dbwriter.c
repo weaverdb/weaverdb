@@ -913,7 +913,9 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
         if ( setstate == XID_SOFT_COMMIT ) {
             /* wait for the soft_xid just before this one to commit before proceeding
              * to insure proper serialization */
+/*
             XactLockTableWait(soft_xid);
+*/
             ResetThreadState(GetMyThread());
         }
     }
