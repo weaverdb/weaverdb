@@ -5,4 +5,8 @@
         <activeConfIndexElem>0</activeConfIndexElem>
     </data>
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/1"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/1">
+        <file>file:/home/mscott/axonbackup/axon/weaver2/mtpgsql/src/include/catalog/pg_proc.h</file>
+        <file>file:/home/mscott/axonbackup/axon/weaver2/mtpgsql/src/include/catalog/pg_operator.h</file>
+    </open-files>
 </project-private>

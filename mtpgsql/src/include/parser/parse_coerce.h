@@ -86,16 +86,10 @@ typedef enum CATEGORY
 		|| ((a) == STREAMINGOID && (b) == BLOBOID) \
 		|| ((a) == BPCHAROID && (b) == TEXTOID) \
 		|| ((a) == BPCHAROID && (b) == VARCHAROID) \
-		|| ((a) == BPCHAROID && (b) == BYTEAOID) \
 		|| ((a) == VARCHAROID && (b) == TEXTOID) \
 		|| ((a) == VARCHAROID && (b) == BPCHAROID) \
-		|| ((a) == VARCHAROID && (b) == BYTEAOID) \
 		|| ((a) == TEXTOID && (b) == BPCHAROID) \
 		|| ((a) == TEXTOID && (b) == VARCHAROID) \
-		|| ((a) == TEXTOID && (b) == BYTEAOID) \
-		|| ((a) == BYTEAOID && (b) == BPCHAROID) \
-		|| ((a) == BYTEAOID && (b) == VARCHAROID) \
-		|| ((a) == BYTEAOID && (b) == TEXTOID) \
 		|| ((a) == OIDOID && (b) == INT4OID) \
 		|| ((a) == OIDOID && (b) == REGPROCOID) \
 		|| ((a) == INT4OID && (b) == OIDOID) \

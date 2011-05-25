@@ -796,12 +796,12 @@ bytealt(char *arg1, char *arg2)
 				len2;
 	int			i;
 
-	if (arg1 == NULL || arg2 == NULL)
+	if (arg1 == NULL && arg2 == NULL)
 		return (bool) 0;
 	len1 = VARSIZE(arg1) - VARHDRSZ;
 	len2 = VARSIZE(arg2) - VARHDRSZ;
-        
-        for (i=0;i<len1;i++) {
+        len0 = ( len1 < len2 ) ? len1 : len2;
+        for (i=0;i<len0;i++) {
             if ( VARDATA(arg1)[i] < VARDATA(arg2)[i] ) return 1;
         }
         if ( len1 == len2 ) return 0;
@@ -834,7 +834,7 @@ byteale(char *arg1, char *arg2)
 bool
 byteagt(char *arg1, char *arg2)
 {
-    return byteale(arg1,arg2);
+    return !byteale(arg1,arg2);
 }
 
 bool

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configurationDescriptor version="69">
-  <logicalFolder name="root" displayName="root" projectFiles="true">
+<configurationDescriptor version="79">
+  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
     <logicalFolder name="pgjava_c" displayName="pgjava_c" projectFiles="true">
       <logicalFolder name="driver" displayName="driver" projectFiles="true">
         <logicalFolder name="weaver" displayName="weaver" projectFiles="true">
@@ -1274,10 +1274,8 @@
   <confs>
     <conf name="Default" type="0">
       <toolsSet>
-        <developmentServer>localhost</developmentServer>
         <remote-sources-mode>LOCAL_SOURCES</remote-sources-mode>
         <compilerSet>SunStudio|SunStudio</compilerSet>
-        <platform>0</platform>
       </toolsSet>
       <makefileType>
         <makeTool>
@@ -1293,10 +1291,8 @@
     </conf>
     <conf name="NewConfiguration" type="0">
       <toolsSet>
-        <developmentServer>localhost</developmentServer>
         <remote-sources-mode>LOCAL_SOURCES</remote-sources-mode>
         <compilerSet>SunStudio_12|SunStudio_12</compilerSet>
-        <platform>0</platform>
       </toolsSet>
       <makefileType>
         <makeTool>

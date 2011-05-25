@@ -278,8 +278,6 @@ WDestroyConnection(OpaqueWConn conn)
         WConn     parent = conn->parent;
 
         if ( parent ) {
-            int x = 0; 
-            int land = 0;
             pthread_mutex_lock(&parent->child_lock);
             parent->child_count--;
             pthread_mutex_unlock(&parent->child_lock);

@@ -1590,6 +1590,10 @@ DATA(insert OID = 1293 ( currtid		   PGUID 11 f t f 2 f 27 "26 27" 100 0 0 100  
 DESCR("latest tid of a tuple");
 DATA(insert OID = 1294 ( currtid2		   PGUID 11 f t f 2 f 27 "25 27" 100 0 0 100  currtid_byrelname - ));
 DESCR("latest tid of a tuple");
+DATA(insert OID = 1513 ( tid		   PGUID 11 f t t 1 f 27 "17" 100 0 0 100  tidtobytes - ));
+DESCR("tid to bytea");
+DATA(insert OID = 1514 ( bytea		   PGUID 11 f t t 1 f 17 "27" 100 0 0 100  bytestotid - ));
+DESCR("bytea to tid");
 
 DATA(insert OID = 1296 (  timedate_pl	   PGUID 14 f t f 2 f 1184 "1083 1082" 100 0 0 100	"select datetime_pl($2, $1)" - ));
 DESCR("convert time and date to timestamp");

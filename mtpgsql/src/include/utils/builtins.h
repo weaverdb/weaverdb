@@ -463,6 +463,8 @@ PG_EXTERN text *tid_text(ItemPointer);
 PG_EXTERN ItemPointer text_tid(const text *);
 PG_EXTERN ItemPointer currtid_byreloid(Oid relOid, ItemPointer);
 PG_EXTERN ItemPointer currtid_byrelname(const text *relName, ItemPointer);
+PG_EXTERN bytea* tidtobytes(ItemPointer item);
+PG_EXTERN ItemPointer bytestotid(bytea* bytes);
 
 /* varchar.c */
 PG_EXTERN char *bpcharin(char *s, int dummy, int32 atttypmod);

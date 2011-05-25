@@ -90,8 +90,15 @@ public class BaseWeaverConnection {
         return convertString(connString);
     }
 
-    public void dispose() throws SQLException {
-        disposeConnection();
+    public synchronized void dispose() throws SQLException {
+        if ( id!= null ) disposeConnection();
+        id = null;
+    }
+    
+    @Override
+    public void finalize() throws Throwable {
+        super.finalize();
+        dispose();
     }
 
     public BaseWeaverConnection spawnHelper() throws SQLException {
