@@ -867,7 +867,6 @@ StartTransaction()
 
 void
 CycleTransactionId() {
-	Env* env = GetEnv();
 	TransactionId xid = GetCurrentTransactionId();
 	TransactionInfo*  info = GetTransactionInfo();
 	TransactionState s = info->CurrentTransactionState;
@@ -1390,6 +1389,8 @@ SetAbortOnly()
         } else if ( s->blockState != TBLOCK_DEFAULT ) {
             s->blockState = TBLOCK_ABORTONLY;
         }
+        
+        TransactionUnlock();
 }
 
 

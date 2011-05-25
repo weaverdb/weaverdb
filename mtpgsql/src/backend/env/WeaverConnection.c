@@ -84,6 +84,7 @@ static bool ReadyConnection(WConn connection);
             strncpy(connection->env->state, "ABORTONLY", 39);\
             target->abortonly = 1;\
         }\
+        SetAbortOnly();\
         WHandleError(target,err);\
     } else {\
         target->CDA.rc = 0\
