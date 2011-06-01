@@ -120,25 +120,6 @@ MemoryContextGetEnv(void) {
 }
 
 /*
- * MemoryContextReset
- *		Release all space allocated within a context and its descendants,
- *		but don't delete the contexts themselves.
- *
- * The type-specific reset routine handles the context itself, but we
- * have to do the recursion for the children.
- */
-/*
-void
-MemoryContextReset(MemoryContext context)
-{
-       AssertArg(MemoryContextIsValid(context));
-
-       MemoryContextResetChildren(context);
-       (*context->methods->reset) (context);
-}
- */
-
-/*
  * MemoryContextResetChildren
  *		Release all space allocated within a context's descendants,
  *		but don't delete the contexts themselves.  The named context

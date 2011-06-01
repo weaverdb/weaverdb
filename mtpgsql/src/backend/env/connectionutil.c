@@ -66,7 +66,7 @@ static const char* 			progname  = "mtpg";
 static IpcMemoryKey 		ipc_key;
 static 	void*				ipc_addr;
 static 	bool				master;
-static  bool				isPrivate;
+static  bool				isPrivate = true;
 
 extern void					StartupXLOG(void);
 extern void					ShutdownXLOG(void);
@@ -220,9 +220,11 @@ extern void initweaverbackend(char* vars)
 	GoMultiuser();
 	
 
+/*  no more notion of shared server  
 	if ( servertype != NULL ) {
 		isPrivate = !(strcasecmp(servertype,"SHARED") == 0);
 	}    
+*/
 
         /*  only private mode is supported now  */
 #ifndef NOTUSED

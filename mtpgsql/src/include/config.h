@@ -78,15 +78,15 @@
  * NOTE: default setting corresponds to the minimum number of buffers
  * that postmaster.c will allow for the default MaxBackends value.
  */
-#define DEF_NBUFFERS (DEF_MAXBACKENDS > 8 ? DEF_MAXBACKENDS * 2 : 16)
+#define DEF_NBUFFERS (DEF_MAXBACKENDS > 8 ? DEF_MAXBACKENDS * 2 : 512)
 
 /*
  * Size of a disk block --- currently, this limits the size of a tuple.
  * You can set it bigger if you need bigger tuples.
  */
-/* currently must be <= 32k bjm */
+/* currently must be <= 64k bjm */
 /* must also be a multiple of 8 for proper alignment */
-#define BLCKSZ	(1024*8)
+#define BLCKSZ	(1024*16)
 
 /*
  * RELSEG_SIZE is the maximum number of blocks allowed in one disk file.
@@ -106,7 +106,7 @@
  */
 #ifdef _LP64
 /*  this is the limit of the block number field of an item pointer  */
-#define RELSEG_SIZE	(0x400000000000)    
+#define RELSEG_SIZE	(0x800000000000)    
 #define LET_OS_MANAGE_FILESIZE
 #else
 #define RELSEG_SIZE	(0x40000000 / BLCKSZ)

@@ -48,7 +48,7 @@ MACOSPATH=\
 -L${JAVA_HOME}/lib \
 
 ifneq ($(PORTNAME),macosx)
-all: libweaver.so weaver java_bits
+all: java_bits libweaver.so weaver 
 legacy: libmtpgjava.so pgjava 
 # think about using malloc mtmalloc as memory management libs
 java_bits:

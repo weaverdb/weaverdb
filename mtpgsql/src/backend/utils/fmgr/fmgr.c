@@ -561,8 +561,8 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
 	else
 	{
 		procedureTuple = SearchSysCacheTuple(PROCOID,
-										   ObjectIdGetDatum(procedureId),
-											 0, 0, 0);
+                                                       ObjectIdGetDatum(procedureId),
+                                                             0, 0, 0);
 		if (!HeapTupleIsValid(procedureTuple))
 		{
 			elog(ERROR, "fmgr_info: function %u: cache lookup failed",

@@ -720,8 +720,6 @@ vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
 
 int
 _vfddumpindextomemory() {
-    int ret = 0;
-    
     if ( IndexStore.header.count == 0 ) return 0;
     IndexStore.header.index_magic = INDEX_MAGIC;
     if ( !index_log ) {

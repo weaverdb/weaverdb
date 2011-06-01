@@ -5,10 +5,7 @@
  */
 package driver.weaver;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.WritableByteChannel;
 import java.sql.SQLException;
@@ -21,16 +18,19 @@ import java.util.Date;
 public class BoundOutput<T> extends Bound<T> {
 
     private BaseWeaverConnection owner;
+    private Object link;
     private int index;
     private Object value;
     private boolean isnull = true;
 
-    protected BoundOutput(BaseWeaverConnection fc, int index, Class<T> type) throws SQLException {
+    protected BoundOutput(BaseWeaverConnection fc, Object link, int index, Class<T> type) throws SQLException {
         owner = fc;
+        this.link = link;
         setTypeClass(type);
         this.index = index;
         bind();
-    }
+        fc.getOutput(link,index,getTypeId(),this);
+    } 
 
     private void bind() throws SQLException {
         Class<T> type = getTypeClass();

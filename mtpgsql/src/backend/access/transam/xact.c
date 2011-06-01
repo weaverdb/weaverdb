@@ -1088,8 +1088,6 @@ AbortTransaction()
 void
 StartTransactionCommand()
 {
-	Env* env = GetEnv();
-	
 	TransactionState s = GetTransactionInfo()->CurrentTransactionState;
 
 	switch (s->blockState)

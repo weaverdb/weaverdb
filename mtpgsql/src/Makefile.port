@@ -56,6 +56,7 @@ CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
 CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
 CFLAGS+= -DDEBUGLOGS
 # performance
+#CFLAGS+= -xO4 -m64 -KPIC
 #CFLAGS+= -xO4 -xtarget=${CPU} -m64 -KPIC
 #CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo
 

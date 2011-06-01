@@ -447,7 +447,6 @@ InitializeTransactionLog(void)
 	Relation	logRelation;
 	Relation	variablerelation;
 	MemoryContext oldContext;
-	MemoryContextGlobals*	memenv = MemoryContextGetEnv();
     TransactionInfo*	info = GetTransactionInfo();
 
 	/* ----------------

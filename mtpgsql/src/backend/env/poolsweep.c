@@ -752,12 +752,13 @@ AddWaitRequest(char* dbname, Oid dbid) {
     args.args = &w;
     
     result = AddJobRequest(WAIT_JOB, "", dbname, 0, dbid, &args);
-    
-    pthread_mutex_lock(&w.guard);
-    while ( !w.done ) {
-        pthread_cond_wait(&w.gate, &w.guard);
+    if ( result == 0 ) {
+        pthread_mutex_lock(&w.guard);
+        while ( !w.done ) {
+            pthread_cond_wait(&w.gate, &w.guard);
+        }
+        pthread_mutex_unlock(&w.guard);
     }
-    pthread_mutex_unlock(&w.guard);
     pthread_cond_destroy(&w.gate);
     pthread_mutex_destroy(&w.guard);
 }

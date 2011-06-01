@@ -98,7 +98,6 @@ PG_EXTERN void MemoryContextResetAndDeleteChildren(MemoryContext context);
 PG_EXTERN size_t MemoryContextStats(MemoryContext context);
 PG_EXTERN void MemoryContextCheck(MemoryContext context);
 PG_EXTERN bool MemoryContextContains(MemoryContext context, void *pointer);
-PG_EXTERN bool MemoryContextReset(MemoryContext context);
 
 /*
  * This routine handles the context-type-independent part of memory

@@ -152,7 +152,6 @@ static void SetHead(BufferDesc* buf) {
 
 static void SetTailBuffer(BufferDesc* buf) {
     BufferDesc*  tail = NULL;
-    Buffer       origtail = InvalidBuffer;
     
     FreeList* which = ( buf->kind == RELKIND_INDEX ) ? &IndexList : &MasterList;
     pthread_mutex_lock(&which->guard);
@@ -168,21 +167,18 @@ static void SetTailBuffer(BufferDesc* buf) {
         tail = &BufferDescriptors[which->tail];
     }
     
-    if ( tail != NULL ) {
-        pthread_mutex_lock(&tail->cntx_lock.guard);
-    }
-    
     pthread_mutex_lock(&buf->cntx_lock.guard);
     Assert(buf->freeNext == DETACHED_DESCRIPTOR);
   /*  BM_FREE signals intention to add to list and should already be set  */
     Assert((buf->locflags & BM_FREE));
     buf->freeNext = INVALID_DESCRIPTOR;
     pthread_mutex_unlock(&buf->cntx_lock.guard);   
-    
+     
     if (tail == NULL) {
         which->head = buf->buf_id;
         which->tail = INVALID_DESCRIPTOR;
     } else {
+        pthread_mutex_lock(&tail->cntx_lock.guard);
         Assert((tail->locflags & BM_FREE));
         Assert((tail->freeNext == INVALID_DESCRIPTOR));
         tail->freeNext = buf->buf_id;
@@ -268,7 +264,6 @@ int BiasPinned(BufferDesc* buf) {
 
 
 int ManualPin(BufferDesc* buf, bool pageaccess) {
-    bool  remove = false;
     int valid = 0;
     BufferDesc*  tail = NULL;
     pthread_mutex_lock(&buf->cntx_lock.guard);
