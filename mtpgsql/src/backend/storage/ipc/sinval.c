@@ -294,8 +294,7 @@ GetSnapshotData(bool serializable)
 	int			count = 0;
 	MemoryContext		old;
 	TransactionId 		checkpoint;
-    MemoryContext       query = MemoryContextGetEnv()->TopTransactionContext;
-	Env*		env = GetEnv();
+        MemoryContext       query = MemoryContextGetEnv()->TopTransactionContext;
         
         THREAD*              my_thread = GetMyThread();
 	

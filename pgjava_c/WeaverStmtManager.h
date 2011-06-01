@@ -34,7 +34,12 @@ typedef struct WeaverStmtManager* StmtMgr;
 typedef int (*outputfunc)(StmtMgr , int type, void* value, int length, void* userarg, void* funcarg);
 typedef int (*usercleanup)(StmtMgr , int type, void* userarg);
 
-StmtMgr CreateWeaverStmtManager(const char* name, const char * paslong, const char* connect);
+OpaqueWConn CreateWeaverConnection(const char* name, const char * paslong, const char* connect);
+OpaqueWConn GetWeaverConnection(StmtMgr );
+void DestroyWeaverConnection( StmtMgr );
+
+StmtMgr CreateWeaverStmtManager(OpaqueWConn connection);
+
 StmtMgr  CreateSubConnection(StmtMgr );
 void DestroyWeaverStmtManager( StmtMgr );
 short  IsValid( StmtMgr mgr);
@@ -63,18 +68,13 @@ void     DisconnectStdIO(StmtMgr );
 
 short StreamExec(StmtMgr ,char* statement);
 
-short ParseStatement( StmtMgr ,const char* thePass, long passLen);
+short ParseStatement( StmtMgr ,const char* statement);
 short Fetch( StmtMgr  );
 long Count( StmtMgr  );
-/*
-Input AddBind(StmtMgr mgr, const char * vari, short type);
-Input GetBind(StmtMgr mgr, const char * vari);
-*/
+
 Input SetInputValue(StmtMgr , const char * vari, short type, void* value, int length);
 Output SetOutputValue(StmtMgr , int index, short type, void* value, int length);
-/*
-short GetType(StmtMgr mgr, Bound bound);
- */
+
 void* SetUserspace(StmtMgr , Bound bound, void* user);
 
 Output OutputLink(StmtMgr , int index, short type);

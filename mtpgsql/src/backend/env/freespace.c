@@ -58,6 +58,7 @@ typedef struct freespace {
     BlockNumber                         index[INDEX_SIZE];
     Size                                index_size[INDEX_SIZE];
     
+    int                                 skip;
     int                                 min_request;
     int                                 max_request;
     int                                 extent;

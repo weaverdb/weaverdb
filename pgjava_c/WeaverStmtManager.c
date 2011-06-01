@@ -43,8 +43,6 @@ struct bindObj {
 };
 
 typedef struct  WeaverStmtManager {
-        short				statementParsed;
-
         long				transactionId;	
         long				commandId;	
         void*				dataStack;
@@ -55,9 +53,10 @@ typedef struct  WeaverStmtManager {
         long				errorlevel;	
 
         OpaqueWConn 			theConn;  
+        int                             refcount;
+        OpaquePreparedStatement         statement;  
 
         long				holdingArea;
-        long				statementLength;
 
         struct bindObj			bindLog[MAX_FIELDS];
         struct outputObj		outputLog[MAX_FIELDS];
@@ -70,55 +69,58 @@ static void Clean( StmtMgr mgr,usercleanup input,usercleanup output);
 static long  align(StmtMgr mgr, long pointer);
 static void* Advance(StmtMgr mgr,long size);
 
+OpaqueWConn
+CreateWeaverConnection( const char* name, const char * paslong, const char* connect) {
+    OpaqueWConn conn = WCreateConnection(name,paslong,connect);
+    if ( !WIsValidConnection(conn) ) {
+        WDestroyConnection(conn);
+        return NULL;
+    }
+    return conn;
+}
 
 StmtMgr
-CreateWeaverStmtManager( const char* name, const char * paslong, const char* connect)
+CreateWeaverStmtManager(OpaqueWConn connection)
 {
-    StmtMgr mgr = (StmtMgr)os_malloc(sizeof(WeaverStmtManager));
+    if ( !WIsValidConnection(connection) ) return NULL;
     
-    mgr->theConn = WCreateConnection(name,paslong,connect);
+    StmtMgr mgr = (StmtMgr)WAllocConnectionMemory(connection,sizeof(WeaverStmtManager));
+    
+    mgr->theConn = connection;
+    mgr->refcount = 1;
         
     mgr->dataStack = NULL;
     mgr->stackSize = 0;
+    mgr->statement = NULL;
 
-    if ( mgr->theConn && WIsValidConnection(mgr->theConn) ) {
-        int counter = 0;
+    int counter = 0;
 
-        mgr->holdingArea = 0;
+    mgr->holdingArea = 0;
 
-        mgr->blob_size = BLOBSIZE;
-        mgr->stackSize = mgr->blob_size * 4;
-        mgr->dataStack = os_malloc(mgr->stackSize);
-        mgr->statementParsed = 0;
-        mgr->statementLength = 0;
-        mgr->transactionId = 0;
-        
-        memset(&mgr->errordelegate,0x00,sizeof(Error));
+    mgr->blob_size = BLOBSIZE;
+    mgr->stackSize = mgr->blob_size * 2;
+    mgr->dataStack = WAllocConnectionMemory(connection,mgr->stackSize);
+    mgr->transactionId = 0;
+
+    memset(&mgr->errordelegate,0x00,sizeof(Error));
 
 /*  zero statement structures */
-       for ( counter = 0;counter < MAX_FIELDS;counter++ ) {
-            memset(&mgr->outputLog[counter],0,sizeof(struct outputObj));
-            mgr->outputLog[counter].base.indicator = -1;
-            mgr->outputLog[counter].base.byval = 0;
-            mgr->outputLog[counter].base.userspace = NULL;
-            memset(&mgr->bindLog[counter],0,sizeof(struct bindObj));
-            mgr->bindLog[counter].base.indicator = -1;
-            mgr->bindLog[counter].base.byval = 0;
-            mgr->bindLog[counter].base.userspace = NULL;
-        }
-    } else {
-        if ( mgr->theConn ) WDestroyConnection(mgr->theConn);
-        mgr->theConn = NULL;
-        os_free(mgr);
-        mgr = NULL;
+   for ( counter = 0;counter < MAX_FIELDS;counter++ ) {
+        memset(&mgr->outputLog[counter],0,sizeof(struct outputObj));
+        mgr->outputLog[counter].base.indicator = -1;
+        mgr->outputLog[counter].base.byval = 0;
+        mgr->outputLog[counter].base.userspace = NULL;
+        memset(&mgr->bindLog[counter],0,sizeof(struct bindObj));
+        mgr->bindLog[counter].base.indicator = -1;
+        mgr->bindLog[counter].base.byval = 0;
+        mgr->bindLog[counter].base.userspace = NULL;
     }
     
     return mgr;
 } 
 
-void DestroyWeaverStmtManager( StmtMgr mgr )
-{
-    mgr->holdingArea = 0;
+void DestroyWeaverConnection( StmtMgr mgr ) {
+    if ( mgr == NULL ) return;
     if ( mgr->theConn != NULL ) {
         /*  it's possible the the owning thread is not the
          *  destroying thread so to a cancel/join for
@@ -128,29 +130,41 @@ void DestroyWeaverStmtManager( StmtMgr mgr )
         WDestroyConnection(mgr->theConn);
         mgr->theConn = NULL;
     }
-    if ( mgr->dataStack != NULL ) os_free(mgr->dataStack);
-    os_free(mgr);
+}
+
+OpaqueWConn GetWeaverConnection( StmtMgr mgr )
+{
+    if ( mgr == NULL ) return NULL;
+    mgr->refcount += 1;
+    return mgr->theConn;
+}
+
+void DestroyWeaverStmtManager( StmtMgr mgr )
+{
+    if ( mgr == NULL ) return;
+    if ( mgr->dataStack != NULL ) WFreeMemory(mgr->theConn,mgr->dataStack);
+    WFreeMemory(mgr->theConn,mgr);
 }
 
 StmtMgr
 CreateSubConnection( StmtMgr parent) 
 {
-    StmtMgr mgr = (StmtMgr)os_malloc(sizeof(WeaverStmtManager));
-    mgr->theConn = WCreateSubConnection(parent->theConn);
+    if ( parent == NULL ) return NULL;
+    OpaqueWConn connection = WCreateSubConnection(parent->theConn);
+    StmtMgr mgr = (StmtMgr)WAllocConnectionMemory(connection,sizeof(WeaverStmtManager));
+    mgr->theConn = connection;
         
     mgr->dataStack = NULL;
     mgr->stackSize = 0;
+    mgr->statement = NULL;
 
     if ( WIsValidConnection(mgr->theConn) ) {
-        short x;
         int counter = 0;
 
         mgr->holdingArea = 0;
         mgr->blob_size = BLOBSIZE;
-        mgr->stackSize = mgr->blob_size * 4;
-        mgr->dataStack = os_malloc(mgr->stackSize);
-        mgr->statementParsed = 0;
-        mgr->statementLength = 0;
+        mgr->stackSize = mgr->blob_size * 2;
+        mgr->dataStack = WAllocConnectionMemory(connection,mgr->stackSize);
         mgr->transactionId = 0;
         
         memset(&mgr->errordelegate,0x00,sizeof(Error));
@@ -168,8 +182,6 @@ CreateSubConnection( StmtMgr parent)
         }
     } else {
         WDestroyConnection(mgr->theConn);
-        mgr->theConn = NULL;
-        os_free(mgr);
     }
 
     return mgr;
@@ -177,6 +189,7 @@ CreateSubConnection( StmtMgr parent)
 
 short IsValid( StmtMgr mgr )
 {
+    if ( mgr == NULL ) return 0;
     if ( mgr->theConn == NULL ) return (short)0;
     return (short)(WIsValidConnection(mgr->theConn));
 }
@@ -184,7 +197,7 @@ short IsValid( StmtMgr mgr )
 void Clean( StmtMgr mgr, usercleanup input, usercleanup output )
 {
         short x;
-
+        if ( !IsValid(mgr) )  return;
         ClearData(mgr);
         for (x=0;x<MAX_FIELDS;x++)
         {
@@ -212,9 +225,12 @@ void Clean( StmtMgr mgr, usercleanup input, usercleanup output )
 
 void Init( StmtMgr mgr, usercleanup input, usercleanup output )
 {
-    if ( mgr->statementParsed ) {
-        memset(mgr->dataStack,0x00,mgr->statementLength);
-        mgr->statementParsed = 0;
+        if ( !IsValid(mgr) )  return;
+    if ( mgr->statement ) {
+        if ( mgr->theConn ) {
+            WDestroyPreparedStatement(mgr->statement);
+        }
+        mgr->statement = NULL;
         memset(&mgr->errordelegate,0,sizeof(Error));
         mgr->errorlevel = 0;
         Clean(mgr,input,output);
@@ -224,8 +240,6 @@ void Init( StmtMgr mgr, usercleanup input, usercleanup output )
 short Begin( StmtMgr mgr ) 
 {
     long err = 0;
-
-    mgr->statementLength = 0;
 
     if ( !IsValid(mgr) ) return -1;
 
@@ -240,7 +254,8 @@ short Begin( StmtMgr mgr )
 
 short Fetch( StmtMgr mgr ) 
 {
-    long val = WFetch(mgr->theConn);
+    if ( !IsValid(mgr) )  return -1;
+    long val = WFetch(mgr->statement);
     if ( val == 4 ) return 1;
     return CheckForErrors(mgr);
 }
@@ -248,7 +263,7 @@ short Fetch( StmtMgr mgr )
 long Count( StmtMgr mgr )
 {
     if ( !IsValid(mgr) ) return -1;
-    return WExecCount(mgr->theConn);
+    return WExecCount(mgr->statement);
 }
 
 short Cancel( StmtMgr mgr ) 
@@ -281,23 +296,11 @@ short EndProcedure( StmtMgr mgr )
 
 short Exec( StmtMgr mgr ) 
 {
-    int x=0;
     short err = 0;
     
     if ( !IsValid(mgr) ) return -1;
-/*  make sure all the bound variables have been set to null or 
-*  a value  */              
-    for (x=0;x<MAX_FIELDS;x++)
-    {
-        if (mgr->bindLog[x].binder[0] == '\0') break;
-        if ( mgr->bindLog[x].base.indicator < 0 ) {
-            char        msg[255];
-            snprintf(msg,255,"bound variable %s not set",mgr->bindLog[x].binder);
-            return DelegateError(mgr,"EXEC",msg,849);
-        }
-    }
 
-    WExec(mgr->theConn);
+    WExec(mgr->statement);
     err = CheckForErrors(mgr);
     if ( !err ) {
         mgr->commandId = WGetCommandId(mgr->theConn);
@@ -307,10 +310,12 @@ short Exec( StmtMgr mgr )
 }
 
 long GetTransactionId( StmtMgr mgr ) {
+        if ( !IsValid(mgr) )  return -1;
     return mgr->transactionId;
 }
 
 long GetCommandId( StmtMgr mgr ) {
+        if ( !IsValid(mgr) )  return -1;
     return mgr->commandId;
 }
 
@@ -358,18 +363,12 @@ const char* GetErrorState( StmtMgr mgr )
     return WGetErrorState(mgr->theConn);
 }
 
-short ParseStatement(StmtMgr mgr, const char* thePass, long passLen)
+short ParseStatement(StmtMgr mgr, const char* statement)
 {	
-    mgr->statementLength = 0;
-
     if ( !IsValid(mgr) ) return -1;
 
     if ( mgr->dataStack != NULL ) {
-        memmove((char*)mgr->dataStack,thePass,passLen + 1);
-        mgr->holdingArea = passLen + 1;
-        mgr->statementLength = passLen + 1;
-        mgr->statementParsed = 1;
-        WParsingFunc(mgr->theConn,(char*)mgr->dataStack);
+        mgr->statement = WPrepareStatement(mgr->theConn,statement);
         return CheckForErrors(mgr);
     } else {
         return -1;
@@ -381,9 +380,13 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
         int         otype;
         Input        bind = NULL;
         Bound       base = NULL;
+        
+        if ( !IsValid(mgr) ) return NULL;
+        
         void*       savestack = mgr->dataStack;
         long        stmtsz = GetStatementSpaceSize(mgr);
-        
+             short x;
+       
     /*  remove the marker flag of the named parameter if there is one */
         switch (*vari) {
             case '$':
@@ -392,21 +395,16 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
                 vari++;
         }
     
-        if ( !IsValid(mgr) ) {
+        for (x=0;x<MAX_FIELDS;x++)
+        {
+            if ( mgr->bindLog[x].binder[0] == '\0') break;
+        }
+        if ( x == MAX_FIELDS ) {
+            DelegateError(mgr,"BINDING","too many bind variables",851);
             return NULL;
         } else {
-            short x;
-            for (x=0;x<MAX_FIELDS;x++)
-            {
-                if ( mgr->bindLog[x].binder[0] == '\0') break;
-            }
-            if ( x == MAX_FIELDS ) {
-                DelegateError(mgr,"BINDING","too many bind variables",851);
-                return NULL;
-            } else {
-                bind = &mgr->bindLog[x];
-                base = &bind->base;
-            }
+            bind = &mgr->bindLog[x];
+            base = &bind->base;
         }
 
         base->indicator = 0;
@@ -422,7 +420,7 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
                 base->byval = 1;
                 break;
             case VARCHARTYPE:
-                base->maxlength = 259;
+                base->maxlength = (128 + 4);
                 base->byval = 0;
                 break;
             case CHARTYPE:
@@ -434,13 +432,13 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
                 base->byval = 1;
                 break;
             case BYTEATYPE:
-                base->maxlength = 259;
+                base->maxlength = (128 + 4);
                 base->byval = 0;
                 break;
             case BLOBTYPE:
             case TEXTTYPE:
             case JAVATYPE:
-                 base->maxlength = (mgr->blob_size + 4);
+                 base->maxlength = (512);
                  base->byval = 0;
                  break;
             case TIMESTAMPTYPE:
@@ -458,7 +456,7 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
             case FUNCTIONTYPE:
                 break;
             case SLOTTYPE:
-                base->maxlength = (mgr->blob_size + 4);
+                base->maxlength = (512 + 4);
                 base->byval = 0;
                 break;
             case STREAMTYPE:
@@ -489,12 +487,12 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
             short x;
             for (x=0;x<MAX_FIELDS;x++) {
                 bind = &mgr->bindLog[x];
-                if ( WBindWithIndicate(mgr->theConn,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,type) ) {
+                if ( WBindLink(mgr->statement,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,type) ) {
                     break;
                 }
             }
         } else {
-            WBindWithIndicate(mgr->theConn,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,type);
+            WBindLink(mgr->statement,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,type);
         } 
 
         return bind;
@@ -502,6 +500,7 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
 
 Input  GetBind(StmtMgr mgr, const char * vari, short type) {
         Input    bind = NULL;
+        if ( !IsValid(mgr) ) return NULL;
 
      /*  remove the marker flag of the named parameter if there is one */
         switch (*vari) {
@@ -511,26 +510,20 @@ Input  GetBind(StmtMgr mgr, const char * vari, short type) {
                 vari++;
         }
         
-        if ( IsValid(mgr) ) {
-            short x;
-            for (x=0;x<MAX_FIELDS;x++)
-            {
-                if (mgr->bindLog[x].binder == '\0' || strcmp(vari,mgr->bindLog[x].binder) == 0) break;
-            }
-            if ( x == MAX_FIELDS || mgr->bindLog[x].binder == '\0' ) {
-                return AddBind(mgr,vari,type);
-            } else {
-                bind = &mgr->bindLog[x];
-            }
+        short x;
+        for (x=0;x<MAX_FIELDS;x++)
+        {
+            if (mgr->bindLog[x].binder == '\0' || strcmp(vari,mgr->bindLog[x].binder) == 0) break;
+        }
+        if ( x == MAX_FIELDS || mgr->bindLog[x].binder == '\0' ) {
+            return AddBind(mgr,vari,type);
+        } else {
+            bind = &mgr->bindLog[x];
         }
         
         return bind;
 }
-/*
-short GetType(StmtMgr mgr, Bound bound) {
-    return bound->type;
-}
-*/
+
 void* SetUserspace(StmtMgr mgr, Bound bound, void* target) {
     if ( bound != NULL ) {
         void* old = bound->userspace;
@@ -557,10 +550,14 @@ Input SetInputValue(StmtMgr mgr, const char * vari, short type, void* data, int 
             } else {
                 char*  space = Advance(mgr, base->pointer);
                 if ( base->maxlength < length + 4 ) {
-                    length = base->maxlength - 4;
-                }            
-                memcpy(space + 4,data,length);
+                        *(int32_t*)space = -1;
+                        space += 4;
+                        *(void**)space = WAllocStatementMemory(mgr->theConn,length + 4);
+                        space = *(void**)space;
+                } 
                 *(int32_t*)space = length + 4;
+                space += 4;
+                memcpy(space,data,length);
             }
             base->indicator = 1;
         }
@@ -599,12 +596,15 @@ Output SetOutputValue(StmtMgr mgr, int index, short type, void* data, int length
 short GetOutputs(StmtMgr mgr, void* funcargs, outputfunc sendfunc) 
 {
     short x;
+    
+    if ( !IsValid(mgr) ) return -1;
     for (x=0;x<MAX_FIELDS;x++) {
         Output      output = &mgr->outputLog[x];
         void* value = NULL;
         
         if ( output->index == 0 ) break;
         if ( output->base.indicator == 1 ) value = Advance(mgr,output->base.pointer);
+        else if ( output->base.indicator == 2 ) value = *(void**)Advance(mgr,output->base.pointer);
         if ( output->base.type == 0 ) value = NULL;
         sendfunc(mgr,output->base.type,value,output->clength,output->base.userspace,funcargs);
     }
@@ -647,7 +647,7 @@ Output OutputLink(StmtMgr mgr, int index, short type)
                 base->byval = 1;
                 break;
             case VARCHARTYPE:
-                base->maxlength = 259;
+                base->maxlength = (128 + 4);
                 base->byval = 0;
                 break;
             case CHARTYPE:
@@ -659,19 +659,13 @@ Output OutputLink(StmtMgr mgr, int index, short type)
                 base->byval = 1;
                 break;
             case BYTEATYPE:
-                base->maxlength = 259;
+                base->maxlength = (128 + 4);
                 base->byval = 0;
                 break;
             case JAVATYPE:
-                base->maxlength = (mgr->blob_size + 4);
-                base->byval = 0;
-                break;
             case BLOBTYPE:
-                base->maxlength = (mgr->blob_size + 4);
-                base->byval = 0;
-                break;
             case TEXTTYPE:
-                base->maxlength = (mgr->blob_size + 4);
+                base->maxlength = (512 + 4);
                 base->byval = 0;
                 break;
             case TIMESTAMPTYPE:
@@ -718,13 +712,13 @@ Output OutputLink(StmtMgr mgr, int index, short type)
             for (x=0;x<MAX_FIELDS;x++) {
                 link = &mgr->outputLog[x];
                 if ( mgr->outputLog[x].index != 0 ) {
-                    WOutputLinkInd(mgr->theConn,link->index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
+                    WOutputLink(mgr->statement,link->index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
                 } else {
                     break;
                 }
             }
         } else {
-            WOutputLinkInd(mgr->theConn,index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
+            WOutputLink(mgr->statement,index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
         }
         
         return link;
@@ -732,17 +726,21 @@ Output OutputLink(StmtMgr mgr, int index, short type)
 
 void ClearData(StmtMgr mgr)
 {
-	if (mgr->dataStack != NULL && mgr->statementLength > 0) memset(Advance(mgr, mgr->statementLength),'\0',mgr->stackSize - mgr->statementLength);
+    if ( !IsValid(mgr) ) return;
+	if (mgr->dataStack != NULL ) memset(mgr->dataStack,'\0',mgr->stackSize);
+        mgr->holdingArea = 0;
 }
 
 void* Advance(StmtMgr mgr, long size)
 {
+    if ( !IsValid(mgr) ) return NULL;
 	if (size >= mgr->stackSize ) return NULL;
 	return ((char*)mgr->dataStack)+size;
 }
 
 short SetStatementSpaceSize(StmtMgr mgr, long size ) 
 {
+    if ( !IsValid(mgr) ) return -1;
 	mgr->stackSize = size;
 	if ( mgr->dataStack == NULL ) {
 		mgr->stackSize == 0;
@@ -756,6 +754,7 @@ short SetStatementSpaceSize(StmtMgr mgr, long size )
 
 short SetStatementBlobSize(StmtMgr mgr, long size ) 
 {
+    if ( !IsValid(mgr) ) return -1;
 	mgr->blob_size = size;
 	if ( ( mgr->blob_size * 4 ) > mgr->stackSize ) SetStatementSpaceSize(mgr, mgr->blob_size * 4);
 	return 0;
@@ -763,17 +762,20 @@ short SetStatementBlobSize(StmtMgr mgr, long size )
 
 long GetStatementSpaceSize( StmtMgr mgr ) 
 {
+    if ( !IsValid(mgr) ) return -1;
 	return mgr->stackSize;
 }
 
 
 long GetStatementBlobSize( StmtMgr mgr ) 
 {
+    if ( !IsValid(mgr) ) return -1;
 	return mgr->blob_size;
 }
 
 short DelegateError(StmtMgr mgr, const char* state,const char* text,int code)
 {
+    if ( !IsValid(mgr) ) return -1;
 	mgr->errorlevel = 2;
 	mgr->errordelegate.rc = code;
 	strncpy(mgr->errordelegate.text,text,255);
@@ -782,6 +784,7 @@ short DelegateError(StmtMgr mgr, const char* state,const char* text,int code)
 
 short CheckForErrors( StmtMgr mgr ) 
 {
+    if ( !IsValid(mgr) ) return -1;
 	long cc = WGetErrorCode(mgr->theConn);
         if ( mgr->errorlevel == 2 ) return 2;
         if ( cc != 0 ) {  
@@ -810,21 +813,25 @@ short StreamExec(StmtMgr mgr, char* statement)
 
 Pipe PipeConnect(StmtMgr mgr, void* args, pipefunc func)
 {    
+    if ( !IsValid(mgr) ) return NULL;
     return  WPipeConnect(mgr->theConn,args,func);
 
 }
 
 void* PipeDisconnect(StmtMgr mgr, Pipe comm)
 {
+    if ( !IsValid(mgr) ) return NULL;
      return WPipeDisconnect(mgr->theConn,comm);
 }
 
 void ConnectStdIO(StmtMgr mgr,void *args,pipefunc in, pipefunc out)
 {
+    if ( !IsValid(mgr) ) return;
     WConnectStdIO(mgr->theConn,args,in,out);
 }
 
 void DisconnectStdIO(StmtMgr mgr) {
+    if ( !IsValid(mgr) ) return;
     WDisconnectStdIO(mgr->theConn);
 }
 

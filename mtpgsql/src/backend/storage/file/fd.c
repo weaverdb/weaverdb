@@ -123,7 +123,7 @@ static int vfdmultiple =        GROWVFDMULTIPLE;
 static int vfdsharemax =        MAX_FILE_SHARE;
 static int vfdblockcount =      MAXVFDBLOCKS;
 static int vfdmax = 		MAXVIRTUALFILES;
-static bool vfdoptimize =       true;
+static bool vfdoptimize =       false;
 static bool vfdautotune =       false;
  
 static struct {
@@ -1132,7 +1132,7 @@ FileOptimize(File file)
 {
     Vfd                     *target = GetVirtualFD(file);
     int flag = 0;
-
+   
     if ( target->fd == VFD_CLOSED ) return 0;
 
 #ifdef SUNOS

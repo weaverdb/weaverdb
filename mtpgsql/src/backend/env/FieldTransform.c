@@ -52,6 +52,7 @@ ConvertValueToText(Output* output,Oid type,int4 typmod, Datum val) {
                         typelem;
         char           *texto;
         int             textlen;
+        char*           target = output->target;
 
         if (!getTypeOutAndElem(type, &foutoid, &typelem)) {
             coded_elog(ERROR,108,"type conversion error");
@@ -60,42 +61,48 @@ ConvertValueToText(Output* output,Oid type,int4 typmod, Datum val) {
 
         textlen = strlen(texto);
         if (textlen > output->size) {
-            textlen = output->size;
-            coded_elog(ERROR,109,"binary truncation");
-        }
+            output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,textlen);
+            *(void**)output->target = output->freeable;
+            target = output->freeable;
+        } 
         *output->length = textlen;
-        memcpy(output->target, texto, textlen);
+        memcpy(target, texto, textlen);
 }
 
 static void
 BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
+    char* target = output->target;
+    
     if (desc->attlen > 0) {
         if (desc->attlen > output->size) {
-                coded_elog(ERROR,109,"binary truncation");
+            output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,desc->attlen);
+            *(void**)output->target = output->freeable;
+            target = output->freeable;
         }
         if (desc->attbyval) {
                 *output->length = desc->attlen;
-                memcpy(output->target, (void *)&(value), desc->attlen);
+                memcpy(target, (void *)&(value), desc->attlen);
         } else {
                 *output->length = desc->attlen;
-                memcpy(output->target, (void *)DatumGetPointer(value), desc->attlen);
+                memcpy(target, (void *)DatumGetPointer(value), desc->attlen);
         }
     } else {
         if ( ISINDIRECT(value) ) {
             int size = sizeof_indirect_blob(value);
             int length = 0;
             int moved = 0;
-            char*  travel = output->target;
 
             if (size > output->size ) {
-                    coded_elog(ERROR,102,"binary truncation for position %d", output->index);
-            }
+                output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,size);
+                *(void**)output->target = output->freeable;
+                target = output->freeable;
+            } 
 
             Datum pointer = open_read_pipeline_blob(value,false);
-            while (read_pipeline_segment_blob(pointer,travel,&length,output->size - moved) ) {
+            while (read_pipeline_segment_blob(pointer,target,&length,output->size - moved) ) {
                 Assert(length > 0);
                 moved += length;
-                travel += length;
+                target += length;
             }
 
             close_read_pipeline_blob(pointer);
@@ -103,10 +110,12 @@ BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
             *output->length = moved + length;
         } else {
             if (VARSIZE(value) - 4 > output->size) {
-                coded_elog(ERROR,109,"binary truncation");
+                output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,VARSIZE(value) - 4);
+                *(void**)output->target = output->freeable;
+                target = output->freeable;
             }
             *output->length = VARSIZE(value) - 4;
-            memcpy(output->target, VARDATA(value), VARSIZE(value) - 4);
+            memcpy(target, VARDATA(value), VARSIZE(value) - 4);
         }
     }
 }
@@ -178,7 +187,7 @@ TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
                 break;
             case INT8OID:
                 if (desc->atttypid == XIDOID) IndirectLongCopyValue(output,value);
-                else if (desc->atttypid == OIDOID) IndirectLongCopyValue(output,&value);
+                else if (desc->atttypid == OIDOID) IndirectLongCopyValue(output,value);
                 break;
             case FLOAT8OID:
                 if (desc->atttypid == FLOAT4OID) DirectDoubleCopyValue(output,(double)*(float*)DatumGetPointer(value));

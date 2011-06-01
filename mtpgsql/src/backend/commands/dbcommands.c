@@ -560,9 +560,9 @@ get_user_info(const char *name, int4 *use_sysid, bool *use_super, bool *use_crea
 							   0, 0, 0);
 
 	if (!HeapTupleIsValid(utup)) {
-            if ( use_sysid ) use_sysid = 0;
-            if ( use_super ) use_super = false;
-            if ( use_createdb ) use_createdb = true;
+            if ( use_sysid ) *use_sysid = 0;
+            if ( use_super ) *use_super = false;
+            if ( use_createdb ) *use_createdb = true;
         } else {
             if (use_sysid)
                     *use_sysid = ((Form_pg_shadow) GETSTRUCT(utup))->usesysid;

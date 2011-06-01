@@ -30,47 +30,10 @@ public class BaseWeaverConnection {
     public int resultField = 0;
     String errorText = "";
     String state = "";
-    
-    String current_stmt = null;
-    long stmt_id;
-    /*
-    private StreamingType streamingPersonality = StreamingType.STREAMING_STREAMS;
-    private int streaming_size = 64 * 1024;
 
-    public enum StreamingType {
-
-        STREAMING_STREAMS(0x00, 0x00),
-        DIRECT_STREAMS(0x01, 0x00),
-        STREAMING_CHANNELS(0x00, 0x01),
-        DIRECT_CHANNELS(0x01, 0x01);
-        private int tt;
-        private int bt;
-
-        StreamingType(int transferType, int bufferType) {
-            tt = transferType;
-            bt = bufferType;
-        }
-
-        public boolean isTransferTypeStreamed() {
-            return (tt == 0x00);
-        }
-
-        public boolean isBufferTypeStreams() {
-            return (bt == 0x00);
-        }
-    }
-*/
     public BaseWeaverConnection() {
     }
-/*
-    public void setStreamingPersonality(StreamingType type) {
-        streamingPersonality = type;
-    }
 
-    public void setStreamingBufferSize(int size) {
-        streaming_size = size;
-    }
-*/
     private boolean convertString(String connect) throws SQLException {
         if ( connect == null ) return false;
         if ( connect.startsWith("@") ) connect = "/" + connect;
@@ -91,7 +54,7 @@ public class BaseWeaverConnection {
     }
 
     public synchronized void dispose() throws SQLException {
-        if ( id!= null ) disposeConnection();
+        if ( id!= null ) dispose(id);
         id = null;
     }
     
@@ -115,6 +78,10 @@ public class BaseWeaverConnection {
         resultField = 0;
         clearBinds();
     }
+    
+    public Statement statement(String statement) throws SQLException {
+        return new Statement(statement);
+    }
 
     HashMap<Integer,BoundOutput> outputs = new HashMap<Integer,BoundOutput>();
     
@@ -125,8 +92,7 @@ public class BaseWeaverConnection {
             else bo.deactivate();
         }
 
-        bo = new BoundOutput<T>(this, index, type);
-        getOutput(index,bo.getTypeId(),bo);
+        bo = new BoundOutput<T>(this,id, index, type);
         outputs.put(index, bo);
         return bo;
     }
@@ -140,7 +106,7 @@ public class BaseWeaverConnection {
             else bi.deactivate();
         }
 
-        bi = new BoundInput<T>(this, name, type);
+        bi = new BoundInput<T>(this,id, name, type);
         inputs.put(name, bi);
         return bi;
     }
@@ -150,23 +116,11 @@ public class BaseWeaverConnection {
         inputs.clear();
         for ( BoundOutput bo : outputs.values() ) bo.deactivate();
         outputs.clear();
-        current_stmt = null;
-    }
-    
-    public String getParsedStatement() {
-        return current_stmt;
     }
 
     public long parse(String stmt) throws SQLException {
         clearBinds();
-        current_stmt = stmt;
-        stmt_id = parseStatement(stmt);
-        return stmt_id;
-    }
-    
-    public long parseIfNew(String stmt) throws SQLException {
-        if ( stmt.equals(current_stmt) ) return stmt_id;
-        return parse(stmt);
+        return parseStatement(stmt);
     }
 
     public long begin() throws SQLException {
@@ -203,25 +157,25 @@ public class BaseWeaverConnection {
     }
 
     public long execute() throws SQLException {
-        return executeStatement();
+        return executeStatement(id);
     }
 
     public boolean fetch() throws SQLException {
-        return fetchResults();
+        return fetchResults(id);
     }
     
     private native boolean grabConnection(String name, String password, String connect) throws SQLException;
     private native void connectSubConnection(BaseWeaverConnection parent) throws SQLException;
-    private native void disposeConnection();
+    private native void dispose(Object link);
 
+    private native Object prepareStatement(String theStatement) throws SQLException;
     private native long parseStatement(String theStatement) throws SQLException;
-    private native long executeStatement() throws SQLException;
-    private native boolean fetchResults() throws SQLException;
+    private native long executeStatement(Object link) throws SQLException;
+    private native boolean fetchResults(Object link) throws SQLException;
 
-    native void setInput(String name, int type, Object value) throws SQLException;
-    native void getOutput(int index, int type, BoundOutput test) throws SQLException;
+    native void setInput(Object link, String name, int type, Object value) throws SQLException;
+    native void getOutput(Object link, int index, int type, BoundOutput test) throws SQLException;
 
-//    public native void userLock(String group, int connector, boolean lock) throws SQLException;
     private native void prepareTransaction() throws SQLException;
     private native void cancelTransaction();
     private native long beginTransaction() throws SQLException;
@@ -270,5 +224,62 @@ public class BaseWeaverConnection {
 
     public void setStandardInput(InputStream in) {
         is = in;
+    }
+    
+    public class Statement {
+        Object  link;
+        
+        Statement(String statement) throws SQLException {
+            link = prepareStatement(statement);
+        }
+
+        public BaseWeaverConnection getConnection() {
+            return BaseWeaverConnection.this;
+        }
+        
+        HashMap<Integer,BoundOutput> outputs = new HashMap<Integer,BoundOutput>();
+        HashMap<String,BoundInput> inputs = new HashMap<String,BoundInput>();
+    
+        public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws SQLException {
+            BoundOutput bo = outputs.get(index);
+            if ( bo != null ) {
+                if ( bo.isSameType(type) ) return bo;
+                else bo.deactivate();
+            }
+
+            bo = new BoundOutput<T>(BaseWeaverConnection.this,link,index, type);
+            outputs.put(index, bo);
+            return bo;
+        }
+        
+        public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws SQLException {
+            BoundInput bi = inputs.get(name);
+            if ( bi != null ) {
+                if ( bi.isSameType(type) ) return bi;
+                else bi.deactivate();
+            }
+
+            bi = new BoundInput<T>(BaseWeaverConnection.this,link, name, type);
+            inputs.put(name, bi);
+            return bi;
+        }
+        
+        public boolean fetch() throws SQLException {
+            return fetchResults(link);
+        }        
+        
+        public long execute() throws SQLException {
+            return executeStatement(link);
+        }
+        
+        public void dispose() {
+            BaseWeaverConnection.this.dispose(link);
+        }
+        
+        @Override
+        protected void finalize() throws Throwable {
+            super.finalize();
+            this.dispose();
+        }
     }
 }
