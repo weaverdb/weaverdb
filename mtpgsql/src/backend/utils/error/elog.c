@@ -134,10 +134,10 @@ elog(int lev, const char *fmt,...)
 	char	   *bp;
 	int			indent = 0;
 	int			space_needed;
+        bool                    expand = true;
 
 #ifdef USE_SYSLOG
 	int			log_level;
-
 #endif
 	int			len;
 
@@ -179,20 +179,13 @@ elog(int lev, const char *fmt,...)
 			break;
 		default:
 			/* temporarily use msg buf for prefix */
+                        expand = false;
 			sprintf(msg_fixedbuf, "FATAL %d:  ", lev);
 			prefix = msg_fixedbuf;
 			break;
 	}
 
 	/* get errno string for %m */
-/*	if (errno < sys_nerr && errno >= 0)
-		errorstr = strerror(errno);
-	else
-	{
-		sprintf(errorstr_buf, "error %d", errno);
-		errorstr = errorstr_buf;
-	}
-*/
 	sprintf(errorstr_buf,"error %d",100);
 	errorstr = errorstr_buf;
 	/*
@@ -203,9 +196,9 @@ elog(int lev, const char *fmt,...)
 	 */
 	space_needed = TIMESTAMP_SIZE + strlen(prefix) + indent + (GetEnv()->lineno ? 24 : 0)
 		+ strlen(fmt) + strlen(errorstr) + 1;
-	if (space_needed > (int) sizeof(fmt_fixedbuf))
+	if (expand && space_needed > (int) sizeof(fmt_fixedbuf))
 	{
-		fmt_buf = (char *) os_malloc(space_needed);
+		fmt_buf = (char *) palloc(space_needed);
 		if (fmt_buf == NULL)
 		{
 			/* We're up against it, convert to fatal out-of-memory error */
@@ -286,13 +279,11 @@ elog(int lev, const char *fmt,...)
 		 * actually stored, but at least one returns -1 on failure. Be
 		 * conservative about believing whether the print worked.
 		 */
-		if (nprinted >= 0 && nprinted < space_needed - 3)
+		if (!expand || (nprinted >= 0 && nprinted < space_needed - 3) )
 			break;
-		/* It didn't work, try to get a bigger buffer */
-		if (msg_buf != msg_fixedbuf)
-			os_free(msg_buf);
+
 		space_needed *= 2;
-		msg_buf = (char *) os_malloc(space_needed);
+		msg_buf = (char *) palloc(space_needed);
 		if (msg_buf == NULL)
 		{
 			/* We're up against it, convert to fatal out-of-memory error */
@@ -406,12 +397,6 @@ elog(int lev, const char *fmt,...)
 		strncpy(env->errortext,msg_buf,255);
 		strncpy(env->state,prefix,39);
 	}
-
-	/* done with the message, release space */
-	if (fmt_buf != fmt_fixedbuf)
-		os_free(fmt_buf);
-	if (msg_buf != msg_fixedbuf)
-		os_free(msg_buf);
 
 	/*
 	 * Perform error recovery action as specified by lev.

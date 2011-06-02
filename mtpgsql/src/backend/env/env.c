@@ -122,21 +122,9 @@ int DestroySystem(void) {
 	
 	pthread_mutex_destroy(&envlock);
 
-	
-#ifdef MACOSX
-#ifdef NOTUSED
-        sem_close(pipeline);
-#endif
-#else	
-#ifdef NOTUSED
-	sem_destroy(pipeline);
-#endif
         pthread_condattr_destroy(&process_cond_attr);
         pthread_mutexattr_destroy(&process_mutex_attr);
-#endif	
-#ifdef NOTUSED
-        os_free(pipeline);
-#endif
+
 	return 0;
 }
 

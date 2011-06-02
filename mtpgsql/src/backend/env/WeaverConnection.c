@@ -73,6 +73,9 @@ static int FillExecArgs(PreparedPlan* plan);
 static PreparedPlan *ParsePlan(PreparedPlan * plan);
 static void SetError(WConn connection, int sqlError, char* state, char* err);
 static void* WAllocMemory(WConn connection, mem_type type, size_t size);
+
+static SectionId   connection_section_id = SECTIONID("CONN");
+
 /*
 static WConn SetupConnection(OpaqueWConn conn);
 static long ReleaseConnection(WConn comm);
@@ -106,10 +109,19 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     char dbpath[512];
     Oid dbid = InvalidOid;
     WConn connection = NULL;
+    Env*     env;
 
     if (!isinitialized()) return NULL;
 
-    connection = os_malloc(sizeof (struct Connection));
+    env = CreateEnv(NULL);
+    if ( env == NULL ) {
+        return NULL;
+    } else {
+        SetEnv(env);
+        MemoryContextInit();
+    }
+    
+    connection = AllocateEnvSpace(connection_section_id,sizeof (struct Connection));
     memset(connection, 0x00, sizeof (struct Connection));
 
     connection->validFlag = -1;
@@ -117,21 +129,9 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     strncpy(connection->name, tName, 64);
     strncpy(connection->connect, conn, 64);
 
-    connection->env = CreateEnv(NULL);
-    if (connection->env == NULL) {
-        sqlError = 99;
-        strncpy(connection->env->errortext, "unsuccessful connection -- too many connections", 255);
-        strncpy(connection->env->state, "DISCONNECTED", 39);
-        WHandleError(connection, sqlError);
-        os_free(connection);
-        return NULL;
-    }
-
-    SetEnv(connection->env);
+    connection->env = env;
 
     connection->env->Mode = InitProcessing;
-
-    MemoryContextInit();
 
     SetDatabaseName(conn);
     GetRawDatabaseInfo(conn, &dbid, dbpath);
@@ -220,56 +220,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
 
 OpaqueWConn
 WCreateSubConnection(OpaqueWConn parent) {
-    int sqlError = 0;
-    WConn connection = NULL;
-
-    if (parent->parent != NULL) {
-        sqlError = 99;
-        strncpy(parent->env->errortext, "a sub-connection cannot spawn children", 255);
-        strncpy(parent->env->state, "DISCONNECTED", 39);
-        WHandleError(parent, sqlError);
-        return connection;
-    }
-
-    connection = MemoryContextAlloc(parent->env->global_context, sizeof (struct Connection));
-    memmove(connection, parent, sizeof (struct Connection));
-
-    connection->env = CreateEnv(parent->env);
-    if (connection->env == NULL) {
-        sqlError = 99;
-        strncpy(connection->env->errortext, "unsuccessful connection -- too many connections", 255);
-        strncpy(connection->env->state, "DISCONNECTED", 39);
-        WHandleError(connection, sqlError);
-        return connection;
-    }
-    SetEnv(connection->env);
-
-    connection->env->Mode = InitProcessing;
-
-    connection->env->DatabaseId = parent->env->DatabaseId;
-    connection->env->DatabaseName = parent->env->DatabaseName;
-    connection->env->DatabasePath = parent->env->DatabasePath;
-    connection->env->UserName = parent->env->UserName;
-    connection->env->UserId = parent->env->UserId;
-
-    MemoryContextInit();
-    InitThread(NORMAL_THREAD);
-
-    RelationInitialize();
-    InitCatalogCache();
-
-    CallableInitInvalidationState();
-    connection->env->Mode = NormalProcessing;
-    connection->stage = TRAN_INVALID;
-
-    pthread_mutex_lock(&parent->child_lock);
-    connection->parent = parent;
-    connection->child_count++;
-    pthread_mutex_unlock(&parent->child_lock);
-
-    SetEnv(NULL);
-
-    return (OpaqueWConn) connection;
+    return NULL;
 }
 
 extern long
@@ -300,13 +251,7 @@ WDestroyConnection(OpaqueWConn conn) {
     }
     if (conn->env != NULL) {
         DestroyEnv(conn->env);
-        conn->env = NULL;
     }
-
-    if (!parent)
-        os_free(conn);
-    else
-        pfree(conn);
 }
 
 extern long
@@ -501,7 +446,8 @@ WExec(OpaquePreparedStatement plan) {
     plan = ParsePlan(plan);
 
     WResetExecutor(plan);
-
+    plan->processed = 0;
+    
     trackquery = plan->querytreelist;
     trackplan = plan->plantreelist;
 
@@ -575,16 +521,15 @@ WExec(OpaquePreparedStatement plan) {
                     if (count % 99 == 0 && CheckForCancel()) {
                         elog(ERROR, "Query Cancelled");
                     }
-                    plan->processed += count;
                 } while (true);
-                
+                plan->processed += count;
                 WResetExecutor(plan);
             }
         }
    }
     plan->stage = STMT_EXEC;
     RELEASE(connection);
-    return 0;
+    return err;
 }
 
 extern long
@@ -675,9 +620,6 @@ WFetch(OpaquePreparedStatement plan) {
     }
 
     MemoryContextSwitchTo(old);
-#ifdef MEMORY_CONTEXT_CHECKING
-    fprintf(stderr, "memory at fetch: %d\n", MemoryContextStats(plan->fetch_cxt));
-#endif
 
     RELEASE(connection);
     return err;
@@ -1338,7 +1280,7 @@ WResetQuery(WConn connection) {
     abort cleanup will take care of it.  */
 
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
-#ifdef MEMORY_CONTEXT_CHECKING
+#ifdef MEMORY_STATS
     fprintf(stderr, "memory at query: %d\n", MemoryContextStats(MemoryContextGetEnv()->QueryContext));
 #endif
     MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
@@ -1359,7 +1301,7 @@ WResetExecutor(PreparedPlan * plan) {
     }
 
     if ( plan->exec_cxt != NULL ) {
-#ifdef MEMORY_CONTEXT_CHECKING
+#ifdef MEMORY_STATS
     fprintf(stderr, "memory at exec: %d\n", MemoryContextStats(plan->exec_cxt));
 #endif
         MemoryContextResetAndDeleteChildren(plan->exec_cxt);
@@ -1378,7 +1320,6 @@ WResetExecutor(PreparedPlan * plan) {
 
     plan->bind_cxt = NULL;
     plan->fetch_cxt = NULL;
-    plan->processed = 0;
 }
 
 /* create copies in case underlying buffer goes away  */
