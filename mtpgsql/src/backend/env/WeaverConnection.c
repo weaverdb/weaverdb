@@ -113,9 +113,9 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     memset(connection, 0x00, sizeof (struct Connection));
 
     connection->validFlag = -1;
-    strncpy(connection->password, pass, 255);
-    strncpy(connection->name, tName, 255);
-    strncpy(connection->connect, conn, 255);
+    strncpy(connection->password, pass, 64);
+    strncpy(connection->name, tName, 64);
+    strncpy(connection->connect, conn, 64);
 
     connection->env = CreateEnv(NULL);
     if (connection->env == NULL) {
@@ -625,7 +625,6 @@ WFetch(OpaquePreparedStatement plan) {
     if (TupIsNull(slot)) {
         err = 4; /*  EOT ( End of Transmission ascii code */
         plan->stage = STMT_EOD;
-        plan->finished = true;
         WResetExecutor(plan);
    } else {
         HeapTuple tuple = slot->val;
@@ -687,7 +686,7 @@ WFetch(OpaquePreparedStatement plan) {
 
 extern long
 WFetchIsComplete(OpaquePreparedStatement stmt) {
-    if (stmt->finished) return TRUE;
+    if (stmt->stage == STMT_EOD) return TRUE;
     else return FALSE;
 }
 
@@ -889,7 +888,7 @@ WDisposeConnection(OpaqueWConn conn) {
             }
         }
     }
-    FreeXactSnapshot();
+    
     DropNoNameRels();
 
     if (setjmp(connection->env->errorContext) == 0) {
@@ -1368,7 +1367,6 @@ WResetExecutor(PreparedPlan * plan) {
     plan->bind_cxt = NULL;
     plan->fetch_cxt = NULL;
     plan->processed = 0;
-    plan->finished = false;
 }
 
 /* create copies in case underlying buffer goes away  */

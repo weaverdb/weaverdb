@@ -82,18 +82,16 @@ CreateWeaverConnection( const char* name, const char * paslong, const char* conn
 StmtMgr
 CreateWeaverStmtManager(OpaqueWConn connection)
 {
+    int counter = 0;
+
     if ( !WIsValidConnection(connection) ) return NULL;
     
     StmtMgr mgr = (StmtMgr)WAllocConnectionMemory(connection,sizeof(WeaverStmtManager));
     
     mgr->theConn = connection;
     mgr->refcount = 1;
-        
-    mgr->dataStack = NULL;
-    mgr->stackSize = 0;
-    mgr->statement = NULL;
 
-    int counter = 0;
+    mgr->statement = NULL;
 
     mgr->holdingArea = 0;
 

@@ -216,6 +216,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnect
                     javaSideLog[x] = (*env)->NewGlobalRef(env,talkerObject);
                 } else {
                     DestroyWeaverConnection(theManagers[x]);
+                    theManagers[x] = NULL;
                 }
             }
             

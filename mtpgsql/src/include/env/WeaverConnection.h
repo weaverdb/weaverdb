@@ -106,7 +106,7 @@ typedef struct preparedplan {
         EState*		state;
         QueryDesc*	qdesc;
         int             processed;
-        bool            finished;
+
         int            input_count;
     Binder		input[MAX_ARGS];
     Output		output[MAX_ARGS];
