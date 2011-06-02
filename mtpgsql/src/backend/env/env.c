@@ -76,9 +76,7 @@ int InitSystem(bool  isPrivate) {
 	
         MyProcPid = getpid();
 #ifdef SUNOS
-#ifndef GC_DEBUG
         umem_nofail_callback(memory_fail);
-#endif
 #endif
 	pthread_mutex_init(&envlock,NULL);
 	

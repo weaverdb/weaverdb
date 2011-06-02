@@ -142,7 +142,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
         strncpy(connection->env->state, "DISCONNECTED", 39);
         /*  destroy env takes care of the memory cxt  */
         SetEnv(NULL);
-        DestroyEnv(connection->env);
+        DestroyEnv(env);
 
         return NULL;
     } else {
@@ -245,7 +245,9 @@ WDestroyConnection(OpaqueWConn conn) {
         }
         pthread_mutex_unlock(&conn->child_lock);
     }
-    
+    while ( conn->plan ) {
+        WDestroyPreparedStatement(conn->plan);
+    }
     if (conn->validFlag >= 0) {
         WDisposeConnection(conn);
     }
@@ -374,6 +376,10 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
             start = start->next;
         }
         start->next = stmt->next;
+    }
+    
+    if (stmt->qdesc != NULL) {
+        ExecutorEnd(stmt->qdesc, stmt->state);
     }
     MemoryContextDelete(stmt->created_cxt);
     if ( stmt->exec_cxt ) MemoryContextDelete(stmt->exec_cxt);
@@ -819,6 +825,7 @@ WDisposeConnection(OpaqueWConn conn) {
 
     if (connection->env == NULL)
         return sqlError;
+    
     SetEnv(connection->env);
     if (setjmp(connection->env->errorContext) == 0) {
         if (connection->validFlag == 1 && CurrentXactInProgress()) {
@@ -830,6 +837,7 @@ WDisposeConnection(OpaqueWConn conn) {
         }
     }
     
+    FreeXactSnapshot();
     DropNoNameRels();
 
     if (setjmp(connection->env->errorContext) == 0) {
@@ -991,7 +999,6 @@ void*
 WAllocStatementMemory(OpaquePreparedStatement conn, size_t size) {
     WConn connection = SETUP(conn->owner);
     void* pointer;
-    MemoryContext cxt;
     int err;
 
     READY(connection, err);
@@ -1278,20 +1285,14 @@ void
 WResetQuery(WConn connection) {
     /*  if we are in abort don't worry about shutting down,
     abort cleanup will take care of it.  */
-
+    while ( connection->plan ) {
+        WResetExecutor(connection->plan);
+    }
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
 #ifdef MEMORY_STATS
     fprintf(stderr, "memory at query: %d\n", MemoryContextStats(MemoryContextGetEnv()->QueryContext));
 #endif
     MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
-    
-    PreparedPlan* list = connection->plan;
-    
-    while ( list != NULL ) {
-        list->exec_cxt = NULL;
-        list->qdesc = NULL;
-        list = list->next;
-    }
 }
 
 void
@@ -1344,11 +1345,6 @@ FillExecArgs(PreparedPlan* plan) {
         paramLI->type = plan->input[k].type;
         paramLI->isnull = !(*plan->input[k].isNotNull);
 
-/*
-        if (*plan->input[k].isNotNull < 0) {
-            elog(ERROR, "bound variable %s has not been set", paramLI->name);
-        }
-*/
         if (paramLI->isnull) {
             paramLI->length = 0;
         } else switch (plan->input[k].ctype) {

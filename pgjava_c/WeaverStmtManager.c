@@ -545,22 +545,25 @@ Input SetInputValue(StmtMgr mgr, const char * vari, short type, void* data, int 
                     length = base->maxlength;
                  }
                  memcpy(Advance(mgr, base->pointer),data,length);
+                 base->indicator = 1;
             } else {
                 char*  space = Advance(mgr, base->pointer);
-                if ( base->indicator && *(int32_t*)space == -1) {
+                if ( base->indicator == 2 ) {
                     WFreeMemory(mgr->theConn,*(void**)(space+4));
                 }
                 if ( base->maxlength < length + 4 ) {
-                        *(int32_t*)space = -1;
-                        space += 4;
-                        *(void**)space = WAllocStatementMemory(mgr->statement,length + 4);
-                        space = *(void**)space;
-                } 
+                    *(int32_t*)space = -1;
+                    space += 4;
+                    *(void**)space = WAllocStatementMemory(mgr->statement,length + 4);
+                    space = *(void**)space;
+                    base->indicator = 2;
+                } else {
+                    base->indicator = 1;
+                }
                 *(int32_t*)space = length + 4;
                 space += 4;
                 memcpy(space,data,length);
             }
-            base->indicator = 1;
         }
     }
     return bound;
