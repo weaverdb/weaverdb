@@ -297,12 +297,10 @@ Poolsweep(void *args) {
     
     while (activated && !IsShutdownProcessingMode()) {
         JobList        *item = NULL;
-        int             err = 0;
         
-        err = setjmp(env->errorContext);
-        if (err) {
+        if (setjmp(env->errorContext)) {
             pthread_mutex_lock(&list_guard);
-            tool->requests = item->next;
+            tool->requests = ( item ) ? item->next : NULL;
             pthread_mutex_unlock(&list_guard);
             pfree(item);
             item = NULL;
@@ -432,6 +430,9 @@ Poolsweep(void *args) {
             MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
             CommitTransaction();
             if (item != NULL) {
+                pthread_mutex_lock(&list_guard);
+                tool->requests = ( item ) ? item->next : NULL;
+                pthread_mutex_unlock(&list_guard);
                 pfree(item);
                 item = NULL;
             }
@@ -483,6 +484,7 @@ CheckSweepForJob(Sweeps* sweep, JobType type, Oid relid) {
 
 static int
 AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid relid, Oid dbid, PoolArgs* extra) {
+    
     JobList* item = (JobList *) MemoryContextAlloc(sweep->context, sizeof(JobList));
     
     strncpy(item->relname, relname, 255);

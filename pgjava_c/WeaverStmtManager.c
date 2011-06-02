@@ -547,7 +547,7 @@ Input SetInputValue(StmtMgr mgr, const char * vari, short type, void* data, int 
                  memcpy(Advance(mgr, base->pointer),data,length);
             } else {
                 char*  space = Advance(mgr, base->pointer);
-                if ( base->indicator && *(int32_t*)space = -1) {
+                if ( base->indicator && *(int32_t*)space == -1) {
                     WFreeMemory(*(void**)space+4);
                 }
                 if ( base->maxlength < length + 4 ) {
