@@ -61,7 +61,7 @@ ConvertValueToText(Output* output,Oid type,int4 typmod, Datum val) {
 
         textlen = strlen(texto);
         if (textlen > output->size) {
-            output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,textlen);
+            output->freeable = palloc(textlen);
             *(void**)output->target = output->freeable;
             target = output->freeable;
         } 
@@ -75,7 +75,7 @@ BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
     
     if (desc->attlen > 0) {
         if (desc->attlen > output->size) {
-            output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,desc->attlen);
+            output->freeable = palloc(desc->attlen);
             *(void**)output->target = output->freeable;
             target = output->freeable;
         }
@@ -93,7 +93,7 @@ BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
             int moved = 0;
 
             if (size > output->size ) {
-                output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,size);
+                output->freeable = palloc(size);
                 *(void**)output->target = output->freeable;
                 target = output->freeable;
             } 
@@ -110,7 +110,7 @@ BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
             *output->length = moved + length;
         } else {
             if (VARSIZE(value) - 4 > output->size) {
-                output->freeable = MemoryContextAlloc(MemoryContextGetEnv()->TransactionCommandContext,VARSIZE(value) - 4);
+                output->freeable = palloc(VARSIZE(value) - 4);
                 *(void**)output->target = output->freeable;
                 target = output->freeable;
             }

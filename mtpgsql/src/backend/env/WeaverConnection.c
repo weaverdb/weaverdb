@@ -274,6 +274,8 @@ WCreateSubConnection(OpaqueWConn parent) {
 
 extern long
 WDestroyConnection(OpaqueWConn conn) {
+    if ( conn == NULL ) return 0;
+    
     WConn parent = conn->parent;
 
     if (parent) {
@@ -618,6 +620,8 @@ WFetch(OpaquePreparedStatement plan) {
                 (32 * 1024),
                 ALLOCSET_DEFAULT_MAXSIZE);
     }
+    
+    MemoryContextResetAndDeleteChildren(plan->fetch_cxt);
     MemoryContext old = MemoryContextSwitchTo(plan->fetch_cxt);
 
     TupleTableSlot *slot = ExecProcNode(plan->qdesc->plantree);
@@ -641,15 +645,11 @@ WFetch(OpaquePreparedStatement plan) {
             if (tuple->t_data->t_natts < pos || pos < 0) {
                 coded_elog(ERROR, 107, "wrong number of attributes");
             }
-            if (plan->output[pos].freeable) {
-                pfree(plan->output[pos].freeable);
-                plan->output[pos].freeable = NULL;
-                plan->output[pos].size = 0;
-            }
 
             val = HeapGetAttr(tuple, plan->output[pos].index, tdesc, &isnull);
 
             if (!isnull) {
+                plan->output[pos].freeable = NULL;
                 if (!TransferValue(&plan->output[pos], tdesc->attrs[pos], val)) {
                     /* field was not transfered, try and coerce to see if it should someday  */
                     if (can_coerce_type(1, &tdesc->attrs[pos]->atttypid, &plan->output[pos].type)) {
@@ -673,7 +673,6 @@ WFetch(OpaquePreparedStatement plan) {
         plan->state->es_processed++;
         plan->processed++;
         plan->stage = STMT_FETCH;
-        MemoryContextResetAndDeleteChildren(plan->fetch_cxt);
     }
 
     MemoryContextSwitchTo(old);
@@ -1048,8 +1047,21 @@ WAllocTransactionMemory(OpaqueWConn conn, size_t size) {
 }
 
 void*
-WAllocStatementMemory(OpaqueWConn conn, size_t size) {
-    return WAllocMemory(conn, STATEMENT_MEMORY, size);
+WAllocStatementMemory(OpaquePreparedStatement conn, size_t size) {
+    WConn connection = SETUP(conn->owner);
+    void* pointer;
+    MemoryContext cxt;
+    int err;
+
+    READY(connection, err);
+
+    if (CheckForCancel()) {
+        elog(ERROR, "query cancelled");
+    }
+
+    pointer = MemoryContextAlloc(conn->created_cxt, size);
+    RELEASE(connection);
+    return pointer;
 }
 
 void*
@@ -1067,7 +1079,7 @@ WAllocMemory(OpaqueWConn conn, mem_type type, size_t size) {
 
     switch (type) {
         case TRANSACTION_MEMORY:
-            cxt = MemoryContextGetEnv()->TopTransactionContext;
+            cxt = MemoryContextGetEnv()->QueryContext;
             break;
         case STATEMENT_MEMORY:
             cxt = MemoryContextGetEnv()->TransactionCommandContext;

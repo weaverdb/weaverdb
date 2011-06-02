@@ -76,7 +76,7 @@ LIB_EXTERN long WGetCommandId(OpaqueWConn conn);
 
 LIB_EXTERN void* WAllocConnectionMemory(OpaqueWConn conn, size_t size);
 LIB_EXTERN void* WAllocTransactionMemory(OpaqueWConn conn, size_t size);
-LIB_EXTERN void* WAllocStatementMemory(OpaqueWConn conn, size_t size);
+LIB_EXTERN void* WAllocStatementMemory(OpaquePreparedStatement conn, size_t size);
 LIB_EXTERN void WFreeMemory(OpaqueWConn conn, void* pointer);
 
 LIB_EXTERN long WExecCount(OpaquePreparedStatement conn);
