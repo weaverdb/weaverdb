@@ -1370,9 +1370,11 @@ tryAgain:
 	if (ControlFile->blcksz != BLCKSZ)
 		elog(STOP, "database was initialized with BLCKSZ %d,\n\tbut the backend was compiled with BLCKSZ %d.\n\tlooks like you need to initdb.",
 			 ControlFile->blcksz, BLCKSZ);
+#ifndef LET_OS_MANAGE_FILESIZE
 	if (ControlFile->relseg_size != RELSEG_SIZE)
 		elog(STOP, "database was initialized with RELSEG_SIZE %d,\n\tbut the backend was compiled with RELSEG_SIZE %d.\n\tlooks like you need to initdb.",
 			 ControlFile->relseg_size, RELSEG_SIZE);
+#endif
 	if (ControlFile->catalog_version_no != CATALOG_VERSION_NO)
 		elog(STOP, "database was initialized with CATALOG_VERSION_NO %d,\n\tbut the backend was compiled with CATALOG_VERSION_NO %d.\n\tlooks like you need to initdb.",
 			 ControlFile->catalog_version_no, CATALOG_VERSION_NO);
