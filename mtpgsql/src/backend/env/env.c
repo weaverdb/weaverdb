@@ -10,6 +10,9 @@
 #ifdef SUNOS
 #include <umem.h>
 #endif
+#ifdef _GNU_SOURCE
+#include <mcheck.h>
+#endif
 
 #include "postgres.h"
 #include "env/env.h"
@@ -73,10 +76,13 @@ static __thread Env* env_cache = NULL;
 
 int InitSystem(bool  isPrivate) {
 	int counter = 0;
-	
+
         MyProcPid = getpid();
 #ifdef SUNOS
         umem_nofail_callback(memory_fail);
+#endif
+#ifdef _GNU_SOURCE
+        memcheck(memory_fail);
 #endif
 	pthread_mutex_init(&envlock,NULL);
 	
@@ -875,7 +881,7 @@ void*
 base_mem_alloc(size_t size) {
 #ifdef SUNOS
     size_t* pointer = umem_alloc(size + sizeof(size_t), UMEM_NOFAIL);
-#else
+#else 
     size_t* pointer = malloc(size + sizeof(size_t));
 #endif
     *pointer = size;
@@ -889,7 +895,21 @@ base_mem_free(void * pointer) {
 #ifdef SUNOS
     umem_free(mark, *mark + sizeof(size_t));
 #else
+#ifdef _GNU_SOURCE
+    mcheck_status status = mprobe(pointer);
+    switch (status) {
+        case MCHECK_DISABLED:
+        case MCHECK_OK:
+            free(mark);
+            break;
+        case MCHECK_HEAD:
+        case MCHECK_TAIL:
+        case MCHECK_FREE:
+            abort();
+    }
+#else
     free(mark);
+#endif
 #endif
 }
 
