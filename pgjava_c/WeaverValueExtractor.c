@@ -369,6 +369,7 @@ int PassOutValue(StmtMgr mgr, int type, void* value, int length, void* userspace
     jobject setval = NULL;
 
         if (target == NULL ) return 0;
+    if ( (*env)->IsSameObject(env,target,NULL)) return 0;
         if (type == STREAMTYPE ) return 0;
 
         if ( value == NULL ) {

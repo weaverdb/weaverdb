@@ -368,12 +368,12 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_setInput(JNIEnv *
         if ( (*env)->IsSameObject(env,NULL,bindPass) ) {
             bound = SetInputValue(base,var,type,NULL,0);
         } else if ( type == STREAMTYPE ) {
-            Pipe pipe = PipeConnect(base,(*env)->NewGlobalRef(env,bindPass),direct_pipein);
+            Pipe pipe = PipeConnect(base,(*env)->NewWeakGlobalRef(env,bindPass),direct_pipein);
             bound = SetInputValue(base,var,type,pipe, -1); /*  -1 length means use the maxlength for the type */
             pipe = SetUserspace(base,InputToBound(bound),pipe);
             if ( pipe != NULL ) {
                 jobject ref = PipeDisconnect(base,pipe);
-                (*env)->DeleteGlobalRef(env,ref);
+                (*env)->DeleteWeakGlobalRef(env,ref);
             }
         } else {
             PassInValue(env,base,var,type,bindPass);
@@ -393,16 +393,16 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_getOutput
 
 // check for valid link
         if ( type == STREAMTYPE ) {
-            Pipe pipe = PipeConnect(base,(*env)->NewGlobalRef(env,target),direct_pipeout);
+            Pipe pipe = PipeConnect(base,(*env)->NewWeakGlobalRef(env,target),direct_pipeout);
             bound = SetOutputValue(base,index,type,pipe,-1);
             pipe = SetUserspace(base,OutputToBound(bound),pipe);
             if ( pipe != NULL ) {
                 jobject ref = PipeDisconnect(base,pipe);
-                (*env)->DeleteGlobalRef(env,ref);
+                (*env)->DeleteWeakGlobalRef(env,ref);
             }
         } else {
             bound = OutputLink(base,index,type);
-            (*env)->DeleteGlobalRef(env,SetUserspace(base,OutputToBound(bound),(*env)->NewGlobalRef(env,target)));
+            (*env)->DeleteWeakGlobalRef(env,SetUserspace(base,OutputToBound(bound),(*env)->NewWeakGlobalRef(env,target)));
         }
 //  report errors
 	reportError(env,talkerObject,base);
@@ -732,6 +732,8 @@ static int direct_pipeout(void* arg,char* buff,int start,int run)
     JNIEnv*  env = NULL;
     jobject target = arg;
     
+    if ( (*env)->ISSameObject(env,target,NULL) ) return PIPING_ERROR;
+
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
 
     jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
@@ -755,6 +757,8 @@ static int direct_pipein(void* arg,char* buff,int start,int run)
 {
     JNIEnv*  env = NULL;
     jobject target = arg;
+    
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
     
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
     
@@ -782,6 +786,9 @@ static int pipeout(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
+    if ( (*env)->ISSameObject(env,target,NULL) ) return PIPING_ERROR;
+
+    
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
     if ( jb != NULL ) {
@@ -806,6 +813,8 @@ static int pipein(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
+    if ( (*env)->ISSameObject(env,target,NULL) ) return PIPING_ERROR;
+    
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
     if ( jb != NULL ) {
@@ -833,7 +842,7 @@ int clean_output(StmtMgr mgr, int type, void* arg) {
         arg = PipeDisconnect(mgr,arg);
     }
 
-    (*env)->DeleteGlobalRef(env,arg);
+    (*env)->DeleteWeakGlobalRef(env,arg);
 
     return 0;
 }
@@ -846,7 +855,7 @@ int clean_input(StmtMgr mgr,int type, void* arg) {
         arg = PipeDisconnect(mgr,arg);
     }
 
-    (*env)->DeleteGlobalRef(env,arg);
+    (*env)->DeleteWeakGlobalRef(env,arg);
     
     return 0;
 }
