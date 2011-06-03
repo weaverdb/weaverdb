@@ -97,8 +97,9 @@ typedef struct preparedplan {
         List*		querytreelist;
         List*		plantreelist;
 
-       MemoryContext   created_cxt;
-       MemoryContext   bind_cxt;
+       MemoryContext   plan_cxt;
+       MemoryContext   node_cxt;
+
        MemoryContext   exec_cxt;
        MemoryContext   fetch_cxt;
 

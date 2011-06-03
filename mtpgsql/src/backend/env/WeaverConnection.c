@@ -309,7 +309,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     WConn connection = SETUP(conn);
     long err = 0;
     PreparedPlan* plan;
-    MemoryContext old;
+    MemoryContext plan_cxt,old;
 
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
@@ -330,16 +330,17 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
-
-    old = MemoryContextSwitchTo(GetEnvMemoryContext());
-    plan = (PreparedPlan *) palloc(sizeof (PreparedPlan));
-    plan->statement = pstrdup(smt);
-plan->created_cxt = AllocSetContextCreate(MemoryContextGetCurrentContext(),
+    
+    plan_cxt = AllocSetContextCreate(GetEnvMemoryContext(),
             "PreparedPlanContext",
             ALLOCSET_DEFAULT_MINSIZE,
             ALLOCSET_DEFAULT_INITSIZE,
             ALLOCSET_DEFAULT_MAXSIZE);
-    MemoryContextSwitchTo(plan->created_cxt);
+
+    old = MemoryContextSwitchTo(plan_cxt);
+    plan = (PreparedPlan *) palloc(sizeof (PreparedPlan));
+    plan->statement = pstrdup(smt);
+    plan->plan_cxt = plan_cxt;
     plan->owner = connection;
     memset(plan->input, 0, sizeof (Binder) * MAX_ARGS);
     memset(plan->output, 0, sizeof (Output) * MAX_ARGS);
@@ -352,7 +353,9 @@ plan->created_cxt = AllocSetContextCreate(MemoryContextGetCurrentContext(),
     plan->querytreelist = NULL;
     plan->plantreelist = NULL;
     
+    plan->node_cxt = NULL;
     plan->exec_cxt = NULL;
+    plan->fetch_cxt = NULL;
     plan->stage = STMT_NEW;
     
     plan->next = connection->plan;
@@ -381,10 +384,10 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     if (stmt->qdesc != NULL) {
         ExecutorEnd(stmt->qdesc, stmt->state);
     }
-    MemoryContextDelete(stmt->created_cxt);
+
     if ( stmt->exec_cxt ) MemoryContextDelete(stmt->exec_cxt);
-    pfree(stmt->statement);
-    pfree(stmt);
+    MemoryContextDelete(stmt->plan_cxt);
+
     RELEASE(connection);
     return err;
 }
@@ -449,9 +452,10 @@ WExec(OpaquePreparedStatement plan) {
 
     READY(connection, err);
 
+    WResetExecutor(plan);
+
     plan = ParsePlan(plan);
 
-    WResetExecutor(plan);
     plan->processed = 0;
     
     trackquery = plan->querytreelist;
@@ -775,11 +779,15 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
     if (index >= MAX_ARGS) {
         coded_elog(ERROR, 105, "too many bind values, max is %d", MAX_ARGS);
     }
+        
+    if ( plan->input[index].index == 0 ) plan->input_count = index+1;
 /*  if the input is now different, we need to re-parse the statement */
-    if ( plan->input[index].index == 0 || plan->input[index].type != varType ) {
-        plan->querytreelist = NULL;
-        plan->input_count = index+1;
-   }
+    if ( plan->node_cxt && (plan->input[index].index == 0 || plan->input[index].type != varType) ) {
+            MemoryContextDelete(plan->node_cxt);
+            plan->node_cxt = NULL;
+            plan->plantreelist = NULL;
+            plan->querytreelist = NULL;
+    }
     plan->input[index].index = index + 1;
     strncpy(plan->input[index].name, var, 64);
     plan->input[index].varSize = varSize;
@@ -1007,7 +1015,7 @@ WAllocStatementMemory(OpaquePreparedStatement conn, size_t size) {
         elog(ERROR, "query cancelled");
     }
 
-    pointer = MemoryContextAlloc(conn->created_cxt, size);
+    pointer = MemoryContextAlloc(conn->plan_cxt, size);
     RELEASE(connection);
     return pointer;
 }
@@ -1319,7 +1327,6 @@ WResetExecutor(PreparedPlan * plan) {
     plan->state = NULL;
     plan->qdesc = NULL;
 
-    plan->bind_cxt = NULL;
     plan->fetch_cxt = NULL;
 }
 
@@ -1327,13 +1334,13 @@ WResetExecutor(PreparedPlan * plan) {
 static int
 FillExecArgs(PreparedPlan* plan) {
     int k = 0;
-    MemoryContext old = NULL;
+    MemoryContext old,bind_cxt;
     ParamListInfo paramLI;
 
     Assert(plan != NULL);
 
-    plan->bind_cxt = SubSetContextCreate(plan->exec_cxt, "StatementArgumentContext");
-    old = MemoryContextSwitchTo(plan->bind_cxt);
+    bind_cxt = SubSetContextCreate(plan->exec_cxt, "StatementArgumentContext");
+    old = MemoryContextSwitchTo(bind_cxt);
 
     paramLI = (ParamListInfo) palloc((plan->input_count + 1) * sizeof (ParamListInfoData));
 
@@ -1417,21 +1424,18 @@ FillExecArgs(PreparedPlan* plan) {
 
 static PreparedPlan *
 ParsePlan(PreparedPlan* plan) {
-    List* querytree_list;
-    List* plantree_list;
+    List *querytree_list,*iterator;
+    List* plantree_list = NULL;
     Oid*    targs;
     char**  names;
     int x;
 
-    Plan *plantree = NULL;
-    Query *querytree = NULL;
-    MemoryContext old;
+    MemoryContext old,parse_cxt;
     /* parse out a new query and setup plan  */
     /* init for set type */
-
-    if (!plan->querytreelist) {
-        MemoryContextResetAndDeleteChildren(plan->created_cxt);
-        old = MemoryContextSwitchTo(plan->created_cxt);
+    parse_cxt = SubSetContextCreate(MemoryContextGetCurrentContext(), "ParseContext");
+    old = MemoryContextSwitchTo(parse_cxt);
+    if (!plan->node_cxt) {
         if ( plan->input_count > 0 ) {
             targs = palloc(sizeof(Oid) * plan->input_count);
             names = palloc(sizeof(char*) * plan->input_count);
@@ -1443,25 +1447,27 @@ ParsePlan(PreparedPlan* plan) {
         querytree_list = pg_parse_and_rewrite(plan->statement, targs, names, plan->input_count, FALSE);
         if (!querytree_list) {
             elog(ERROR, "parsing error");
-        }
-        plan->querytreelist = querytree_list;
-
+        }        
         /*
          * should only be calling one statement at a time if not, you need to
          * do a foreach on the querytree_list to get a plan for each query
          */
-        querytree = lfirst(querytree_list);
-        while (querytree_list) {
-            plantree = pg_plan_query(querytree);
-            plantree_list = lappend(plantree_list, plantree);
-            querytree_list = lnext(querytree_list);
+        iterator = querytree_list;
+        while (iterator) {
+            plantree_list = lappend(plantree_list, pg_plan_query(lfirst(iterator)));
+            iterator = lnext(iterator);
         }
-
-        plan->plantreelist = plantree_list;
+        
+        plan->node_cxt = SubSetContextCreate(plan->plan_cxt, "ParseContext");
+        
+        MemoryContextSwitchTo(plan->node_cxt);
+        plan->querytreelist = copyObject(querytree_list);
+        plan->plantreelist = copyObject(plantree_list);
         plan->processed = -1;
         /* set the bind context to NULL until a memory context is created  */
         plan->stage = STMT_PARSED;
         MemoryContextSwitchTo(old);
+        MemoryContextDelete(parse_cxt);
     }
     return plan;
 }

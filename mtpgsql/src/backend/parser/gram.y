@@ -6208,6 +6208,7 @@ int parser_parse(List** parsetree) {
 void parser_destroy() {
     ParserInfo* pi = GetParserInfo();
     yylex_destroy(pi->yyscanner);
+     pfree(pi->parseString);
 }
 
 /*

@@ -9,7 +9,7 @@ endif
 ifeq ($(ARCH),Linux)
 OS=LINUX
 PORTNAME=linux
-CFLAGS+= -D_GNU_SOURCE -lmcheck
+CFLAGS+= -D_GNU_SOURCE
 endif
 
 ifeq ($(PROC),i386)
@@ -67,8 +67,8 @@ BKIOPTS+= -DNOARRAY -I../../include -I..
 #CFLAGS+= -DDEBUG_INDEX_INSERT
 #CFLAGS+= -DCACHEDEBUG
 #CFLAGS+= -DHEAPDEBUGALL
-CFLAGS+= -DCLOBBER_FREED_MEMORY
-CFLAGS+= -DMEMORY_CONTEXT_CHECKING
+#CFLAGS+= -DCLOBBER_FREED_MEMORY
+#CFLAGS+= -DMEMORY_CONTEXT_CHECKING
 CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
 AROPT= crs
 CFLAGS_SL=
@@ -78,7 +78,7 @@ LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket
 endif
 ifeq ($(OS),LINUX) 
 LDFLAGS= -L/usr/lib64 
-LIBS= -lnsl -lrt -lm -lcrypt
+LIBS= -lnsl -lrt -lm -lcrypt -lmcheck
 endif
 
 INSTALL= $(SRCDIR)/install-sh -c
