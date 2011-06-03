@@ -334,7 +334,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     old = MemoryContextSwitchTo(GetEnvMemoryContext());
     plan = (PreparedPlan *) palloc(sizeof (PreparedPlan));
     plan->statement = pstrdup(smt);
-    plan->created_cxt = AllocSetContextCreate(MemoryContextGetCurrentContext(),
+plan->created_cxt = AllocSetContextCreate(MemoryContextGetCurrentContext(),
             "PreparedPlanContext",
             ALLOCSET_DEFAULT_MINSIZE,
             ALLOCSET_DEFAULT_INITSIZE,

@@ -9,7 +9,7 @@ endif
 ifeq ($(ARCH),Linux)
 OS=LINUX
 PORTNAME=linux
-CFLAGS+= -D_GNU_SOURCE
+CFLAGS+= -D_GNU_SOURCE -lmcheck
 endif
 
 ifeq ($(PROC),i386)

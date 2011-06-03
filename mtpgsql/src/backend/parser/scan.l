@@ -530,7 +530,7 @@ other			.
 
  void yyfree (void * ptr, void * yyscanner) {  
      if ( ptr == NULL ) return;
-     pfree(ptr);
+/*     pfree(ptr);  */
  }
 
 void yyerror(const char * message) {  

@@ -68,6 +68,9 @@ static HTAB* CreateHash(MemoryContext context);
 static int DestroyHash(HTAB* hash);
 static long sectionid_hash(void* key, int size);
 static int memory_fail(void);
+#ifdef _GNU_SOURCE
+static void glibc_memory_fail(enum mcheck_status err);
+#endif
 static void  env_log(Env* env, char* pattern, ...);
 
 #ifdef ENV_TLS
@@ -82,7 +85,7 @@ int InitSystem(bool  isPrivate) {
         umem_nofail_callback(memory_fail);
 #endif
 #ifdef _GNU_SOURCE
-        memcheck(memory_fail);
+        mcheck(glibc_memory_fail);
 #endif
 	pthread_mutex_init(&envlock,NULL);
 	
@@ -870,7 +873,15 @@ PrintUserMemory( void ) {
         size_t amt = MemoryContextStats(GetEnv()->global_context);
         env_log(GetEnv(),"Total env memory: %ld",amt);     
 }
-
+#ifdef _GNU_SOURCE
+void 
+glibc_memory_fail(enum mcheck_status err) {
+    printf("memory allocation failed");
+    /*
+    abort();
+     * */
+}
+#endif
 int 
 memory_fail(void) {
     printf("memory allocation failed");
@@ -896,7 +907,7 @@ base_mem_free(void * pointer) {
     umem_free(mark, *mark + sizeof(size_t));
 #else
 #ifdef _GNU_SOURCE
-    mcheck_status status = mprobe(pointer);
+    enum mcheck_status status = mprobe(mark);
     switch (status) {
         case MCHECK_DISABLED:
         case MCHECK_OK:
