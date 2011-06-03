@@ -130,6 +130,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     strncpy(connection->connect, conn, 64);
 
     connection->env = env;
+    connection->plan = NULL;
 
     connection->env->Mode = InitProcessing;
 
@@ -1293,8 +1294,17 @@ void
 WResetQuery(WConn connection) {
     /*  if we are in abort don't worry about shutting down,
     abort cleanup will take care of it.  */
-    while ( connection->plan ) {
-        WResetExecutor(connection->plan);
+    OpaquePreparedStatement plan = connection->plan;
+    while ( plan ) {
+        if (plan->qdesc != NULL) {
+            ExecutorEnd(plan->qdesc, plan->state);
+        }
+        plan->tupdesc = NULL;
+        plan->qdesc = NULL;
+        plan->state = NULL;
+        plan->fetch_cxt = NULL;
+        plan->exec_cxt = NULL;
+        plan = plan->next;
     }
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
 #ifdef MEMORY_STATS
@@ -1426,16 +1436,16 @@ static PreparedPlan *
 ParsePlan(PreparedPlan* plan) {
     List *querytree_list,*iterator;
     List* plantree_list = NULL;
-    Oid*    targs;
-    char**  names;
+    Oid*    targs = NULL;
+    char**  names = NULL;
     int x;
 
-    MemoryContext old,parse_cxt;
+    MemoryContext old;
     /* parse out a new query and setup plan  */
     /* init for set type */
-    parse_cxt = SubSetContextCreate(MemoryContextGetCurrentContext(), "ParseContext");
-    old = MemoryContextSwitchTo(parse_cxt);
     if (!plan->node_cxt) {
+        plan->node_cxt = SubSetContextCreate(plan->plan_cxt, "ParseContext");
+        old = MemoryContextSwitchTo(plan->node_cxt);
         if ( plan->input_count > 0 ) {
             targs = palloc(sizeof(Oid) * plan->input_count);
             names = palloc(sizeof(char*) * plan->input_count);
@@ -1447,7 +1457,10 @@ ParsePlan(PreparedPlan* plan) {
         querytree_list = pg_parse_and_rewrite(plan->statement, targs, names, plan->input_count, FALSE);
         if (!querytree_list) {
             elog(ERROR, "parsing error");
-        }        
+        }  
+        
+        if ( targs ) pfree(targs);
+        if ( names ) pfree(names);
         /*
          * should only be calling one statement at a time if not, you need to
          * do a foreach on the querytree_list to get a plan for each query
@@ -1458,16 +1471,12 @@ ParsePlan(PreparedPlan* plan) {
             iterator = lnext(iterator);
         }
         
-        plan->node_cxt = SubSetContextCreate(plan->plan_cxt, "ParseContext");
-        
-        MemoryContextSwitchTo(plan->node_cxt);
-        plan->querytreelist = copyObject(querytree_list);
-        plan->plantreelist = copyObject(plantree_list);
+        plan->querytreelist = querytree_list;
+        plan->plantreelist = plantree_list;
         plan->processed = -1;
         /* set the bind context to NULL until a memory context is created  */
         plan->stage = STMT_PARSED;
         MemoryContextSwitchTo(old);
-        MemoryContextDelete(parse_cxt);
     }
     return plan;
 }
