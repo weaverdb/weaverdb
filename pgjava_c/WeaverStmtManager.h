@@ -19,7 +19,7 @@
 #include "env/WeaverInterface.h"
 
   
-#define MAX_FIELDS  20
+#define MAX_FIELDS  16
 #define MAX_STMTSIZE  (BLOBSIZE * 32)
 
 typedef struct bound *  Bound;

@@ -16,7 +16,8 @@
 #define _WEAVER_CONNECTION_H_
 #define HAVE_UNION_SEMUN
 
-#define MAX_ARGS 16
+#define START_ARGS 4
+#define MAX_ARGS 32
 #define MAX_CHILDREN 4
 
 #include <stdlib.h>  
@@ -43,7 +44,7 @@ typedef struct output {
 
 typedef struct input {
 	short 	index;
-	char	name[64];
+	char*	name;
 	int 	varSize;
 	Oid 	type;
 	int 	ctype;
@@ -70,9 +71,9 @@ typedef struct Connection {
     Error		CDA;	
     short		validFlag;
 
-    char		password[64];
-    char 		name[64];
-    char 		connect[64];
+    char*		password;
+    char* 		name;
+    char* 		connect;
 
     Stage		stage;
 
@@ -108,9 +109,10 @@ typedef struct preparedplan {
         QueryDesc*	qdesc;
         int             processed;
 
-        int            input_count;
-    Binder		input[MAX_ARGS];
-    Output		output[MAX_ARGS];
+        short            input_count;
+        short            arg_count;
+    Binder*		input;
+    Output*		output;
 
     OpaquePreparedStatement   next;
 } PreparedPlan;

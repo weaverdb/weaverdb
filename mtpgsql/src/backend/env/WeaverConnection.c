@@ -125,9 +125,9 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     memset(connection, 0x00, sizeof (struct Connection));
 
     connection->validFlag = -1;
-    strncpy(connection->password, pass, 64);
-    strncpy(connection->name, tName, 64);
-    strncpy(connection->connect, conn, 64);
+    connection->password = pstrdup(pass);
+    connection->name = pstrdup(tName);
+    connection->connect = pstrdup(conn);
 
     connection->env = env;
     connection->plan = NULL;
@@ -221,7 +221,62 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
 
 OpaqueWConn
 WCreateSubConnection(OpaqueWConn parent) {
-    return NULL;
+    int sqlError = 0;
+    WConn connection = NULL;
+    Env*              env;
+
+    if (parent->parent != NULL) {
+        sqlError = 99;
+        strncpy(parent->env->errortext, "a sub-connection cannot spawn children", 255);
+        strncpy(parent->env->state, "DISCONNECTED", 39);
+        WHandleError(parent, sqlError);
+        return connection;
+    }
+    
+    env = CreateEnv(parent->env);
+    
+    if (env == NULL) {
+        sqlError = 99;
+        strncpy(parent->env->errortext, "unsuccessful connection -- too many connections", 255);
+        strncpy(parent->env->state, "DISCONNECTED", 39);
+        WHandleError(parent, sqlError);
+        return connection;
+    } else {
+        SetEnv(env);
+        MemoryContextInit();
+
+    }
+    
+    connection = AllocateEnvSpace(connection_section_id,sizeof (struct Connection));
+    memmove(connection, parent, sizeof (struct Connection));
+
+    
+    connection->env = env;
+    connection->env->Mode = InitProcessing;
+
+    connection->env->DatabaseId = parent->env->DatabaseId;
+    connection->env->DatabaseName = parent->env->DatabaseName;
+    connection->env->DatabasePath = parent->env->DatabasePath;
+    connection->env->UserName = parent->env->UserName;
+    connection->env->UserId = parent->env->UserId;
+
+    InitThread(NORMAL_THREAD);
+
+    RelationInitialize();
+    InitCatalogCache();
+
+    CallableInitInvalidationState();
+    connection->env->Mode = NormalProcessing;
+    connection->stage = TRAN_INVALID;
+
+    pthread_mutex_lock(&parent->child_lock);
+    connection->parent = parent;
+    connection->child_count++;
+    pthread_mutex_unlock(&parent->child_lock);
+
+    SetEnv(NULL);
+
+    return (OpaqueWConn) connection;
 }
 
 extern long
@@ -343,8 +398,11 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     plan->statement = pstrdup(smt);
     plan->plan_cxt = plan_cxt;
     plan->owner = connection;
-    memset(plan->input, 0, sizeof (Binder) * MAX_ARGS);
-    memset(plan->output, 0, sizeof (Output) * MAX_ARGS);
+    plan->arg_count = START_ARGS;
+    plan->input = palloc(sizeof(Binder) * START_ARGS);
+    plan->output = palloc(sizeof(Output) * START_ARGS);
+    memset(plan->input, 0, sizeof (Binder) * START_ARGS);
+    memset(plan->output, 0, sizeof (Output) * START_ARGS);
     plan->input_count = 0;
 
     plan->tupdesc = NULL;
@@ -413,7 +471,13 @@ WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, 
     }
 
     if (pos > MAX_ARGS || pos <= 0) {
-        coded_elog(ERROR, 101, "bad value - index must be greater than 0 and less than %d", MAX_ARGS);
+                coded_elog(ERROR, 101, "bad value - index must be greater than 0 and less than %d", MAX_ARGS);
+    } else if ( pos > plan->arg_count ) {
+        plan->input = repalloc(plan->input, sizeof(Binder) * pos);
+        plan->output = repalloc(plan->output, sizeof(Output) * pos);
+        memset(plan->input + (plan->arg_count),0x00,(sizeof(Binder) * (pos - plan->arg_count)));
+        memset(plan->output + (plan->arg_count),0x00,(sizeof(Output) * (pos - plan->arg_count)));
+        plan->arg_count = pos;
     } else {
         plan->output[pos - 1].index = pos;
         plan->output[pos - 1].target = varAdd;
@@ -772,13 +836,17 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
     }
 
     /* find the right binder */
-    for (index = 0; index < MAX_ARGS; index++) {
+    for (index = 0; index < plan->arg_count; index++) {
         if (plan->input[index].index == 0 || strcmp(var, plan->input[index].name) == 0)
             break;
     }
 
-    if (index >= MAX_ARGS) {
-        coded_elog(ERROR, 105, "too many bind values, max is %d", MAX_ARGS);
+    if (index == plan->arg_count) {
+        plan->input = repalloc(plan->input, sizeof(Binder) * plan->arg_count * 2);
+        plan->output = repalloc(plan->output, sizeof(Output) * plan->arg_count * 2);
+        memset(plan->input + (plan->arg_count),0x00,(sizeof(Binder) * plan->arg_count));
+        memset(plan->output + (plan->arg_count),0x00,(sizeof(Output) * plan->arg_count));
+        plan->arg_count *= 2;
     }
         
     if ( plan->input[index].index == 0 ) plan->input_count = index+1;
@@ -790,7 +858,7 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
             plan->querytreelist = NULL;
     }
     plan->input[index].index = index + 1;
-    strncpy(plan->input[index].name, var, 64);
+    plan->input[index].name = MemoryContextStrdup(plan->plan_cxt,var);
     plan->input[index].varSize = varSize;
     plan->input[index].type = varType;
     plan->input[index].ctype = cType;
