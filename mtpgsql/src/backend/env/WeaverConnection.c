@@ -654,7 +654,7 @@ WFetch(OpaquePreparedStatement plan) {
         HeapTuple tuple = slot->val;
         TupleDesc tdesc = slot->ttc_tupleDescriptor;
 
-        while (plan->output[pos].index != 0 && pos <= plan->arg_count) {
+        while (plan->output[pos].index != 0 && pos < plan->arg_count) {
             Datum val = (Datum) NULL;
             char isnull = 0;
 
