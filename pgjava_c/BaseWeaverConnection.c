@@ -365,7 +365,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_setInput(JNIEnv *
 	(*env)->GetStringUTFRegion(env,theVar,0, varsize, var); 		
 	var[varsize] = 0;
         
-        if ( (*env)->IsSameObject(env,NULL,bindPass) ) {
+        if ( (*env)->IsSameObject(env,bindPass,NULL) ) {
             bound = SetInputValue(base,var,type,NULL,0);
         } else if ( type == STREAMTYPE ) {
             Pipe pipe = PipeConnect(base,(*env)->NewWeakGlobalRef(env,bindPass),direct_pipein);
@@ -732,9 +732,9 @@ static int direct_pipeout(void* arg,char* buff,int start,int run)
     JNIEnv*  env = NULL;
     jobject target = arg;
     
-    if ( (*env)->ISSameObject(env,target,NULL) ) return PIPING_ERROR;
-
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
+
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
 
     jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
     
@@ -757,11 +757,11 @@ static int direct_pipein(void* arg,char* buff,int start,int run)
 {
     JNIEnv*  env = NULL;
     jobject target = arg;
-    
-    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
-    
+        
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
     
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+
     jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
 
     if ( jb != NULL ) {
@@ -786,8 +786,7 @@ static int pipeout(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
-    if ( (*env)->ISSameObject(env,target,NULL) ) return PIPING_ERROR;
-
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
     
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
@@ -813,7 +812,7 @@ static int pipein(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
-    if ( (*env)->ISSameObject(env,target,NULL) ) return PIPING_ERROR;
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
     
     jbyteArray jb = (*env)->NewByteArray(env,run);
 

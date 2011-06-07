@@ -54,8 +54,6 @@
 #define TLS  static __thread
 #endif
 
-#define PIPELINE_SIZE 128
-#define COMMBUFFER_SIZE  8192
 /*  DBWriter will wait yield for other threads to catch as many commits as possible  */
 #define FRIENDLY_DBWRITER     
 /*

@@ -858,7 +858,9 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
             plan->querytreelist = NULL;
     }
     plan->input[index].index = index + 1;
-    plan->input[index].name = MemoryContextStrdup(plan->plan_cxt,var);
+    if ( plan->input[index].name == NULL ) {
+        plan->input[index].name = MemoryContextStrdup(plan->plan_cxt,var);
+    }
     plan->input[index].varSize = varSize;
     plan->input[index].type = varType;
     plan->input[index].ctype = cType;
