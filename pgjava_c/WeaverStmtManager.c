@@ -698,7 +698,7 @@ Output OutputLink(StmtMgr mgr, int index, short type)
                 }
             }
         } else {
-            WOutputLink(mgr->statement,index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
+            WOutputLink(mgr->statement,link->index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
         }
         
         return link;
