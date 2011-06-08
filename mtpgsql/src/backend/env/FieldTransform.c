@@ -145,6 +145,12 @@ IndirectLongCopyValue(Output* output, Datum value) {
 }
 
 static void
+DirectLongCopyValue(Output* output,long value) {
+    *(int64_t*) output->target = value;
+    *output->length = 8;
+}
+
+static void
 IndirectDoubleCopyValue(Output* output, Datum value) {
     *(double *) output->target = *(double *)DatumGetPointer(value);
     *output->length = 8;
@@ -178,7 +184,11 @@ TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
                 break;
             case INT4OID:
                 if (desc->atttypid == CONNECTOROID ) DirectIntCopyValue(output,value);
-                else if (desc->atttypid == BOOLOID) DirectIntCopyValue(output,(value) ? 1 : 0);
+                else if (desc->atttypid == BOOLOID) DirectIntCopyValue(output,Int32GetDatum((value) ? 1 : 0));
+                else if ( desc->atttypid == INT8OID ) {
+                    if ( DatumGetInt64(value) > 0x7fffffff ) return false;
+                    else DirectIntCopyValue(output,value);
+                }
                 else return false;
                 break;
             case BOOLOID:
@@ -188,6 +198,8 @@ TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
             case INT8OID:
                 if (desc->atttypid == XIDOID) IndirectLongCopyValue(output,value);
                 else if (desc->atttypid == OIDOID) IndirectLongCopyValue(output,value);
+                else if (desc->atttypid == INT4OID) DirectLongCopyValue(output,DatumGetInt32(value));
+                else return false;
                 break;
             case FLOAT8OID:
                 if (desc->atttypid == FLOAT4OID) DirectDoubleCopyValue(output,(double)*(float*)DatumGetPointer(value));
