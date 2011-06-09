@@ -852,7 +852,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 
 	int			firstchar;
 	StringInfo	parser_input;
-	char	   *userName;
+	char	   *userName = NULL;
 	
 	/* Used if verbose is set, must be initialized */
 	char	   *remote_info = "interactive";
