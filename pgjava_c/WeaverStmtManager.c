@@ -71,6 +71,7 @@ static void Clean( StmtMgr mgr,usercleanup input,usercleanup output);
 static long  align(StmtMgr mgr, long pointer);
 static void* Advance(StmtMgr mgr,long size);
 static short ExpandBindings(StmtMgr mgr);
+static short ResetBindings(StmtMgr mgr);
 
 OpaqueWConn
 CreateWeaverConnection( const char* name, const char * paslong, const char* connect) {
@@ -136,7 +137,6 @@ void DestroyWeaverConnection( StmtMgr mgr ) {
          */
         WCancelAndJoin(mgr->theConn);
         WDestroyConnection(mgr->theConn);
-        mgr->theConn = NULL;
     }
 }
 
@@ -150,6 +150,7 @@ OpaqueWConn GetWeaverConnection( StmtMgr mgr )
 void DestroyWeaverStmtManager( StmtMgr mgr )
 {
     if ( mgr == NULL ) return;
+
     if ( mgr->dataStack != NULL ) WFreeMemory(mgr->theConn,mgr->dataStack);
     if ( mgr->inputLog != NULL ) WFreeMemory(mgr->theConn,mgr->inputLog);
     if ( mgr->outputLog != NULL ) WFreeMemory(mgr->theConn,mgr->outputLog);
@@ -203,15 +204,15 @@ void Clean( StmtMgr mgr, usercleanup input, usercleanup output )
 void Init( StmtMgr mgr, usercleanup input, usercleanup output )
 {
         if ( !IsValid(mgr) )  return;
-    if ( mgr->statement ) {
-        if ( mgr->theConn ) {
-            WDestroyPreparedStatement(mgr->statement);
+        if ( mgr->statement ) {
+            Clean(mgr,input,output);
+            if ( mgr->theConn ) {
+                WDestroyPreparedStatement(mgr->statement);
+            }
+            mgr->statement = NULL;
+            memset(&mgr->errordelegate,0,sizeof(Error));
+            mgr->errorlevel = 0;
         }
-        mgr->statement = NULL;
-        memset(&mgr->errordelegate,0,sizeof(Error));
-        mgr->errorlevel = 0;
-        Clean(mgr,input,output);
-    }
 }
 
 short Begin( StmtMgr mgr ) 
@@ -360,8 +361,6 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
         
         if ( !IsValid(mgr) ) return NULL;
         
-        void*       savestack = mgr->dataStack;
-        long        stmtsz = GetStatementSpaceSize(mgr);
              short x;
        
     /*  remove the marker flag of the named parameter if there is one */
@@ -385,9 +384,6 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
 
         base->indicator = 0;
         if ( base->type == type ) return bind;
-        
-	strncpy(bind->binder,vari,64);
-	base->type = type;
 	
 	switch(type)
 	{
@@ -444,32 +440,29 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
 	}
         /*  first check to see if the data will fit  */
         mgr->holdingArea = align(mgr, mgr->holdingArea);
-        if ( mgr->holdingArea + base->maxlength > MAX_STMTSIZE ) {
+        
+        base->pointer = mgr->holdingArea;
+        mgr->holdingArea += base->maxlength;
+        
+        if ( mgr->holdingArea > MAX_STMTSIZE ) {
             DelegateError(mgr,"PREPARE","no statement binding space left",803);
             return NULL; 
         }
-        while ( stmtsz < (mgr->holdingArea + base->maxlength) ) {
-            stmtsz = ( stmtsz * 2 < MAX_STMTSIZE ) ? stmtsz * 2 : MAX_STMTSIZE;
+        
+        while ( GetStatementSpaceSize(mgr) < (mgr->holdingArea) ) {
+            long stmtsz = ( stmtsz * 2 < MAX_STMTSIZE ) ? stmtsz * 2 : MAX_STMTSIZE;
             SetStatementSpaceSize(mgr,stmtsz);
         }   
+	
+        strncpy(bind->binder,vari,64);
+	base->type = type;
         
         if ( type == STREAMTYPE ) otype = BLOBTYPE;
         else otype = type;
         
-        base->pointer = mgr->holdingArea;
-        mgr->holdingArea += base->maxlength;
 /*  if the dataStack has been moved, all the pointers need to be reset  */
-        if ( savestack != mgr->dataStack ) {
-            for (x=0;x<mgr->log_count;x++) {
-                bind = &mgr->inputLog[x];
-                base = InputToBound(bind);
-                if ( bind->binder[0] != '\0' ) {
-                    WBindLink(mgr->statement,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,type);
-                }
-            }
-        } else {
-            WBindLink(mgr->statement,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,type);
-        } 
+
+        WBindLink(mgr->statement,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,type);
 
         return bind;
 }
@@ -598,7 +591,6 @@ Output OutputLink(StmtMgr mgr, int index, short type)
 {
         Output      link = NULL;
         Bound       base = NULL;
-        void*       savestack = mgr->dataStack;
 
         if ( !IsValid(mgr) ) {
             return NULL;
@@ -672,10 +664,9 @@ Output OutputLink(StmtMgr mgr, int index, short type)
                 break;
         }
 
+
         mgr->holdingArea = align(mgr,mgr->holdingArea);
         base->pointer = mgr->holdingArea;
-        link->index = index;
-        base->type = type;
         mgr->holdingArea += base->maxlength;
 
         if ( mgr->holdingArea > MAX_STMTSIZE ) {
@@ -687,19 +678,11 @@ Output OutputLink(StmtMgr mgr, int index, short type)
             long stmtsz = ( stmtsz * 2 < MAX_STMTSIZE ) ? stmtsz * 2 : MAX_STMTSIZE;
             SetStatementSpaceSize(mgr,stmtsz);
         }
-/*  if the dataStack has been moved, all the pointers need to be reset  */
-       if ( savestack != mgr->dataStack ) {
-            short x;
-            for (x=0;x<mgr->log_count;x++) {
-                link = &mgr->outputLog[x];
-                base = OutputToBound(link);
-                if ( mgr->outputLog[x].index != 0 ) {
-                    WOutputLink(mgr->statement,link->index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
-                }
-            }
-        } else {
-            WOutputLink(mgr->statement,link->index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
-        }
+        
+        link->index = index;
+        base->type = type;
+        
+        WOutputLink(mgr->statement,link->index,Advance(mgr,base->pointer),base->maxlength,type,&base->indicator,&link->clength);
         
         return link;
 }
@@ -728,14 +711,19 @@ short SetStatementSpaceSize(StmtMgr mgr, long size )
     }
     mgr->dataStack = newbuf;
     mgr->stackSize = size;
+    
+    ResetBindings(mgr);
     return 0;
 }
 
 short ExpandBindings(StmtMgr mgr) 
 {
     if ( !IsValid(mgr) ) return -1;
+    
     int count = mgr->log_count * 2;
+    
     if ( count <= 0 ) count = 2;
+    
     inputDef* inputs = WAllocConnectionMemory(mgr->theConn,sizeof(inputDef) * count);
     memset(inputs,0x00,sizeof(inputDef) * count);
     outputDef* outputs = WAllocConnectionMemory(mgr->theConn,sizeof(outputDef) * count);
@@ -751,6 +739,14 @@ short ExpandBindings(StmtMgr mgr)
     mgr->inputLog = inputs;
     mgr->outputLog = outputs;
     mgr->log_count = count;
+    
+    ResetBindings(mgr);
+
+    return 0;
+}
+
+short ResetBindings(StmtMgr mgr) {
+    int count = 0;
     for (count=0;count<mgr->log_count;count++) {
         Output link = &mgr->outputLog[count];
         Bound base = OutputToBound(link);
@@ -765,7 +761,7 @@ short ExpandBindings(StmtMgr mgr)
             int otype = ( base->type == STREAMTYPE ) ? BLOBTYPE : base->type;
             WBindLink(mgr->statement,bind->binder,Advance(mgr, base->pointer),base->maxlength,&base->indicator,otype,base->type);
         }
-    }
+    }    
     return 0;
 }
 

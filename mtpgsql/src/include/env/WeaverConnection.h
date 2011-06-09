@@ -81,6 +81,7 @@ typedef struct Connection {
     OpaquePreparedStatement	plan;
 /* private */
     Env*                            env;
+    MemoryContext                   memory;
     
     struct Connection*              parent;             
     int                             child_count;
@@ -110,7 +111,9 @@ typedef struct preparedplan {
         int             processed;
 
         short            input_count;
-        short            arg_count;
+        short            input_slots;
+        short            output_slots;
+        
     Binder*		input;
     Output*		output;
 

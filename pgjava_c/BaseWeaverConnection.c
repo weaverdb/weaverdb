@@ -244,14 +244,14 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
         
         if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
 //  free all resources associated with this connection
-            if ( theManagers[link] != NULL ) {
-                Init(theManagers[link],clean_input,clean_output);
-                DestroyWeaverConnection(theManagers[link]);
-                theManagers[link] = NULL;
-            }
 
             if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link]))
             {
+                if ( theManagers[link] != NULL ) {
+                    Init(theManagers[link],clean_input,clean_output);
+                    DestroyWeaverConnection(theManagers[link]);
+                    theManagers[link] = NULL;
+                }
                 (*env)->DeleteGlobalRef(env,javaSideLog[link]);
                 javaSideLog[link] = NULL;
             }

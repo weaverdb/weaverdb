@@ -65,6 +65,11 @@ typedef enum {
     CONNECTION_MEMORY
 } mem_type;
 
+typedef enum {
+    INPUT,
+            OUTPUT  
+} slot_type;
+
 /* buffer flusher for external world */
 
 static long WDisposeConnection(OpaqueWConn conn);
@@ -72,7 +77,8 @@ static long WDisposeConnection(OpaqueWConn conn);
 static int FillExecArgs(PreparedPlan* plan);
 static PreparedPlan *ParsePlan(PreparedPlan * plan);
 static void SetError(WConn connection, int sqlError, char* state, char* err);
-static void* WAllocMemory(WConn connection, mem_type type, size_t size);
+static void* AllocMemory(WConn connection, mem_type type, size_t size);
+static int ExpandSlots(PreparedPlan* connection,slot_type type);
 
 static SectionId   connection_section_id = SECTIONID("CONN");
 
@@ -129,6 +135,11 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     connection->name = pstrdup(tName);
     connection->connect = pstrdup(conn);
 
+    connection->memory = AllocSetContextCreate(GetEnvMemoryContext(),
+						    "Connection",
+						    ALLOCSET_DEFAULT_MINSIZE,
+						  ALLOCSET_DEFAULT_INITSIZE,
+						  ALLOCSET_DEFAULT_MAXSIZE);
     connection->env = env;
     connection->plan = NULL;
 
@@ -170,8 +181,8 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
             if (HeapTupleIsValid(ht)) {
                 Datum dpass = SysCacheGetAttr(SHADOWNAME, ht, Anum_pg_shadow_passwd, &isNull);
                 if (!isNull) {
-                    char cpass[256];
-                    memset(cpass, 0, 256);
+                    char cpass[64];
+                    memset(cpass,0x00,64);
                     strncpy(cpass, (char *) DatumGetPointer(dpass + 4), (*(int *) dpass) - 4);
                     winner = (strcmp(pass, cpass) == 0);
                     if (!winner) {
@@ -398,7 +409,8 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     plan->statement = pstrdup(smt);
     plan->plan_cxt = plan_cxt;
     plan->owner = connection;
-    plan->arg_count = START_ARGS;
+    plan->input_slots = START_ARGS;
+    plan->output_slots = START_ARGS;
     plan->input = palloc(sizeof(Binder) * START_ARGS);
     plan->output = palloc(sizeof(Output) * START_ARGS);
     memset(plan->input, 0, sizeof (Binder) * START_ARGS);
@@ -472,21 +484,17 @@ WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, 
 
     if (pos > MAX_ARGS || pos <= 0) {
                 coded_elog(ERROR, 101, "bad value - index must be greater than 0 and less than %d", MAX_ARGS);
-    } else if ( pos > plan->arg_count ) {
-        plan->input = repalloc(plan->input, sizeof(Binder) * pos);
-        plan->output = repalloc(plan->output, sizeof(Output) * pos);
-        memset(plan->input + (plan->arg_count),0x00,(sizeof(Binder) * (pos - plan->arg_count)));
-        memset(plan->output + (plan->arg_count),0x00,(sizeof(Output) * (pos - plan->arg_count)));
-        plan->arg_count = pos;
-    } else {
-        plan->output[pos - 1].index = pos;
-        plan->output[pos - 1].target = varAdd;
-        plan->output[pos - 1].size = varSize;
-        plan->output[pos - 1].type = varType;
-        plan->output[pos - 1].notnull = ind;
-        plan->output[pos - 1].freeable = NULL;
-        plan->output[pos - 1].length = clength;
-    }
+    } else if ( pos >= plan->output_slots ) {
+        ExpandSlots(plan,OUTPUT);
+    } 
+    
+    plan->output[pos - 1].index = pos;
+    plan->output[pos - 1].target = varAdd;
+    plan->output[pos - 1].size = varSize;
+    plan->output[pos - 1].type = varType;
+    plan->output[pos - 1].notnull = ind;
+    plan->output[pos - 1].freeable = NULL;
+    plan->output[pos - 1].length = clength;
 
     RELEASE(connection);
 
@@ -654,7 +662,7 @@ WFetch(OpaquePreparedStatement plan) {
         HeapTuple tuple = slot->val;
         TupleDesc tdesc = slot->ttc_tupleDescriptor;
 
-        while (plan->output[pos].index != 0 && pos < plan->arg_count) {
+        while (plan->output[pos].index != 0 && pos < plan->output_slots) {
             Datum val = (Datum) NULL;
             char isnull = 0;
 
@@ -807,6 +815,21 @@ WRollback(OpaqueWConn conn) {
     return err;
 }
 
+static int 
+ExpandSlots(PreparedPlan* plan, slot_type type) {
+    if ( type == INPUT ) {
+        plan->input = repalloc(plan->input, sizeof(Binder) * plan->input_slots * 2);
+        memset(plan->input + (plan->input_slots),0x00,(sizeof(Binder) * plan->input_slots));
+        plan->input_slots *= 2;
+        return plan->input_slots;
+    } else {
+        plan->output = repalloc(plan->output, sizeof(Output) * plan->output_slots * 2);
+        memset(plan->output + (plan->output_slots),0x00,(sizeof(Output) * plan->output_slots));
+        plan->output_slots *= 2;
+        return plan->output_slots;
+    }
+}
+
 extern long
 WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSize, short *indAdd, int varType, int cType) {
     WConn connection = SETUP(plan->owner);
@@ -836,17 +859,13 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
     }
 
     /* find the right binder */
-    for (index = 0; index < plan->arg_count; index++) {
+    for (index = 0; index < plan->input_slots; index++) {
         if (plan->input[index].index == 0 || strcmp(var, plan->input[index].name) == 0)
             break;
     }
 
-    if (index == plan->arg_count) {
-        plan->input = repalloc(plan->input, sizeof(Binder) * plan->arg_count * 2);
-        plan->output = repalloc(plan->output, sizeof(Output) * plan->arg_count * 2);
-        memset(plan->input + (plan->arg_count),0x00,(sizeof(Binder) * plan->arg_count));
-        memset(plan->output + (plan->arg_count),0x00,(sizeof(Output) * plan->arg_count));
-        plan->arg_count *= 2;
+    if (index == plan->input_slots) {
+        ExpandSlots(plan,INPUT);
     }
         
     if ( plan->input[index].index == 0 ) plan->input_count = index+1;
@@ -1066,12 +1085,12 @@ WEndProcedure(OpaqueWConn conn) {
 
 void*
 WAllocConnectionMemory(OpaqueWConn conn, size_t size) {
-    return WAllocMemory(conn, CONNECTION_MEMORY, size);
+    return AllocMemory(conn, CONNECTION_MEMORY, size);
 }
 
 void*
 WAllocTransactionMemory(OpaqueWConn conn, size_t size) {
-    return WAllocMemory(conn, TRANSACTION_MEMORY, size);
+    return AllocMemory(conn, TRANSACTION_MEMORY, size);
 }
 
 void*
@@ -1092,7 +1111,7 @@ WAllocStatementMemory(OpaquePreparedStatement conn, size_t size) {
 }
 
 void*
-WAllocMemory(OpaqueWConn conn, mem_type type, size_t size) {
+AllocMemory(WConn conn, mem_type type, size_t size) {
     WConn connection = SETUP(conn);
     void* pointer;
     MemoryContext cxt;
@@ -1112,7 +1131,7 @@ WAllocMemory(OpaqueWConn conn, mem_type type, size_t size) {
             cxt = MemoryContextGetEnv()->TransactionCommandContext;
             break;
         case CONNECTION_MEMORY:
-            cxt = GetEnvMemoryContext();
+            cxt = connection->memory;
             break;
         default:
             elog(ERROR, "bad memory context");
@@ -1129,10 +1148,6 @@ WFreeMemory(OpaqueWConn conn, void* pointer) {
     int err;
 
     READY(connection, err);
-
-    if (CheckForCancel()) {
-        elog(ERROR, "query cancelled");
-    }
 
     pfree(pointer);
     RELEASE(connection);
@@ -1154,7 +1169,7 @@ WUserLock(OpaqueWConn conn, const char *group, uint32_t val, char lockit) {
         elog(ERROR, "query cancelled");
     }
 
-    memset(gname, 0x00, 255);
+    memset(gname,0x00,  255);
 
     trax = gname;
     while (*group != 0x00) {
@@ -1174,7 +1189,7 @@ WUserLock(OpaqueWConn conn, const char *group, uint32_t val, char lockit) {
 
     int lockstate = 0;
     LOCKTAG tag;
-    memset(&tag, 0, sizeof (tag));
+    memset(&tag,0x00, sizeof (tag));
 
     tag.relId = grouplockid;
     tag.dbId = GetDatabaseId();
@@ -1353,8 +1368,8 @@ WHandleError(WConn connection, int sqlError) {
         return;
     }
 
-    memset(connection->CDA.state, '\0', 40);
-    memset(connection->CDA.text, '\0', 256);
+    memset(connection->CDA.state,0x00, 40);
+    memset(connection->CDA.text,0x00, 256);
 
     SetError(connection, sqlError, connection->env->state, connection->env->errortext);
     clearerror(connection->env);
