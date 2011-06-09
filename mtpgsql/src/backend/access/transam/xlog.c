@@ -34,8 +34,6 @@
 #endif
 
 void		UpdateControlFile(void);
-int			XLOGShmemSize(void);
-void		XLOGShmemInit(void);
 void		BootStrapXLOG(void);
 void		StartupXLOG(void);
 void		ShutdownXLOG(void);
@@ -1184,7 +1182,7 @@ tryAgain:
 	return;
 }
 
-int
+unsigned long
 XLOGShmemSize()
 {
 	if (XLOGbuffers < MinXLOGbuffers)

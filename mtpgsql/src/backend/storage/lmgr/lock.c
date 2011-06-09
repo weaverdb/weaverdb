@@ -1316,10 +1316,10 @@ HOLDER* SearchHolderTable(LOCKMETHOD tid, HOLDERTAG* lid, HASHACTION action) {
         
 }
 
-int
+size_t
 LockShmemSize(int maxBackends)
 {
-	int			size = 0;
+	size_t			size = 0;
 
 	size += MAXALIGN(sizeof(PROC_HDR)); /* ProcGlobal */
 	size += MAXALIGN(maxBackends * sizeof(THREAD));		/* each GetEnv()->thread */

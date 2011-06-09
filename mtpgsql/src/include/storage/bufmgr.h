@@ -146,7 +146,7 @@ PG_EXTERN void InvalidateRelationBuffers(Relation rel);
 
 PG_EXTERN void DropBuffers(Oid dbid);
 PG_EXTERN void PrintPinnedBufs(void);
-PG_EXTERN int	BufferShmemSize(void);
+PG_EXTERN size_t	BufferShmemSize(void);
 
 PG_EXTERN int BiasBuffer(Relation rel, Buffer buffer);
 

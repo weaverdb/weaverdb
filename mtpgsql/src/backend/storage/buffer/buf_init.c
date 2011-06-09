@@ -226,10 +226,10 @@ InitBufferPool(IPCKey key)
  * data pages, buffer descriptors, hash tables, etc.
  * ----------------------------------------------------
  */
-int
+size_t
 BufferShmemSize()
 {
-	int			size = 0;
+	size_t			size = 0;
         char*           table_count;
         char*           buffers;
 

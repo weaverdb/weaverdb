@@ -59,7 +59,7 @@ SystemPortAddressCreateIPCKey(SystemPortAddress address)
 void
 CreateSharedMemoryAndSemaphores(IPCKey key, int maxBackends)
 {
-	int			size;
+	size_t			size;
         int                     lockTables = 1;
         
         char*  tables = GetProperty("lock_tables");
