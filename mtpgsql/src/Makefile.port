@@ -74,7 +74,7 @@ AROPT= crs
 CFLAGS_SL=
 ifeq ($(OS),SUNOS) 
 LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU}
-LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket
+LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket -lmd5
 endif
 ifeq ($(OS),LINUX) 
 LDFLAGS= -L/usr/lib64 

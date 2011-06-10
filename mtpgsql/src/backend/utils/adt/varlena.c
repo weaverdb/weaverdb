@@ -13,6 +13,7 @@
  *-------------------------------------------------------------------------
  */
 #include <ctype.h>
+#include <md5.h>
 
 #include "postgres.h"
 
@@ -866,4 +867,26 @@ name_text(NameData *s)
 int32
 pagesize() {
 	return (MaxAttrSize - VARHDRSZ - 128);
+}
+
+bytea*
+md5(struct varlena* src) {
+    bytea* output = palloc(VARHDRSZ + 16);
+    if ( !ISINDIRECT(src) ) {
+        SETVARSIZE(output,19);
+        md5_calc(VARDATA(output),VARDATA(src),VARSIZE(src));
+    } else {
+        MD5_CTX  ctx;
+        Datum    pipe;
+        int     len = sizeof_max_tuple_blob();
+        char*    buffer = palloc(len);
+        MD5Init(&ctx);
+        pipe = open_read_pipeline_blob(PointerGetDatum(src),true);
+        while ( read_pipeline_segment_blob(pipe,buffer,&len,sizeof_max_tuple_blob()) ) {
+                MD5Update(&ctx, buffer,len);
+        }
+        close_read_pipeline_blob(pipe);
+        MD5Final(VARDATA(output),&ctx);
+    }
+    return output;
 }

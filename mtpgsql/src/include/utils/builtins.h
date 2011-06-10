@@ -506,6 +506,7 @@ PG_EXTERN int32 varcharcmp(char *arg1, char *arg2);
 PG_EXTERN int32 varcharlen(char *arg);
 PG_EXTERN int32 varcharoctetlen(char *arg);
 PG_EXTERN uint32 hashvarchar(struct varlena * key);
+PG_EXTERN bytea* md5(struct varlena* src);
 
 /* varlena.c */
 PG_EXTERN text *textin(char *inputText);

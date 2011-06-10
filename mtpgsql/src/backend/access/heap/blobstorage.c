@@ -294,8 +294,6 @@ sizeof_indirect_blob(Datum pipe) {
 
 Datum
 open_read_pipeline_blob(Datum pointer, bool read_only) {
-    bool  isNull;
-
     read_pipeline*      pipe = palloc(sizeof(read_pipeline));
 
     blob_header     header;
@@ -886,7 +884,6 @@ store_tuple_blob(Relation rel, HeapTuple tuple,int16 attnum)
 	Datum          *values;
 	char           *nulls;
 	char           *replaces;
-	bool            isNull = false;
 	HeapTuple       ret_tuple;
 	blob_list      *list;
 	BlockNumber     limit = 0;

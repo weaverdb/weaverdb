@@ -819,6 +819,16 @@ DATA(insert OID =  408 (  bpchar		   PGUID 11 f t t 1 f 1042 "19" 100 0 0 100 na
 DESCR("convert name to char()");
 DATA(insert OID =  409 (  name			   PGUID 11 f t t 1 f	19 "1042" 100 0 0 100	bpchar_name - ));
 DESCR("convert char() to name");
+DATA(insert OID =  402 (  md5			   PGUID 11 f t t 1 f	17 "0" 100 0 0 100	md5 - ));
+DESCR("md5 on unknown type");
+DATA(insert OID =  1515 (  md5			   PGUID 11 f t t 1 f	17 "1803" 100 0 0 100	md5 - ));
+DESCR("md5 on blob");
+DATA(insert OID =  1516 (  md5			   PGUID 11 f t t 1 f	17 "25" 100 0 0 100	md5 - ));
+DESCR("md5 on text");
+DATA(insert OID =  1517 (  md5			   PGUID 11 f t t 1 f	17 "1403" 100 0 0 100	md5 - ));
+DESCR("md5 on varchar");
+DATA(insert OID =  1518 (  md5			   PGUID 11 f t t 1 f	17 "17" 100 0 0 100	md5 - ));
+DESCR("md5 on bytea");
 
 DATA(insert OID =  438 (  hashcostestimate PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  hashcostestimate - ));
 DESCR("hash index cost estimator");
