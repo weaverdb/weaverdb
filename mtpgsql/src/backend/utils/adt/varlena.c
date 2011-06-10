@@ -13,7 +13,11 @@
  *-------------------------------------------------------------------------
  */
 #include <ctype.h>
+#ifdef SUNOS
 #include <md5.h>
+#elif LINUX
+#include <pppd/md5.h>
+#endif
 
 #include "postgres.h"
 
@@ -872,8 +876,9 @@ pagesize() {
 bytea*
 md5(struct varlena* src) {
     bytea* output = palloc(VARHDRSZ + 16);
+    SETVARSIZE(output,19);
+#ifdef SUNOS
     if ( !ISINDIRECT(src) ) {
-        SETVARSIZE(output,19);
         md5_calc(VARDATA(output),VARDATA(src),VARSIZE(src));
     } else {
         MD5_CTX  ctx;
@@ -888,5 +893,26 @@ md5(struct varlena* src) {
         close_read_pipeline_blob(pipe);
         MD5Final(VARDATA(output),&ctx);
     }
+#elif LINUX
+    if ( !ISINDIRECT(src) ) {
+	MD5_CTX cxt;
+	MD5_Init(&cxt);
+	MD5_Update(&cxt,VARDATA(src),VARSIZE(src));
+	MD5_Final(VARDATA(output),&cxt);
+    } else {
+        MD5_CTX  ctx;
+        Datum    pipe;
+        int     len = sizeof_max_tuple_blob();
+        char*    buffer = palloc(len);
+        MD5_Init(&ctx);
+        pipe = open_read_pipeline_blob(PointerGetDatum(src),true);
+        while ( read_pipeline_segment_blob(pipe,buffer,&len,sizeof_max_tuple_blob()) ) {
+                MD5_Update(&ctx, buffer,len);
+        }
+        close_read_pipeline_blob(pipe);
+        MD5_Final(VARDATA(output),&ctx);
+    }
+
+#endif
     return output;
 }
