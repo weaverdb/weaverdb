@@ -85,7 +85,9 @@ int InitSystem(bool  isPrivate) {
         umem_nofail_callback(memory_fail);
 #endif
 #ifdef _GNU_SOURCE
+/*
         mcheck(glibc_memory_fail);
+*/
 #endif
 	pthread_mutex_init(&envlock,NULL);
 	
@@ -877,9 +879,7 @@ PrintUserMemory( void ) {
 void 
 glibc_memory_fail(enum mcheck_status err) {
     printf("memory allocation failed");
-    /*
     abort();
-     * */
 }
 #endif
 int 
