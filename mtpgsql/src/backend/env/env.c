@@ -85,7 +85,7 @@ int InitSystem(bool  isPrivate) {
         umem_nofail_callback(memory_fail);
 #endif
 #ifdef _GNU_SOURCE
-/*
+        /*
         mcheck(glibc_memory_fail);
 */
 #endif
