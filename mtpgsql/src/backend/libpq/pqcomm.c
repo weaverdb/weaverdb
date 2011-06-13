@@ -531,7 +531,7 @@ extern void* DisconnectIO() {
         args = comm->args;
     } 
     
-    if ( env->pipeout == NULL ) {
+    if ( env->pipeout != NULL ) {
         CommCursor* comm = (CommCursor*)env->pipeout;
         if (comm->ptr < comm->end) {
             if ( comm->datamove(comm->args, comm->buffer, comm->ptr, comm->end - comm->ptr) == COMM_ERROR ) {
