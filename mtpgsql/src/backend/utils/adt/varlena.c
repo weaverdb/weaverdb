@@ -874,7 +874,7 @@ pagesize() {
 bytea*
 md5(struct varlena* src) {
     bytea* output = palloc(VARHDRSZ + 16);
-    SETVARSIZE(output,19);
+    SETVARSIZE(output,VARHDRSZ + 16);
     if ( !ISINDIRECT(src) ) {
 	MD5_CTX cxt;
 	md5_init(&cxt);
@@ -902,7 +902,7 @@ md5(struct varlena* src) {
 bytea*
 sha2(struct varlena* src) {
     bytea* output = palloc(VARHDRSZ + SHA256_DIGEST_LENGTH);
-    SETVARSIZE(output,19);
+    SETVARSIZE(output,VARHDRSZ + SHA256_DIGEST_LENGTH);
     if ( !ISINDIRECT(src) ) {
 	SHA256_CTX cxt;
 	SHA256_Init(&cxt);
