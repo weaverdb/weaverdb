@@ -496,7 +496,8 @@ pq_endcopyout(bool errorAbort)
 }
 
 extern void ConnectIO(void* args, commfunc infunc,commfunc outfunc) {
-    Env*     env;
+    Env*     env = GetEnv();
+    
     if ( env->pipein != NULL || env->pipeout != NULL ) {
         DisconnectIO();
     }
