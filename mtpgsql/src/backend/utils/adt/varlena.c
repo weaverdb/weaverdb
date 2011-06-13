@@ -13,14 +13,12 @@
  *-------------------------------------------------------------------------
  */
 #include <ctype.h>
-#ifdef SUNOS
-#include <md5.h>
-#elif LINUX
-#include <pppd/md5.h>
-#endif
+
 
 #include "postgres.h"
 
+#include "utils/md5.h"
+#include "utils/sha2.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
 #include "access/blobstorage.h"
@@ -877,42 +875,53 @@ bytea*
 md5(struct varlena* src) {
     bytea* output = palloc(VARHDRSZ + 16);
     SETVARSIZE(output,19);
-#ifdef SUNOS
-    if ( !ISINDIRECT(src) ) {
-        md5_calc(VARDATA(output),VARDATA(src),VARSIZE(src));
-    } else {
-        MD5_CTX  ctx;
-        Datum    pipe;
-        int     len = sizeof_max_tuple_blob();
-        char*    buffer = palloc(len);
-        MD5Init(&ctx);
-        pipe = open_read_pipeline_blob(PointerGetDatum(src),true);
-        while ( read_pipeline_segment_blob(pipe,buffer,&len,sizeof_max_tuple_blob()) ) {
-                MD5Update(&ctx, buffer,len);
-        }
-        close_read_pipeline_blob(pipe);
-        MD5Final(VARDATA(output),&ctx);
-    }
-#elif LINUX
     if ( !ISINDIRECT(src) ) {
 	MD5_CTX cxt;
-	MD5_Init(&cxt);
-	MD5_Update(&cxt,VARDATA(src),VARSIZE(src));
-	MD5_Final(VARDATA(output),&cxt);
+	md5_init(&cxt);
+	md5_loop(&cxt,(uint8*)VARDATA(src),VARSIZE(src));
+        md5_pad(&cxt);
+	md5_result((uint8*)VARDATA(output),&cxt);
     } else {
-        MD5_CTX  ctx;
+        MD5_CTX  cxt;
         Datum    pipe;
         int     len = sizeof_max_tuple_blob();
         char*    buffer = palloc(len);
-        MD5_Init(&ctx);
+        md5_init(&cxt);
         pipe = open_read_pipeline_blob(PointerGetDatum(src),true);
         while ( read_pipeline_segment_blob(pipe,buffer,&len,sizeof_max_tuple_blob()) ) {
-                MD5_Update(&ctx, buffer,len);
+                md5_loop(&cxt, (uint8*)buffer,len);
         }
         close_read_pipeline_blob(pipe);
-        MD5_Final(VARDATA(output),&ctx);
+        md5_pad(&cxt);
+        md5_result((uint8*)VARDATA(output),&cxt);
     }
 
-#endif
     return output;
 }
+
+bytea*
+sha2(struct varlena* src) {
+    bytea* output = palloc(VARHDRSZ + SHA256_DIGEST_LENGTH);
+    SETVARSIZE(output,19);
+    if ( !ISINDIRECT(src) ) {
+	SHA256_CTX cxt;
+	SHA256_Init(&cxt);
+	SHA256_Update(&cxt,(uint8*)VARDATA(src),VARSIZE(src));
+	SHA256_Final((uint8*)VARDATA(output),&cxt);
+    } else {
+	SHA256_CTX cxt;
+        Datum    pipe;
+        int     len = sizeof_max_tuple_blob();
+        char*    buffer = palloc(len);
+        SHA256_Init(&cxt);
+        pipe = open_read_pipeline_blob(PointerGetDatum(src),true);
+        while ( read_pipeline_segment_blob(pipe,buffer,&len,sizeof_max_tuple_blob()) ) {
+                SHA256_Update(&cxt, (uint8*)buffer,len);
+        }
+        close_read_pipeline_blob(pipe);
+        SHA256_Final((uint8*)VARDATA(output),&cxt);
+    }
+
+    return output;
+}
+

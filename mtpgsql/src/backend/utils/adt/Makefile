@@ -33,7 +33,7 @@ OBJS = bool.o cash.o char.o \
 	tid.o timestamp.o varbit.o varchar.o varlena.o version.o \
 	network.o mac.o inet_net_ntop.o inet_net_pton.o \
 	pg_lzcompress.o pg_locale.o formatting.o \
-    ruleutils.o ri_triggers.o java.o wrapdatum.o
+    ruleutils.o ri_triggers.o java.o wrapdatum.o md5.o sha2.o
 
 ifdef USEACL
 OBJS += acl.o oracle_compat.o

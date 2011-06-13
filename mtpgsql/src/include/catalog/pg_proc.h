@@ -829,6 +829,16 @@ DATA(insert OID =  1517 (  md5			   PGUID 11 f t t 1 f	17 "1403" 100 0 0 100	md5
 DESCR("md5 on varchar");
 DATA(insert OID =  1518 (  md5			   PGUID 11 f t t 1 f	17 "17" 100 0 0 100	md5 - ));
 DESCR("md5 on bytea");
+DATA(insert OID =  1519 (  sha2			   PGUID 11 f t t 1 f	17 "0" 100 0 0 100	sha2 - ));
+DESCR("sha2 on unknown type");
+DATA(insert OID =  1520 (  sha2			   PGUID 11 f t t 1 f	17 "1803" 100 0 0 100	sha2 - ));
+DESCR("sha2 on blob");
+DATA(insert OID =  1521 (  sha2			   PGUID 11 f t t 1 f	17 "25" 100 0 0 100	sha2 - ));
+DESCR("sha2 on text");
+DATA(insert OID =  1522 (  sha2			   PGUID 11 f t t 1 f	17 "1403" 100 0 0 100	sha2 - ));
+DESCR("sha2 on varchar");
+DATA(insert OID =  1523 (  sha2			   PGUID 11 f t t 1 f	17 "17" 100 0 0 100	sha2 - ));
+DESCR("sha2 on bytea");
 
 DATA(insert OID =  438 (  hashcostestimate PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  hashcostestimate - ));
 DESCR("hash index cost estimator");

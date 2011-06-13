@@ -262,8 +262,6 @@ Node *
 ParseJavaFunc(ParseState *pstate, char *funcname, char* target,List *fargs)
 {
 	Oid			rettype = InvalidOid;
-	Oid			argrelid = InvalidOid;
-	Oid			funcid = InvalidOid;
 	List	   *i = NIL;
 	Ident		   *targetIdent = NULL;
 	Node		   *targetVar = NULL;

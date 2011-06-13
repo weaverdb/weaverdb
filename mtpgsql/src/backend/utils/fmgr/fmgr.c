@@ -680,13 +680,13 @@ fmgr(Oid procedureId,...)
 		elog(ERROR, "fmgr: function %u: too many arguments (%d > %d)",
 			 procedureId, pronargs, FUNC_MAX_ARGS);
 
-		va_start(pvar, first);
+        va_start(pvar, first);
 
-		for (i = 0; i < pronargs; ++i)
-			values.data[i] = va_arg(pvar, char *);
+        for (i = 0; i < pronargs; ++i)
+                values.data[i] = va_arg(pvar, char *);
 
-		va_end(pvar);
-		return fmgr_c(&finfo, &values, &isNull);
+        va_end(pvar);
+        return fmgr_c(&finfo, &values, &isNull);
 }
 
 /*

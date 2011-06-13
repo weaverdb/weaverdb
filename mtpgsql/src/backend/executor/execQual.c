@@ -647,16 +647,16 @@ ExecEvalJavaArgs(ExprContext * econtext,
 			if (val->constisnull) {
 				nullVect = true;
 			} else {
-				argV[i] = ConvertToJavaArg(val->consttype, val->constbyval, val->constlen, val->constvalue);
+				argV[i] = ConvertToJavaArg(val->consttype, val->constvalue);
 			}
 		} else if (IsA(next, Param)) {
 			Param          *setup = (Param *) next;
 			Datum           setter = ExecEvalParam(setup, econtext, &nullVect);
-			argV[i] = ConvertToJavaArg(setup->paramtype, 0, 0, setter);
+			argV[i] = ConvertToJavaArg(setup->paramtype, setter);
 		} else if (IsA(next, Var)) {
 			Var            *var = (Var *) next;
 			Datum           retDatum = ExecEvalVar(var, econtext, &nullVect, NULL, NULL);
-			argV[i] = ConvertToJavaArg(var->vartype, 0, 0, retDatum);
+			argV[i] = ConvertToJavaArg(var->vartype, retDatum);
 		} else {
 			elog(ERROR, "argument node not supported");
 		}
@@ -701,14 +701,11 @@ ExecMakeFunctionResult(Node * node,
 		       bool * isDone)
 {
 	Datum           argV[FUNC_MAX_ARGS];
-	jvalue          jargV[FUNC_MAX_ARGS];
 	FunctionCachePtr fcache;
 	Func           *funcNode = NULL;
 	Oper           *operNode = NULL;
-	Java           *javaNode = NULL;
 	bool            funcisset = false;
 	Node           *target = NULL;
-	Datum           javaTarget = NULL;
 
 	/*
 	 * This is kind of ugly, Func nodes now have targetlists so that we
