@@ -458,7 +458,7 @@ Poolsweep(void *args) {
      SetEnv(NULL);
      DestroyEnv(env);
          
-    return env;
+    return NULL;
 }
 
 static int

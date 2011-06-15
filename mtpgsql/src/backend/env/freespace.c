@@ -149,7 +149,7 @@ GetUpdateFactor(Oid relid, Oid dbid, char* relname, char* dbname, double last_va
 {
         FreeKey    key;
 	FreeSpace* entry;
-        bool found;
+        bool found = false;
 		
 	if ( !inited) return 100.0;
 
@@ -349,23 +349,19 @@ void GetTupleSizes(Relation rel,Size* min,Size* max,Size* ave) {
 BlockNumber
 GetFreespace(Relation rel,int request,BlockNumber limit)
 {
-    FreeSpace*  entry;
+    FreeSpace*  entry = NULL;
     BlockNumber check = InvalidBlockNumber;
     bool        allocate = false;
     bool        scan = false;
     int         recommend   = 0;
     int 	space = request;
-	
-    if (!inited) {
-        elog(FATAL,"Freespace not initialized");
-    }
 
     entry = FindFreespace(rel,NULL,true);	
     if ( entry ) {
         int p = 0;
         int run = 0;
         int idx = 0;
-        FreeRun*    alloc;
+        FreeRun*    alloc = NULL;
 
         pthread_mutex_lock(&entry->accessor);
     
@@ -465,10 +461,6 @@ long
 GetTotalAvailable(Relation rel) {
     FreeSpace*  entry;
     long        avail = 0;
-	
-    if (!inited) {
-        elog(FATAL,"Freespace not initialized");
-    }
 
     entry = FindFreespace(rel,NULL,true);	
     if ( entry ) {
@@ -484,8 +476,6 @@ DeactivateFreespace(Relation rel, BlockNumber blk,Size realspace)
 {
 	FreeSpace* entry = NULL;
 	
-	if ( !inited ) return;
-
  	entry = FindFreespace(rel,NULL,false);
 
 	if ( entry ) {
@@ -561,8 +551,10 @@ FreeSpace* FindFreespace(Relation rel,char* dbname,bool create) {
 	FreeSpace* entry;
 	int type = ( create ) ? HASH_ENTER : HASH_FIND;
 	
-	if ( !inited ) return 0;
-
+    if (!inited) {
+        elog(FATAL,"Freespace not initialized");
+    }
+        
 	memset(&tag,0,sizeof(tag));
 	tag.relid = rel->rd_lockInfo.lockRelId.relId;
 	tag.dbid = rel->rd_lockInfo.lockRelId.dbId;
@@ -609,6 +601,10 @@ FreeSpace* FindFreespace(Relation rel,char* dbname,bool create) {
                 entry->extent = 0;
                 entry->extent_percentage = false;
                 entry->blocks = NULL;
+                entry->min_request = MaxTupleSize;
+                entry->max_request = MinTupleSize;
+                entry->last_dead_tuple_count = 0;
+                entry->last_live_tuple_count = 0;
                 
 		pthread_mutex_unlock(&freespace_access);
                         
@@ -627,10 +623,6 @@ BlockNumber
 AllocateMoreSpace(Relation rel) {
     FreeSpace*  freespace = FindFreespace(rel,NULL,false);
     int recommend = 0;
-
-    if (!inited) {
-        elog(FATAL,"Freespace not initialized");
-    }
 
 /*  if not recommending a value, then the extender is not set and need to get an extension value  */
     pthread_mutex_lock(&freespace->accessor);
@@ -651,10 +643,6 @@ BlockNumber
 TruncateHeapRelation(Relation rel, BlockNumber new_rel_pages) {
     FreeSpace*  entry = FindFreespace(rel,NULL,TRUE);
     int count = 0;
-
-    if (!inited) {
-        elog(FATAL,"Freespace not initialized");
-    }
 
     pthread_mutex_lock(&entry->accessor);
 

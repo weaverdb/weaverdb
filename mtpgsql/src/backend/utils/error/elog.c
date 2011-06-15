@@ -458,6 +458,8 @@ elog(int lev, const char *fmt,...)
 	{
             if ( IsMultiuser() ) {
                 printf("ABORT from thread %d\n",pthread_self());
+                printf(msg_buf);
+                fprintf(stderr,msg_buf);
                 #ifdef MACOSX
                 kill(getpid(),SIGABRT);
                 #else

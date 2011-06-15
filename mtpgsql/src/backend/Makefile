@@ -124,7 +124,7 @@ endif
 ifeq ($(LEAK_DETECT),1)
 libmtpg.a: ${OBJS} mtpg.o
 	${LD} -r ${LDFLAGS} -\
-	${OBJS} ${SRCDIR}/../../gc/.libs/libgc.a ${VERSIONOBJ} \
+	${OBJS} ${GCOBJ} ${MD5OBJ} ${VERSIONOBJ} \
 	-o libclearmtpg.a
 	${LD} -r -M$(SRCDIR)/backend/mapfile.txt mtpg.o libclearmtpg.a -o libmtpg.a
 else
@@ -132,14 +132,14 @@ ifeq ($(PORTNAME),solaris)
 #	${LD} -r ${LDFLAGS} -M$(SRCDIR)/backend/mapfile.txt 
 libmtpg.a: ${OBJS} mtpg.o
 	${LD} -r ${LDFLAGS} \
-	${OBJS} ${VERSIONOBJ} mtpg.o \
+	${OBJS} ${MD5OBJ} ${VERSIONOBJ} mtpg.o \
 	-o libmtpg.a
 else
 #	ar ${AROPT} libmtpg.a 
 #	${OBJS} ${VERSIONOBJ}
 libmtpg.a: ${OBJS} 
 	${LD} -r ${LDFLAGS} --version-script=$(SRCDIR)/backend/mapfile.txt \
-	${OBJS} ${VERSIONOBJ} \
+	${OBJS} ${MD5OBJ} ${VERSIONOBJ} \
 	-o libmtpg.a
 endif
 endif

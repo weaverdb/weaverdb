@@ -911,30 +911,28 @@ element_alloc(HTAB *hashp)
 {
 	HASHHDR    *hctl = hashp->hctl;
 	Size		elementSize;
-	HASHELEMENT *tmpElement;
-	int			i;
+	HASHELEMENT *tmpElement,*head;
 
 	/* Each element has a HASHELEMENT header plus user data. */
 	elementSize = MAXALIGN(sizeof(HASHELEMENT)) + MAXALIGN(hctl->entrysize);
 
-	tmpElement = (HASHELEMENT *)
+	head = (HASHELEMENT *)
 		hashp->alloc(HASHELEMENT_ALLOC_INCR * elementSize,hashp->hcxt);
 
-	if (!tmpElement)
+	if (!head)
 		return false;
         
-    tmpElement->freeable = true;
-
+        tmpElement = head;
 	/* link all the new entries into the freelist */
-	for (i = 0; i < HASHELEMENT_ALLOC_INCR; i++)
+	for (tmpElement = head; tmpElement < (((char*)head) + (HASHELEMENT_ALLOC_INCR * elementSize)); tmpElement = ((char*)tmpElement) + elementSize)
 	{
 		tmpElement->link = hctl->freeList;
+                tmpElement->freeable = false;
 		hctl->freeList = tmpElement;
-		tmpElement = (HASHELEMENT *) (((char *) tmpElement) + elementSize);
 /*  these aren't freeable b/c they were part of original allocation  */
-        tmpElement->freeable = false;
 	}
 
+        head->freeable = true;
 	return true;
 }
 
