@@ -192,7 +192,6 @@ char           *
 javatextout(bytea * target)
 {
 	JNIEnv         *jenv;
-	int             test;
 	jclass          converter;
 	jmethodID       out;
 	int             length = VARSIZE(target) - VARHDRSZ;
@@ -384,7 +383,13 @@ fmgr_javaA(Datum target, Oid rettype, char *clazz, char *name, char *sig, void *
 		case INT4OID:
 			rval.i = (*jenv)->CallIntMethodA(jenv, jtar, in, (jvalue *) args);
 			break;
-		default:
+                case INT8OID:
+                        rval.j = (*jenv)->CallLongMethodA(jenv, jtar, in, args);
+                        break;                
+                case FLOAT8OID:
+                        rval.d = (*jenv)->CallDoubleMethodA(jenv, jtar, in, args);
+                        break;
+                    default:
 			rval.l = (*jenv)->CallObjectMethodA(jenv, jtar, in, (jvalue *) args);
 			break;
 		}
@@ -413,7 +418,13 @@ fmgr_javaA(Datum target, Oid rettype, char *clazz, char *name, char *sig, void *
 		case INT4OID:
 			rval.i = (*jenv)->CallStaticIntMethodA(jenv, converter, in, (jvalue *) args);
 			break;
-		default:
+                case INT8OID:
+                        rval.j = (*jenv)->CallStaticLongMethodA(jenv, converter, in, args);
+                        break;                
+                case FLOAT8OID:
+                        rval.d = (*jenv)->CallStaticDoubleMethodA(jenv, converter, in, args);
+                        break;
+                    default:
 			rval.l = (*jenv)->CallStaticObjectMethodA(jenv, converter, in, (jvalue *) args);
 			break;
 		}
@@ -717,8 +728,7 @@ javalen(bytea * obj)
 
 PG_EXTERN int
 GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
-     char **javasrc, char **javaname, char **javasig /* return variable */ ,
-		 Oid * rettype /* return variable */ )
+     char **javasrc, char **javaname, char **javasig, Oid * rettype )
 {
 	jobject         javaTarget = NULL;
 	JNIEnv         *jenv;
@@ -746,10 +756,16 @@ GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
 		getname = (*jenv)->GetMethodID(jenv, class_class, "getName", "()Ljava/lang/String;");
 
 		while (converter != NULL) {
+                    char*               mark;
 			jsize           len;
 			classid = (*jenv)->CallObjectMethod(jenv, converter, getname);
 			len = (*jenv)->GetStringUTFLength(jenv, classid);
 			(*jenv)->GetStringUTFRegion(jenv, classid, 0, len, NameStr(lookup));
+                        mark = NameStr(lookup);
+                        while ( mark != NULL ) {
+                            mark = index(mark,'.');
+                            if ( mark != NULL ) *mark = '/';
+                        }
 
 			*(NameStr(lookup) + len) = '.';
 			strncpy(NameStr(lookup) + len + 1, name, NAMEDATALEN - len - 2);
@@ -761,10 +777,11 @@ GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
 				Form_pg_proc    pg_proc = (Form_pg_proc) GETSTRUCT(func);
 				*fid = func->t_data->t_oid;
 				*rettype = pg_proc->prorettype;
-				Datum           sig = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_prosrc, NULL);
-				*javasig = textout((text *) sig);
-				Datum           cla = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_probin, NULL);
+				
+                                Datum           cla = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_prosrc, NULL);
 				*javasrc = textout((text *) cla);
+                                Datum           sig = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_probin, NULL);
+				*javasig = textout((text *) sig);
                                 
                                 (*jenv)->PopLocalFrame(jenv, NULL);
 				return 0;
@@ -780,13 +797,19 @@ GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
 			   Int32GetDatum(nargs), PointerGetDatum(types), 0);
 
 		if (HeapTupleIsValid(func)) {
+                    char* mark;
 			Form_pg_proc    pg_proc = (Form_pg_proc) GETSTRUCT(func);
 			*fid = func->t_data->t_oid;
 			*rettype = pg_proc->prorettype;
-			Datum           sig = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_prosrc, NULL);
-			*javasig = textout((text *) sig);
-			Datum           cla = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_probin, NULL);
+                        
+			Datum           cla = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_prosrc, NULL);
 			*javasrc = textout((text *) cla);
+                        Datum           sig = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_probin, NULL);
+			*javasig = textout((text *) sig);
+
+                        mark = index(javasrc,'.');
+                        *mark = '\0';
+                        *javaname = mark + 1;
 			return 0;
 		}
 	}
