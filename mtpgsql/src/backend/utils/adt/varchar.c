@@ -761,7 +761,7 @@ varcharge(char *arg1, char *arg2)
 }
 
 bool
-byteaeq(char *arg1, char *arg2)
+byteaeq(bytea *arg1, bytea *arg2)
 {
 	int			i,
                                 len1,
@@ -783,13 +783,13 @@ byteaeq(char *arg1, char *arg2)
 }
 
 bool
-byteane(char *arg1, char *arg2)
+byteane(bytea *arg1, bytea *arg2)
 {
     return !byteaeq(arg1,arg2);
 }
 
 bool
-bytealt(char *arg1, char *arg2)
+bytealt(bytea *arg1, bytea *arg2)
 {
 	int			len0,
                                 len1,
@@ -804,13 +804,12 @@ bytealt(char *arg1, char *arg2)
         for (i=0;i<len0;i++) {
             if ( VARDATA(arg1)[i] < VARDATA(arg2)[i] ) return 1;
         }
-        if ( len1 == len2 ) return 0;
         if ( len1 < len2 ) return 1;
         return 0;
 }
 
 bool
-byteale(char *arg1, char *arg2)
+byteale(bytea *arg1, bytea *arg2)
 {
 	int			len0,
                                 len1,
@@ -826,26 +825,25 @@ byteale(char *arg1, char *arg2)
         for (i=0;i<len0;i++) {
             if ( VARDATA(arg1)[i] > VARDATA(arg2)[i] ) return 0;
         }
-        if ( len1 == len2 ) return 1;
-        if ( len1 < len2 ) return 1;
-        return 0;
+        if ( len1 > len2 ) return 0;
+        return 1;
 }
 
 bool
-byteagt(char *arg1, char *arg2)
+byteagt(bytea *arg1, bytea *arg2)
 {
     return !byteale(arg1,arg2);
 }
 
 bool
-byteage(char *arg1, char *arg2)
+byteage(bytea *arg1, bytea *arg2)
 {
 	return !bytealt(arg1,arg2);
 
 }
 
 int32
-byteacmp(char *arg1, char *arg2)
+byteacmp(bytea *arg1, bytea *arg2)
 {
 	int			len0,
                                 len1,

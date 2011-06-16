@@ -284,14 +284,20 @@ Poolsweep(void *args) {
     
     SetDatabaseName(tool->dbname);
     env->DatabaseId = tool->dbid;
-    
+        
     InitThread(POOLSWEEP_THREAD);
+    
+    if ( !CallableInitInvalidationState() ) {
+        DestroyThread();
+        SetEnv(NULL);
+        DestroyEnv(env);
+        return NULL;
+    }
     
     RelationInitialize();
 
     InitCatalogCache();
     
-    CallableInitInvalidationState();
     
     env->Mode = NormalProcessing;
     
@@ -447,14 +453,15 @@ Poolsweep(void *args) {
         }
 #endif
     
-    CallableCleanupInvalidationState();
     
     RelationCacheShutdown();
     
     ThreadReleaseLocks(false);
     ThreadReleaseSpins(GetMyThread());
     DestroyThread();
-    
+     
+    CallableCleanupInvalidationState();
+   
      SetEnv(NULL);
      DestroyEnv(env);
          

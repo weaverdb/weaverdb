@@ -78,7 +78,6 @@ BufTableLookup(char kind, BufferTag *tagPtr)
 {
         BufferLookupEnt  *result;
         bool		found = false;
-        BufferDesc* 	buf;
 
         if (tagPtr->blockNum == P_NEW)
                 return NULL;

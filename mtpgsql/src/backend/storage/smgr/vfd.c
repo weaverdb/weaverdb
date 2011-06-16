@@ -134,7 +134,9 @@ vfdinit()
      if ( log_file < 0 ) {
         elog(FATAL,"unable to access vfd logfile");
     }
-    FileOptimize(log_file);
+    if ( GetBoolProperty("optimize_log") ) {
+           FileOptimize(log_file);  
+    }
     FilePin(log_file,0);
     FileSeek(log_file,0,SEEK_SET);
     
@@ -142,7 +144,9 @@ vfdinit()
      if ( index_file < 0 ) {
         elog(FATAL,"unable to access vfd logfile");
     }
-    FileOptimize(index_file);
+    if ( GetBoolProperty("optimize_log") ) {
+            FileOptimize(index_file); 
+    }
     FilePin(index_file,0);
     FileSeek(index_file,0,SEEK_SET);
     

@@ -130,7 +130,7 @@ PG_EXTERN int SIGetDataEntry(SISeg *segP, int backendId,
 PG_EXTERN void SIDelExpiredDataEntries(SISeg *segP);
 PG_EXTERN void CallableCleanupInvalidationState(void); 
  
-PG_EXTERN void  CallableInitInvalidationState(void);
+PG_EXTERN int  CallableInitInvalidationState(void);
 
   #ifdef __cplusplus
 }

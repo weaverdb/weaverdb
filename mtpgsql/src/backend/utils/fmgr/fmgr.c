@@ -15,6 +15,8 @@
 
 #include "postgres.h"
 
+#include <strings.h>
+
 #include "nodes/pg_list.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_proc.h"
@@ -38,39 +40,6 @@ fmgr_pl(char *arg0,...)
 {
         elog(ERROR,"procedural language functions not implemented");
 
-
-
-#ifdef NOTUSED
-
-	va_list		pvar;
-	FmgrValues	values;
-	int			n_arguments = fmgr_pl_finfo->fn_nargs;
-	bool		isNull = false;
-	int			i;
-
-	memset(&values, 0, sizeof(values));
-
-	if (n_arguments > 0)
-	{
-		values.data[0] = arg0;
-		if (n_arguments > 1)
-		{
-			if (n_arguments > FUNC_MAX_ARGS)
-				elog(ERROR, "fmgr_pl: function %u: too many arguments (%d > %d)",
-					 fmgr_pl_finfo->fn_oid, n_arguments, FUNC_MAX_ARGS);
-			va_start(pvar, arg0);
-			for (i = 1; i < n_arguments; i++)
-				values.data[i] = va_arg(pvar, char *);
-			va_end(pvar);
-		}
-	}
-
-	/* Call the PL handler */
-	SetTriggerData(NULL);
-	return (*(fmgr_pl_finfo->fn_plhandler)) (fmgr_pl_finfo,
-											 &values,
-											 &isNull);
-#endif
 }
 
 
@@ -127,8 +96,6 @@ fmgr_c(FmgrInfo *finfo,
 	 * If finfo contains a PL handler for this function, call that
 	 * instead.
 	 */
-	if (finfo->fn_plhandler != NULL)
-		return (*(finfo->fn_plhandler)) (finfo, values, isNull);
 
 	if (user_fn == (func_ptr) NULL)
 		elog(ERROR, "Internal error: fmgr_c received NULL function pointer.");
@@ -533,19 +500,16 @@ fmgr_c(FmgrInfo *finfo,
  * Expand a regproc OID into an FmgrInfo cache struct.
  */
 
-void
+Oid
 fmgr_info(Oid procedureId, FmgrInfo *finfo)
 {
 	FmgrCall   *fcp;
 	HeapTuple	procedureTuple;
 	FormData_pg_proc *procedureStruct;
-	HeapTuple	languageTuple;
-	Form_pg_language languageStruct;
 	Oid			language;
 	char	   *prosrc;
 
 	finfo->fn_addr = NULL;
-	finfo->fn_plhandler = NULL;
 	finfo->fn_oid = procedureId;
 
 	if ((fcp = fmgr_isbuiltin(procedureId)) != NULL)
@@ -557,6 +521,7 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
 		 */
 		finfo->fn_addr = fcp->func;
 		finfo->fn_nargs = fcp->nargs;
+                language = INTERNALlanguageId;
 	}
 	else
 	{
@@ -569,14 +534,7 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
 				 procedureId);
 		}
 		procedureStruct = (FormData_pg_proc *) GETSTRUCT(procedureTuple);
-/*
-		if (!procedureStruct->proistrusted)
-		{
-			finfo->fn_addr = (func_ptr) fmgr_untrusted;
-			finfo->fn_nargs = procedureStruct->pronargs;
-			return;
-		}
-*/
+
 		language = procedureStruct->prolang;
 		switch (language)
 		{
@@ -612,44 +570,32 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
 				finfo->fn_nargs = procedureStruct->pronargs;
 				break;
 			case JAVAlanguageId:
-				finfo->fn_addr = (func_ptr) fmgr_java;
+				finfo->fn_addr = (func_ptr) NULL;
 				finfo->fn_nargs = procedureStruct->pronargs;
+                                {
+                                    JavaInfo* info = palloc(sizeof(JavaInfo));
+                                    char*   src = textout(&procedureStruct->prosrc);
+                                    char* mark = index(src,'.');
+                                    int i=0;
+                                    *mark = '\0';
+                                    strncpy(info->javaclazz,src,128);
+                                    strncpy(info->javamethod,mark+1,128);
+                                    strncpy(info->javasig,textout(&procedureStruct->probin),128);
+                                    for(i=0;i<finfo->fn_nargs;i++) {
+                                        info->types[i] = procedureStruct->proargtypes[i];
+                                    }
+                                    info->rettype = procedureStruct->prorettype;
+                                    finfo->fn_data = info;
+                                }
 				break;
 			default:
-
-				/*
-				 * Might be a created procedural language Lookup the
-				 * syscache for the language and check the lanispl flag If
-				 * this is the case, we return a NULL function pointer and
-				 * the number of arguments from the procedure.
-				 */
-				languageTuple = SearchSysCacheTuple(LANGOID,
-							  ObjectIdGetDatum(procedureStruct->prolang),
-													0, 0, 0);
-				if (!HeapTupleIsValid(languageTuple))
-				{
 					elog(ERROR, "fmgr_info: %s %u",
 						 "Cache lookup for language failed",
 						 DatumGetObjectId(procedureStruct->prolang));
-				}
-				languageStruct = (Form_pg_language) GETSTRUCT(languageTuple);
-				if (languageStruct->lanispl)
-				{
-					FmgrInfo	plfinfo;
-
-					fmgr_info(languageStruct->lanplcallfoid, &plfinfo);
-					finfo->fn_addr = (func_ptr) fmgr_pl;
-					finfo->fn_plhandler = plfinfo.fn_addr;
-					finfo->fn_nargs = procedureStruct->pronargs;
-				}
-				else
-				{
-					elog(ERROR, "fmgr_info: function %u: unknown language %d",
-						 procedureId, language);
-				}
 				break;
 		}
 	}
+        return language;
 }
 
 /*
@@ -669,24 +615,38 @@ fmgr(Oid procedureId,...)
 	va_list		pvar;
 	int			i;
 	int			pronargs;
-	FmgrValues	values;
 	FmgrInfo	finfo;
 	bool		isNull = false;
+        Oid             language;
 
-	fmgr_info(procedureId, &finfo);
+	language = fmgr_info(procedureId, &finfo);
 	pronargs = finfo.fn_nargs;
 
 	if (pronargs > FUNC_MAX_ARGS)
 		elog(ERROR, "fmgr: function %u: too many arguments (%d > %d)",
 			 procedureId, pronargs, FUNC_MAX_ARGS);
 
-        va_start(pvar, first);
+        if ( language == JAVAlanguageId ) {
+            JavaInfo*   jinfo = finfo.fn_data;
+            jvalue      values[FUNC_MAX_ARGS];
+            
+            va_start(pvar, first);
 
-        for (i = 0; i < pronargs; ++i)
-                values.data[i] = va_arg(pvar, char *);
+            for (i = 0; i < pronargs; ++i)
+                    values[i] = ConvertToJavaArg(jinfo->types[i],va_arg(pvar, Datum));
 
-        va_end(pvar);
-        return fmgr_c(&finfo, &values, &isNull);
+            va_end(pvar);
+            return fmgr_javaA(PointerGetDatum(finfo.fn_data),NULL,finfo.fn_nargs,jinfo->types,values,&isNull);
+        } else {
+            FmgrValues	values;
+            va_start(pvar, first);
+
+            for (i = 0; i < pronargs; ++i)
+                    values.data[i] = va_arg(pvar, char *);
+
+            va_end(pvar);
+            return fmgr_c(&finfo, &values, &isNull);
+        }
 }
 
 /*
@@ -711,7 +671,6 @@ fmgr_ptr(FmgrInfo *finfo,...)
 	bool		isNull = false;
 
 	local_finfo->fn_addr = finfo->fn_addr;
-	local_finfo->fn_plhandler = finfo->fn_plhandler;
 	local_finfo->fn_oid = finfo->fn_oid;
 
 	va_start(pvar, finfo);

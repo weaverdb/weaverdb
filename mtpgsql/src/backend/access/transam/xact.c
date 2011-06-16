@@ -837,6 +837,7 @@ StartTransaction()
 	 *	initialize the various transaction subsystems
 	 * ----------------
 	 */
+        ResetTransactionCommitType();
 	AtStart_Locks();
 	AtStart_Cache();
 	AtStart_Memory();
@@ -863,43 +864,6 @@ StartTransaction()
 	s->state = TRANS_INPROGRESS;
         info->backupState = s->state;
 
-}
-
-void
-CycleTransactionId() {
-	TransactionId xid = GetCurrentTransactionId();
-	TransactionInfo*  info = GetTransactionInfo();
-	TransactionState s = info->CurrentTransactionState;
-
-	ThreadTransactionEnd();
-
-
-
-	RecordTransactionCommit();
-	ThreadReleaseLocks(true);
-	RegisterInvalid(true);
-/*    ResetCatalogCacheMemory();   */
-
-	ResetReindexProcessing();
-
-	xid = GetNewTransactionId();
-	s->transactionIdData = xid;
-
-	ThreadTransactionStart(xid);
-
-
-
-
-
-	XactLockTableInsert(xid);
-
-	s->commandId = FirstCommandId;
-	s->scanCommandId = FirstCommandId;
-	s->startTime = GetCurrentAbsoluteTime();
-
-	DiscardInvalid();  
-	FreeXactSnapshot();
-	SetQuerySnapshot();       
 }
 
 /* ---------------
@@ -996,8 +960,6 @@ CommitTransaction()
 	 */
 	s->state = TRANS_DEFAULT;
 	info->SharedBufferChanged = false;/* safest place to do it */
-
-        ResetTransactionCommitType();
 }
 
 /* --------------------------------
@@ -1078,7 +1040,6 @@ AbortTransaction()
 	 */
 	s->state = TRANS_DEFAULT;
 	info->SharedBufferChanged = false;/* safest place to do it */
-        ResetTransactionCommitType();
 }
 
 /* --------------------------------

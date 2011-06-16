@@ -146,20 +146,12 @@ SISegInit(SISeg *segP, int maxBackends)
 int
 SIBackendInit(SISeg *segP)
 {
-	int			index = 0;
+	int			index =0;
 	ProcState  *stateP = NULL;
 	
 	SetMyBackendTag(segP->nextBackendTag++);
 
-	/* Check for duplicate backend tags (should never happen) */
-/*	for (index = 0; index < segP->maxBackends; index++)
-	{
-		if (segP->procState[index].tag == GetEnv()->MyBackendTag)
-			elog(FATAL, "SIBackendInit: tag %d already in use", GetEnv()->MyBackendTag);
-	}
-*/
 	/* Look for a free entry in the procState array */
-while ( stateP == NULL ) {
 	for (index = 0; index < segP->maxBackends; index++)
 	{
 		if (segP->procState[index].tag == InvalidBackendTag)
@@ -168,27 +160,8 @@ while ( stateP == NULL ) {
 			break;
 		}
 	}
-	if ( stateP == NULL ) {
-/*  we are about to roll again so give up the lock 
-	so others have a chance to release backend tags
-	MKS  12.27.2000
-*/
-		SpinRelease(SInvalLock);
-		sleep(1);
-		SpinAcquire(SInvalLock);
-	}
-}
-	/*
-	 * elog() with spinlock held is probably not too cool, but this
-	 * condition should never happen anyway.
-	 */
-	if (stateP == NULL)
-	{
-		elog(NOTICE, "SIBackendInit: no free procState slot available");
-		SetMyBackendTag(InvalidBackendTag);
-		SetMyBackendId(0);
-		return 0;
-	}
+        
+        if ( index == segP->maxBackends ) return 0;
 
 	SetMyBackendId(index + 1);
 
@@ -226,11 +199,13 @@ CallableCleanupInvalidationState() {
 	CleanupInvalidationState(status,shmInvalBuffer);
 }
  
-void 
+int 
 CallableInitInvalidationState() {
+    int result = 0;
 	SpinAcquire(SInvalLock);
-	SIBackendInit(shmInvalBuffer);
+	result = SIBackendInit(shmInvalBuffer);
 	SpinRelease(SInvalLock);
+        return result;
 }
 
 static void

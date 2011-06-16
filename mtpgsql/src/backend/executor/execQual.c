@@ -82,7 +82,7 @@ static Datum
 ExecMakeFunctionResult(Node * node, List * arguments, ExprContext * econtext, 
                 bool * isNull, bool * isDone);
 static Datum    ExecMakeJavaFunctionResult(Java * node, Datum target, 
-                List * args, ExprContext * econtext);
+                List * args, ExprContext * econtext, bool* isNull);
 /*
  * ExecEvalArrayRef
  * 
@@ -666,10 +666,10 @@ ExecEvalJavaArgs(ExprContext * econtext,
 }
 
 /*
- * ExecMakeFunctionResult
+ * ExecMakeJavaFunctionResult
  */
 static          Datum
-ExecMakeJavaFunctionResult(Java * node, Datum target, List * args, ExprContext * econtext)
+ExecMakeJavaFunctionResult(Java * node, Datum target, List * args, ExprContext * econtext, bool *isNull)
 {
 	jvalue          jargV[FUNC_MAX_ARGS];
 
@@ -685,7 +685,7 @@ ExecMakeJavaFunctionResult(Java * node, Datum target, List * args, ExprContext *
 
 		ExecEvalJavaArgs(econtext, args, jargV);
 	}
-	return (Datum) fmgr_javaA(target, node->functype, node->funcclazz, node->funcname, node->funcsig, jargV);
+	return (Datum) fmgr_javaA(target, node->funcname,node->funcnargs,node->funcargtypes, jargV, isNull);
 }
 
 
@@ -705,7 +705,6 @@ ExecMakeFunctionResult(Node * node,
 	Func           *funcNode = NULL;
 	Oper           *operNode = NULL;
 	bool            funcisset = false;
-	Node           *target = NULL;
 
 	/*
 	 * This is kind of ugly, Func nodes now have targetlists so that we
@@ -855,7 +854,20 @@ ExecMakeFunctionResult(Node * node,
 				((Func *) node)->func_fcache = NULL;
 		}
 		return result;
-	} else {
+	} else if ( fcache->language == JAVAlanguageId ) {
+		int             i;
+                jvalue          args[FUNC_MAX_ARGS];
+                JavaInfo*       info = fcache->func.fn_data;
+
+		if (isDone)
+			*isDone = true;
+		for (i = 0; i < fcache->nargs; i++)
+			if (fcache->nullVect[i] == true)
+				*isNull = true;
+
+                ExecEvalJavaArgs(econtext,arguments,args);
+		return (Datum) fmgr_javaA(PointerGetDatum(info),NULL,fcache->nargs,info->types, args, isNull);
+        } else {
 		int             i;
 
 		if (isDone)
@@ -979,22 +991,7 @@ ExecEvalFunc(Expr * funcClause,
 		if (javaNode->java_target)
 			javaTarget = ExecEvalExpr(javaNode->java_target, econtext, &done, &isn);
 
-		if (javaNode->funcsig == NULL) {
-			int             result = GetJavaSignature(javaTarget,
-				    javaNode->funcname, javaNode->funcnargs,
-						     javaNode->funcargtypes,
-							  &javaNode->funcid,
-						       &javaNode->funcclazz,
-							&javaNode->funcname,
-							 &javaNode->funcsig,
-						       &javaNode->functype);
-
-			if (result) {
-
-				elog(ERROR, "java function does not exist");
-			}
-		}
-		return ExecMakeJavaFunctionResult(javaNode, javaTarget, funcClause->args, econtext);
+		return ExecMakeJavaFunctionResult(javaNode, javaTarget, funcClause->args, econtext,isNull);
 	}
 }
 

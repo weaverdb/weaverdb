@@ -277,9 +277,8 @@ extern void initweaverbackend(char* vars)
             } else {
                 SetTransactionCommitType(CAREFUL_COMMIT);
             }
-            
         }
-
+        
 	gettimeofday(&timer,NULL);	
 
 	InitSystem(isPrivate);	
@@ -298,9 +297,6 @@ extern void initweaverbackend(char* vars)
 	SetProcessingMode(InitProcessing);   
 
         MemoryContextInit();
-/*
-	EnablePortalManager();   
-*/
 
 	if ( shmget(IPCKeyGetBufferMemoryKey(ipc_key),0,0) < 0 ) {
 		CreateSharedMemoryAndSemaphores(ipc_key, MaxBackends);
@@ -362,6 +358,19 @@ extern void initweaverbackend(char* vars)
         if ( hgc != NULL ) hgci = atoi(hgc);
 	if ( gcfactor != NULL ) gcfi = atoi(gcfactor);
 	if ( gcupdate != NULL ) gcui = atoi(gcupdate);
+        
+        if ( timeout == 0 ) {
+            switch (GetTransactionCommitType()) {
+                case SOFT_COMMIT: 
+                    SetTransactionCommitType(FAST_SOFT_COMMIT);
+                    break;
+                case CAREFUL_COMMIT:
+                    SetTransactionCommitType(FAST_CAREFUL_COMMIT);
+                    break;
+                default:
+                    
+            }
+        }
 
 	LockDisable(true);
         smgrinit();

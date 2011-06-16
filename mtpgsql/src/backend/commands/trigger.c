@@ -774,12 +774,6 @@ ExecCallTriggerFunc(Trigger *trigger)
 	if (trigger->tgfunc.fn_addr == NULL)
 		fmgr_info(trigger->tgfoid, &trigger->tgfunc);
 
-	if (trigger->tgfunc.fn_plhandler != NULL)
-	{
-		return (HeapTuple) (*(trigger->tgfunc.fn_plhandler))
-			(&trigger->tgfunc);
-	}
-
 	return (HeapTuple) ((*fmgr_faddr(&trigger->tgfunc)) ());
 }
 

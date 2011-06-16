@@ -171,7 +171,6 @@ mmdcreate(Relation reln)
 
 	Assert(reln->rd_unlinked && reln->rd_fd < 0);
 	path = relpath(RelationGetPhysicalRelationName(reln));   
-/*	CycleTransactionId(); */
 #ifndef __CYGWIN32__
 	fd = FileNameOpenFile(path, O_RDWR | O_CREAT | O_EXCL, 0600);
 #else
@@ -307,7 +306,6 @@ mmdunlink(Relation reln)
 	FileUnpin(v->mdfd_vfd,3);
 	FileUnlink(v->mdfd_vfd);
 #endif
-/*	CycleTransactionId(); */
 
 	MemoryContextSwitchTo(oldcxt);
 	

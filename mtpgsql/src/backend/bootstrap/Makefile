@@ -68,7 +68,7 @@ bootscanner.c: bootscanner.l
 clean:
 	rm -f SUBSYS.o $(OBJS)
 # And the garbage that might have been left behind by partial build:
-	rm -f y.tab.h y.tab.c y.output lex.yy.c
+	rm -f y.tab.h y.tab.c y.output lex.yy.c bootparse.c bootscanner.c bootstrap_tokens.h
 
 # This is unusual:  We actually have to build some of the parts before
 # we know what the header file dependencies are.  

@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <jni.h>
+#include <strings.h>
 
 #include "postgres.h"
 
@@ -22,11 +23,15 @@
 #include "access/blobstorage.h"
 
 static          Datum
-                ConvertFromJavaArg(Oid type, jvalue val);
+                ConvertFromJavaArg(Oid type, jvalue val, bool* isNull);
 static JNIEnv  *GetJavaEnv();
 
 JavaVM         *jvm;
 static const char* loader = "driver/weaver/WeaverObjectLoader";
+
+static int  GetJavaSignature(jobject target,Oid foid, char* name,int nargs,Oid* types, Oid* fid,
+				char** src, char** id,
+				char** sig, Oid* rettype);
 
 void
 SetJVM(JavaVM * java, const char *ol)
@@ -237,141 +242,34 @@ javatextout(bytea * target)
 	return data;
 }
 
-
 Datum
-fmgr_java(Datum target, Oid rettype, char *clazz, char *name, char *sig,...)
-{
-	va_list         pvar;
-        Datum           retval;
-
-	va_start(pvar, sig);
-	retval = fmgr_javaV(target, rettype, clazz, name, sig, pvar);
-        
-	va_end(pvar);
-        return retval;
-}
-
-
-Datum
-fmgr_javaV(Datum target, Oid rettype, char *clazz, char *name, char *sig, va_list args)
-{
-	JNIEnv         *jenv;
-	jclass          converter;
-	jmethodID       in;
-	jvalue          rval;
-	jobject         jtar;
-	Datum           ret_datum;
-
-	jenv = GetJavaEnv();
-	(*jenv)->PushLocalFrame(jenv, 10);
-
-        if ( target != NULL ) {
-            jtar = (jobject) javaout((bytea *) target);
-            converter = (*jenv)->GetObjectClass(jenv, jtar);
-            if ((*jenv)->ExceptionOccurred(jenv)) {
-                    (*jenv)->ExceptionClear(jenv);
-                    (*jenv)->PopLocalFrame(jenv, NULL);
-                    elog(ERROR, "embedded exception occurred");
-            }
-            in = (*jenv)->GetMethodID(jenv, converter, name, sig);
-            if ((*jenv)->ExceptionOccurred(jenv)) {
-                    (*jenv)->ExceptionClear(jenv);
-                    (*jenv)->PopLocalFrame(jenv, NULL);
-                    elog(ERROR, "embedded exception occurred");
-            }
-            switch (rettype) {
-                case JAVAOID:
-                case TEXTOID:
-                case VARCHAROID:
-                        rval.l = (*jenv)->CallObjectMethodV(jenv, jtar, in, args);
-                        break;
-                case BOOLOID:
-                        rval.z = (*jenv)->CallBooleanMethodV(jenv, jtar, in, args);
-                        break;
-                case INT4OID:
-                        rval.i = (*jenv)->CallIntMethodV(jenv, jtar, in, args);
-                        break;                
-                case INT8OID:
-                        rval.j = (*jenv)->CallLongMethodV(jenv, jtar, in, args);
-                        break;                
-                case FLOAT8OID:
-                        rval.d = (*jenv)->CallDoubleMethodV(jenv, jtar, in, args);
-                        break;
-                default:
-                        rval.l = (*jenv)->CallObjectMethodV(jenv, jtar, in, args);
-                        break;
-            }
-
-            if ((*jenv)->ExceptionOccurred(jenv)) {
-                    (*jenv)->ExceptionClear(jenv);
-                    (*jenv)->PopLocalFrame(jenv, NULL);
-                    elog(ERROR, "embedded exception occurred");
-            }
-            ret_datum = ConvertFromJavaArg(rettype, rval);
-        } else {
-		converter = (*jenv)->FindClass(jenv, clazz);
-		if (converter == NULL) {
-			(*jenv)->ExceptionClear(jenv);
-			(*jenv)->PopLocalFrame(jenv, NULL);
-			elog(ERROR, "java class %s does not resolve", clazz);
-		}
-		in = (*jenv)->GetStaticMethodID(jenv, converter, name, sig);
-		if (in == NULL) {
-			(*jenv)->ExceptionClear(jenv);
-			(*jenv)->PopLocalFrame(jenv, NULL);
-			elog(ERROR, "method does not exist class:%s method:%s sig:%s", clazz, name, sig);
-		}
-		switch (rettype) {
-		case JAVAOID:
-                case TEXTOID:
-		case VARCHAROID:
-			rval.l = (*jenv)->CallStaticObjectMethodV(jenv, converter, in, args);
-			break;
-		case BOOLOID:
-			rval.z = (*jenv)->CallStaticBooleanMethodV(jenv, converter, in, args);
-			break;
-		case INT4OID:
-			rval.i = (*jenv)->CallStaticIntMethodV(jenv, converter, in, args);
-			break;		
-		case INT8OID:
-			rval.i = (*jenv)->CallStaticLongMethodV(jenv, converter, in, args);
-			break;	
-                    case FLOAT8OID:
-                        rval.d = (*jenv)->CallStaticDoubleMethodV(jenv, converter, in, args);
-                        break;
-		default:
-			rval.l = (*jenv)->CallStaticObjectMethodV(jenv, converter, in, args);
-			break;
-		}
-             ret_datum = ConvertFromJavaArg(rettype, rval);
-       }
-	(*jenv)->PopLocalFrame(jenv, NULL);
-	return ret_datum;
-}
-
-
-Datum
-fmgr_javaA(Datum target, Oid rettype, char *clazz, char *name, char *sig, void *args)
+fmgr_javaA(Datum target, char* function, int nargs, Oid* types, jvalue *args,bool* isNull)
 {
 	JNIEnv         *jenv;
 	jclass          converter;
 	jmethodID       in;
 	jvalue          rval;
 	Datum           ret_datum;
-
+        Oid foid;
+        Oid rtype;
+                char            *clazz;
+                char            *sig;
+                
 	jenv = GetJavaEnv();
 
 	(*jenv)->PushLocalFrame(jenv, 10);
 
-	if (target != NULL) {
+	if (function != NULL) {
 		jobject         jtar = (jobject) javaout((bytea *) target);
+
+                GetJavaSignature(jtar,0,function,nargs,types,&foid,&clazz,&sig,&function,&rtype);
 		converter = (*jenv)->GetObjectClass(jenv, jtar);
-		in = (*jenv)->GetMethodID(jenv, converter, name, sig);
+		in = (*jenv)->GetMethodID(jenv, converter, function, sig);
 		if (in == NULL) {
 			(*jenv)->PopLocalFrame(jenv, NULL);
 			elog(ERROR, "method for target class does not exist");
 		}
-		switch (rettype) {
+		switch (rtype) {
 		case JAVAOID:
                 case TEXTOID:
 		case VARCHAROID:
@@ -394,19 +292,24 @@ fmgr_javaA(Datum target, Oid rettype, char *clazz, char *name, char *sig, void *
 			break;
 		}
 	} else {
-		converter = (*jenv)->FindClass(jenv, clazz);
+/*
+                GetJavaSignature(NULL,DatumGetObjectId(target),function,nargs,types,&foid,&clazz,&sig,&function,&rtype);
+*/
+            JavaInfo*  jinfo = ((JavaInfo*)DatumGetPointer(target));
+            rtype = jinfo->rettype;
+		converter = (*jenv)->FindClass(jenv, jinfo->javaclazz);
 		if (converter == NULL) {
 			(*jenv)->ExceptionClear(jenv);
 			(*jenv)->PopLocalFrame(jenv, NULL);
-			elog(ERROR, "java class %s does not resolve", clazz);
+			elog(ERROR, "java class %s does not resolve", jinfo->javaclazz);
 		}
-		in = (*jenv)->GetStaticMethodID(jenv, converter, name, sig);
+		in = (*jenv)->GetStaticMethodID(jenv, converter, jinfo->javamethod, jinfo->javasig);
 		if (in == NULL) {
 			(*jenv)->ExceptionClear(jenv);
 			(*jenv)->PopLocalFrame(jenv, NULL);
-			elog(ERROR, "method does not exist class:%s method:%s sig:%s", clazz, name, sig);
+			elog(ERROR, "method does not exist class:%s method:%s sig:%s", jinfo->javaclazz, jinfo->javamethod, jinfo->javasig);
 		}
-		switch (rettype) {
+		switch (rtype) {
 		case JAVAOID:
                 case TEXTOID:
 		case VARCHAROID:
@@ -435,7 +338,7 @@ fmgr_javaA(Datum target, Oid rettype, char *clazz, char *name, char *sig, void *
 		(*jenv)->ExceptionClear(jenv);
 		elog(ERROR, "embedded exception occurred");
 	}
-	ret_datum = ConvertFromJavaArg(rettype, rval);
+	ret_datum = ConvertFromJavaArg(rtype, rval,isNull);
 	(*jenv)->PopLocalFrame(jenv, NULL);
 
 	return ret_datum;
@@ -487,13 +390,19 @@ ConvertToJavaArg(Oid type, Datum val)
 
 
 Datum
-ConvertFromJavaArg(Oid type, jvalue val)
+ConvertFromJavaArg(Oid type, jvalue val, bool *isNull)
 {
 	JNIEnv         *jenv;
 	Datum           ret_datum = NULL;
 
 
 	jenv = GetJavaEnv();
+        
+        if ( (*jenv)->IsSameObject(jenv,val.l,NULL) ) 
+        {
+            *isNull = true;
+            return NULL;
+        }
 
 	switch (type) {
 	case INT4OID:
@@ -727,10 +636,9 @@ javalen(bytea * obj)
 }
 
 PG_EXTERN int
-GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
+GetJavaSignature(jobject target, Oid foid, char *name, int nargs, Oid * types, Oid * fid,
      char **javasrc, char **javaname, char **javasig, Oid * rettype )
 {
-	jobject         javaTarget = NULL;
 	JNIEnv         *jenv;
 	jclass          converter = NULL;
 	jclass          class_class;
@@ -738,19 +646,17 @@ GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
 	jmethodID       getname;
 	jstring         classid;
 
-	NameData        lookup;
-
 	HeapTuple       func;
-
-	memset(NameStr(lookup), 0x00, NAMEDATALEN);
 
 	jenv = GetJavaEnv();
 
 	if (target) {
-                (*jenv)->PushLocalFrame(jenv, 10);
+                NameData        lookup;
+                
+                memset(NameStr(lookup), 0x00, NAMEDATALEN);
+              (*jenv)->PushLocalFrame(jenv, 10);
 		
-                javaTarget = javaout((bytea *) target);
-		converter = (*jenv)->GetObjectClass(jenv, javaTarget);
+		converter = (*jenv)->GetObjectClass(jenv, target);
 
 		class_class = (*jenv)->FindClass(jenv, "java/lang/Class");
 		getname = (*jenv)->GetMethodID(jenv, class_class, "getName", "()Ljava/lang/String;");
@@ -778,9 +684,9 @@ GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
 				*fid = func->t_data->t_oid;
 				*rettype = pg_proc->prorettype;
 				
-                                Datum           cla = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_prosrc, NULL);
+                                Datum           cla = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prosrc, NULL);
 				*javasrc = textout((text *) cla);
-                                Datum           sig = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_probin, NULL);
+                                Datum           sig = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_probin, NULL);
 				*javasig = textout((text *) sig);
                                 
                                 (*jenv)->PopLocalFrame(jenv, NULL);
@@ -791,10 +697,7 @@ GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
 		}
                 (*jenv)->PopLocalFrame(jenv, NULL);
 	} else {
-		strncpy(NameStr(lookup), name, NAMEDATALEN);
-
-		func = SearchSysCacheTuple(PROCNAME, NameGetDatum(&lookup),
-			   Int32GetDatum(nargs), PointerGetDatum(types), 0);
+		func = SearchSysCacheTuple(PROCOID, ObjectIdGetDatum(foid), 0, 0 , 0);
 
 		if (HeapTupleIsValid(func)) {
                     char* mark;
@@ -807,7 +710,7 @@ GetJavaSignature(Datum target, char *name, int nargs, Oid * types, Oid * fid,
                         Datum           sig = SysCacheGetAttr(PROCOID, func, Anum_pg_proc_probin, NULL);
 			*javasig = textout((text *) sig);
 
-                        mark = index(javasrc,'.');
+                        mark = index(*javasrc,'.');
                         *mark = '\0';
                         *javaname = mark + 1;
 			return 0;

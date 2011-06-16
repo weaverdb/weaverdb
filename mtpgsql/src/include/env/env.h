@@ -47,6 +47,7 @@ typedef enum CommitType
 {
 	DEFAULT_COMMIT,
 	SOFT_COMMIT,
+        FAST_SOFT_COMMIT,
 	CAREFUL_COMMIT,
         FAST_CAREFUL_COMMIT,
         SYNCED_COMMIT,

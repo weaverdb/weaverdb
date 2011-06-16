@@ -158,7 +158,6 @@ agg_get_candidates(char *aggname,
 
 		current_candidate = (CandidateList) palloc(sizeof(struct _CandidateList));
 		current_candidate->args = (Oid *) palloc(sizeof(Oid));
-
 		current_candidate->args[0] = agg->aggbasetype;
 		current_candidate->next = *candidates;
 		*candidates = current_candidate;
@@ -308,6 +307,7 @@ ParseJavaFunc(ParseState *pstate, char *funcname, char* target,List *fargs)
 
 	/* got it */
 	funcnode = makeNode(Java);
+        funcnode->funcid = 0;
 /*  don't know exact function type yet  */
 	funcnode->funcname = funcname;
 /*  don't know return type yet  */
@@ -770,7 +770,7 @@ ParseFuncOrColumn(ParseState *pstate, char *funcname, List *fargs,
 		if ( attisset ) {
 			elog(ERROR,"JAVA functions do not support data sets and arguments");
 		}
-
+                jc->funcid = funcid;
 		jc->funcname = funcname;
 		jc->functype = rettype;
 		jc->funcargtypes = palloc(sizeof(Oid) * FUNC_MAX_ARGS);
@@ -1282,7 +1282,7 @@ func_select_candidate(int nargs,
  *	 d) if the answer is zero, try the next array from vector #1
  */
 static bool
-func_get_detail(char *funcname,
+func_get_detail( char *funcname,
 				int nargs,
 				Oid *oid_array,
 				Oid *funclang,
@@ -1371,6 +1371,7 @@ func_get_detail(char *funcname,
 												   0);
 						Assert(HeapTupleIsValid(ftup));
 					}
+                                        
 
 					/*
 					 * otherwise, ambiguous function call, so fail by

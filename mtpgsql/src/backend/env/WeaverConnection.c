@@ -163,10 +163,20 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
 
     /* from Init Relations cache from RelationInitialize();   */
     InitThread(NORMAL_THREAD);
+
+    if ( !CallableInitInvalidationState() ) {
+        strncpy(connection->env->errortext, "unsuccessful connection -- too many connections", 255);
+        strncpy(connection->env->state, "DISCONNECTED", 39);
+        
+        DestroyThread();
+        SetEnv(NULL);
+        DestroyEnv(env);
+
+        return NULL;
+    }
+    
     RelationInitialize();
     InitCatalogCache();
-
-    CallableInitInvalidationState();
 
     connection->env->Mode = NormalProcessing;
 
@@ -255,7 +265,6 @@ WCreateSubConnection(OpaqueWConn parent) {
     } else {
         SetEnv(env);
         MemoryContextInit();
-
     }
     
     connection = AllocateEnvSpace(connection_section_id,sizeof (struct Connection));
@@ -272,11 +281,16 @@ WCreateSubConnection(OpaqueWConn parent) {
     connection->env->UserId = parent->env->UserId;
 
     InitThread(NORMAL_THREAD);
-
+    if ( !CallableInitInvalidationState() ) {
+        DestroyThread();
+        SetEnv(NULL);
+        DestroyEnv(env);
+        return NULL;
+    }
+    
     RelationInitialize();
     InitCatalogCache();
 
-    CallableInitInvalidationState();
     connection->env->Mode = NormalProcessing;
     connection->stage = TRAN_INVALID;
 
@@ -955,8 +969,6 @@ WDisposeConnection(OpaqueWConn conn) {
     if (setjmp(connection->env->errorContext) == 0)
         remove_all_temp_relations();
     if (setjmp(connection->env->errorContext) == 0)
-        CallableCleanupInvalidationState();
-    if (setjmp(connection->env->errorContext) == 0)
         RelationCacheShutdown();
     if (setjmp(connection->env->errorContext) == 0)
         ThreadReleaseLocks(false);
@@ -964,7 +976,8 @@ WDisposeConnection(OpaqueWConn conn) {
         ThreadReleaseSpins(GetMyThread());
     if (setjmp(connection->env->errorContext) == 0)
         DestroyThread();
-
+    if (setjmp(connection->env->errorContext) == 0)
+        CallableCleanupInvalidationState();
 
     connection->validFlag = -1;
     SetEnv(NULL);

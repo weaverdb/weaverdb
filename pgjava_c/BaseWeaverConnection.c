@@ -116,6 +116,8 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_close(JNIEnv *env,jo
 /*  shutdown any threads resources still hanging around */
 	if ( prepareforshutdown() ) {
             shuttingdown = true;
+                
+            pthread_mutex_lock(&allocator);
 
             for (int x = 0;x<GetMaxBackends();x++) {
                     if (theManagers[x] != NULL ) {
@@ -128,6 +130,8 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_close(JNIEnv *env,jo
                             javaSideLog[x] = NULL;    
                     }
             }
+                
+            pthread_mutex_unlock(&allocator);
 
             wrapupweaverbackend();
         }
@@ -240,10 +244,12 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
 	jint link = getProperAgent(env,talkerObject);
         if ( link < 0 ) return;
         
+        
 	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
         
         if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
 //  free all resources associated with this connection
+            pthread_mutex_lock(&allocator);
 
             if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link]))
             {
@@ -270,6 +276,8 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
                     }
                 }
             }
+                pthread_mutex_unlock(&allocator);
+                
         } else {
             if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link])) {
                 StmtMgr ref = getStmtMgr(env,linkid);
@@ -277,6 +285,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
                 DestroyWeaverStmtManager(ref); 
             }
         }
+
 }
 
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_beginTransaction(JNIEnv *env, jobject talkerObject)

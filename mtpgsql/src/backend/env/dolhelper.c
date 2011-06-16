@@ -175,7 +175,7 @@ PG_EXTERN void*
 InitDolConnection(void* connection) {
         DolConnection conn = (DolConnection)connection;
 	SetEnv(conn->env);
-
+        
 	conn->env->Mode = InitProcessing;
 
 	MemoryContextInit();
@@ -190,10 +190,15 @@ InitDolConnection(void* connection) {
 
 	InitThread(DOL_THREAD);
 
+        if ( !CallableInitInvalidationState() ) {
+            DestroyThread();
+            SetEnv(NULL);
+            DestroyEnv(conn->env);
+            return NULL;
+        }
+        
 	RelationInitialize();
 	InitCatalogCache();
-
-	CallableInitInvalidationState();
 
         conn->env->Mode = NormalProcessing;
 
@@ -352,7 +357,6 @@ CloseDolConnection(DolConnection conn) {
         TransactionUnlock();
 
         remove_all_temp_relations();
-        CallableCleanupInvalidationState();
         RelationCacheShutdown();
 
 #ifdef  USE_ASSERT_CHECKING  
@@ -364,6 +368,7 @@ CloseDolConnection(DolConnection conn) {
         ThreadReleaseLocks(false);
         ThreadReleaseSpins(GetMyThread());
         DestroyThread();
+        CallableCleanupInvalidationState();
 	
         return sqlError;
 }

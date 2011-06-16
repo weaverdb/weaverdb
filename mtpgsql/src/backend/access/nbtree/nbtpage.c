@@ -318,6 +318,12 @@ _bt_pageinit(Page page, Size size)
 	PageInit(page, size, sizeof(BTPageOpaqueData));
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_parent =
 		InvalidBlockNumber;
+	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_next =
+		0;
+	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_parent =
+		0;        
+	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_flags =
+		0;                
 }
 
 /*

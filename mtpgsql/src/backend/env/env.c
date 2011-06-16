@@ -713,11 +713,15 @@ bool IsLoggable(void) {
         }
 
         switch ( check ) {
-                case SYNCED_COMMIT:
-                        return false;
+            case SYNCED_COMMIT:
+                return false;
+            default: 
+                return true;
         }
+        
         return true;
 }
+
 bool IsTransactionFriendly() {
 	Env* env = GetEnv();
         CommitType check = DEFAULT_COMMIT;
@@ -733,6 +737,7 @@ bool IsTransactionFriendly() {
         }
 
         switch ( check ) {
+                case FAST_SOFT_COMMIT:
                 case FAST_CAREFUL_COMMIT:
                         return false;
         }
@@ -754,6 +759,9 @@ CommitType GetTransactionCommitType() {
 void SetTransactionCommitType(CommitType trans) {
         Env*  env = GetEnv();
 	switch ( trans ) {
+                case DEFAULT_COMMIT: 
+                    env->user_type = DEFAULT_COMMIT;
+                    break;
 		case USER_SOFT_COMMIT:
 			env->user_type = SOFT_COMMIT;
 			break;
@@ -785,12 +793,18 @@ void SetTransactionCommitType(CommitType trans) {
 		case SOFT_COMMIT:
 			default_type = SOFT_COMMIT;
 			break;
-		case FAST_CAREFUL_COMMIT:
+		case FAST_SOFT_COMMIT:
+			default_type = FAST_SOFT_COMMIT;
+			break;
+                case FAST_CAREFUL_COMMIT:
 			default_type = FAST_CAREFUL_COMMIT;
                         break;
 		case SYNCED_COMMIT:
 			default_type = SYNCED_COMMIT;                        
 			break;
+            default: 
+                default_type = trans;
+                
 	}
 }
 

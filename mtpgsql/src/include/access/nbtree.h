@@ -61,7 +61,7 @@ typedef struct BTMetaPageData
 {
 	uint32		btm_magic;
 	uint32		btm_version;
-	BlockNumber btm_root;
+	BlockNumber     btm_root;
 	int32		btm_level;
 } BTMetaPageData;
 
