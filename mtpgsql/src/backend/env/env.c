@@ -717,9 +717,7 @@ bool IsLoggable(void) {
                 return false;
             default: 
                 return true;
-        }
-        
-        return true;
+        }        
 }
 
 bool IsTransactionFriendly() {

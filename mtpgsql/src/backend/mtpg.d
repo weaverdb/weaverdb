@@ -20,6 +20,9 @@ provider mtpg {
         probe buffer__pininvalid(int, int, string);
         probe buffer__writelockdefer(int, int);
         probe buffer__cxtnotpassed();
+        probe buffer__store(string,string,long);
+        probe buffer__evict(string,string,long);
+        probe buffer__replace(string,string,long,string,long);
         probe buffer__waitbufferio(int,int,int,int);
         probe buffer__inboundbufferio(int,int,int,int);
         probe buffer__readbufferio(int,int,int,int);
@@ -36,8 +39,8 @@ provider mtpg {
 	probe dbwriter__logged(int);
 	probe dbwriter__softcommit(long);
 	probe dbwriter__commit(long);
-	probe dbwriter__loggedbuffers(int,int);
-	probe dbwriter__syncedbuffers(int,int);
+	probe dbwriter__loggedbuffers(int,int,int);
+	probe dbwriter__syncedbuffers(int,int,int,int);
 	probe dbwriter__circularflush(int,int);
 	probe dbwriter__tolerance(string,string,double*,double*);
 	probe dbwriter__accesses(string,string,double*,double*);

@@ -10,17 +10,20 @@
 
 #include "c.h"
 
-
 #include "storage/buf_internals.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef enum mode {
+    SYNC_MODE,
+    LOG_MODE
+} DBMode;
 
 void DBWriterInit(int maxcount,int timeout,int hgc_threshold,int hgc_updatewt,int hgc_factor);
 
-void DBCreateWriterThread(void);
+void DBCreateWriterThread(DBMode mode);
 
 void CommitDBBufferWrites(TransactionId xid,int state);
 

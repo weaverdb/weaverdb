@@ -240,7 +240,7 @@ WriteLocalBuffer(Buffer buffer, bool release)
  *	  flushes a local buffer
  */
 int
-FlushLocalBuffer(Buffer buffer, bool release)
+FlushLocalBuffer(Buffer buffer)
 {
 	int			bufid;
 	Relation	bufrel;
@@ -279,11 +279,7 @@ FlushLocalBuffer(Buffer buffer, bool release)
 	/* drop relcache refcount incremented by RelationIdCacheGetRelation */
 	RelationDecrementReferenceCount(bufrel);
 
-	if (release)
-	{
-		Assert(env->LocalRefCount[bufid] > 0);
-		env->LocalRefCount[bufid]--;
-	}
+        env->LocalRefCount[bufid]--;
 
 	return true;
 }

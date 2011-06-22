@@ -68,7 +68,7 @@ _bt_metapinit(Relation rel)
 		elog(ERROR, "Cannot initialize non-empty btree %s",
 			 RelationGetRelationName(rel));
 
-	buf = ReadBuffer(rel, P_NEW);
+	buf = ReadBuffer(rel,AllocateMoreSpace(rel));
         if (!BufferIsValid(buf) ) 
                     elog(ERROR,"bad buffer read while scanning btree %s",RelationGetRelationName(rel));
 	pg = BufferGetPage(buf);
@@ -178,7 +178,9 @@ _bt_tryroot(Relation rel, bool create)
 			 * type on the new root page.  Since this is the first page in
 			 * the tree, it's a leaf as well as the root.
 			 */
+                        LockBuffer(rel,metabuf,BUFFER_LOCK_NOTCRITICAL);
 			Buffer rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
+                        LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
 			Page rootpage = BufferGetPage(rootbuf);
                         root = BufferGetBlockNumber(rootbuf);
 
@@ -243,13 +245,13 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 		 * Extend bufmgr code is unclean and so we have to use extra locking
 		 * here.
 		 */
-		LockPage(rel, 0, ExclusiveLock);
-		buf = ReadBuffer(rel, P_NEW);
+		buf = ReadBuffer(rel,AllocateMoreSpace(rel));
+                
                 if ( !BufferIsValid(buf) ) {
                     elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
                 }	
+                
                 LockBuffer((rel),  buf, access);
-		UnlockPage(rel, 0, ExclusiveLock);
 
 		/* Initialize the new page before returning it */
 		page = BufferGetPage(buf);

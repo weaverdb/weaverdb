@@ -921,7 +921,8 @@ element_alloc(HTAB *hashp)
         
         tmpElement = head;
 	/* link all the new entries into the freelist */
-	for (tmpElement = head; tmpElement < (((char*)head) + (HASHELEMENT_ALLOC_INCR * elementSize)); tmpElement = ((char*)tmpElement) + elementSize)
+        
+	for (tmpElement = head; tmpElement < (HASHELEMENT *)(((char*)head) + (HASHELEMENT_ALLOC_INCR * elementSize)); tmpElement = (HASHELEMENT *)(((char*)tmpElement) + elementSize))
 	{
 		tmpElement->link = hctl->freeList;
                 tmpElement->freeable = false;

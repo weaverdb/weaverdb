@@ -72,14 +72,12 @@ extern void					StartupXLOG(void);
 extern void					ShutdownXLOG(void);
 
 extern int 					NBuffers;
-extern int 					IndexBufferReserve;
 extern int 					DebugLvl;
 static int 					MaxBackends = MAXBACKENDS;
 
 extern bool             disable_crc;
 extern bool             DelegatedIndexBuild;
 extern bool             FastIndexBuild;
-extern bool             lingeringbuffers;
 
 static int					exclusive_lock = -1;
 static char					lock_name[255];
@@ -109,7 +107,6 @@ extern void initweaverbackend(char* vars)
         pthread_mutex_lock(&init_lock);
             
         char* nbuff = getenv("PG_BUFFERCOUNT");
-	char* ibufreserve = getenv("PG_INDEXBUFFERRESERVE");
 	char* dbug = getenv("PG_DEBUGLEVEL");
 	char* back = getenv("PG_MAXBACKENDS");
 	char*  output = getenv("PG_LOGFILE");
@@ -150,8 +147,6 @@ extern void initweaverbackend(char* vars)
 */
             if ( strcmp(key,"buffercount") == 0 ) {
                 nbuff = val;
-            } else if ( strcmp(key,"indexbuffers") == 0 ) {
-                ibufreserve = val;
             } else if ( strcmp(key,"debuglevel") == 0 ) {
                 dbug = val;
             } else if ( strcmp(key,"maxbackends") == 0 ) {
@@ -192,8 +187,6 @@ extern void initweaverbackend(char* vars)
 		DelegatedIndexBuild = (toupper(val[0]) == 'T') ? true : false;
             } else if ( strcmp(key,"start_delay") == 0 ) {
 		start_delay = atoi(val);
-            } else if ( strcmp(key,"lingeringbuffers") == 0 ) {
-		lingeringbuffers = (toupper(val[0]) == 'T') ? true : false;
             } else {
                 NameData nkey;
                 Name nval;
@@ -250,9 +243,6 @@ extern void initweaverbackend(char* vars)
 	}
 	if ( nbuff != NULL ) {
 		NBuffers = atoi(nbuff);
-	}
-	if ( ibufreserve != NULL ) {
-		IndexBufferReserve = atof(ibufreserve);
 	}
 	if ( back != NULL ) {
 		MaxBackends = atoi(back);
@@ -368,7 +358,7 @@ extern void initweaverbackend(char* vars)
                     SetTransactionCommitType(FAST_CAREFUL_COMMIT);
                     break;
                 default:
-                    
+                    break;
             }
         }
 
@@ -377,7 +367,7 @@ extern void initweaverbackend(char* vars)
 	RelationInitialize(); 
         DBWriterInit(maxxactgroup,timeout,hgci,gcui,gcfi);	
         
-	DBCreateWriterThread();
+	DBCreateWriterThread(LOG_MODE);
         InitializeTransactionSystem();		/* pg_log,etc init/crash recovery here */
 	InitFreespace();
         LockDisable(false);

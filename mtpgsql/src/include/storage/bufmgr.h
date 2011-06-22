@@ -66,7 +66,15 @@ PG_EXTERN int	ShowPinTrace;
 
 /*  bit flag set if lock should fail instead of block  */
 #define BUFFER_LOCK_WRITEIO                     16   /*  blocks exclusive locks until write io is finished */
+#define BUFFER_LOCK_FLUSHIO                     32   /*  blocks exclusive locks until write io is finished */
+#define BUFFER_LOCK_NOTCRITICAL                 64   /*  blocks exclusive locks until write io is finished */
+#define BUFFER_LOCK_CRITICAL                    128   /*  blocks exclusive locks until write io is finished */
 
+typedef enum writemode {
+    WRITE_NORMAL,
+    WRITE_COMMIT,
+    WRITE_FLUSH
+} WriteMode;
 
 /*
  * BufferIsValid
@@ -127,7 +135,7 @@ PG_EXTERN Buffer ReleaseAndReadBuffer(Buffer buffer, Relation relation,
 					 BlockNumber blockNum);
 PG_EXTERN int	ReleaseBuffer(Relation reln, Buffer buffer);
 
-PG_EXTERN int	FlushBuffer(Relation reln,Buffer buffer, bool release);
+PG_EXTERN int	FlushBuffer(Relation reln,Buffer buffer);
 PG_EXTERN int	PrivateWriteBuffer(Relation rel, Buffer buffer, bool release);
 PG_EXTERN int	SyncRelation(Relation rel);
 
@@ -162,7 +170,7 @@ PG_EXTERN void ErrorBufferIO(IOStatus locks, BufferDesc* buf);
 PG_EXTERN bool IsDirtyBufferIO(BufferDesc* buf);
         
 PG_EXTERN IOStatus ReadBufferIO(BufferDesc *buf);
-PG_EXTERN IOStatus WriteBufferIO(BufferDesc *buf, bool flush);
+PG_EXTERN IOStatus WriteBufferIO(BufferDesc *buf, WriteMode mode);
 PG_EXTERN IOStatus LogBufferIO(BufferDesc *buf);
 PG_EXTERN void TerminateBufferIO(IOStatus locks, BufferDesc *buf);
 

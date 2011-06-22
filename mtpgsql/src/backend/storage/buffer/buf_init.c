@@ -117,7 +117,6 @@ SPINLOCK	HeapBufLock;
 SPINLOCK	IndexBufLock;
 SPINLOCK	FreeBufMgrLock;
 extern SLock*	SLockArray;
-extern int	lockowner;
 
 long int	ReadBufferCount;
 long int	ReadLocalBufferCount;
@@ -197,10 +196,7 @@ InitBufferPool(IPCKey key)
                     pthread_mutex_init(&(buf->cntx_lock.guard),&process_mutex_attr);
                     pthread_cond_init(&(buf->cntx_lock.gate),&process_cond_attr);
 
-                    buf->used = false;
                     buf->r_locks = 0;		/* # of shared locks */
-                    buf->w_lock = false;			/* context exclusively locked */
-                    buf->e_lock = false;
 
                     buf->e_waiting = 0;
                     buf->w_waiting = 0;

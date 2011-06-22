@@ -636,7 +636,7 @@ fmgr(Oid procedureId,...)
                     values[i] = ConvertToJavaArg(jinfo->types[i],va_arg(pvar, Datum));
 
             va_end(pvar);
-            return fmgr_javaA(PointerGetDatum(finfo.fn_data),NULL,finfo.fn_nargs,jinfo->types,values,&isNull);
+            return (char*)fmgr_javaA(PointerGetDatum(finfo.fn_data),NULL,finfo.fn_nargs,jinfo->types,values,&isNull);
         } else {
             FmgrValues	values;
             va_start(pvar, first);

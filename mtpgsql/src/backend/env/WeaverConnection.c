@@ -533,11 +533,11 @@ WExec(OpaquePreparedStatement plan) {
         return err;
     }
 
+    READY(connection, err);
+
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
-
-    READY(connection, err);
 
     WResetExecutor(plan);
 

@@ -89,94 +89,74 @@ static BlockNumber _vfdnblocks(File file, Size blcksz);
 static int _vfddumplogtodisk(void);
 static int _vfddumpindextomemory(void);
 static int _vfddumpindextodisk();
-static long _vfdreplaysegment(void);
+static long _vfdreplaysegment(File logfile);
 static int _vfdreplayindexlog();
 
+static File _openlogfile(char* path, bool replay);
+
 static void  vfd_log(char* pattern, ...);
+
+
+File
+_openlogfile(char* logfile_path, bool replay) {
+      File  file;
+      char path[256];
+      int fileflags = (replay) ? (O_RDONLY) : (O_WRONLY | O_CREAT);
+      char* datadir = DataDir;
+      
+        if ( *logfile_path == SEP_CHAR ) {
+            sprintf(path,"%s",logfile_path);
+        } else {
+            sprintf(path,"%s%c%s",datadir,SEP_CHAR,logfile_path);
+        }
+
+#ifdef LINUX        
+    if ( !replay && GetBoolProperty("optimize_log") ) {
+        fileflags |= O_DIRECT;
+    }
+#endif      
+    file = PathNameOpenFile(path, fileflags , 0600);
+     if ( file < 0 ) {
+        elog(FATAL,"unable to access %s",logfile_path);
+    }
+    if ( !replay && GetBoolProperty("optimize_log") ) {
+           FileOptimize(file);  
+    }
+ 
+    FilePin(file,0);
+    FileSeek(file,0,SEEK_SET);
+    FileUnpin(file,0);
+    
+    return file;
+}
 
 int
 vfdinit()
 {    
-      char path[256];
-      char idxpath[256];
-      char* logfile_path = GetProperty("vfdlogfile");
       char* index_path = GetProperty("vfdindexlog");
-      char* datadir = DataDir;
-      int count;
-      
-        max_index = ((sizeof(IndexStore) - MAXALIGN((char*)&IndexStore - (char*)&IndexStore.header.blocks)) / sizeof(SmgrData));
-        max_blocks = ((sizeof(SegmentStore) - MAXALIGN((char*)&SegmentStore - (char*)&SegmentStore.header.blocks)) / sizeof(SmgrData));
-        log_count = 0;
+      char* logfile_path = GetProperty("vfdlogfile");
 
-      if ( datadir == NULL ) datadir = getenv("PGDATA");
-      
       if ( logfile_path == NULL ) {
         logfile_path = "pg_shadowlog";
       }
-      
       if ( index_path == NULL ) {
         index_path = "pg_indexlog";
       }     
-      
-    if ( *logfile_path == SEP_CHAR ) {
-        sprintf(path,"%s",logfile_path);
-    } else {
-        sprintf(path,"%s%c%s",datadir,SEP_CHAR,logfile_path);
-    }
-      
-    if ( *index_path == SEP_CHAR ) {
-        sprintf(idxpath,"%s",index_path);
-    } else {
-        sprintf(idxpath,"%s%c%s",datadir,SEP_CHAR,index_path);
-    }
-      
-    log_file = PathNameOpenFile(path, O_RDWR | O_CREAT , 0600);
-     if ( log_file < 0 ) {
-        elog(FATAL,"unable to access vfd logfile");
-    }
-    if ( GetBoolProperty("optimize_log") ) {
-           FileOptimize(log_file);  
-    }
-    FilePin(log_file,0);
-    FileSeek(log_file,0,SEEK_SET);
     
-    index_file = PathNameOpenFile(idxpath, O_RDWR | O_CREAT , 0600);
-     if ( index_file < 0 ) {
-        elog(FATAL,"unable to access vfd logfile");
-    }
-    if ( GetBoolProperty("optimize_log") ) {
-            FileOptimize(index_file); 
-    }
-    FilePin(index_file,0);
-    FileSeek(index_file,0,SEEK_SET);
-    
+    log_file = _openlogfile(logfile_path, false);
+    index_file = _openlogfile(index_path, false);
+        
+        max_index = ((sizeof(IndexStore) - MAXALIGN((char*)&IndexStore - (char*)&IndexStore.header.blocks)) / sizeof(SmgrData));
+        max_blocks = ((sizeof(SegmentStore) - MAXALIGN((char*)&SegmentStore - (char*)&SegmentStore.header.blocks)) / sizeof(SmgrData));
+        log_count = 0;
+        
     scratch_size = (BLCKSZ * max_blocks);
     scratch_space = os_malloc(scratch_size);
-        
-    count = FileRead(log_file,LogBuffer.block, BLCKSZ);
-    if ( count == BLCKSZ ) {
-        if ( LogBuffer.LogHeader.header_magic != HEADER_MAGIC ) {
-            elog(FATAL,"vfd logfile is invalid");
-        }
-        log_count = LogBuffer.LogHeader.log_id;
-    } else {
-        log_count = 0;
-    }
     
     log_pos = 0;
-    
-    count = FileRead(index_file,IndexStore.data, BLCKSZ);
-    if ( count == BLCKSZ ) {
-        if ( IndexStore.header.index_magic != INDEX_MAGIC ) {
-            elog(FATAL,"vfd index logfile is invalid");
-        }
-    }   
  
     index_log = NULL;
     index_count = 0;
-
-    FileUnpin(log_file,0);
-    FileUnpin(index_file,0);
     
     return SM_SUCCESS;
 }
@@ -822,18 +802,26 @@ vfdreplaylogs() {
     int result = SM_SUCCESS;
     bool logged = false;
     
+      char* logfile_path = GetProperty("vfdlogfile");
+      
+      if ( logfile_path == NULL ) {
+        logfile_path = "pg_shadowlog";
+      }
+        
+        File logfile = _openlogfile(logfile_path,true);
+    
     vfd_log("--- Replaying VFD storage manager log ---");
    	 
-    if ( log_file < 0 ) {
+    if ( logfile < 0 ) {
         vfd_log("Log File not valid. exiting.");
         return SM_SUCCESS;
     }
-    FilePin(log_file,0);
-    end = FileSeek(log_file,0,SEEK_END);
-    FileSeek(log_file,0,SEEK_SET);
+    FilePin(logfile,0);
+    end = FileSeek(logfile,0,SEEK_END);
+    FileSeek(logfile,0,SEEK_SET);
     
     while (total < end) {
-        read = FileRead(log_file,LogBuffer.block,BLCKSZ);
+        read = FileRead(logfile,LogBuffer.block,BLCKSZ);
 
         if ( read != BLCKSZ ) {
             vfd_log("Log File not valid. exiting.");
@@ -860,7 +848,7 @@ vfdreplaylogs() {
             (LogBuffer.LogHeader.completed) ? "true":"false",LogBuffer.LogHeader.segments);   
 
         for ( count=0;count<LogBuffer.LogHeader.segments;count++) {
-            long add =  _vfdreplaysegment();
+            long add =  _vfdreplaysegment(logfile);
             if ( add < 0 ) {
                 vfd_log("exiting due to invalid segment");
                 result = SM_FAIL;
@@ -872,7 +860,9 @@ vfdreplaylogs() {
         logged = true; 
     }
     log_count = LogBuffer.LogHeader.log_id + 1;
-    FileUnpin(log_file,0);
+    FileUnpin(logfile,0);
+    FileClose(logfile);
+    
     if ( !logged ) _vfdreplayindexlog();
     
     return SM_SUCCESS;
@@ -880,9 +870,17 @@ vfdreplaylogs() {
 
 static int 
 _vfdreplayindexlog() {
+      char* index_path = GetProperty("vfdindexlog");
+
+      if ( index_path == NULL ) {
+        index_path = "pg_indexlog";
+      }  
+      
+      File indexfile = _openlogfile(index_path,true);
+        
     int x =0;
     long count = BLCKSZ;
-    FilePin(index_file,0);
+    FilePin(indexfile,0);
     while ( count == BLCKSZ ) {
         if ( IndexStore.header.index_magic != INDEX_MAGIC ) break;
 
@@ -891,20 +889,21 @@ _vfdreplayindexlog() {
             smgraddrecoveredpage(NameStr(data->dbname),data->dbid,data->relid,data->nblocks);
         }
 
-        count = FileRead(index_file,IndexStore.data,BLCKSZ);
+        count = FileRead(indexfile,IndexStore.data,BLCKSZ);
     }
-    FileUnpin(index_file,0);
+    FileUnpin(indexfile,0);
+    FileClose(indexfile);
 }
 
 static long
-_vfdreplaysegment() {
+_vfdreplaysegment(File logfile) {
         int count = 0;
         long ret = 0;
         long total = 0;
         File fd = -1;
         Oid crel = 0,cdb = 0;
     
-        ret = FileRead(log_file,SegmentStore.data,BLCKSZ);
+        ret = FileRead(logfile,SegmentStore.data,BLCKSZ);
         total += ret;
         if ( ret != BLCKSZ ) {
             return -1;
@@ -923,7 +922,7 @@ _vfdreplaysegment() {
             vfd_log("replay %s-%s relid:%d dbid:%d block:%d",NameStr(info->relname),
                 NameStr(info->dbname),info->relid,info->dbid,info->nblocks);
 
-            ret = FileRead(log_file,scratch_space,BLCKSZ);
+            ret = FileRead(logfile,scratch_space,BLCKSZ);
             
             if ( ret == BLCKSZ ) {
                 total += ret;

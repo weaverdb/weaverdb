@@ -72,7 +72,9 @@ RelationPutHeapTuple(Relation relation,
 
 	/* return an accurate tuple */
 	ItemPointerSet(&tuple->t_self, BufferGetBlockNumber(buffer), offnum);
+/*
         DeactivateFreespace(relation,BufferGetBlockNumber(buffer),PageGetFreeSpace(pageHeader));
+*/
 
 }
 

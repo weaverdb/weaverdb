@@ -328,7 +328,7 @@ InitPostgres(const char *dbname)
         smgrinit();
         RelationInitialize();		/* pre-allocated reldescs created here */
         DBWriterInit(-1,-1,-1,-1,-1);
-        DBCreateWriterThread();
+        DBCreateWriterThread(SYNC_MODE);
  	InitializeTransactionSystem();		/* pg_log,etc init/crash recovery here */
         InitFreespace();
 

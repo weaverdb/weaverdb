@@ -119,7 +119,7 @@ VariableRelationGetNextXid(void)
 	xid = var->nextXidData;
 	var->nextXidData += xid_prefetch;
 
-	FlushBuffer(VariableRelation,buf,TRUE);
+	FlushBuffer(VariableRelation,buf);
 	UnlockRelation(VariableRelation,AccessExclusiveLock);
 	RelationClose(VariableRelation);
 	return xid;
@@ -167,7 +167,7 @@ VariableRelationPutNextXid(TransactionId xid)
 
 	var->nextXidData = xid;
 
-	FlushBuffer(VariableRelation, buf, TRUE);
+	FlushBuffer(VariableRelation, buf);
 	UnlockRelation(VariableRelation,AccessExclusiveLock);
 	RelationClose(VariableRelation);
 }
@@ -221,11 +221,11 @@ VariableRelationGetNextOid(void)
 		if (OidIsValid(var->nextOid)) {
 			oid_ret = var->nextOid;
 			var->nextOid += oid_prefetch;
-			FlushBuffer(VariableRelation,buf,TRUE);
+			FlushBuffer(VariableRelation,buf);
 		} else {
 			oid_ret = BootstrapObjectIdData;
 			var->nextOid = BootstrapObjectIdData + oid_prefetch;
-			FlushBuffer(VariableRelation, buf,TRUE);
+			FlushBuffer(VariableRelation, buf);
 		}
 
 	UnlockRelation(VariableRelation,AccessExclusiveLock);
@@ -507,7 +507,7 @@ SetTransactionRecoveryCheckpoint(TransactionId recover)
 
 		
         LockBuffer((VariableRelation),header,BUFFER_LOCK_UNLOCK);
-	FlushBuffer(VariableRelation, header,true);
+	FlushBuffer(VariableRelation, header);
 	
 	RelationClose(VariableRelation);	
 }
@@ -554,7 +554,7 @@ SetTransactionLowWaterMark(TransactionId lowwater)
 		
 /*	UnlockRelation(VariableRelation,ExclusiveLock);    */
         LockBuffer((VariableRelation),header,BUFFER_LOCK_UNLOCK);
-	FlushBuffer(VariableRelation,header,true);
+	FlushBuffer(VariableRelation,header);
 	
 	RelationClose(VariableRelation);	
 /*	MasterUnLock();			*/
@@ -642,7 +642,7 @@ VacuumTransactionLog()
 		header->baseline = low;
 	}
 		
-        FlushBuffer(VariableRelation, first,true);
+        FlushBuffer(VariableRelation, first);
 
 	if ( base != 0 ) {                
 		zeroblock = ReadBuffer(LogRelation,0);
@@ -655,8 +655,8 @@ VacuumTransactionLog()
 			
 		memcpy(zb,bb,BLCKSZ);
 	
-		FlushBuffer(LogRelation, zeroblock, TRUE);    
-		FlushBuffer(LogRelation, newzero, TRUE);     
+		FlushBuffer(LogRelation, zeroblock);    
+		FlushBuffer(LogRelation, newzero);     
 		/*
 		i = FlushRelationBuffers(LogRelation,1);
 		if (i < 0)

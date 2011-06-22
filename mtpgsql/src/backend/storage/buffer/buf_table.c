@@ -136,6 +136,7 @@ BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block) {
 	 * buffer not initialized or has been removed from table already.
 	 * BM_DELETED keeps us from removing buffer twice.
 	 */
+        DTRACE_PROBE5(mtpg,buffer__replace,buf->blind.dbname,buf->blind.relname,buf->tag.blockNum,RelationGetRelationName(rel),block);
         pthread_mutex_lock(&(buf->cntx_lock.guard));
         
         Assert(!(buf->locflags & BM_VALID));

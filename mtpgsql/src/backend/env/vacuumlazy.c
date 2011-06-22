@@ -535,7 +535,7 @@ lazy_vacuum_rel(Relation onerel, bool scanonly, bool force_trim)
                             onerel->rd_id, GetDatabaseId(), true, (vacrelstats->rel_live_tuples * 0.01));
             }
 */
-            if (random < (MAX_RANDOM_VALUE * 0.25)) {
+            if (random < (MAX_RANDOM_VALUE * 0.20)) {
                     AddAnalyzeRequest(NameStr(onerel->rd_rel->relname), GetDatabaseName(), onerel->rd_id, GetDatabaseId());
             }
         }
@@ -1646,11 +1646,7 @@ lazy_truncate_heap(Relation onerel, LVRelStats * vacrelstats)
 	/*
 	 * We keep the exclusive lock until commit (perhaps not necessary)?
 	 */
-/*
-        for (i=new_rel_pages;i<old_rel_pages;i++) {
-            DeactivateFreespace(onerel,i,0);
-        }
-*/
+
 	vacuum_log(onerel, "Truncated %u --> %u pages.",
 	     old_rel_pages, onerel->rd_nblocks);
 	vacuum_log(onerel, "%s", vac_show_rusage(&ru0, rubuf));

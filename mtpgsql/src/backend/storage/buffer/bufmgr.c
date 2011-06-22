@@ -87,7 +87,7 @@ static void BufferReplaceMiss(Oid relid, Oid dbid, char* name);
 static void BufferPinInvalid(Buffer buf, Oid relid, Oid dbid, char* name);
 static void BufferPinMiss(Buffer buf, Oid relid, Oid dbid, char* name);
 
-static int DirectWriteBuffer(Relation rel, Buffer buffer, bool release);
+static int DirectWriteBuffer(Relation rel, Buffer buffer);
 static bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc* buffer);
 
 static bool InboundBufferIO(BufferDesc* header);
@@ -425,19 +425,19 @@ SyncRelation(Relation rel) {
 }
 
 int
-FlushBuffer(Relation rel, Buffer buffer, bool release) {
+FlushBuffer(Relation rel, Buffer buffer) {
 
     if (BufferIsLocal(buffer))
-        return FlushLocalBuffer(buffer, release) ? STATUS_OK : STATUS_ERROR;
+        return FlushLocalBuffer(buffer) ? STATUS_OK : STATUS_ERROR;
     
     if (BAD_BUFFER_ID(buffer))
         return STATUS_ERROR;
 
-    return DirectWriteBuffer(rel, buffer, release);
+    return DirectWriteBuffer(rel, buffer);
 }
 
 int
-DirectWriteBuffer(Relation rel, Buffer buffer, bool release) {
+DirectWriteBuffer(Relation rel, Buffer buffer) {
     BufferDesc *bufHdr;
     Oid			bufdb;
     Oid			relId;
@@ -469,7 +469,7 @@ we don't have to lock  */
          * other backend changes its contents while we write it;
          * see comments in BufferSync().
          */
-        iostatus = WriteBufferIO(bufHdr,true);
+        iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus ) {
             if ( rel->rd_rel->relkind != RELKIND_SPECIAL )  {
                 PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
@@ -488,9 +488,7 @@ we don't have to lock  */
             }
         }
         
-        if (release) {
-            UnpinBuffer(bufenv,bufHdr);
-        }
+        UnpinBuffer(bufenv,bufHdr);
         
         return ( status == SM_FAIL ) ? STATUS_ERROR : STATUS_OK;
 }
@@ -953,38 +951,48 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
                 pthread_cond_wait(&buf->cntx_lock.gate, &(buf->cntx_lock.guard));
                 buf->e_waiting--;
             }
-            buf->w_lock = true;
-            buf->e_lock = true;
-            buflock |= BL_W_LOCK;
+            buf->locflags |= BM_EXCLUSIVEMASK;
+            buflock |= (BL_W_LOCK);
             break;
+        case BUFFER_LOCK_FLUSHIO:
+/*  if the owner of this write lock is blocked and waiting for a
+ *  write so buffers can be freed then there is no danger of changing the 
+ *  buffer during a write.  if that is not the case just do what SHARE lock does
+ */
+            Assert((rel == NULL));
+            if ( (buf->locflags & BM_CRITICALMASK) == BM_CRITICALMASK )  {
+               locking_error = BL_NOLOCK;
+            } else {
+                (buf->r_locks)++;
+                buflock |= BL_R_LOCK;
+            }
+            break;            
         case BUFFER_LOCK_WRITEIO:
 /*  if the owner of this write lock is blocked and waiting for a
  *  write so buffers can be freed then there is no danger of changing the 
  *  buffer during a write.  if that is not the case just do what SHARE lock does
  */
             Assert((rel == NULL));
-            if ( buf->w_lock && IsWaitingForFlush(buf->w_owner) ) {
-               locking_error = BL_NOLOCK;
-            } else {
                 /* only wait for a write lock to finish, anything else would be problematic due to the test above  */
-                while( buf->w_lock ) {
-                    buf->r_waiting++;
-                    pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
-                    buf->r_waiting--;
-                }
-                (buf->r_locks)++;
-                buflock |= BL_R_LOCK;
+            while( (buf->locflags & BM_CRITICALMASK) == BM_CRITICALMASK )  {
+                buf->r_waiting++;
+                buf->locflags |= (BM_CRITICALWAITING);
+                pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
+                buf->locflags &= ~(BM_CRITICALWAITING);
+                buf->r_waiting--;
             }
+            (buf->r_locks)++;
+            buflock |= BL_R_LOCK;
             break;
         case BUFFER_LOCK_SHARE:
             /*  don't wait for e_waiting b/c it is useless unless pins wait for buf->e-waiting  */
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
-            while( buf->w_lock || buf->w_waiting > 0 ) {
+            while( (buf->locflags & BM_WRITELOCK) || buf->w_waiting > 0 ) {
                 buf->r_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->r_waiting--;
-                if ( !buf->w_lock ) break;
+                if ( !(buf->locflags & BM_WRITELOCK) ) break;
             }
             (buf->r_locks)++;
             buflock |= BL_R_LOCK;
@@ -992,15 +1000,28 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
         case BUFFER_LOCK_EXCLUSIVE:
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
-            while ( (buf->r_locks > 0) || buf->w_lock ) {
+            while ( (buf->r_locks > 0) || (buf->locflags & BM_WRITELOCK) ) {
                 buf->w_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->w_waiting--;
             }
             buf->w_owner = GetEnv()->eid;
-            buf->w_lock = true;
-            buflock |= BL_W_LOCK;
+            buf->locflags |= BM_CRITICALMASK;
+            buflock |= (BL_W_LOCK);
             break;
+        case BUFFER_LOCK_NOTCRITICAL:
+            Assert((BL_W_LOCK & buflock));
+            Assert((buf->w_owner == GetEnv()->eid));
+            buf->locflags &= ~(BM_CRITICAL);
+            if ( buf->locflags & BM_CRITICALWAITING ) {
+                pthread_cond_broadcast(&buf->cntx_lock.gate);
+            }
+            break;
+        case BUFFER_LOCK_CRITICAL:
+            Assert((BL_W_LOCK & buflock));
+            Assert((buf->w_owner == GetEnv()->eid));
+            buf->locflags |= (BM_CRITICAL);
+            break;                  
         default:
             elog(ERROR, "LockBuffer: unknown lock mode %d", mode);
     }
@@ -1025,15 +1046,14 @@ bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc * buf) {
             signal = true;
         }
     } else if (buflock & BL_W_LOCK) {
-        Assert(buf->w_lock);
-        if (buf->e_lock ) {
+        Assert(buf->locflags & BM_WRITELOCK);
+        if (buf->locflags & BM_EXCLUSIVE) {
             Assert(buf->pageaccess <= buf->e_waiting + 1);
         }
         signal = true;
-        buf->e_lock = false;
-        buf->w_lock = false;
         buf->w_owner = 0;
         buflock &= ~BL_W_LOCK;
+        buf->locflags &= BM_REMOVEWRITEMASK;
     }
 
     if ( signal ) {
@@ -1183,13 +1203,15 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 }
 
 IOStatus
-WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
+WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  */
     int dirty = 0;
     IOStatus  iostatus = BL_NOLOCK;
     
-    if ( 0 == LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_WRITEIO) ) {
-        iostatus = BL_R_LOCK;
-    } 
+    iostatus = LockBuffer(NULL,BufferDescriptorGetBuffer(buf),( mode == WRITE_COMMIT ) ?  BUFFER_LOCK_WRITEIO : BUFFER_LOCK_FLUSHIO);
+
+    if ( iostatus == BL_NOLOCK ) return iostatus;
+
+    iostatus = BL_R_LOCK;
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1207,21 +1229,25 @@ WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
     }
 
 /*  flushes are always dirty  */
-    if ( flush ) {
-        dirty = 1;
-/*  file will be flushed  */
-        buf->ioflags &= ~(BM_LOGGED);
-    } else {
-        if ( !IsMultiuser() ) {
-    /*  in single user mode, no logging is done  
-        check for dirty */
-            dirty = (buf->ioflags & BM_DIRTY);  
-            buf->ioflags &= ~(BM_DIRTY);
-        } else {
-            dirty = (buf->ioflags & BM_LOGGED);  
+    switch ( mode ) {
+        case WRITE_FLUSH:
+            dirty = 1;
+    /*  file will be flushed  */
+    /* can remove both flags b/c flushes only occur on Var and Log relations */
+            Assert(buf->kind == RELKIND_SPECIAL);
+            buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
+            break;
+        case WRITE_COMMIT:
+            dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
+            buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
+            break;
+        case WRITE_NORMAL:
+        default:
+            /* a write is warranted logged or dirty but only remove the logged flag 
+             * as we still need to log it if we are not in commit mode*/
+            dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
             buf->ioflags &= ~(BM_LOGGED);
         }
-    }
     
     if ( dirty ) {
  /*  logging is skipped in single user mode  */

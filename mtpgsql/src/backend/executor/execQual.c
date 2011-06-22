@@ -685,7 +685,7 @@ ExecMakeJavaFunctionResult(Java * node, Datum target, List * args, ExprContext *
 
 		ExecEvalJavaArgs(econtext, args, jargV);
 	}
-	return (Datum) fmgr_javaA(target, node->funcname,node->funcnargs,node->funcargtypes, jargV, isNull);
+	return fmgr_javaA(target, node->funcname,node->funcnargs,node->funcargtypes, jargV, isNull);
 }
 
 
@@ -866,7 +866,7 @@ ExecMakeFunctionResult(Node * node,
 				*isNull = true;
 
                 ExecEvalJavaArgs(econtext,arguments,args);
-		return (Datum) fmgr_javaA(PointerGetDatum(info),NULL,fcache->nargs,info->types, args, isNull);
+		return fmgr_javaA(PointerGetDatum(info),NULL,fcache->nargs,info->types, args, isNull);
         } else {
 		int             i;
 

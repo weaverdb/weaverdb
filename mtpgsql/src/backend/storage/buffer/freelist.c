@@ -35,7 +35,7 @@
 #else
 #include "storage/s_lock.h"
 #endif
-
+#include "env/connectionutil.h"
 #include "storage/bufmgr.h"
 
 
@@ -62,15 +62,15 @@ typedef struct flush_manager {
 } FlushManager;
 
 
-static FreeList MasterList;
+static FreeList* MasterList;
 
-static FreeList IndexList;
+static FreeList* IndexList;
 
 static FlushManager  FlushBlock;
 
-float     IndexBufferReserve = 0.25;
+static float     IndexBufferReserve = 0.0;
 static	 int 		split = 0;
-bool        lingeringbuffers = false;
+static bool        lingeringbuffers = false;
 
 static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf);
 
@@ -82,12 +82,12 @@ static bool InitiateFlush();
 static BufferDesc* GetHead(Relation rel) {
     BufferDesc*  head = NULL;
     
-    FreeList* which = ( rel->rd_rel->relkind == RELKIND_INDEX ) ? &IndexList : &MasterList;
+    FreeList* which = ( rel->rd_rel->relkind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
     
     pthread_mutex_lock(&which->guard);
     /*  need a valid buffer from the list */
     while ( which->head == INVALID_DESCRIPTOR  ) {
-        FreeList* oplist = ( which == &IndexList ) ? &MasterList : &IndexList;
+        FreeList* oplist = ( which == IndexList || IndexList == NULL ) ? MasterList : IndexList;
 
         pthread_mutex_unlock(&which->guard);
         pthread_mutex_lock(&oplist->guard);
@@ -131,8 +131,7 @@ static BufferDesc* GetHead(Relation rel) {
 }
 
 static void SetHead(BufferDesc* buf) {
-    BufferDesc*  head = NULL;
-    FreeList* which = ( buf->kind == RELKIND_INDEX ) ? &IndexList : &MasterList;
+    FreeList* which = ( buf->kind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
     pthread_mutex_lock(&which->guard);
     pthread_mutex_lock(&buf->cntx_lock.guard);
     /*  if the tail is invalid push the old head to the tail  */
@@ -153,7 +152,8 @@ static void SetHead(BufferDesc* buf) {
 static void SetTailBuffer(BufferDesc* buf) {
     BufferDesc*  tail = NULL;
     
-    FreeList* which = ( buf->kind == RELKIND_INDEX ) ? &IndexList : &MasterList;
+    DTRACE_PROBE3(mtpg,buffer__store,buf->blind.dbname,buf->blind.relname,buf->tag.blockNum);
+    FreeList* which = ( buf->kind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
     pthread_mutex_lock(&which->guard);
     
     /* must deal with special cases of when the head
@@ -231,12 +231,12 @@ static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf) {
                 bf->freeNext = next->freeNext;
                 next->freeNext = DETACHED_DESCRIPTOR;
                 next->locflags &= ~(BM_FREE);
-            } else if ( lingeringbuffers && next->used ) {
+            } else if ( lingeringbuffers && (next->locflags & BM_USED) ) {
                 bf->freeNext = next->freeNext;
                 next->freeNext = DETACHED_DESCRIPTOR;
          /*  we are in the freelist and going to be added back to the end  */
                 Assert(next->locflags & BM_FREE);
-                next->used = false;
+                next->locflags &= ~(BM_USED);
                 tail = true;
             } else {
                 leave = true;
@@ -272,7 +272,7 @@ int ManualPin(BufferDesc* buf, bool pageaccess) {
      *  valid check because the buffer could no longer be valid
      *  by the time the release gets to us.
      */
-    while ( pageaccess && buf->e_lock ) {
+    while ( pageaccess && (buf->locflags & BM_EXCLUSIVE) ) {
         buf->p_waiting++;
         pthread_cond_wait(&buf->cntx_lock.gate, &buf->cntx_lock.guard);
         buf->p_waiting--;
@@ -280,7 +280,7 @@ int ManualPin(BufferDesc* buf, bool pageaccess) {
     if ( buf->locflags & BM_VALID ) {
         if ( pageaccess ) buf->pageaccess++;
         if ( buf->refCount++ == 0 ) {
-            buf->used = true;
+            buf->locflags |= BM_USED;
         }
         if (buf->locflags & BM_FREE) {
             /*  pin just sets the ref count and if it happens to be in the free list
@@ -320,7 +320,7 @@ int ManualUnpin(BufferDesc* buf, bool pageaccess) {
         if ( buf->locflags & BM_FREE ) {
             DTRACE_PROBE1(mtpg, buffer__doublefree, buf->buf_id);
         } else {
-            buf->used = false;
+            buf->locflags &= ~(BM_USED);
             add = true;
             buf->locflags |= BM_FREE;
         }
@@ -339,7 +339,7 @@ void PutFreeBuffer(BufferDesc* bufHdr) {
     
     Assert((bufHdr->refCount == 1 && bufHdr->pageaccess == 1));
     if (!(bufHdr->locflags & BM_FREE)) {
-        bufHdr->used = false;
+        bufHdr->locflags &= ~(BM_USED);
         bufHdr->refCount = 0;
         bufHdr->pageaccess = 0;
         bufHdr->locflags |= BM_FREE;
@@ -377,14 +377,14 @@ BufferDesc * GetFreeBuffer(Relation rel) {
              * head->locflags &= ~(BM_FREE);
              * head->freeNext = DETACHED_DESCRIPTOR;
              */
-            head->used = false;
+            head->locflags &= ~(BM_USED);
             valid = false;
         } else if ( head->bias > 0 ) {
             /*  this one is baised to not be used unless
              * absolutely nessessary reduce bias and set tail to true
              * which adds it to the end of the list */
             head->bias -= 1;
-            head->used = false;
+            head->locflags &= ~(BM_USED);
             valid = false;
             if ( !(head->locflags & BM_FREE) ) {
                 head->locflags |= BM_FREE;
@@ -402,7 +402,7 @@ BufferDesc * GetFreeBuffer(Relation rel) {
             head->locflags &= ~(BM_VALID);
             head->refCount = 1;
             head->pageaccess = 1;
-            head->used = false;
+            head->locflags &= ~(BM_USED);
             valid = true;
         }
         pthread_mutex_unlock(&head->cntx_lock.guard);
@@ -412,7 +412,7 @@ BufferDesc * GetFreeBuffer(Relation rel) {
         }
  
     }
-    
+    DTRACE_PROBE3(mtpg,buffer__evict,head->blind.dbname,head->blind.relname,head->tag.blockNum);
     return head;
 }
 
@@ -428,23 +428,40 @@ void InitFreeList(bool init) {
     int count = 0;
     SharedFreeList = &(BufferDescriptors[Free_List_Descriptor]);
     
+    double reserve = ( PropertyIsValid("index_buffer_reserve") ) ?
+        GetFloatProperty("index_buffer_reserve")
+    :
+        IndexBufferReserve;
+    
+    lingeringbuffers = GetBoolProperty("lingering_buffers");
+    if ( !lingeringbuffers ) {
+        /* backward compatible */
+        lingeringbuffers = GetBoolProperty("lingeringbuffers");
+    }
+            
     if (init) {
-        split = NBuffers * IndexBufferReserve;
+        split = NBuffers * reserve;
         
         pthread_mutex_init(&FlushBlock.flush_gate, &process_mutex_attr);
         pthread_cond_init(&FlushBlock.flush_wait, &process_cond_attr);
         FlushBlock.flushing = false;
         memset(FlushBlock.waiting,0x00,sizeof(bool) * MAXBACKENDS);
         
-        pthread_mutex_init(&IndexList.guard, &process_mutex_attr);
-        IndexList.head = 0;
-        IndexList.tail = split - 1;
-        IndexList.last = 0;
+        if ( split != 0 ) {
+            IndexList = os_malloc(sizeof(FreeList));
+            pthread_mutex_init(&IndexList->guard, &process_mutex_attr);
+            IndexList->head = 0;
+            IndexList->tail = split - 1;
+            IndexList->last = 0;
+        } else {
+            IndexList = NULL;
+        }
         
-        pthread_mutex_init(&MasterList.guard, &process_mutex_attr);
-        MasterList.head = split;
-        MasterList.tail = NBuffers - 1;
-        MasterList.last = 0;
+        MasterList = os_malloc(sizeof(FreeList));
+        pthread_mutex_init(&MasterList->guard, &process_mutex_attr);
+        MasterList->head = split;
+        MasterList->tail = NBuffers - 1;
+        MasterList->last = 0;
         
         for (count=0;count<NBuffers;count++) {
             BufferDesc*  buf = &BufferDescriptors[count];

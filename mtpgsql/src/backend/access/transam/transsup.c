@@ -312,7 +312,7 @@ TransBlockNumberSetXidStatus(Relation relation,TransactionId xid,XidStatus xstat
 
 /*	LockBuffer((relation),buffer, BUFFER_LOCK_UNLOCK);       */
         if ( !IsMultiuser() ) {
-            FlushBuffer(relation,buffer,true);	
+            FlushBuffer(relation,buffer);	
         } else {
             WriteBuffer(relation,buffer);	
         }

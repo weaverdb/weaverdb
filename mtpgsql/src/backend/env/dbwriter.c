@@ -75,20 +75,6 @@ enum writerstates {
     DEAD
 };
 
-enum passtype {
-    HEAP_PASS,
-    INDEX_PASS,
-    NONINDEX_PASS,
-    ALL_PASS
-};
-
-typedef enum mode {
-    SYNC_MODE,
-    LOG_MODE
-} DBMode;
-
-typedef enum passtype PassType;
-
 typedef enum writerstates WriterState;
 
 typedef struct writegroups* WriteGroup;
@@ -117,7 +103,6 @@ struct writegroups {
     
     bool				isTransFriendly;
     bool				locked;
-    bool                                flush_run;
     /*  for convenience, cache these here  */
     Oid                                 LogId;
     Oid                                 VarId;
@@ -149,13 +134,19 @@ static HTAB*  				db_table;
 static MemoryContext                    db_cxt;
 static bool				db_inited = false;
 
-static  PathCache* GetPathCache(WriteGroup  cart, char *relname , char *dbname, Oid bufrel, Oid bufdb);
+static  PathCache* GetPathCache(HASHACTION mode, char *relname , char *dbname, Oid bufrel, Oid bufdb);
 static void CommitPackage(WriteGroup  cart);
 static int SignalDBWriter(WriteGroup  cart);
 static WriteGroup GetCurrentWriteGroup(bool forcommit);
 static int UnlockWriteGroup(WriteGroup  cart);
 static WriteGroup GetNextTarget(WriteGroup last);
 static void* DBWriter(void* arg);
+static void* SyncWriter(void *jones);
+
+static WriteGroup GetSyncGroup();
+static void ActivateSyncGroup();
+static void ReleaseSyncGroup();
+static void FlushWriteGroup(WriteGroup cart);
 
 static void DBTableInit();
 static void* DBAlloc(Size size, void* cxt);
@@ -174,8 +165,8 @@ static WriteGroup DestroyWriteGroup(WriteGroup w);
 
 static int LogTransactions(WriteGroup cart);
 static int ClearLogs(WriteGroup list);
-static int LogBuffers(WriteGroup list, PassType type);
-static int SyncBuffers(WriteGroup list);
+static int LogBuffers(WriteGroup list);
+static int SyncBuffers(WriteGroup list, bool forcommit);
 static void ResetWriteGroup(WriteGroup cart);
 static int ForgetPathCache(Oid relid, Oid dbid);
 
@@ -191,7 +182,7 @@ static int      BufferFlushCount;
 
 static WriteGroup log_group;
 static WriteGroup sync_group;   /*  a holder for buffers that need to be synced */
-int    sync_buffers = 0;
+int    sync_buffers = 0; 
 
 static int      groupcount;
 
@@ -219,11 +210,6 @@ static double   hgc_update = 1;
 
 static pthread_t *writerid;
 static int      writercount = 0;
-
-extern SLock   *SLockArray;
-extern pthread_t lockowner;
-
-
 
 /*
  * This thread writes out all buffers at transaction commit time Only one
@@ -275,7 +261,6 @@ void DBWriterInit(int maxcount, int to, int thres, int update, int factor) {
     log_group->next->next = log_group;
 
     sync_group = CreateWriteGroup(maxtrans, NBuffers);
-    sync_buffers = 0;
 
     DBTableInit();
 
@@ -395,18 +380,97 @@ WriteGroup DestroyWriteGroup(WriteGroup w) {
 }
 
 
-void DBCreateWriterThread() {
-    writerid = os_realloc(writerid, sizeof(pthread_t) * (writercount + 1));
-    if (pthread_create(&writerid[writercount++], &writerprops, DBWriter, NULL) != 0) {
-        elog(FATAL, "[DBWriter]could not create db writer\n");
+void DBCreateWriterThread(DBMode mode) {
+    switch ( mode ) {
+        case LOG_MODE:
+            writerid = os_realloc(writerid, sizeof(pthread_t) * (writercount + 1));
+            if (pthread_create(&writerid[writercount++], &writerprops, SyncWriter, NULL) != 0) {
+                elog(FATAL, "[DBWriter]could not create sync writer\n");
+            }  
+            /*  fall through so that both threads are created */
+        case SYNC_MODE: 
+            writerid = os_realloc(writerid, sizeof(pthread_t) * (writercount + 1));
+            if (pthread_create(&writerid[writercount++], &writerprops, DBWriter, NULL) != 0) {
+                elog(FATAL, "[DBWriter]could not create db writer\n");
+            }  
+            break;
     }
+    logging = (mode == LOG_MODE);
+}
+
+void* SyncWriter(void *jones) {    
+    while (!stopped) { 
+        int releases = 0;
+        
+        pthread_mutex_lock(&sync_group->checkpoint);
+        while ( sync_group->currstate != WAITING && sync_group->currstate != DEAD ) {
+            pthread_cond_wait(&sync_group->broadcaster,&sync_group->checkpoint);
+            if ( stopped ) break;
+        }
+        sync_group->currstate = FLUSHING;
+        pthread_mutex_unlock(&sync_group->checkpoint);
+        
+        if ( !stopped ) {
+            releases = SyncBuffers(sync_group,false);
+        }
+        
+        pthread_mutex_lock(&sync_group->checkpoint);
+        sync_group->currstate = NOT_READY;
+        pthread_cond_signal(&sync_group->broadcaster);
+        pthread_mutex_unlock(&sync_group->checkpoint);
+    }
+    
+    return NULL;
+}
+
+WriteGroup GetSyncGroup() {
+    pthread_mutex_lock(&sync_group->checkpoint);
+    while ( sync_group->currstate == FLUSHING || sync_group->currstate == COMPLETED ) {
+        sync_group->currstate = COMPLETED;
+        pthread_cond_wait(&sync_group->broadcaster,&sync_group->checkpoint);
+    }
+    sync_group->currstate = NOT_READY;
+    pthread_mutex_unlock(&sync_group->checkpoint);
+    return sync_group;
+}
+
+void ActivateSyncGroup() {
+    pthread_mutex_lock(&sync_group->checkpoint);
+    sync_group->currstate = WAITING;
+    pthread_cond_signal(&sync_group->broadcaster);
+    pthread_mutex_unlock(&sync_group->checkpoint);
+}
+
+void ReleaseSyncGroup() {
+    pthread_mutex_lock(&sync_group->checkpoint);
+    sync_group->currstate = READY;
+    pthread_cond_signal(&sync_group->broadcaster);
+    pthread_mutex_unlock(&sync_group->checkpoint);
+}
+
+void FlushWriteGroup(WriteGroup cart) {
+    int release = 0;
+    
+        WriteGroup sync = GetSyncGroup();
+        MergeWriteGroups(sync,cart);
+        pthread_mutex_unlock(&cart->checkpoint);
+        sync->currstate = FLUSHING;
+        release = SyncBuffers(sync,true);
+        sync->currstate = NOT_READY;
+        CommitPackage(sync);
+        if ( logging ) ClearLogs(sync);
+        elog(DEBUG,"flushed out %d buffers",release);
+        sync_buffers = MergeWriteGroups(cart,sync);
+        if ( sync_buffers ) ActivateSyncGroup();
+        pthread_mutex_lock(&cart->checkpoint);
+        cart->currstate = READY;
+        pthread_cond_broadcast(&cart->broadcaster);
 }
 
 void* DBWriter(void *jones) {
     char            dbuser[255];
     WriteGroup     cart = NULL;
     Env            *env = CreateEnv(NULL);
-    DBMode           wm = LOG_MODE;           
     
     SetEnv(env);
     env->Mode = InitProcessing;
@@ -419,7 +483,7 @@ void* DBWriter(void *jones) {
     }
     
     InitThread(DBWRITER_THREAD);
-    
+        
     RelationInitialize();
     
     while ( !CallableInitInvalidationState() ) { elog(NOTICE,"cannot create dbwriter's shared state"); };
@@ -430,7 +494,7 @@ void* DBWriter(void *jones) {
     
     MemoryContextSwitchTo(MemoryContextGetTopContext());
     
-    cart = ( wm == LOG_MODE ) ? log_group : sync_group;
+    cart = log_group;
     
     while (!stopped) {
         int     releasecount = 0;
@@ -441,6 +505,10 @@ void* DBWriter(void *jones) {
         }
         
         while ( CheckWriteGroupState(cart, (sync_buffers > 0)) ) {
+            if ( cart->currstate == FLUSHING ) {
+                FlushWriteGroup(cart);
+            }
+            if ( stopped ) break;
             /*  wait to see if we are ready to go  */
         }
         
@@ -453,24 +521,23 @@ void* DBWriter(void *jones) {
         cart->currstate = RUNNING;
         
         UnlockWriteGroup(cart);
-        
+             
         releasecount = LogWriteGroup(cart);
-        
-        if ( GetProcessingMode() == NormalProcessing && !cart->flush_run && cart->loggable && (sync_buffers < max_logcount) && !primed ) {
+                       
+        if ( GetProcessingMode() == NormalProcessing && cart->loggable && (sync_buffers < max_logcount) && !primed ) {
             /*  move buffer syncs to the sync cart */
-            sync_buffers += MergeWriteGroups(sync_group, cart);
+            sync_buffers += MergeWriteGroups(GetSyncGroup(), cart);
+            ActivateSyncGroup();
         } else {
             /* transfer any saved writes back to the current cart and sync all buffers */
-            if ( sync_buffers > 0 ) {
-                MergeWriteGroups(cart, sync_group);
-                ResetWriteGroup(sync_group);
-                sync_buffers = 0;
-            }
+            WriteGroup sync = GetSyncGroup();
+            MergeWriteGroups(cart, sync);
+            ResetWriteGroup(sync);
+            sync_buffers = 0;
             releasecount += SyncWriteGroup(cart);
         }
                 
         FinishWriteGroup(cart);
-        
         /* no invalids generated by DBWriter mean anything  */
         DiscardInvalid();
 
@@ -479,16 +546,17 @@ void* DBWriter(void *jones) {
     
     UnlockWriteGroup(cart);
     
-    if ( sync_buffers > 0 ) {
-        MergeWriteGroups(cart, sync_group);
-        ResetWriteGroup(sync_group);
-        sync_buffers = 0;
-    }
+    MergeWriteGroups(cart, GetSyncGroup());
     
+    cart = CleanupWriteGroup(cart);
     CleanupWriteGroup(cart);
-    CommitPackage(cart);
-    CleanupWriteGroup(cart->next);
-    CommitPackage(cart->next);    
+
+    cart = GetSyncGroup();
+    pthread_mutex_lock(&cart->checkpoint);
+    cart->currstate = DEAD;
+    pthread_cond_signal(&cart->broadcaster);
+    pthread_mutex_unlock(&cart->checkpoint);
+    
     /* all done cleaning, we should have no valid threads or write groups  */
     CallableCleanupInvalidationState();
     RelationCacheShutdown();
@@ -523,7 +591,7 @@ WriteGroup CleanupWriteGroup(WriteGroup cart) {
 
 bool CheckWriteGroupState(WriteGroup cart, bool timed) {
     int             timerr;
-    
+                
     switch (cart->currstate) {
         case COMPLETED:
             cart->currstate = NOT_READY;
@@ -573,6 +641,9 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
                 cart->currstate = WAITING;
                 timerr = pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
                 if (timerr == ETIMEDOUT) {
+                    if ( cart->currstate == FLUSHING ) {
+                        return true;
+                    }
                     if ( timeout > sync_timeout ) cart->currstate = PRIMED;
                     else cart->currstate = READY;
                     return false;
@@ -611,8 +682,6 @@ int LogWriteGroup(WriteGroup cart) {
     int releasecount = 0;
     int trans_logged = 0;
     int x=0;
-    
-    if ( logging ) {
         /*  insert the buffers in the shadow log
          * and log the transaction state, then release
          * waiters
@@ -621,32 +690,31 @@ int LogWriteGroup(WriteGroup cart) {
         releasecount += LogBuffers(cart, NONINDEX_PASS);
  *      releasecount = LogBuffers(cart, INDEX_PASS);
 */
-        releasecount = LogBuffers(cart,ALL_PASS);
+    releasecount = LogBuffers(cart);
 
-        if ( cart->dotransaction ) {
-            trans_logged = LogTransactions(cart);
-        }
-        
-        for (x=0;x<cart->numberOfTrans;x++) {
-            if ( cart->WaitingThreads[x] && !cart->wait_for_sync[x] ) {
-                ResetThreadState(cart->WaitingThreads[x]);
-                cart->WaitingThreads[x] = NULL;
-            }
-        }
-        
-        pthread_mutex_lock(&cart->checkpoint);
-        cart->currstate = LOGGED;
-        cart->dotransaction = false;
-        pthread_cond_broadcast(&cart->broadcaster);
-        pthread_mutex_unlock(&cart->checkpoint);
+    if ( cart->dotransaction ) {
+        trans_logged = LogTransactions(cart);
     }
+
+    for (x=0;x<cart->numberOfTrans;x++) {
+        if ( cart->WaitingThreads[x] && !cart->wait_for_sync[x] ) {
+            ResetThreadState(cart->WaitingThreads[x]);
+            cart->WaitingThreads[x] = NULL;
+        }
+    }
+
+    pthread_mutex_lock(&cart->checkpoint);
+    cart->currstate = LOGGED;
+    cart->dotransaction = false;
+    pthread_cond_broadcast(&cart->broadcaster);
+    pthread_mutex_unlock(&cart->checkpoint);
     
     return releasecount;
 }
 
 int SyncWriteGroup(WriteGroup cart) {
     /*  syncing the buffers */
-    int releases = SyncBuffers(cart);
+    int releases = SyncBuffers(cart,true);
     int trans_logged = 0;
     int x=0;
     
@@ -681,7 +749,6 @@ int FinishWriteGroup(WriteGroup cart) {
     
     pthread_mutex_lock(&cart->checkpoint);
     cart->currstate = COMPLETED;
-    cart->flush_run = false;
     pthread_cond_broadcast(&cart->broadcaster);
     pthread_mutex_unlock(&cart->checkpoint);
     
@@ -710,8 +777,7 @@ void ResetWriteGroup(WriteGroup cart) {
     cart->dotransaction = true;
 
     cart->isTransFriendly = true;
-    cart->flush_run = false;
-    cart->loggable = true;
+    cart->loggable = logging;
     
     cart->snapshot = NULL;
 }
@@ -750,6 +816,9 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
                     src->descriptions[i].blockNum);
         } else {
             target->release[i] += src->release[i];
+            src->release[i] = 0;
+            memset(&src->descriptions[i],0x00,sizeof(BufferTag));
+            src->buffers[i] = false;
         }
     }
     pthread_mutex_unlock(&target->checkpoint);
@@ -781,7 +850,7 @@ int LogTransactions(WriteGroup cart) {
         
         if (buffer == InvalidBuffer || localblock != BufferGetBlockNumber(buffer)) {
             if (buffer != InvalidBuffer) {
-                FlushBuffer(LogRelation,buffer,true);
+                FlushBuffer(LogRelation,buffer);
             }
             buffer = ReadBuffer(LogRelation, localblock);
             if (!BufferIsValid(buffer))
@@ -797,7 +866,7 @@ int LogTransactions(WriteGroup cart) {
         TransBlockSetXidStatus(block, cart->transactions[i], cart->transactionState[i]);
     }
     
-    FlushBuffer(LogRelation,buffer,true);
+    FlushBuffer(LogRelation,buffer);
     RelationClose(LogRelation);
     
     DTRACE_PROBE1(mtpg, dbwriter__logged, i);
@@ -944,10 +1013,10 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
     LocalBufferSync();
 }
 
-int LogBuffers(WriteGroup list, PassType type) {
+int LogBuffers(WriteGroup list) {
     int             i;
     BufferDesc     *bufHdr;
-    int             releasecount = 0;
+    int             releasecount = 0, freecount = 0;
     int             buffer_hits = 0;
     IOStatus        iostatus;
 
@@ -971,14 +1040,6 @@ int LogBuffers(WriteGroup list, PassType type) {
                  */
                 continue;
             }
-            
-            if ( type == NONINDEX_PASS ) {
-                if ( bufHdr->kind == RELKIND_INDEX ) continue;
-            } else if ( type == INDEX_PASS ) {
-                if ( bufHdr->kind != RELKIND_INDEX ) continue;
-            } else if ( type == HEAP_PASS ) {
-                if ( bufHdr->kind != RELKIND_RELATION ) continue;
-            }
 
             iostatus = LogBufferIO(bufHdr);
             if ( iostatus ) {
@@ -999,22 +1060,7 @@ int LogBuffers(WriteGroup list, PassType type) {
                 } else {
                     TerminateBufferIO(iostatus,bufHdr);
                 }
-            } else {
-                /*
-                 * buffer has already be written out
-                 * go ahead and forget about writing out again
-                 * and make sure to release the buffer because it
-                 * won't be transfered to the sync_group
-                 */
-#ifdef DEBUGBUILD
-                list->buffers[i] = false;
-                while (list->release[i] > 0) {
-                    ManualUnpin(bufHdr, false);
-                    list->release[i]--;
-                    releasecount++;
-                }
-#endif
-            }
+            } 
         } else {
             iostatus = LogBufferIO(bufHdr);
             
@@ -1029,13 +1075,22 @@ int LogBuffers(WriteGroup list, PassType type) {
                         list->descriptions[i].relId.relId,
                         bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus,bufHdr);
+            } else {
+                list->buffers[i] = false;
+                while (list->release[i] > 0) {
+                    if ( ManualUnpin(bufHdr, false)) {
+                        freecount++;
+                    }
+                    list->release[i]--;
+                    releasecount++;
+                }
             }
         }
     }
     
     smgrcommitlog();
     
-    DTRACE_PROBE2(mtpg, dbwriter__loggedbuffers, buffer_hits, releasecount);
+    DTRACE_PROBE3(mtpg, dbwriter__loggedbuffers, buffer_hits, releasecount, freecount);
     return releasecount;
 }
 
@@ -1048,13 +1103,14 @@ int ClearLogs(WriteGroup list) {
     }
 }
 
-int SyncBuffers(WriteGroup list) {
+int SyncBuffers(WriteGroup list,bool forcommit) {
     int             i;
     BufferDesc     *bufHdr;
-    int             releasecount = 0;
+    int             releasecount = 0,freecount = 0;
     int buffer_hits = 0;
     IOStatus        iostatus;
     int status = STATUS_OK;
+    int iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_COMMIT;
 
 
     for (i = 0, bufHdr = BufferDescriptors; i < NBuffers; i++, bufHdr++) {
@@ -1062,8 +1118,20 @@ int SyncBuffers(WriteGroup list) {
         if (!list->buffers[i])
             continue;
         
+        if ( !forcommit ) {
+            bool   exit = false;
+            pthread_mutex_lock(&list->checkpoint);
+            exit = (list->currstate == COMPLETED);
+            iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_COMMIT; /* just in case, piggyback on this mutex */
+            pthread_mutex_unlock(&list->checkpoint);
+            if ( exit ) break;
+        }
+        
         /* no need to lock mutex, buffer is referenced by sync grp */
-        if ( CheckBufferId(bufHdr, bufHdr->tag.blockNum, bufHdr->tag.relId.relId, bufHdr->tag.relId.dbId) ) {
+        if ( CheckBufferId(bufHdr, 
+                list->descriptions[i].blockNum, 
+                list->descriptions[i].relId.relId, 
+                list->descriptions[i].relId.dbId) ) {
             /*
              * skip over any log relation
              * buffer
@@ -1077,8 +1145,8 @@ int SyncBuffers(WriteGroup list) {
                  * a reference to the buffer though actually write to
                  * disk of the sync group
                  */
-
-                iostatus = WriteBufferIO(bufHdr, true);
+                if ( !forcommit ) continue;
+                iostatus = WriteBufferIO(bufHdr, WRITE_FLUSH);
                 if (iostatus) {
                     Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
                     
@@ -1098,7 +1166,9 @@ int SyncBuffers(WriteGroup list) {
             } else {
                 PathCache*   cache = NULL;
 
-                cache = GetPathCache(list, bufHdr->blind.relname, bufHdr->blind.dbname, bufHdr->tag.relId.relId, bufHdr->tag.relId.dbId);
+                cache = GetPathCache((forcommit) ?  HASH_ENTER : HASH_FIND, bufHdr->blind.relname, bufHdr->blind.dbname, bufHdr->tag.relId.relId, bufHdr->tag.relId.dbId);
+                if ( !cache ) continue;
+                
                 if (cache->keepstats && cache->tolerance > 0.0) {
                     /*
                      * use the release count as
@@ -1109,8 +1179,9 @@ int SyncBuffers(WriteGroup list) {
                     cache->accesses += ((list->release[i] * cache->tolerance) * (hgc_update / hgc_factor));
                 }
 
-                iostatus = WriteBufferIO(bufHdr, false);
+                iostatus = WriteBufferIO(bufHdr, iomode);
                 if ( iostatus ) {
+                    if ( iostatus == BL_NOLOCK ) continue;
                     
                     buffer_hits++;
                     cache->commit = true;
@@ -1138,10 +1209,10 @@ int SyncBuffers(WriteGroup list) {
                     } else {
                         TerminateBufferIO(iostatus, bufHdr);
                     }
-                }
+                } 
             }
         } else {
-            iostatus = WriteBufferIO(bufHdr, true);
+            iostatus = WriteBufferIO(bufHdr, WRITE_FLUSH);
             if (iostatus) {
                 elog(NOTICE, "already out dbid:%d relid:%d blk:%d\n",
                         list->descriptions[i].relId.dbId,
@@ -1154,82 +1225,43 @@ int SyncBuffers(WriteGroup list) {
         }
         
         while(list->release[i] > 0) {
-            ManualUnpin(bufHdr, false);
+            if ( ManualUnpin(bufHdr, false) ) {
+                freecount++;
+            }
             list->release[i]--;
             releasecount++;
         }
+        list->buffers[i] = false;
     }
     
-    DTRACE_PROBE2(mtpg, dbwriter__syncedbuffers, buffer_hits, releasecount);
-    return releasecount;
+    DTRACE_PROBE4(mtpg, dbwriter__syncedbuffers, buffer_hits, releasecount, freecount, forcommit);
+    return freecount;
 }
 
 void FlushAllDirtyBuffers() {
-    WriteGroup     cart = NULL;
-    int             releasecount = 0;
-    
+    WriteGroup          cart =  GetCurrentWriteGroup(false);
+    int                 releasecount = 0;
+        
     if (IsDBWriter()) {
-        cart = log_group;
-        while ( cart->currstate != RUNNING && cart->currstate != LOGGED ) cart = cart->next;
-        
-        while ( releasecount == 0 ) {
-            int possible = sync_buffers;
-            WriterState  cstate;
-            pthread_mutex_lock(&cart->checkpoint);
-            cstate = cart->currstate;
-            cart->currstate = FLUSHING;
-            pthread_mutex_unlock(&cart->checkpoint);
-            
-            MergeWriteGroups(cart, sync_group);
-            ResetWriteGroup(sync_group);
-            sync_buffers = 0;
-            
-            if ( logging && cstate != RUNNING && cstate != LOGGED ) {
-/*
-                LogBuffers(cart, INDEX_PASS);
-                LogBuffers(cart, NONINDEX_PASS);
-*/
-                LogBuffers(cart,ALL_PASS);
-            }
-            releasecount = SyncBuffers(cart);
-            if ( logging ) {
-                ClearLogs(cart);
-            }
-            /*  clear the buffer information
-             * manually, transaction info needs to be kept.
-             */
-            /*
-             * releasecount = ReleaseBuffers(cart);
-             */
-            pthread_mutex_lock(&cart->checkpoint);
-            memset(cart->buffers, 0, sizeof(bool) * NBuffers);
-            memset(cart->release, 0, sizeof(int) * NBuffers);
-            memset(cart->descriptions, 0, sizeof(BufferTag) * NBuffers);
-            cart->currstate = cstate;
-            pthread_mutex_unlock(&cart->checkpoint);
-            
-            cart = cart->next;
-            DTRACE_PROBE2(mtpg, dbwriter__circularflush, possible, releasecount);
-        }
-    } else {
-        cart = GetCurrentWriteGroup(false);
-        
-        cart->flush_run = true;
-        cart->isTransFriendly = false;
+        while ( cart->currstate != RUNNING && cart->currstate != FLUSHING ) cart = cart->next;
+        FlushWriteGroup(cart);
+        DTRACE_PROBE2(mtpg, dbwriter__circularflush, sync_buffers, releasecount);
+    } else {        
         SignalDBWriter(cart);
+        cart->currstate = FLUSHING;
         
-        while ( cart->flush_run ) {
+        while ( cart->currstate == FLUSHING ) {
             if (pthread_cond_wait(&cart->broadcaster, &cart->checkpoint)) {
                 UnlockWriteGroup(cart);
                 elog(FATAL, "[DBWriter] cannot attach to db write thread");
             }
         }
-        
-        UnlockWriteGroup(cart);
     }
+    
+    UnlockWriteGroup(cart);
 }
 
-static PathCache* GetPathCache(WriteGroup  cart, char *relname, char *dbname, Oid bufrel, Oid bufdb) {
+static PathCache* GetPathCache(HASHACTION  mode, char *relname, char *dbname, Oid bufrel, Oid bufdb) {
     PathCache*       target = NULL;
     DBKey           key;
     bool            found;
@@ -1237,7 +1269,9 @@ static PathCache* GetPathCache(WriteGroup  cart, char *relname, char *dbname, Oi
     key.relid = bufrel;
     key.dbid = bufdb;
     
-    target = hash_search(db_table, &key, HASH_ENTER, &found);
+    target = hash_search(db_table, &key, mode, &found);
+
+    if ( target == NULL ) return NULL;
     
     if (!found) {
         target->accesses = 0;
@@ -1361,6 +1395,8 @@ int SignalDBWriter(WriteGroup  cart) {
             break;
         case (PRIMED):
             break;
+        case (FLUSHING):          
+            break;
         default:
             elog(FATAL, "DBWriter in the wrong state");
             break;
@@ -1378,8 +1414,7 @@ WriteGroup GetCurrentWriteGroup(bool forcommit) {
                 cart->currstate == LOGGED ||
                 cart->currstate == SYNCED ||
                 cart->currstate == COMPLETED ||
-                cart->currstate == DEAD ||
-                cart->currstate == FLUSHING 
+                cart->currstate == DEAD 
             ) ||
             ( forcommit && cart->numberOfTrans == maxtrans )
           ) {
@@ -1499,7 +1534,6 @@ static int TakeFileSystemSnapshot(char* sys) {
 
 char* RequestSnapshot(char* cmd) {
     WriteGroup     cart = GetCurrentWriteGroup(false);
-    int             position = 0;
     
     if (cart->currstate == RUNNING) {
         UnlockWriteGroup(cart);

@@ -413,9 +413,10 @@ _bt_insertonpg(Relation rel,
 			 * current page; else someone else's _bt_check_unique scan
 			 * could fail to see our insertion.
 			 */
+                        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 			rbuf = _bt_getbuf(rel, rblkno, BT_WRITE);
 
-			_bt_relbuf(rel, buf);
+                        _bt_relbuf(rel, buf);
 			buf = rbuf;
 			page = BufferGetPage(buf);
 			lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
@@ -549,7 +550,9 @@ _bt_insertonpg(Relation rel,
 			 */
 			ItemPointerSet(&(stack->bts_btitem.bti_itup.t_tid),
 						   bknum, P_HIKEY);
-
+                        
+                        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
+                        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 			pbuf = _bt_getstackbuf(rel, stack, BT_WRITE);
 
 			/* Now we can write and unlock the children */
@@ -635,6 +638,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	OffsetNumber i;
 	BTItem		lhikey;
 
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 	rbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
 
 	origpage = BufferGetPage(buf);
@@ -807,7 +811,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * page always be clean, and the most efficient way to guarantee this
 	 * is just to compact the data by reinserting it into a new left page.
 	 */
-
+        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
 	PageRestoreTempPage(leftpage, origpage);
 
 	/* write and release the old right sibling */
@@ -1139,12 +1143,18 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	BTMetaPageData *metad;
 
 	/* get a new root page */
-	rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
- 
+        LockBuffer(rel,lbuf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
+        
+        rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
+        
 	rootpage = BufferGetPage(rootbuf);
 	rootblknum = BufferGetBlockNumber(rootbuf);
 	metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
-	
+        
+        LockBuffer(rel,lbuf,BUFFER_LOCK_CRITICAL);
+        LockBuffer(rel,rbuf,BUFFER_LOCK_CRITICAL);
+        
 	metapg = BufferGetPage(metabuf);
 	metad = BTPageGetMeta(metapg);
 
