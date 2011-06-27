@@ -2,8 +2,6 @@ package driver.weaver;
 
 import java.util.*;
 import java.io.*;
-import java.lang.reflect.*;
-import java.nio.channels.*;
 
 import java.sql.SQLException;
 

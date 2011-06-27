@@ -31,7 +31,7 @@
 #include "driver_weaver_WeaverInitializer.h"
 #include "driver_weaver_BaseWeaverConnection.h"
 
-#define BINDNULL	driver_weaver_BaseWeaverConnection_bindNull
+#define BINDNULL  driver_weaver_BaseWeaverConnection_bindNull
 #define BINDINTEGER  driver_weaver_BaseWeaverConnection_bindInteger
 #define BINDSTRING  driver_weaver_BaseWeaverConnection_bindString
 #define BINDDOUBLE  driver_weaver_BaseWeaverConnection_bindDouble
@@ -46,8 +46,8 @@
 #define BINDSLOT driver_weaver_BaseWeaverConnection_bindSlot
 #define BINDJAVA  driver_weaver_BaseWeaverConnection_bindJava
 #define BINDTEXT  driver_weaver_BaseWeaverConnection_bindText
-#define BINDSTREAM driver_weaver_BaseWeaverConnection_bindStream
-#define BINDDIRECT driver_weaver_BaseWeaverConnection_bindDirect
+#define BINDSTREAM  driver_weaver_BaseWeaverConnection_bindStream
+#define BINDDIRECT  driver_weaver_BaseWeaverConnection_bindDirect
 
 JavaVM*   jvm;
 
@@ -103,7 +103,10 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
             (*env)->GetStringUTFRegion(env,jd,0,len,datapass);
         }
 
-	initweaverbackend(datapass);
+	if ( !initweaverbackend(datapass) ) {
+            (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment not valid, see db log");
+            return;
+        }
         Cache = CreateCache(env);
 		
 	(*env)->GetJavaVM(env,&jvm);

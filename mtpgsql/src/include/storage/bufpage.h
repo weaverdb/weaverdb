@@ -322,5 +322,6 @@ PG_EXTERN void PageIndexTupleDelete(Page page, OffsetNumber offset);
 PG_EXTERN crc64 PageInsertChecksum(Page page);
 PG_EXTERN crc64 PageInsertInvalidChecksum(Page page);
 PG_EXTERN bool PageConfirmChecksum(Page page);
+PG_EXTERN bool DisableCRC(bool enable);
 
 #endif	 /* BUFPAGE_H */

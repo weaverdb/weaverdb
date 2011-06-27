@@ -194,7 +194,7 @@ static pthread_attr_t writerprops;
 static bool     logging = false;
 static bool     stopped = false;
 
-static int      timeout = 400;
+static int      wait_timeout = 400;
 static int      sync_timeout = 5000;
 static int      max_logcount = (512);
 
@@ -220,23 +220,39 @@ static int      writercount = 0;
  * for the preceeding write group to finish  MKS - 11/3/2000
  */
 
-void DBWriterInit(int maxcount, int to, int thres, int update, int factor) {
+void DBWriterInit() {
     struct sched_param sched;
     stopped = false;
     int             sched_policy;
     maxtrans = MAXTRANS;
-    if (maxcount > 0 && maxcount < (32 * 1024) /* don't be stupid check */)
-        maxtrans = maxcount;
-    if (to > 0)
-        timeout = to;
-    if (thres > 0)
-        hgc_threshold = (double) thres;
-    if (update > 0)
-        hgc_update = (double) update;
-    if (factor > 0)
-        hgc_factor = (double) factor;
     
-    elog(DEBUG, "[DBWriter]waiting time %li", timeout);
+    if ( PropertyIsValid("maxgrouptrans") ) {
+        int check = GetIntProperty("maxgrouptrans");
+        if ( check > 0 && check < (32 * 1024) ) {
+            maxtrans = check;
+        }
+    }
+    if ( PropertyIsValid("waittime") ) {
+        wait_timeout = GetIntProperty("waittime");
+    }
+    if ( PropertyIsValid("synctimeout") ) {
+        sync_timeout = GetIntProperty("synctimeout");
+        if ( sync_timeout < 0 ) sync_timeout = 5000;
+    }    
+    if ( PropertyIsValid("gcthreshold") ) {
+        hgc_threshold = GetFloatProperty("gcthreshold");
+    }
+    if ( PropertyIsValid("gcsizefactor") ) {
+        hgc_factor = GetFloatProperty("gcsizefactor");
+    }
+     if ( PropertyIsValid("gcupdatefactor") ) {
+        hgc_update = GetFloatProperty("gcupdatefactor");
+    }
+    
+    elog(DEBUG, "[DBWriter]waiting time %li", wait_timeout);
+    elog(DEBUG, "[DBWriter]sync timeout %li", sync_timeout);
+    elog(DEBUG, "[DBWriter]default commit type %d", GetTransactionCommitType());
+    elog(DEBUG, "[DBWriter]maximum numbers of transactions %d", maxtrans);
     memset(&writerprops, 0, sizeof(pthread_attr_t));
     memset(&sched, 0, sizeof(struct sched_param));
     /* init thread attributes  */
@@ -269,23 +285,15 @@ void DBWriterInit(int maxcount, int to, int thres, int update, int factor) {
         /* no logging so make sure everyone waits for sync */
         SetTransactionCommitType(SYNCED_COMMIT);
     } else {
-        char*  sto = GetProperty("synctimeout");
-        char*  mlog = GetProperty("maxlogcount");
+        int mlog = GetIntProperty("maxlogcount");
 
         logging = true;
 
-        if ( sto != NULL ) {
-            /*  user provided sync timeout in microsecounds  */
-            sync_timeout = atoi(sto);
-            if ( sync_timeout < 0 ) sync_timeout = 5000;
-        }
-
         max_logcount = NBuffers;
 
-        if ( mlog != NULL ) {
+        if ( mlog >= 0 ) {
             /*  user provided sync timeout in microsecounds  */
-            max_logcount = atoi(mlog);
-            if ( max_logcount <= 0 ) max_logcount = NBuffers;
+            max_logcount = mlog;
         }
     }
 }
@@ -632,19 +640,20 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
             return true;
         case READY:
             timerr = 0;
-            if (cart->isTransFriendly &&
+            if (wait_timeout > 0 &&
+                    cart->isTransFriendly &&
                     !(stopped) &&
                     cart->numberOfTrans < maxtrans) {
                 struct timespec waittime;
-                waittime.tv_sec = time(NULL) + (timeout / 1000);
-                waittime.tv_nsec = (timeout % 1000) * 1000000;
+                waittime.tv_sec = time(NULL) + (wait_timeout / 1000);
+                waittime.tv_nsec = (wait_timeout % 1000) * 1000000;
                 cart->currstate = WAITING;
                 timerr = pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
                 if (timerr == ETIMEDOUT) {
                     if ( cart->currstate == FLUSHING ) {
                         return true;
                     }
-                    if ( timeout > sync_timeout ) cart->currstate = PRIMED;
+                    if ( wait_timeout > sync_timeout ) cart->currstate = PRIMED;
                     else cart->currstate = READY;
                     return false;
                 } else {
@@ -694,12 +703,11 @@ int LogWriteGroup(WriteGroup cart) {
 
     if ( cart->dotransaction ) {
         trans_logged = LogTransactions(cart);
-    }
-
-    for (x=0;x<cart->numberOfTrans;x++) {
-        if ( cart->WaitingThreads[x] && !cart->wait_for_sync[x] ) {
-            ResetThreadState(cart->WaitingThreads[x]);
-            cart->WaitingThreads[x] = NULL;
+        for (x=0;x<cart->numberOfTrans;x++) {
+            if ( cart->WaitingThreads[x] && !cart->wait_for_sync[x] ) {
+                ResetThreadState(cart->WaitingThreads[x]);
+                cart->WaitingThreads[x] = NULL;
+            }
         }
     }
 
@@ -1238,19 +1246,22 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
     return freecount;
 }
 
-void FlushAllDirtyBuffers() {
+void FlushAllDirtyBuffers(bool wait) {
     WriteGroup          cart =  GetCurrentWriteGroup(false);
     int                 releasecount = 0;
         
     if (IsDBWriter()) {
-        while ( cart->currstate != RUNNING && cart->currstate != FLUSHING ) cart = cart->next;
+        while ( cart->currstate != RUNNING && cart->currstate != FLUSHING ) {
+            UnlockWriteGroup(cart);
+            cart = GetNextTarget(cart);
+        }
         FlushWriteGroup(cart);
         DTRACE_PROBE2(mtpg, dbwriter__circularflush, sync_buffers, releasecount);
     } else {        
         SignalDBWriter(cart);
         cart->currstate = FLUSHING;
-        
-        while ( cart->currstate == FLUSHING ) {
+       
+        while ( wait && cart->currstate == FLUSHING ) {
             if (pthread_cond_wait(&cart->broadcaster, &cart->checkpoint)) {
                 UnlockWriteGroup(cart);
                 elog(FATAL, "[DBWriter] cannot attach to db write thread");

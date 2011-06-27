@@ -36,7 +36,7 @@ extern int	Num_Descriptors;
 #define BM_WRITELOCK				(1 << 4)/* 16 */
 #define BM_EXCLUSIVE				(1 << 5)/* 32 */
 #define BM_CRITICAL                             (1 << 6)/*64*/
-#define BM_CRITICALWAITING                             (1 << 7)/*128*/
+#define BM_WRITEIO                             (1 << 7)/*128*/
 #define BM_CRITICALMASK                          (BM_WRITELOCK | BM_CRITICAL)
 #define BM_EXCLUSIVEMASK                          (BM_WRITELOCK | BM_EXCLUSIVE | BM_CRITICAL)
 #define BM_REMOVEWRITEMASK                          ~(BM_WRITELOCK | BM_EXCLUSIVE | BM_CRITICAL)

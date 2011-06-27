@@ -77,7 +77,7 @@ static void  env_log(Env* env, char* pattern, ...);
 static __thread Env* env_cache = NULL;
 #endif
 
-int InitSystem(bool  isPrivate) {
+Env* InitSystem(bool  isPrivate) {
 	int counter = 0;
 
         MyProcPid = getpid();
@@ -117,7 +117,7 @@ int InitSystem(bool  isPrivate) {
         SetEnv(CreateEnv(NULL));
 	InitVirtualFileSystem();  
         
-        return counter;
+        return GetEnv();
 }
 
 int DestroySystem(void) {
@@ -170,7 +170,7 @@ extern void SetEnv(void* envp)
         if ( env != NULL ) {
             Assert(current == NULL || current == env);
             pthread_mutex_lock(env->env_guard);
-            if ( env->owner != 0 ) {
+            if ( env->owner != 0 && env->owner != pthread_self() ) {
                 pthread_mutex_unlock(env->env_guard);
                 printf("Environment already owned, make sure the connection is owned by a single thread\n");
                 abort();
@@ -301,7 +301,7 @@ void DiscardAllInvalids()
 {
     int counter = 0;
     Env* home = GetEnv();
-    
+    SetEnv(NULL);
     elog(DEBUG,"discarding invalids for all backends, message queue close to capacity");
     pthread_mutex_lock(&envlock);
     for (counter = 0;counter <MAXBACKENDS;counter++) {
@@ -861,7 +861,7 @@ void
 PrintEnvMemory( void ) {
     int counter = 0;
     Env* home = GetEnv();
-    
+    SetEnv(NULL);
     pthread_mutex_lock(&envlock);
     for (counter = 0;counter <MAXBACKENDS;counter++) {
         if ( envmap[counter] != NULL ) {

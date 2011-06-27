@@ -72,9 +72,7 @@ RelationPutHeapTuple(Relation relation,
 
 	/* return an accurate tuple */
 	ItemPointerSet(&tuple->t_self, BufferGetBlockNumber(buffer), offnum);
-/*
-        DeactivateFreespace(relation,BufferGetBlockNumber(buffer),PageGetFreeSpace(pageHeader));
-*/
+	ItemPointerSet(&tuple->t_data->t_ctid, BufferGetBlockNumber(buffer), offnum);
 
 }
 
@@ -165,6 +163,7 @@ manager may be old and incorrect.   MKS 12.31.2001
         
                 ItemPointerSet(&((HeapTupleHeader)item)->t_ctid, lastblock, offnum);
                 ItemPointerSet(&tuple->t_self, lastblock, offnum);	
+                ItemPointerSet(&tuple->t_data->t_ctid, lastblock, offnum);	
 
             }
             
@@ -280,6 +279,9 @@ LockHeapTupleForUpdate(Relation relation, Buffer * buf, HeapTuple tuple, Snapsho
                 break;
         } else if (result == HeapTupleBeingUpdated) {
                 TransactionId xwait = tuple->t_data->t_xmax;
+/*
+                if ( GetCurrentTransactionId() < xwait ) return result;
+*/
                 LockHeapTuple(relation,*buf,tuple,TUPLE_LOCK_UNLOCK);
                 ReleaseBuffer((relation), *buf);
                 XactLockTableWait(xwait);

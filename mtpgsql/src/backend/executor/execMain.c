@@ -1444,6 +1444,7 @@ ExecReplace(TupleTableSlot *slot,
 	int			result;
 	int			numIndices;
         TransactionInfo* t_info = GetTransactionInfo();
+        int loops = 0;
 	/*
 	 * abort the operation if not running transactions
 	 */
@@ -1522,12 +1523,15 @@ lreplace:;
 					*tupleid = ctid;
 					tuple = ExecRemoveJunk(estate->es_junkFilter, epqslot);
 					slot = ExecStoreTuple(tuple, slot,false);
+                                        loops++;
 					goto lreplace;
 				}
 			}
 			return;
-
-		default:
+                case HeapTupleBeingUpdated:
+                    /* heap tuple is being updated and we started after them so just forget about the update */
+                    return;
+                default:
 			elog(ERROR, "Unknown status %u from heap_update", result);
 			return;
 	}

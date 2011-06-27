@@ -103,7 +103,9 @@ _bt_getroot(Relation rel, int access)
             Page rootpage = BufferGetPage(root);
             BTPageOpaque rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
             if (!P_ISROOT(rootopaque)) {
+/*
                 elog(DEBUG,"moved btree root page %ld %ld %d",BufferGetBlockNumber(root),rootopaque->btpo_parent,rootopaque->btpo_flags);
+*/
                 rootparent = rootopaque->btpo_parent;
                 _bt_relbuf(rel,root);
                 root = InvalidBuffer;

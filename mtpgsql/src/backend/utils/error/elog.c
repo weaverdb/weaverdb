@@ -457,7 +457,7 @@ elog(int lev, const char *fmt,...)
 	if (lev >= FATAL)
 	{
             if ( IsMultiuser() ) {
-                printf("ABORT from thread %d\n",pthread_self());
+                printf("SYSTEM HALT: from thread %d\n",pthread_self());
                 printf(msg_buf);
                 fprintf(stderr,msg_buf);
                 #ifdef MACOSX
@@ -467,7 +467,6 @@ elog(int lev, const char *fmt,...)
                 sigsend(P_PID,P_MYID,SIGABRT);
                          */
                 abort();
-                while ( TRUE ) sleep(1000);
                 #endif
             } else {
                 /*

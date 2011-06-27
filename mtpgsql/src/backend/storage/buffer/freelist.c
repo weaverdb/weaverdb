@@ -81,8 +81,12 @@ static bool InitiateFlush();
 
 static BufferDesc* GetHead(Relation rel) {
     BufferDesc*  head = NULL;
+    bool         flushpick = false;
     
+/*
     FreeList* which = ( rel->rd_rel->relkind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
+*/
+    FreeList* which = MasterList;
     
     pthread_mutex_lock(&which->guard);
     /*  need a valid buffer from the list */
@@ -94,7 +98,7 @@ static BufferDesc* GetHead(Relation rel) {
 
         if ( oplist->head == INVALID_DESCRIPTOR ) {
             pthread_mutex_unlock(&oplist->guard);
-            InitiateFlush();
+            flushpick = InitiateFlush();
             /*  going back to original list so lock it  */
             pthread_mutex_lock(&which->guard);
         } else {
@@ -103,7 +107,7 @@ static BufferDesc* GetHead(Relation rel) {
             DTRACE_PROBE2(mtpg, buffer__freesteal, rel->rd_rel->relkind, split);
         }
     }
-
+    
     Assert(which->head >= 0 && which->head < NBuffers);
     head = &BufferDescriptors[which->head];
 
@@ -193,17 +197,17 @@ static bool InitiateFlush() {
     bool iflushed = false;
     pthread_mutex_lock(&FlushBlock.flush_gate);
     if ( IsDBWriter() ) {
-        FlushAllDirtyBuffers();
+        FlushAllDirtyBuffers(false);
     } else if ( FlushBlock.flushing ) {
         FlushBlock.waiting[GetEnv()->eid] = TRUE;
         pthread_cond_wait(&FlushBlock.flush_wait, &FlushBlock.flush_gate);
         FlushBlock.waiting[GetEnv()->eid] = FALSE;
     } else {
-        FlushBlock.flushing = true;
         iflushed = true;
+        FlushBlock.flushing = true;
         FlushBlock.waiting[GetEnv()->eid] = TRUE;
         pthread_mutex_unlock(&FlushBlock.flush_gate);
-        FlushAllDirtyBuffers();
+        FlushAllDirtyBuffers(true);
         pthread_mutex_lock(&FlushBlock.flush_gate);
         FlushBlock.waiting[GetEnv()->eid] = FALSE;
         FlushBlock.flushing = false;

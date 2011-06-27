@@ -771,7 +771,7 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
 			 * index entries are gone before the heap entries
 			 * come out.
 			 */
-			FlushAllDirtyBuffers();
+			FlushAllDirtyBuffers(true);
 			/* Remove tuples from heap */
 			lazy_vacuum_heap(onerel, vacrelstats);
 
@@ -885,7 +885,7 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
              * flush the dirty buffers to make sure that the index
              * entries are gone before the heap entries come out.
              */
-            FlushAllDirtyBuffers();
+            FlushAllDirtyBuffers(true);
 
             /* Remove tuples from heap */
             lazy_vacuum_heap(onerel, vacrelstats);

@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-extern void initweaverbackend(char* dbname);
+extern bool initweaverbackend(char* dbname);
 extern bool isinitialized();
 extern bool prepareforshutdown(void);
 extern void wrapupweaverbackend(void);

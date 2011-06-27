@@ -465,7 +465,7 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
         }
         start->next = stmt->next;
     }
-    
+
     if (stmt->qdesc != NULL) {
         ExecutorEnd(stmt->qdesc, stmt->state);
     }
@@ -1380,6 +1380,8 @@ WHandleError(WConn connection, int sqlError) {
     if (connection->env == NULL) {
         return;
     }
+    
+    WResetQuery(connection);
 
     memset(connection->CDA.state,0x00, 40);
     memset(connection->CDA.text,0x00, 256);

@@ -21,13 +21,13 @@ typedef enum mode {
     LOG_MODE
 } DBMode;
 
-void DBWriterInit(int maxcount,int timeout,int hgc_threshold,int hgc_updatewt,int hgc_factor);
+void DBWriterInit();
 
 void DBCreateWriterThread(DBMode mode);
 
 void CommitDBBufferWrites(TransactionId xid,int state);
 
-void FlushAllDirtyBuffers(void);
+void FlushAllDirtyBuffers(bool wait);
 void RegisterBufferWrite(BufferDesc * bufHdr,bool release);
 
 void ClearAllDBWrites(BufferDesc* bufHdr);

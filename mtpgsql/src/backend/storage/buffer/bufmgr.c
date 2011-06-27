@@ -649,14 +649,6 @@ BufferPoolCountHolds() {
  *
  * ------------------------------------------------
  */
-#ifdef NOTUSED
-void
-FlushBufferPool(void) {
-    /*
-        FlushAllDirtyBuffers();
-     */
-}
-#endif
 /*
  * BufferGetBlockNumber
  *		Returns the block number associated with a buffer.
@@ -709,7 +701,7 @@ InvalidateRelationBuffers(Relation rel) {
         return;
     }
     
-    FlushAllDirtyBuffers();
+    FlushAllDirtyBuffers(true);
     
     for (i = 1; i <= NBuffers; i++) {
         buf = &BufferDescriptors[i - 1];
@@ -742,7 +734,7 @@ DropBuffers(Oid dbid) {
     BufferDesc *buf;
     BufferCxt    bufcxt = GetBufferCxt();
     
-    FlushAllDirtyBuffers();
+    FlushAllDirtyBuffers(true);
     for (i = 1; i <= NBuffers; i++) {
         buf = &BufferDescriptors[i - 1];
         
@@ -934,6 +926,8 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
         case BUFFER_LOCK_UNLOCK:
             if ( rel == NULL ) {
                 buflock |= BL_R_LOCK;
+                buf->locflags &= ~(BM_WRITEIO);
+                if ( buf->r_waiting ) pthread_cond_broadcast(&buf->cntx_lock.gate);
             }
             buflock = UnlockIndividualBuffer(buflock, buf);
             break;
@@ -976,12 +970,11 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
                 /* only wait for a write lock to finish, anything else would be problematic due to the test above  */
             while( (buf->locflags & BM_CRITICALMASK) == BM_CRITICALMASK )  {
                 buf->r_waiting++;
-                buf->locflags |= (BM_CRITICALWAITING);
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
-                buf->locflags &= ~(BM_CRITICALWAITING);
                 buf->r_waiting--;
             }
             (buf->r_locks)++;
+            buf->locflags |= BM_WRITEIO;
             buflock |= BL_R_LOCK;
             break;
         case BUFFER_LOCK_SHARE:
@@ -1013,13 +1006,18 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             Assert((BL_W_LOCK & buflock));
             Assert((buf->w_owner == GetEnv()->eid));
             buf->locflags &= ~(BM_CRITICAL);
-            if ( buf->locflags & BM_CRITICALWAITING ) {
+            if ( buf->r_waiting ) {
                 pthread_cond_broadcast(&buf->cntx_lock.gate);
             }
             break;
         case BUFFER_LOCK_CRITICAL:
             Assert((BL_W_LOCK & buflock));
             Assert((buf->w_owner == GetEnv()->eid));
+            while ( buf->locflags & BM_WRITEIO ) {
+                buf->r_waiting++;
+                pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
+                buf->r_waiting--;
+            }
             buf->locflags |= (BM_CRITICAL);
             break;                  
         default:

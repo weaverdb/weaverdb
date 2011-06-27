@@ -51,6 +51,7 @@ void		BaseInit(void);
 
 static void ReverifyMyDatabase(const char *name);
 static void InitCommunication(void);
+static void flush_all();
 
 static IPCKey PostgresIpcKey;
 
@@ -224,6 +225,11 @@ extern int	NBuffers;
 
 int			lockingOff = 0;		/* backend -L switch */
 
+void 
+flush_all() {
+    FlushAllDirtyBuffers(true);
+}
+
 /*
  */
 void
@@ -245,7 +251,7 @@ InitPostgres(const char *dbname)
 	/* initialize the local buffer manager */
 
 #ifndef XLOG
-		on_shmem_exit(FlushAllDirtyBuffers, (caddr_t) NULL);
+		on_shmem_exit(flush_all, (caddr_t) NULL);
 #endif
 
 	/* ----------------
@@ -327,7 +333,7 @@ InitPostgres(const char *dbname)
 
         smgrinit();
         RelationInitialize();		/* pre-allocated reldescs created here */
-        DBWriterInit(-1,-1,-1,-1,-1);
+        DBWriterInit();
         DBCreateWriterThread(SYNC_MODE);
  	InitializeTransactionSystem();		/* pg_log,etc init/crash recovery here */
         InitFreespace();

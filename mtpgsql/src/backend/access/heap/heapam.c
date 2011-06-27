@@ -620,7 +620,7 @@ heap_get_latest_tid(Relation relation,
 	Buffer		buffer;
 	HeapTupleData tp;
         ItemPointerData     checkid;
-	bool		valid,invalidBlock,
+	bool		valid,
 				linkend;
 
  	tp.t_datamcxt = NULL;
@@ -790,7 +790,6 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
 {
 	HeapTupleData       oldtup;
 	Buffer              buffer;
-	int                 result = -1;
 	TransactionId       xid;
         Size                pageSize;
         int                updateable;
@@ -800,6 +799,11 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
         oldtup.t_info = 0;
 
         updateable = LockHeapTupleForUpdate(relation, &buffer, &oldtup, snapshot);
+        if ( updateable == HeapTupleBeingUpdated ) {
+            UnlockHeapTuple(relation,buffer,&oldtup);
+            ReleaseBuffer(relation, buffer);
+            return updateable;
+        }
         
         if (updateable != HeapTupleMayBeUpdated) {
             Assert(updateable == HeapTupleSelfUpdated || updateable == HeapTupleUpdated);
@@ -808,7 +812,7 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
             }
             UnlockHeapTuple(relation,buffer,&oldtup);
             ReleaseBuffer(relation, buffer);
-            return result;
+            return updateable;
 	} 
         
 	/* XXX order problems if not atomic assignment ??? */
@@ -827,15 +831,10 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
                 oldtup.t_data->t_xmin = oldtup.t_data->progress.t_vtran;
                 oldtup.t_data->progress.cmd.t_cmin = FirstCommandId;
         }
+        Assert(ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid));
         oldtup.t_data->t_xmax = xid;
         oldtup.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
-        oldtup.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED |
-                          HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN );
-        oldtup.t_data->t_ctid = newtup->t_self;
-
-        /* test to see if putting at freespace is more
-        efficient by commenting out first option
-          MKS  8.9.2002  */
+        oldtup.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
         
 /* insert new item */
         pageSize = PageGetFreeSpace(BufferGetPage(buffer));

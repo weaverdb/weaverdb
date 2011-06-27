@@ -396,6 +396,12 @@ PageManagerModeSet(PageManagerMode mode)
 		PageManagerShuffle = false;
 }
 
+bool
+DisableCRC(bool enable) {
+    
+    disable_crc = !enable;
+}
+
 /*
  *----------------------------------------------------------------
  * PageIndexTupleDelete

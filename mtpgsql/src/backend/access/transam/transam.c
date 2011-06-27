@@ -403,7 +403,7 @@ TransRecover(Relation logrelation)
 		ReleaseBuffer(logrelation,buffer);
 	}
         
-        FlushAllDirtyBuffers();
+        FlushAllDirtyBuffers(true);
         MasterUnLock();
 	SetTransactionRecoveryCheckpoint(ctid);
 	elog(DEBUG,"Recovery checking finished");
@@ -663,7 +663,13 @@ TransactionIdDidCrash(TransactionId transactionId)
 
 	if (TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST)) {
 	    if ( TransactionIdBeforeCheckpoint(transactionId) ) return true;
-            else return !(TransactionIdIsInProgress(transactionId));
+            else if (!TransactionIdIsInProgress(transactionId)) {
+                bool crashed = TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST);
+                if ( crashed ) {
+                    elog(DEBUG,"transaction crashed: %ld",transactionId);
+                }
+                return crashed;
+            }
         } else {
             return false;
         }

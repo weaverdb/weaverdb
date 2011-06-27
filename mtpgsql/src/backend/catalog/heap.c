@@ -2229,16 +2229,11 @@ RelationRemoveStorageDirectives(Relation rel)
 void
 AddRelationStorageDirectives(Relation rel, List *rawConstraints)
 {
-	char	   *relname = RelationGetRelationName(rel);
-	TupleDesc	tupleDesc;
-	TupleConstr *oldconstr;
 	List	   *listptr;
         
 	foreach(listptr, rawConstraints)
 	{
 		Constraint *cdef = (Constraint *) lfirst(listptr);
-		char	   *ccname;
-		Node	   *expr;
                 HeapTuple	reltup;
                 HeapTuple	atttup;
                 Relation    extstore;

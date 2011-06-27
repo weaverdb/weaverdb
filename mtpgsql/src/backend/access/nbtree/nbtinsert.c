@@ -142,6 +142,7 @@ top:
 	{
 		TransactionId xwait;
 
+                LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 		xwait = _bt_check_unique(rel, btitem, heapRel, buf, itup_scankey);
 
 		if (TransactionIdIsValid(xwait))
@@ -152,7 +153,9 @@ top:
 			/* start over... */
 			_bt_freestack(stack);
 			goto top;
-		}
+		} else {
+                        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
+                }
 	}
 
 	/* do the insertion */

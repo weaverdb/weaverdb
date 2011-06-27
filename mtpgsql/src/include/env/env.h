@@ -216,7 +216,7 @@ void DestroyEnv(void* env);
 void* AllocateEnvSpace(SectionId id,size_t size);
 void* GetEnvSpace(SectionId id);
 
-int InitSystem(bool  isPrivate);
+Env* InitSystem(bool  isPrivate);
 int DestroySystem(void);
 
 void DiscardAllInvalids(void);

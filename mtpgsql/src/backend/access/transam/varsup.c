@@ -662,7 +662,7 @@ VacuumTransactionLog()
 		if (i < 0)
 			elog(FATAL, "VACUUM (vc_repair_frag): FlushRelationBuffers returned %d", i);
                 */
-                FlushAllDirtyBuffers();
+                FlushAllDirtyBuffers(true);
 		smgrtruncate(LogRelation->rd_smgr, 1);
                 base = 1;
 	} else {
