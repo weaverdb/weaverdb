@@ -391,12 +391,12 @@ GetSnapshotData(bool serializable)
 	}
 	/* Serializable snapshot must be computed before any other... */
 	Assert(GetMyThread()->xmin != InvalidTransactionId);
-	if ( GetCheckpointId() != checkpoint ) SetCheckpointId(checkpoint);
+	SetCheckpointId(checkpoint);
 	SpinRelease(SInvalLock);
-
 
 	snapshot->xcnt = count;
 	snapshot->isUser = false;
+	snapshot->nowait = false;
 
 	MemoryContextSwitchTo(old);
     

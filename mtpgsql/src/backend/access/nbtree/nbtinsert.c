@@ -142,7 +142,6 @@ top:
 	{
 		TransactionId xwait;
 
-                LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 		xwait = _bt_check_unique(rel, btitem, heapRel, buf, itup_scankey);
 
 		if (TransactionIdIsValid(xwait))
@@ -153,9 +152,7 @@ top:
 			/* start over... */
 			_bt_freestack(stack);
 			goto top;
-		} else {
-                        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
-                }
+		}
 	}
 
 	/* do the insertion */
@@ -416,7 +413,6 @@ _bt_insertonpg(Relation rel,
 			 * current page; else someone else's _bt_check_unique scan
 			 * could fail to see our insertion.
 			 */
-                        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 			rbuf = _bt_getbuf(rel, rblkno, BT_WRITE);
 
                         _bt_relbuf(rel, buf);
@@ -554,8 +550,6 @@ _bt_insertonpg(Relation rel,
 			ItemPointerSet(&(stack->bts_btitem.bti_itup.t_tid),
 						   bknum, P_HIKEY);
                         
-                        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
-                        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 			pbuf = _bt_getstackbuf(rel, stack, BT_WRITE);
 
 			/* Now we can write and unlock the children */
@@ -601,8 +595,9 @@ _bt_insertuple(Relation rel, Buffer buf,
 {
 	Page		page = BufferGetPage(buf);
 	BTPageOpaque pageop = (BTPageOpaque) PageGetSpecialPointer(page);
-
+        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
 	_bt_pgaddtup(rel, page, itemsz, btitem, newitemoff, "page");
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 }
 
 /*
@@ -641,8 +636,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	OffsetNumber i;
 	BTItem		lhikey;
 
-        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
-	rbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
+	rbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
 
 	origpage = BufferGetPage(buf);
 	leftpage = PageGetTempPage(origpage, sizeof(BTPageOpaqueData));
@@ -650,7 +644,8 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 
 	_bt_pageinit(leftpage, BufferGetPageSize(buf));
 	_bt_pageinit(rightpage, BufferGetPageSize(rbuf));
-
+        
+        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
 	/* init btree private data */
 	oopaque = (BTPageOpaque) PageGetSpecialPointer(origpage);
 	lopaque = (BTPageOpaque) PageGetSpecialPointer(leftpage);
@@ -658,7 +653,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 
 	/* if we're splitting this page, it won't be the root when we're done */
 	lopaque->btpo_flags = oopaque->btpo_flags;
-	lopaque->btpo_flags &= ~BTP_ROOT;
+	lopaque->btpo_flags &= ~(BTP_ROOT);
 	ropaque->btpo_flags = lopaque->btpo_flags;
 	lopaque->btpo_prev = oopaque->btpo_prev;
 	lopaque->btpo_next = BufferGetBlockNumber(rbuf);
@@ -686,6 +681,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 		itemid = PageGetItemId(origpage, P_HIKEY);
 		itemsz = ItemIdGetLength(itemid);
 		item = (BTItem) PageGetItem(origpage, itemid);
+                Assert(BufferIsCritical(rbuf));
 		if (PageAddItem(rightpage, (Item) item, itemsz, rightoff,
 						LP_USED) == InvalidOffsetNumber)
 			elog(FATAL, "btree: failed to add hikey to the right sibling");
@@ -712,6 +708,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 		item = (BTItem) PageGetItem(origpage, itemid);
 	}
 	lhikey = item;
+                       
 	if (PageAddItem(leftpage, (Item) item, itemsz, leftoff,
 					LP_USED) == InvalidOffsetNumber)
         elog(FATAL, "btree: failed to add hikey to the left sibling");
@@ -722,7 +719,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 */
 	maxoff = PageGetMaxOffsetNumber(origpage);
 
-	for (i = P_FIRSTDATAKEY(oopaque); i <= maxoff; i = OffsetNumberNext(i))
+        for (i = P_FIRSTDATAKEY(oopaque); i <= maxoff; i = OffsetNumberNext(i))
 	{
 		itemid = PageGetItemId(origpage, i);
 		itemsz = ItemIdGetLength(itemid);
@@ -792,11 +789,14 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * and all readers release locks on a page before trying to fetch its
 	 * neighbors.
 	 */
-
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
 	if (!P_RIGHTMOST(ropaque))
 	{
-		sbuf = _bt_getbuf(rel, ropaque->btpo_next, BT_WRITE);	
+		sbuf = _bt_getbuf(rel, ropaque->btpo_next, BT_READYWRITE);	
 		spage = BufferGetPage(sbuf);
+                BTPageOpaque sopaque = (BTPageOpaque) PageGetSpecialPointer(rightpage);
+                sopaque->btpo_prev = BufferGetBlockNumber(rbuf);
 	}
 
 	/*
@@ -1146,20 +1146,12 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	BTMetaPageData *metad;
 
 	/* get a new root page */
-        LockBuffer(rel,lbuf,BUFFER_LOCK_NOTCRITICAL);
-        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
         
         rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
         
 	rootpage = BufferGetPage(rootbuf);
 	rootblknum = BufferGetBlockNumber(rootbuf);
-	metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
-        
-        LockBuffer(rel,lbuf,BUFFER_LOCK_CRITICAL);
-        LockBuffer(rel,rbuf,BUFFER_LOCK_CRITICAL);
-        
-	metapg = BufferGetPage(metabuf);
-	metad = BTPageGetMeta(metapg);
+	metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_READYWRITE);
 
 	/* NO ELOG(ERROR) from here till newroot op is logged */
 
@@ -1198,6 +1190,7 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	 * is the rightmost page on its level so there is no "high key" in it;
 	 * the two items will go into positions P_HIKEY and P_FIRSTKEY.
 	 */
+        LockBuffer(rel,rootbuf,BUFFER_LOCK_CRITICAL);
 	if (PageAddItem(rootpage, (Item) new_item, itemsz, P_HIKEY, LP_USED) == InvalidOffsetNumber)
 		elog(FATAL, "btree: failed to add leftkey to new root page");
 	pfree(new_item);
@@ -1218,10 +1211,12 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	if (PageAddItem(rootpage, (Item) new_item, itemsz, P_FIRSTKEY, LP_USED) == InvalidOffsetNumber)
 		elog(FATAL, "btree: failed to add rightkey to new root page");
 	pfree(new_item);
+        LockBuffer(rel,rootbuf,BUFFER_LOCK_NOTCRITICAL);
 
-	metad->btm_root = rootblknum;
+	metapg = BufferGetPage(metabuf);
+	metad = BTPageGetMeta(metapg);
+        metad->btm_root = rootblknum;
 	(metad->btm_level)++;
-
 
 	/* write and let go of metapage buffer */
 	_bt_wrtbuf(rel, metabuf);

@@ -458,21 +458,22 @@ void ReleaseSyncGroup() {
 
 void FlushWriteGroup(WriteGroup cart) {
     int release = 0;
-    
-        WriteGroup sync = GetSyncGroup();
-        MergeWriteGroups(sync,cart);
-        pthread_mutex_unlock(&cart->checkpoint);
-        sync->currstate = FLUSHING;
-        release = SyncBuffers(sync,true);
-        sync->currstate = NOT_READY;
-        CommitPackage(sync);
-        if ( logging ) ClearLogs(sync);
-        elog(DEBUG,"flushed out %d buffers",release);
-        sync_buffers = MergeWriteGroups(cart,sync);
-        if ( sync_buffers ) ActivateSyncGroup();
-        pthread_mutex_lock(&cart->checkpoint);
-        cart->currstate = READY;
-        pthread_cond_broadcast(&cart->broadcaster);
+
+    pthread_mutex_unlock(&cart->checkpoint);
+    LogBuffers(cart);
+    WriteGroup sync = GetSyncGroup();
+    MergeWriteGroups(sync,cart);
+    sync->currstate = FLUSHING;
+    release = SyncBuffers(sync,true);
+    sync->currstate = NOT_READY;
+    CommitPackage(sync);
+    if ( logging ) ClearLogs(sync);
+    elog(DEBUG,"flushed out %d buffers",release);
+    sync_buffers = MergeWriteGroups(cart,sync);
+    if ( sync_buffers ) ActivateSyncGroup();
+    pthread_mutex_lock(&cart->checkpoint);
+    cart->currstate = READY;
+    pthread_cond_broadcast(&cart->broadcaster);
 }
 
 void* DBWriter(void *jones) {

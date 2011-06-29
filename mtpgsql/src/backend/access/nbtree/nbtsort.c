@@ -200,7 +200,8 @@ _bt_blnewpage(Relation index, Buffer * buf, Page * page, int flags)
 {
 	BTPageOpaque    opaque;
 
-	*buf = _bt_getbuf(index, P_NEW, BT_WRITE);
+        if ( BufferIsValid(*buf) ) LockBuffer(index,*buf,BUFFER_LOCK_NOTCRITICAL);
+	*buf = _bt_getbuf(index, P_NEW, BT_READYWRITE);
 	*page = BufferGetPage(*buf);
 
 	/* Zero the page and set up standard page header info */

@@ -903,6 +903,22 @@ UnlockBuffers(void) {
     }
 }
 
+bool
+BufferIsCritical(Buffer buffer) {
+    BufferDesc*  buf;
+    bool crit = false;
+    
+    if (BufferIsLocal(buffer))
+        return true;
+
+    buf = &(BufferDescriptors[buffer - 1]);
+
+    pthread_mutex_lock(&(buf->cntx_lock.guard));
+    crit = buf->locflags & (BM_CRITICAL);
+    pthread_mutex_unlock(&(buf->cntx_lock.guard));
+    return crit;
+}
+
 int
 LockBuffer(Relation rel, Buffer buffer, int mode) {
     BufferDesc     *buf;
@@ -991,6 +1007,7 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             buflock |= BL_R_LOCK;
             break;
         case BUFFER_LOCK_EXCLUSIVE:
+        case BUFFER_LOCK_READ_EXCLUSIVE:
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
             while ( (buf->r_locks > 0) || (buf->locflags & BM_WRITELOCK) ) {
@@ -999,7 +1016,8 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
                 buf->w_waiting--;
             }
             buf->w_owner = GetEnv()->eid;
-            buf->locflags |= BM_CRITICALMASK;
+            if ( mode == BUFFER_LOCK_EXCLUSIVE ) buf->locflags |= BM_CRITICALMASK;
+            else buf->locflags |= (BM_WRITELOCK);
             buflock |= (BL_W_LOCK);
             break;
         case BUFFER_LOCK_NOTCRITICAL:

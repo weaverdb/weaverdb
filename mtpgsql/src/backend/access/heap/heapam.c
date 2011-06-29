@@ -745,7 +745,12 @@ heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snaps
         tp.t_self = *tid;
             
         updateable = LockHeapTupleForUpdate(relation, &buffer, &tp, snapshot);
-
+        if ( updateable == HeapTupleBeingUpdated ) {
+            UnlockHeapTuple(relation,buffer,&tp);
+            ReleaseBuffer(relation, buffer);
+            return updateable;
+        }
+        
 	if (updateable != HeapTupleMayBeUpdated)
 	{
 		if (ctid != NULL) {
@@ -808,7 +813,7 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
         if (updateable != HeapTupleMayBeUpdated) {
             Assert(updateable == HeapTupleSelfUpdated || updateable == HeapTupleUpdated);
             if (ctid != NULL) {
-                    *ctid = oldtup.t_data->t_ctid;
+                *ctid = oldtup.t_data->t_ctid;
             }
             UnlockHeapTuple(relation,buffer,&oldtup);
             ReleaseBuffer(relation, buffer);
@@ -831,7 +836,13 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
                 oldtup.t_data->t_xmin = oldtup.t_data->progress.t_vtran;
                 oldtup.t_data->progress.cmd.t_cmin = FirstCommandId;
         }
-        Assert(ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid));
+        if (!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid)) {
+            elog(NOTICE,"self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
+                    oldtup.t_self,oldtup.t_data->t_ctid,oldtup.t_data->t_xmax,xid,
+                    TransactionIdDidCommit(oldtup.t_data->t_xmax)?"yes":"no",
+                    TransactionIdDidCrash(oldtup.t_data->t_xmax)?"yes":"no",
+                    TransactionIdDidAbort(oldtup.t_data->t_xmax)?"yes":"no");
+        }
         oldtup.t_data->t_xmax = xid;
         oldtup.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
         oldtup.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
@@ -873,12 +884,16 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
 int
 heap_mark4update(Relation relation, Buffer *buffer, HeapTuple tuple,  Snapshot snapshot)
 {
-	ItemPointer tid = &(tuple->t_self);
 	int			result;
 	TransactionId		xid;
 
         result = LockHeapTupleForUpdate(relation, buffer, tuple, snapshot);
-
+        if ( result == HeapTupleBeingUpdated ) {
+            UnlockHeapTuple(relation,*buffer,tuple);
+            ReleaseBuffer(relation, *buffer);
+            return result;
+        }
+        
 	if ( result != HeapTupleMayBeUpdated )
 	{
 		Assert(result == HeapTupleSelfUpdated || result == HeapTupleUpdated);

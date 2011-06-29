@@ -196,7 +196,12 @@ extern bool initweaverbackend(char* vars)
 	}
 	if ( PropertyIsValid("buffers") ) {
 		NBuffers = GetIntProperty("buffers");
-	}
+	} else if ( PropertyIsValid("page_buffers") ) {
+                NBuffers = GetIntProperty("page_buffers");
+        } else if ( PropertyIsValid("buffercount") ) {
+                NBuffers = GetIntProperty("buffercount");
+        }
+    
 	if ( PropertyIsValid("maxbackends") ) {
             MaxBackends = GetIntProperty("maxbackends");
             if ( MaxBackends > MAXBACKENDS ) MaxBackends = MAXBACKENDS;

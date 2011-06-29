@@ -59,7 +59,9 @@ RelationPutHeapTuple(Relation relation,
 #endif
         pageHeader = (Page) BufferGetPage(buffer);
 	len = MAXALIGN(tuple->t_len);		/* be conservative */
-	Assert(len <= PageGetFreeSpace(pageHeader));
+	
+        Assert(len <= PageGetFreeSpace(pageHeader));
+        Assert(BufferIsCritical(buffer));
         
 	offnum = PageAddItem((Page) pageHeader, (Item) tuple->t_data,
 						 tuple->t_len, InvalidOffsetNumber, LP_USED);
@@ -151,6 +153,7 @@ manager may be old and incorrect.   MKS 12.31.2001
                 satisfied = true;
             }
             if ( satisfied ) {
+                Assert(BufferIsCritical(buffer));
                 offnum = PageAddItem( pageHeader, (Item) tuple->t_data,
                                  tuple->t_len, InvalidOffsetNumber, LP_USED);
 
@@ -258,6 +261,12 @@ int
 LockHeapTupleForUpdate(Relation relation, Buffer * buf, HeapTuple tuple, Snapshot snapshot) {
     int                 result = -1;     
         SnapshotHolder*     holder = RelationGetSnapshotCxt(relation);
+        bool nowait = false;
+        if ( !IsSnapshotNow(snapshot) &&
+                !IsSnapshotAny(snapshot) &&
+                !IsSnapshotSelf(snapshot)) {
+            nowait = snapshot->nowait;
+        }
 
      while ( result != HeapTupleMayBeUpdated ) {
         *buf = RelationGetHeapTuple(relation, tuple);
@@ -279,9 +288,7 @@ LockHeapTupleForUpdate(Relation relation, Buffer * buf, HeapTuple tuple, Snapsho
                 break;
         } else if (result == HeapTupleBeingUpdated) {
                 TransactionId xwait = tuple->t_data->t_xmax;
-/*
-                if ( GetCurrentTransactionId() < xwait ) return result;
-*/
+                if ( nowait ) return result;
                 LockHeapTuple(relation,*buf,tuple,TUPLE_LOCK_UNLOCK);
                 ReleaseBuffer((relation), *buf);
                 XactLockTableWait(xwait);

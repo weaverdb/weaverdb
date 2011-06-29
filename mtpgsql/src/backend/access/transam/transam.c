@@ -662,15 +662,14 @@ TransactionIdDidCrash(TransactionId transactionId)
 		return false;
 
 	if (TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST)) {
-	    if ( TransactionIdBeforeCheckpoint(transactionId) ) return true;
-            else if (!TransactionIdIsInProgress(transactionId)) {
+	    if (TransactionIdBeforeCheckpoint(transactionId) || !TransactionIdIsInProgress(transactionId)) {
                 bool crashed = TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST);
                 if ( crashed ) {
-                    elog(DEBUG,"transaction crashed: %ld",transactionId);
+                    elog(NOTICE,"transaction crashed: %ld",transactionId);
                 }
                 return crashed;
-            }
-        } else {
-            return false;
-        }
+            } 
+        } 
+        
+        return false;
 }

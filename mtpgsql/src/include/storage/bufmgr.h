@@ -63,6 +63,7 @@ PG_EXTERN int	ShowPinTrace;
 #define BUFFER_LOCK_SHARE			1
 #define BUFFER_LOCK_EXCLUSIVE                   2
 #define BUFFER_LOCK_REF_EXCLUSIVE               4
+#define BUFFER_LOCK_READ_EXCLUSIVE               8
 
 /*  bit flag set if lock should fail instead of block  */
 #define BUFFER_LOCK_WRITEIO                     16   /*  blocks exclusive locks until write io is finished */
@@ -164,6 +165,7 @@ PG_EXTERN void UnlockBuffers(void);
 PG_EXTERN int LockBuffer(Relation rel, Buffer buffer, int mode);
 
 PG_EXTERN bool BufferHasError(Buffer buf);
+PG_EXTERN bool BufferIsCritical(Buffer buffer);
 
 PG_EXTERN void AbortBufferIO(void);
 PG_EXTERN void ErrorBufferIO(IOStatus locks, BufferDesc* buf);

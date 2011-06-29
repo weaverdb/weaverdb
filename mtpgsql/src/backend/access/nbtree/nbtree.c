@@ -1177,28 +1177,6 @@ _bt_fixsplit(Relation rel,BlockNumber left, BlockNumber parent, BlockNumber righ
     return right;
 }
 
-#ifdef NOTUSED
-static void
-_bt_restore_page(Page page, char *from, int len)
-{
-	BTItemData	btdata;
-	Size		itemsz;
-	char	   *end = from + len;
-
-	for (; from < end;)
-	{
-		memcpy(&btdata, from, sizeof(BTItemData));
-		itemsz = IndexTupleDSize(btdata.bti_itup) +
-			(sizeof(BTItemData) - sizeof(IndexTupleData));
-		itemsz = MAXALIGN(itemsz);
-		if (PageAddItem(page, (Item) from, itemsz,
-					  FirstOffsetNumber, LP_USED) == InvalidOffsetNumber)
-			elog(FATAL, "_bt_restore_page: can't add item to page");
-		from += itemsz;
-	}
-}
-#endif
-
 static int
 cmp_itemptr(const void *left, const void *right)
 {

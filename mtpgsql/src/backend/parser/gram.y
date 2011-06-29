@@ -160,7 +160,7 @@ static void doNegateFloat(Value *v);
 %type <ival>    createdb_opt_encoding
 
 %type <ival>	opt_lock lock_type
-%type <boolean>	opt_lmode opt_force
+%type <boolean>	opt_lmode opt_force opt_nowait
 
 %type <ival>    user_createdb_clause user_createuser_clause
 %type <str>		user_passwd_clause
@@ -387,7 +387,7 @@ static void doNegateFloat(Value *v);
 		UNLISTEN UNTIL VACUUM VALID VERBOSE VERSION
 		
 /*  token added by Myron Scott  */
-%token	SCHEMA S_ARRAY S_PATTERN S_NIL
+%token	SCHEMA S_ARRAY S_PATTERN S_NIL NOWAIT
 
 /* Special keywords not in the query language - see the "lex" file */
 %token <str>	IDENT FCONST SCONST Op NAMEDPARAM JAVA_FUNC SYSTEM
@@ -3379,10 +3379,12 @@ columnElem:  ColId opt_indirection
 
 DeleteStmt:  DELETE FROM relation_name
 			 where_clause
+                         opt_nowait
 				{
 					DeleteStmt *n = makeNode(DeleteStmt);
 					n->relname = $3;
 					n->whereClause = $4;
+					n->nowait = $5;
 					$$ = (Node *)n;
 				}
 		;
@@ -3410,6 +3412,10 @@ lock_type:  SHARE ROW EXCLUSIVE	{ $$ = ShareRowExclusiveLock; }
 opt_lmode:	SHARE				{ $$ = TRUE; }
 		| EXCLUSIVE				{ $$ = FALSE; }
 		;
+                
+opt_nowait:	NOWAIT				{ $$ = TRUE; }
+		| /*EMPTY*/				{ $$ = FALSE; }
+		;
 
 
 /*****************************************************************************
@@ -3423,15 +3429,18 @@ UpdateStmt:  UPDATE relation_name
 			  SET update_target_list
 			  from_clause
 			  where_clause
+                          opt_nowait
 				{
 					UpdateStmt *n = makeNode(UpdateStmt);
 					n->relname = $2;
 					n->targetList = $4;
 					n->fromClause = $5;
 					n->whereClause = $6;
+					n->nowait = $7;
 					$$ = (Node *)n;
 				}
-		;
+
+                        ;
 
 
 /*****************************************************************************
@@ -3499,7 +3508,7 @@ SelectStmt:	  select_clause sort_clause for_update_clause opt_select_limit
 					n->limitOffset = nth(0, $4);
 					n->limitCount = nth(1, $4);
 					$$ = (Node *) n;
-                }
+                                }
 				else
 				{
 					/* There were set operations.  The root of the operator

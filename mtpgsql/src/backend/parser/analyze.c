@@ -284,6 +284,8 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 	Query	   *qry = makeNode(Query);
 
 	qry->commandType = CMD_DELETE;
+        
+        qry->nowait = stmt->nowait;
 
 	/* set up a range table */
 	makeRangeTable(pstate, NULL);
@@ -1504,6 +1506,7 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 	qry->commandType = CMD_UPDATE;
 	pstate->p_is_update = true;
 
+        qry->nowait = stmt->nowait;
 	/*
 	 * the FROM clause is non-standard SQL syntax. We used to be able to
 	 * do this with REPLACE in POSTQUEL so we keep the feature.

@@ -99,7 +99,6 @@ TupleDesc
 ExecutorStart(QueryDesc *queryDesc, EState *estate)
 {
 	TupleDesc	result;
-	Env*  		env = GetEnv();
         SnapshotHolder*  holder = GetSnapshotHolder();
 
 	/* sanity checks */
@@ -131,6 +130,7 @@ ExecutorStart(QueryDesc *queryDesc, EState *estate)
 				   estate->es_snapshot->xcnt * sizeof(TransactionId));
 		}
 		estate->es_snapshot->isUser = holder->QuerySnapshot->isUser;
+                estate->es_snapshot->nowait = queryDesc->parsetree->nowait;
 	}
 
 	/*
@@ -1110,7 +1110,8 @@ lnext:	;
 					switch (test)
 					{
 						case HeapTupleSelfUpdated:
-						case HeapTupleMayBeUpdated:
+						case HeapTupleBeingUpdated:
+                                                case HeapTupleMayBeUpdated:
 							break;
 
 						case HeapTupleUpdated:
@@ -1376,12 +1377,15 @@ ldelete:;
 	result = heap_delete(resultRelationDesc, tupleid, &ctid,estate->es_snapshot);
 	switch (result)
 	{
-		case HeapTupleSelfUpdated:
+                case HeapTupleBeingUpdated:
+                    /* heap tuple is being updated and we started after them so just forget about the update */
+                    return;
+                case HeapTupleSelfUpdated:
 			return;
 
 		case HeapTupleMayBeUpdated:
 			break;
-
+                
 		case HeapTupleUpdated:
 			if (t_info->XactIsoLevel == XACT_SERIALIZABLE)
 				elog(ERROR, "Can't serialize access due to concurrent update");

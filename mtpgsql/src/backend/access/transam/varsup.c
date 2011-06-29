@@ -440,7 +440,9 @@ InitTransactionLowWaterMark()
 
 TransactionId
 GetCheckpointId(void) {
-	return ShmemVariableCache->xid_checkpoint;
+    TransactionId xid;
+	xid = ShmemVariableCache->xid_checkpoint;
+        return xid;
 }
 
 /****
@@ -456,9 +458,13 @@ SetCheckpointId(TransactionId xid) {
 
 bool
 TransactionIdBeforeCheckpoint(TransactionId xid) {
-	if ( !TransactionIdIsValid(xid) ) elog(ERROR,"testing invalid id for checkpoint");
-	if (xid < ShmemVariableCache->xid_checkpoint) return true;
-	else return false;
+        bool before = false;
+        
+        if ( !TransactionIdIsValid(xid) ) elog(ERROR,"testing invalid id for checkpoint");
+
+	before = (xid < ShmemVariableCache->xid_checkpoint);
+
+        return before;
 }
 
 

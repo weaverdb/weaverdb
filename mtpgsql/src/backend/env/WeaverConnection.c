@@ -571,7 +571,7 @@ WExec(OpaquePreparedStatement plan) {
              */
         } else {
             plan->state = CreateExecutorState();
-
+            
             if (plan->input_count > 0) {
                 FillExecArgs(plan);
             } else {

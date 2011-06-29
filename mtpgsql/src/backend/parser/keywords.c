@@ -184,6 +184,7 @@ static ScanKeyword ScanKeywords[] = {
 	{"nothing", NOTHING},
 	{"notify", NOTIFY},
 	{"notnull", NOTNULL},
+	{"nowait", NOWAIT},
 	{"null", NULL_P},
 	{"nullif", NULLIF},
 	{"numeric", NUMERIC},

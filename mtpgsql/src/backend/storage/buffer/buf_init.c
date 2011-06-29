@@ -135,14 +135,14 @@ long int	LocalBufferFlushCount;
 void
 InitBufferPool(IPCKey key)
 {
-	bool		foundBufs,foundDescs,foundMutex;
+	bool		foundBufs,foundDescs;
 	int			i;
 
 	Data_Descriptors = NBuffers;
 	Free_List_Descriptor = Data_Descriptors;
         Num_Descriptors = Data_Descriptors + 1;
         
-        
+        elog(DEBUG,"using %d buffers",NBuffers);
         
 	BufferDescriptors = (BufferDesc *)
 		ShmemInitStruct("Buffer Descriptors",Num_Descriptors * sizeof(BufferDesc), &foundDescs);
@@ -227,7 +227,6 @@ BufferShmemSize()
 {
 	size_t			size = 0;
         char*           table_count;
-        char*           buffers;
 
         table_count = GetProperty("buffer_tables");
         if ( table_count != NULL ) {
@@ -235,14 +234,7 @@ BufferShmemSize()
             if ( NTables < 0 || NTables > 9 ) {
                 NTables = 1;
             }
-        }
-        buffers = GetProperty("page_buffers");
-        if ( buffers != NULL ) {
-            NBuffers = atoi(buffers);
-            if ( NBuffers < 0 ) {
-                NBuffers = DEF_NBUFFERS;
-            }
-        }       
+        }   
 	/* size of shmem index hash table */
 	size += hash_estimate_size(SHMEM_INDEX_SIZE,SHMEM_INDEX_ENTRYSIZE);
 

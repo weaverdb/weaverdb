@@ -48,6 +48,7 @@ typedef struct Query
 	bool		unionall;		/* union without unique sort */
 	bool		hasAggs;		/* has aggregates in tlist or havingQual */
 	bool		hasSubLinks;	/* has subquery SubLink */
+        bool            nowait;
 
 	List	   *rtable;			/* list of range table entries */
 	List	   *targetList;		/* target list (of TargetEntry) */
@@ -811,6 +812,7 @@ typedef struct DeleteStmt
 	NodeTag		type;
 	char	   *relname;		/* relation to delete from */
 	Node	   *whereClause;	/* qualifications */
+        bool       nowait;
 } DeleteStmt;
 
 /* ----------------------
@@ -824,6 +826,7 @@ typedef struct UpdateStmt
 	List	   *targetList;		/* the target list (of ResTarget) */
 	Node	   *whereClause;	/* qualifications */
 	List	   *fromClause;		/* the from clause */
+	bool	   nowait;		/* the from clause */
 } UpdateStmt;
 
 /* ----------------------
