@@ -326,6 +326,7 @@ WDestroyConnection(OpaqueWConn conn) {
         }
         pthread_mutex_unlock(&conn->child_lock);
     }
+    
     while ( conn->plan ) {
         WDestroyPreparedStatement(conn->plan);
     }
@@ -1098,6 +1099,7 @@ WEndProcedure(OpaqueWConn conn) {
 
 void*
 WAllocConnectionMemory(OpaqueWConn conn, size_t size) {
+    
     return AllocMemory(conn, CONNECTION_MEMORY, size);
 }
 

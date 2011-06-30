@@ -91,6 +91,7 @@ CreateWeaverStmtManager(OpaqueWConn connection)
     if ( !WIsValidConnection(connection) ) return NULL;
     
     StmtMgr mgr = (StmtMgr)WAllocConnectionMemory(connection,sizeof(WeaverStmtManager));
+    if ( mgr == NULL ) return NULL;
     
     mgr->theConn = connection;
     mgr->refcount = 1;
@@ -102,8 +103,10 @@ CreateWeaverStmtManager(OpaqueWConn connection)
     mgr->blob_size = BLOBSIZE;
     mgr->stackSize = mgr->blob_size * 2;
     mgr->dataStack = WAllocConnectionMemory(connection,mgr->stackSize);
+    if ( mgr->dataStack == NULL ) return NULL;
     mgr->transactionId = 0;
 
+    mgr->errorlevel = 0;
     memset(&mgr->errordelegate,0x00,sizeof(Error));
 
     mgr->log_count = MAX_FIELDS;
@@ -137,6 +140,7 @@ void DestroyWeaverConnection( StmtMgr mgr ) {
          */
         WCancelAndJoin(mgr->theConn);
         WDestroyConnection(mgr->theConn);
+        mgr->theConn = NULL;
     }
 }
 
@@ -216,18 +220,14 @@ void Init( StmtMgr mgr, usercleanup input, usercleanup output )
 }
 
 short Begin( StmtMgr mgr ) 
-{
-    long err = 0;
-
+{    
     if ( !IsValid(mgr) ) return -1;
-
-    err = WBegin(mgr->theConn,0);
     
-    if ( err == 0 ) mgr->transactionId = WGetTransactionId(mgr->theConn);
+    if ( WBegin(mgr->theConn,0) == 0 ) {
+        mgr->transactionId = WGetTransactionId(mgr->theConn);
+    }
 
-    err = CheckForErrors(mgr);
-    
-    return err;
+    return CheckForErrors(mgr);
 }
 
 short Fetch( StmtMgr mgr ) 
@@ -521,11 +521,13 @@ Input SetInputValue(StmtMgr mgr, const char * vari, short type, void* data, int 
                 char*  space = Advance(mgr, base->pointer);
                 if ( base->indicator == 2 ) {
                     WFreeMemory(mgr->theConn,*(void**)(space+4));
+                    if ( CheckForErrors(mgr) ) return NULL;
                 }
                 if ( base->maxlength < length + 4 ) {
                     *(int32_t*)space = -1;
                     space += 4;
                     *(void**)space = WAllocStatementMemory(mgr->statement,length + 4);
+                    if ( CheckForErrors(mgr) ) return NULL;
                     space = *(void**)space;
                     base->indicator = 2;
                 } else {
@@ -713,7 +715,7 @@ short SetStatementSpaceSize(StmtMgr mgr, long size )
     mgr->stackSize = size;
     
     ResetBindings(mgr);
-    return 0;
+    return CheckForErrors(mgr);
 }
 
 short ExpandBindings(StmtMgr mgr) 
@@ -742,7 +744,7 @@ short ExpandBindings(StmtMgr mgr)
     
     ResetBindings(mgr);
 
-    return 0;
+    return CheckForErrors(mgr);
 }
 
 short ResetBindings(StmtMgr mgr) {
@@ -800,7 +802,9 @@ short CheckForErrors( StmtMgr mgr )
 {
     if ( !IsValid(mgr) ) return -1;
 	long cc = WGetErrorCode(mgr->theConn);
-        if ( mgr->errorlevel == 2 ) return 2;
+        if ( mgr->errorlevel == 2 ) {
+            return 2;
+        }
         if ( cc != 0 ) {  
             mgr->errorlevel = 1;
             return 1;

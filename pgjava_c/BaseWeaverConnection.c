@@ -284,6 +284,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
         } else {
             if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link])) {
                 StmtMgr ref = getStmtMgr(env,linkid);
+    if ( ref == NULL ) return;
                 Init(ref,clean_input,clean_output);
                 DestroyWeaverStmtManager(ref); 
             }
@@ -295,6 +296,7 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_beginTransaction
 {
     StmtMgr ref = getStmtMgr(env,talkerObject);
 //	mark the beginning of the transaction
+    if ( ref == NULL ) return 0;
     if ( Begin(ref) ) {
         reportError(env,talkerObject,ref);
         return 0;
@@ -312,6 +314,7 @@ JNIEXPORT jobject JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStateme
 
         StmtMgr base = getStmtMgr(env,talkerObject);
 
+    if ( base == NULL ) return NULL;
 
         if ( statement == NULL ) {
             (*env)->ThrowNew(env,Cache->exception,"no statement");
@@ -336,6 +339,7 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_parseStatement(J
         
         StmtMgr base = getStmtMgr(env,talkerObject);
 
+    if ( base == NULL ) return 0;
 
         if ( statement == NULL ) {
             (*env)->ThrowNew(env,Cache->exception,"no statement");
@@ -367,6 +371,8 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_setInput(JNIEnv *
         short       type = translateType(javaType);
 
         StmtMgr        base = getStmtMgr(env,linkid);
+        
+        if ( base == NULL ) return;
     
 	varsize = (*env)->GetStringLength(env,theVar);	
 	if ( varsize > 63 ) {
@@ -402,6 +408,9 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_getOutput
     //	get proper agent
 
     StmtMgr base = getStmtMgr(env,linkid);
+    
+    if ( base == NULL ) return;
+
 
 // check for valid link
         if ( type == STREAMTYPE ) {
@@ -427,6 +436,9 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_executeStatement
 	jclass classID = (*env)->GetObjectClass(env,talkerObject);
     //	get proper agent	
         StmtMgr ref = getStmtMgr(env,linkid);
+        
+     if ( ref == NULL ) return 0;
+       
 // exec
         if ( Exec(ref) ) {
 // report errors
@@ -443,6 +455,9 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
 {
     //	get proper agent	
 	StmtMgr ref = getStmtMgr(env,linkid);
+        
+    if ( ref == NULL ) return JNI_FALSE;
+        
 //	fetch        
 //  pass results to java if there are no errors
 	if ( !Fetch(ref) ) {
@@ -466,6 +481,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_cancelTransaction
 {
     //	get proper agent	
 	StmtMgr ref = getStmtMgr(env,talkerObject);
+    if ( ref == NULL ) return;
 
 	Cancel(ref);
 }
@@ -582,7 +598,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_userLock
     //	get proper agent	
         StmtMgr base = getStmtMgr(env,talkerObject);
 
-        
+    if ( base == NULL ) return;
 	jsize namelen = (*env)->GetStringLength(env,group);
 	char  name[64];
 
@@ -614,6 +630,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_streamExec
     //	get proper agent	
         StmtMgr base = getStmtMgr(env,talkerObject);
 	
+    if ( base == NULL ) return;
 
     state = (*env)->GetStringUTFChars(env,statement,&copy);
                 
@@ -635,9 +652,10 @@ static jchar* convertStringBytes(char* target,char* source,int limit)
 }
 
 static StmtMgr getStmtMgr(JNIEnv* env, jobject linkid) {
-    StmtMgr ref;
-            
-    if ( (*env)->IsInstanceOf(env,linkid,Cache->talker) ) {
+    StmtMgr ref = NULL;
+    if ( shuttingdown ) {
+        ref = NULL;
+    }else if ( (*env)->IsInstanceOf(env,linkid,Cache->talker) ) {
         ref = theManagers[getProperAgent(env,linkid)];
     } else if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
         ref = theManagers[getProperAgent(env,linkid)];

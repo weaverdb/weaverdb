@@ -112,8 +112,6 @@ typedef struct Environment {
 	ProcessingMode  	Mode;           
 /*  prepkeyset.c   */
 	int			TotalExpr;
-/*     SEGV  in cond handler    */
-        sigjmp_buf		errenv;
 	int			insleep;
 /*   masterlock status   */
 	int 			masterlock;
@@ -210,7 +208,7 @@ MKS  12-11-2000
 
 Env* CreateEnv(Env* parent);
 Env* GetEnv(void);
-void SetEnv(void* env);
+bool SetEnv(void* env);
 void DestroyEnv(void* env);
 
 void* AllocateEnvSpace(SectionId id,size_t size);

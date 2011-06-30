@@ -154,7 +154,7 @@ extern Env* GetEnv(void) {
 
 }
 
-extern void SetEnv(void* envp)
+extern bool SetEnv(void* envp)
 {
 #ifdef ENV_TLS
         if ( envp != NULL ) {
@@ -164,6 +164,7 @@ extern void SetEnv(void* envp)
             Assert(env_cache != NULL);
             env_cache = envp;
         }
+        return TRUE;
 #else
 	EnvPointer env = envp;
         EnvPointer current = GetEnv();
@@ -172,8 +173,11 @@ extern void SetEnv(void* envp)
             pthread_mutex_lock(env->env_guard);
             if ( env->owner != 0 && env->owner != pthread_self() ) {
                 pthread_mutex_unlock(env->env_guard);
+                return FALSE;
+/*
                 printf("Environment already owned, make sure the connection is owned by a single thread\n");
                 abort();
+*/
             } else {
                 pthread_setspecific(envkey,&envmap[env->eid]);
                 env->owner = pthread_self();
@@ -201,6 +205,7 @@ extern void SetEnv(void* envp)
                 pthread_mutex_unlock(current->env_guard);
             }
         }
+        return TRUE;
 #endif
 }
 
@@ -492,9 +497,7 @@ int TransactionLock()
 	{
 		elog(ERROR,"System is shutting down",998);
 	}
-#ifdef NOTUSED
-		sem_wait(pipeline);
-#endif
+
 /*  do nothing if we already have the a transaction lock  */
 	if ( !(env->masterlock & TRANSACTIONLOCK_MASK) ) {
 		pthread_mutex_lock(&masterlock->guard);
@@ -509,7 +512,6 @@ int TransactionLock()
 			masterlock->waitcount++;
 			pthread_cond_wait(&masterlock->gate,&masterlock->guard);
 			masterlock->waitcount--;
-
 		}
 		masterlock->transcount++;
 		pthread_mutex_unlock(&masterlock->guard);
@@ -526,9 +528,7 @@ int TransactionLock()
 int TransactionUnlock()
 {
 	Env* env = GetEnv();
-#ifdef NOTUSED
-	sem_post(pipeline);
-#endif
+
         pthread_mutex_lock(env->env_guard);
         env->in_transaction = false;
         pthread_mutex_unlock(env->env_guard);
