@@ -103,7 +103,7 @@ typedef struct waiter {
 
 static pthread_mutex_t list_guard;
 static pthread_attr_t sweeperprops;
-static bool     paused = false;
+static bool     paused = true;
 static bool     inited = false;
 static int     concurrent = 1;
 
@@ -156,6 +156,7 @@ PoolsweepInit(int priority) {
             ALLOCSET_DEFAULT_MAXSIZE);
     
     inited = true;
+    paused = false;
 
 }
 

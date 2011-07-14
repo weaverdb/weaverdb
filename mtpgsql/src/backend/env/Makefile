@@ -16,7 +16,7 @@ INCLUDE_OPT = -I..
 CFLAGS+=$(INCLUDE_OPT)
 
 OBJS = env.o dbwriter.o poolsweep.o freespace.o \
-	vacuumlazy.o \
+	vacuumlazy.o bitmapset.o \
 	pg_crc.o analyze.o dolhelper.o delegatedscan.o \
 	WeaverConnection.o FieldTransform.o connectionutil.o
 # 	slotvar.o 

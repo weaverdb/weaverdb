@@ -117,6 +117,11 @@ _bt_getroot(Relation rel, int access)
             if ( !create ) break;
         }
     }
+    if ( create ) {
+/*
+        BiasBuffer(rel,root);
+*/
+    }
     return root;
 }
 

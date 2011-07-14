@@ -222,17 +222,12 @@ PG_EXTERN bool BufTableDelete(BufferDesc *buf);
 PG_EXTERN bool  BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block);
 /* bufmgr.c */
 PG_EXTERN BufferDesc *BufferDescriptors;
-PG_EXTERN BufferBlock BufferBlocks;
 
 PG_EXTERN SPINLOCK HeapBufLock;
 PG_EXTERN SPINLOCK IndexBufLock;
 PG_EXTERN SPINLOCK FreeBufMgrLock;
 
 /* localbuf.c */
-/*
-PG_EXTERN long *LocalRefCount;
-PG_EXTERN BufferDesc *LocalBufferDescriptors;
-*/
 PG_EXTERN const int	NLocBuffer;
 
 PG_EXTERN BufferDesc *LocalBufferAlloc(Relation reln, BlockNumber blockNum,bool *foundPtr);

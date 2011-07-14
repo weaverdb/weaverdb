@@ -58,8 +58,7 @@ int			Num_Descriptors;
 
 
 BufferDesc *BufferDescriptors;
-BufferBlock BufferBlocks;
-BufferBlock ShadowBlocks;
+static BufferBlock BufferBlocks;
 
 /*
  * Data Structures:
@@ -163,18 +162,16 @@ InitBufferPool(IPCKey key)
 	{
 		BufferDesc *buf;
 		unsigned long block;
-		unsigned long shadow;
 
 		buf = BufferDescriptors;
 		block = (unsigned long) BufferBlocks;
-                shadow = (unsigned long) ShadowBlocks;
 
 		/*
 		 * link the buffers into a circular, doubly-linked list to
 		 * initialize free list.  Still don't know anything about
 		 * replacement strategy in this file.
 		 */
-		for (i = 0; i < Data_Descriptors; block += BLCKSZ, shadow += BLCKSZ, buf++, i++)
+		for (i = 0; i < Data_Descriptors; block += BLCKSZ, buf++, i++)
 		{
                     Assert(ShmemIsValid((unsigned long) block));
 
@@ -182,9 +179,7 @@ InitBufferPool(IPCKey key)
 
                     CLEAR_BUFFERTAG(&(buf->tag));
                     buf->data = MAKE_OFFSET(block);
-#ifdef USE_SHADOW_PAGES
-                    buf->shadow = MAKE_OFFSET(shadow);
-#endif
+
                     buf->locflags = (BM_DELETED | BM_FREE);
                     buf->ioflags = 0;
                     buf->refCount = 0;

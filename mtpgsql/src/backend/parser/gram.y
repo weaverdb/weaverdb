@@ -140,7 +140,7 @@ static void doNegateFloat(Value *v);
 		RemoveFuncStmt RemoveStmt
 		RenameStmt ReportStmt RuleStmt TransactionStmt ViewStmt LoadStmt
 		CreatedbStmt DropdbStmt VacuumStmt CursorStmt SubSelect
-		UpdateStmt InsertStmt select_clause SelectStmt NotifyStmt DeleteStmt 
+		UpdateStmt InsertStmt select_clause SelectStmt NotifyStmt DeleteStmt PutStmt
 		ClusterStmt ExplainStmt VariableSetStmt VariableShowStmt VariableResetStmt
 		CreateUserStmt AlterUserStmt DropUserStmt RuleActionStmt
 		RuleActionStmtOrEmpty ConstraintsSetStmt
@@ -339,7 +339,7 @@ static void doNegateFloat(Value *v);
 		MATCH MINUTE_P MONTH_P NAMES
 		NATIONAL NATURAL NCHAR NEXT NO NOT NULLIF NULL_P NUMERIC
 		OF ON ONLY OPTION OR ORDER OUTER_P OVERLAPS
-		PARTIAL POSITION PRECISION PRIMARY PRIOR PROCEDURE PUBLIC
+		PARTIAL POSITION PRECISION PRIMARY PRIOR PROCEDURE PUBLIC PUT
 		READ REFERENCES RELATIVE  RIGHT ROLLBACK
 		SCROLL SECOND_P SELECT SESSION_USER SET SOME SUBSTRING
 		TABLE TEMPORARY THEN TIME TIMESTAMP TIMEZONE_HOUR
@@ -2848,6 +2848,7 @@ RuleActionMulti:  RuleActionMulti ';' RuleActionStmtOrEmpty
 RuleActionStmt:	InsertStmt
 		| UpdateStmt
 		| DeleteStmt
+		| PutStmt
 		| NotifyStmt
 		;
 
@@ -2879,6 +2880,7 @@ event:	SELECT							{ $$ = CMD_SELECT; }
 		| UPDATE						{ $$ = CMD_UPDATE; }
 		| DELETE						{ $$ = CMD_DELETE; }
 		| INSERT						{ $$ = CMD_INSERT; }
+		| PUT						{ $$ = CMD_PUT; }
 		 ;
 
 opt_instead:  INSTEAD					{ $$ = TRUE; }
@@ -3247,6 +3249,7 @@ OptimizableStmt:  SelectStmt
 		| CursorStmt
 		| UpdateStmt
 		| InsertStmt
+		| PutStmt
 		| NotifyStmt
 		| DeleteStmt					/* by default all are $$=$1 */
 		;
@@ -3386,6 +3389,14 @@ DeleteStmt:  DELETE FROM relation_name
 					n->whereClause = $4;
 					n->nowait = $5;
 					$$ = (Node *)n;
+				}
+		;
+                
+PutStmt:  PUT INTO relation_name insert_rest
+				{
+ 					$4->relname = $3;
+					$$ = (Node *) $4;
+                                        $$->type = T_PutStmt;
 				}
 		;
 

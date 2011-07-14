@@ -38,6 +38,7 @@ lztextin(char *str)
 	int32		rawsize;
 	lztext	   *tmp;
 	int			tmp_size;
+        int clen;
 
 	/* ----------
 	 * Handle NULL
@@ -58,7 +59,7 @@ lztextin(char *str)
 	 * ----------
 	 */
 	tmp = (lztext *) palloc(tmp_size);
-	pglz_compress(str, rawsize, tmp, NULL);
+	clen = pglz_compress(str, rawsize, tmp, NULL);
 
 	/* ----------
 	 * If we miss less than 25% bytes at the end of the temp value,
@@ -66,13 +67,13 @@ lztextin(char *str)
 	 * sequence.
 	 * ----------
 	 */
-	if (tmp_size - tmp->varsize < 256 ||
-		tmp_size - tmp->varsize < tmp_size / 4)
+	if (tmp_size - clen < 256 ||
+		tmp_size -  clen < tmp_size / 4)
 		result = tmp;
 	else
 	{
-		result = (lztext *) palloc(tmp->varsize);
-		memcpy(result, tmp, tmp->varsize);
+		result = (lztext *) palloc(clen);
+		memcpy(result, tmp, clen);
 		pfree(tmp);
 	}
 
@@ -213,6 +214,7 @@ text_lztext(text *txt)
 	lztext	   *tmp;
 	int			tmp_size;
 	char	   *str;
+        int        clen;
 
 	/* ----------
 	 * Handle NULL
@@ -234,7 +236,7 @@ text_lztext(text *txt)
 	 * ----------
 	 */
 	tmp = (lztext *) palloc(tmp_size);
-	pglz_compress(str, rawsize, tmp, NULL);
+	clen = pglz_compress(str, rawsize, tmp, NULL);
 
 	/* ----------
 	 * If we miss less than 25% bytes at the end of the temp value,
@@ -242,13 +244,13 @@ text_lztext(text *txt)
 	 * sequence.
 	 * ----------
 	 */
-	if (tmp_size - tmp->varsize < 256 ||
-		tmp_size - tmp->varsize < tmp_size / 4)
+	if (tmp_size - clen < 256 ||
+		tmp_size - clen < tmp_size / 4)
 		result = tmp;
 	else
 	{
-		result = (lztext *) palloc(tmp->varsize);
-		memcpy(result, tmp, tmp->varsize);
+		result = (lztext *) palloc(clen);
+		memcpy(result, tmp, clen);
 		pfree(tmp);
 	}
 
@@ -303,7 +305,6 @@ lztext_text(lztext *lz)
 int32
 lztext_cmp(lztext *lz1, lztext *lz2)
 {
-#ifdef USE_LOCALE
 
 	char	   *cp1;
 	char	   *cp2;
@@ -321,50 +322,6 @@ lztext_cmp(lztext *lz1, lztext *lz2)
 	pfree(cp2);
 
 	return result;
-
-#else							/* !USE_LOCALE */
-
-	PGLZ_DecompState ds1;
-	PGLZ_DecompState ds2;
-	int			c1;
-	int			c2;
-	int32		result = (int32) 0;
-
-	if (lz1 == NULL || lz2 == NULL)
-		return (int32) 0;
-
-	pglz_decomp_init(&ds1, lz1);
-	pglz_decomp_init(&ds2, lz2);
-
-	for (;;)
-	{
-		c1 = pglz_decomp_getchar(&ds1);
-		c2 = pglz_decomp_getchar(&ds2);
-
-		if (c1 == EOF)
-		{
-			if (c2 != EOF)
-				result = (int32) -1;
-			break;
-		}
-		else
-		{
-			if (c2 == EOF)
-				result = (int32) 1;
-		}
-		if (c1 != c2)
-		{
-			result = (int32) (c1 - c2);
-			break;
-		}
-	}
-
-	pglz_decomp_end(&ds1);
-	pglz_decomp_end(&ds2);
-
-	return result;
-
-#endif	 /* USE_LOCALE */
 }
 
 

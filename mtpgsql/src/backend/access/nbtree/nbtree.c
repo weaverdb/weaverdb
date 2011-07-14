@@ -101,7 +101,6 @@ btbuild(Relation heap,Relation index, int natts,
 	TupleDesc               htupdesc,
 				itupdesc;
 	Datum	   *            attdata = NULL;
-        Datum                   check1,check2,check3,check4;
 	char	   *            nulls = NULL;
 	InsertIndexResult       res = 0;
 	int			i;
@@ -457,17 +456,21 @@ btbuildCallback(Relation index,
 Datum
 btinsert(Relation rel, Datum *datum, char *nulls, ItemPointer ht_ctid, Relation heapRel)
 {
-/*	bool		checkUnique = PG_GETARG_BOOL(5);   */
 	InsertIndexResult res;
 	BTItem		btitem;
 	IndexTuple	itup;
+        IndexProp          atts = IndexProperties(RelationGetRelid(rel));
 
 	/* generate an index tuple */
 	itup = index_formtuple(RelationGetDescr(rel), datum, nulls);
 	itup->t_tid = *ht_ctid;
 	btitem = _bt_formitem(itup);
 
-	res = _bt_doinsert(rel, btitem, IndexIsUnique(RelationGetRelid(rel)), heapRel);
+        if ( IndexPropIsDeferred(atts) ) {
+                res = _bt_queueinsert(rel,btitem,IndexPropIsUnique(atts), heapRel);
+        } else {
+                res = _bt_doinsert(rel, btitem, IndexPropIsUnique(atts), heapRel);
+        }
 
 	pfree(btitem);
 	pfree(itup);

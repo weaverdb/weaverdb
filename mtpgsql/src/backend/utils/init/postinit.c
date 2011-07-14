@@ -396,7 +396,7 @@ InitPostgres(const char *dbname)
         if ( !bootstrap ) {
 /*
             PoolsweepInit(0);   
-*/
+ */
             on_proc_exit(PoolsweepDestroy, NULL);
 /*  if there are recovered pages are present,
  *  index pages need to be scanned and items 

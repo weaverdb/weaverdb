@@ -1016,91 +1016,6 @@ ExecCloseIndices(RelationInfo *resultRelationInfo)
 }
 
 /* ----------------------------------------------------------------
- *		ExecFormIndexTuple
- *
- *		Most of this code is cannabilized from DefaultBuild().
- *		As said in the comments for ExecOpenIndices, most of
- *		this functionality should be rearranged into a proper
- *		set of routines..
- * ----------------------------------------------------------------
- */
-#ifdef NOT_USED
-IndexTuple
-ExecFormIndexTuple(HeapTuple heapTuple,
-				   Relation heapRelation,
-				   Relation indexRelation,
-				   IndexInfo *indexInfo)
-{
-	IndexTuple	indexTuple;
-	TupleDesc	heapDescriptor;
-	TupleDesc	indexDescriptor;
-	Datum	   *datum;
-	char	   *nulls;
-
-	int			numberOfAttributes;
-	AttrNumber *keyAttributeNumbers;
-	FuncIndexInfoPtr fInfoP;
-
-	/* ----------------
-	 *	get information from index info structure
-	 * ----------------
-	 */
-	numberOfAttributes = indexInfo->ii_NumKeyAttributes;
-	keyAttributeNumbers = indexInfo->ii_KeyAttributeNumbers;
-	fInfoP = indexInfo->ii_FuncIndexInfo;
-
-	/* ----------------
-	 *	datum and null are arrays in which we collect the index attributes
-	 *	when forming a new index tuple.
-	 * ----------------
-	 */
-	CXT1_printf("ExecFormIndexTuple: context is %d\n", CurrentMemoryContext);
-	datum = (Datum *) palloc(numberOfAttributes * sizeof *datum);
-	nulls = (char *) palloc(numberOfAttributes * sizeof *nulls);
-
-	/* ----------------
-	 *	get the tuple descriptors from the relations so we know
-	 *	how to form the index tuples..
-	 * ----------------
-	 */
-	heapDescriptor = RelationGetDescr(heapRelation);
-	indexDescriptor = RelationGetDescr(indexRelation);
-
-	/* ----------------
-	 *	FormIndexDatum fills in its datum and null parameters
-	 *	with attribute information taken from the given heap tuple.
-	 * ----------------
-	 */
-	FormIndexDatum(numberOfAttributes,	/* num attributes */
-				   keyAttributeNumbers, /* array of att nums to extract */
-				   heapTuple,	/* tuple from base relation */
-				   heapDescriptor,		/* heap tuple's descriptor */
-				   datum,		/* return: array of attributes */
-				   nulls,		/* return: array of char's */
-				   fInfoP);		/* functional index information */
-
-	indexTuple = index_formtuple(indexDescriptor,
-								 datum,
-								 nulls);
-
-	/* ----------------
-	 *	free temporary arrays
-	 *
-	 *	XXX should store these in the IndexInfo instead of allocating
-	 *	   and freeing on every insertion, but efficency here is not
-	 *	   that important and FormIndexTuple is wasteful anyways..
-	 *	   -cim 9/27/89
-	 * ----------------
-	 */
-	pfree(nulls);
-	pfree(datum);
-
-	return indexTuple;
-}
-
-#endif
-
-/* ----------------------------------------------------------------
  *		ExecInsertIndexTuples
  *
  *		This routine takes care of inserting index tuples
@@ -1116,7 +1031,7 @@ void
 ExecInsertIndexTuples(TupleTableSlot *slot,
 					  ItemPointer tupleid,
 					  EState *estate,
-					  bool is_update)
+					  bool is_put)
 {
 	HeapTuple	heapTuple;
 	RelationInfo *resultRelationInfo;
@@ -1198,6 +1113,14 @@ ExecInsertIndexTuples(TupleTableSlot *slot,
 							  &(heapTuple->t_self),		/* tid of heap tuple */
 							  heapRelation);
 
+                if ( result->result == INDEX_UNIQUE_VIOLATION ) {
+                    if ( !is_put ) {
+                        GetEnv()->errorcode = 909;
+                        elog(ERROR, "Cannot insert a duplicate key into unique index %s ",RelationGetRelationName(relationDescs[i]));
+                     } else {
+                        *tupleid = result->pointer;
+                     }
+                }
 		/* ----------------
 		 *		keep track of index inserts for debugging
 		 * ----------------

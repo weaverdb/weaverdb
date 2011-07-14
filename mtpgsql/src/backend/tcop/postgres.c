@@ -1520,6 +1520,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 			TPRINTF(TRACE_VERBOSE, "AbortCurrentTransaction");
 
                 AbortTransactionBlock();
+                CommitTransactionCommand();
 		InError = false;
 		if (ExitAfterAbort)
 		{

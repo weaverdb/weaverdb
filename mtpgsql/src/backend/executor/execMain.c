@@ -1248,6 +1248,128 @@ ExecRetrieve(TupleTableSlot *slot,
 	IncrRetrieved();
 	(estate->es_processed)++;
 }
+/* ----------------------------------------------------------------
+ *		ExecPut
+ *
+ * ----------------------------------------------------------------
+ */
+
+int
+ExecPut(TupleTableSlot *slot,
+		   ItemPointer tupleid,
+		   EState *estate)
+{
+	HeapTuple	tuple;
+	int			result;
+	RelationInfo *resultRelationInfo;
+	Relation	resultRelationDesc;
+	int			numIndices;
+	Oid			newId;
+        ItemPointerData         ctid;
+        ItemPointerSetInvalid(tupleid);
+        TransactionInfo* t_info = GetTransactionInfo();
+
+	/*
+	 * get the heap tuple out of the tuple table slot
+	 */
+	tuple = slot->val;
+
+	/*
+	 * get information on the result relation
+	 */
+	resultRelationInfo = estate->es_result_relation_info;
+	resultRelationDesc = resultRelationInfo->ri_RelationDesc;
+
+	/*
+	 * have to add code to preform unique checking here. cim -12/1/89
+	 */
+
+	/* BEFORE ROW INSERT Triggers */
+	if (resultRelationDesc->trigdesc &&
+	resultRelationDesc->trigdesc->n_before_row[TRIGGER_EVENT_INSERT] > 0)
+	{
+		HeapTuple	newtuple;
+
+		newtuple = ExecBRInsertTriggers(resultRelationDesc, tuple);
+
+		if (newtuple == NULL)	/* "do nothing" */
+			return 0;
+
+		if (newtuple != tuple)	/* modified by Trigger(s) */
+		{
+			heap_freetuple(tuple);
+			ExecStoreTuple(newtuple,slot,false);
+			tuple = slot->val;
+		}
+	}
+
+	/*
+	 * Check the constraints of a tuple
+	 */
+
+	if (resultRelationDesc->rd_att->constr)
+		ExecConstraints("ExecPut", resultRelationDesc, tuple, estate);
+
+	/*
+	 * insert the tuple
+	 */
+	newId = heap_insert(resultRelationDesc,	tuple); /* heap tuple */
+	IncrAppended();
+
+	/*
+	 * process indices
+	 *
+	 * Note: heap_insert adds a new tuple to a relation.  As a side effect,
+	 * the tupleid of the new tuple is placed in the new tuple's t_ctid
+	 * field.
+	 */
+	numIndices = resultRelationInfo->ri_NumIndices;
+	if (numIndices > 0)
+		ExecInsertIndexTuples(slot, tupleid, estate, false);
+        
+        if ( ItemPointerIsValid(tupleid) ) {
+            ctid=tuple->t_self;
+     lput:;
+            result = heap_delete(resultRelationDesc, tupleid, &ctid, estate->es_snapshot);
+            switch (result)
+            {
+                    case HeapTupleSelfUpdated:
+                    case HeapTupleMayBeUpdated:
+                            break;
+
+                    case HeapTupleUpdated:
+                            if (t_info->XactIsoLevel == XACT_SERIALIZABLE)
+                                    elog(ERROR, "Can't serialize access due to concurrent update");
+                            else if (!(ItemPointerEquals(tupleid, &ctid)))
+                            {
+                                    TupleTableSlot *epqslot = EvalPlanQual(estate,
+                                                      resultRelationInfo->ri_RangeTableIndex, &ctid);
+
+                                    if (!TupIsNull(epqslot))
+                                    {
+                                            *tupleid = ctid;
+                                            ctid = tuple->t_self;
+                                            goto lput;
+                                    }
+                            }
+                    case HeapTupleBeingUpdated:
+                        /* heap tuple is being updated and we started after them so just forget about the update */
+                    default:
+                            elog(ERROR, "Unknown status %u from heap_delete during put operation", result);
+                            return 0;
+            }       
+        }
+        
+	(estate->es_processed)++;
+	estate->es_lastoid = newId;
+
+	/* AFTER ROW INSERT Triggers */
+	if (resultRelationDesc->trigdesc)
+		ExecARInsertTriggers(resultRelationDesc, tuple);
+        
+        return result;
+}
+
 
 /* ----------------------------------------------------------------
  *		ExecAppend
@@ -1326,7 +1448,7 @@ ExecAppend(TupleTableSlot *slot,
 	 */
 	numIndices = resultRelationInfo->ri_NumIndices;
 	if (numIndices > 0)
-		ExecInsertIndexTuples(slot, &(tuple->t_self), estate, false);
+		ExecInsertIndexTuples(slot, NULL, estate, false);
 	(estate->es_processed)++;
 	estate->es_lastoid = newId;
 
@@ -1349,7 +1471,7 @@ ExecDelete(TupleTableSlot *slot,
 {
 	RelationInfo *resultRelationInfo;
 	Relation	resultRelationDesc;
-	ItemPointerData ctid;
+	ItemPointerData ctid = *tupleid;
 	int			result;
         TransactionInfo* t_info = GetTransactionInfo();
 	/*
@@ -1563,7 +1685,7 @@ lreplace:;
 
 	numIndices = resultRelationInfo->ri_NumIndices;
 	if (numIndices > 0)
-		ExecInsertIndexTuples(slot, &(tuple->t_self), estate, true);
+		ExecInsertIndexTuples(slot, NULL, estate, false);
 
 	/* AFTER ROW UPDATE Triggers */
 	if (resultRelationDesc->trigdesc)

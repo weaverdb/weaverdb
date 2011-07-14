@@ -1727,6 +1727,11 @@ RelationCacheCommitChecker(RelNameCacheEnt *relationPtr, int dummy) {
         elog(DEBUG, "relation %s has refcount of %d at commit", RelationGetRelationName(relation), relation->rd_refcnt);
     }
 
+    if ( relation->readtrigger ) {
+        if ( relation->readtrigger->when == TRIGGER_COMMIT ) {
+            relation->readtrigger->call(relation, relation->readtrigger->args);
+        }
+    }
     relation->readtrigger = NULL;
 }
 
@@ -2250,12 +2255,12 @@ init_irels(void) {
 }
 
 void
-RelationSetReadTrigger(Relation rel, BufferTrigger* read) {
+RelationSetTrigger(Relation rel, BufferTrigger* read) {
     rel->readtrigger = read;
 }
 
 void
-RelationClearReadTrigger(Relation rel) {
+RelationClearTrigger(Relation rel) {
     rel->readtrigger = NULL;
 }
 

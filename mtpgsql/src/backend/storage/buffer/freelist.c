@@ -234,7 +234,7 @@ static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf) {
             } else if ( next->refCount > 0 ) {
                 bf->freeNext = next->freeNext;
                 next->freeNext = DETACHED_DESCRIPTOR;
-                next->locflags &= ~(BM_FREE);
+                next->locflags &= ~(BM_FREE | BM_USED);
             } else if ( lingeringbuffers && (next->locflags & BM_USED) ) {
                 bf->freeNext = next->freeNext;
                 next->freeNext = DETACHED_DESCRIPTOR;
@@ -248,7 +248,9 @@ static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf) {
             pthread_mutex_unlock(&next->cntx_lock.guard);
             
             if ( leave ) return NULL;
-            if ( tail ) return next;
+            if ( tail ) {
+                return next;
+            }
         } else {
             return NULL;
         }
@@ -388,6 +390,13 @@ BufferDesc * GetFreeBuffer(Relation rel) {
              * absolutely nessessary reduce bias and set tail to true
              * which adds it to the end of the list */
             head->bias -= 1;
+            head->locflags &= ~(BM_USED);
+            valid = false;
+            if ( !(head->locflags & BM_FREE) ) {
+                head->locflags |= BM_FREE;
+                tail = true;
+            }
+        } else if ( lingeringbuffers && (head->locflags & BM_USED) ) {
             head->locflags &= ~(BM_USED);
             valid = false;
             if ( !(head->locflags & BM_FREE) ) {

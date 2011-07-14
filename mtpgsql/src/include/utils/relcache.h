@@ -61,8 +61,8 @@ PG_EXTERN void RelationCacheCommit(void);
 PG_EXTERN void RelationCacheWalk(HashtFunc func, int arg);
 PG_EXTERN void ReportTransactionStatus(int level,char* id);
 
-PG_EXTERN void RelationSetReadTrigger(Relation rel, BufferTrigger* read);
-PG_EXTERN void RelationClearReadTrigger(Relation rel);
+PG_EXTERN void RelationSetTrigger(Relation rel, BufferTrigger* read);
+PG_EXTERN void RelationClearTrigger(Relation rel);
 PG_EXTERN void PrintRelcacheMemory(void);
 
 #endif	 /* RELCACHE_H */

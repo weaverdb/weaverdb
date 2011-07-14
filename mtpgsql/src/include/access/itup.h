@@ -43,10 +43,16 @@ typedef struct IndexTupleData
 
 typedef IndexTupleData *IndexTuple;
 
+typedef enum InsertIndextype {
+    INDEX_INSERTED,
+    INDEX_UNIQUE_VIOLATION,     
+    INDEX_QUEUED      
+} InsertIndexType;
 
 typedef struct InsertIndexResultData
 {
-	ItemPointerData pointerData;
+        InsertIndexType         result;
+        ItemPointerData         pointer;
 } InsertIndexResultData;
 
 typedef InsertIndexResultData *InsertIndexResult;

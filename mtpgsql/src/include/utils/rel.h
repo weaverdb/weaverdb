@@ -31,12 +31,6 @@ PG_EXTERN char *get_temp_rel_by_physicalname(const char *relname);
  * LockRelId and LockInfo really belong to lmgr.h, but it's more convenient
  * to declare them here so we can have a LockInfoData field in a Relation.
  */
-typedef int (*trigger_func)(void*);
-
-typedef struct BufferTrigger {
-    trigger_func        call;
-    void*               args;
-} BufferTrigger;
 
 typedef struct bufenv           *BufferCxt;
 typedef struct SnapshotHolder   *SnapshotCxt;
@@ -95,6 +89,21 @@ typedef struct TriggerDesc
  * Here are the contents of a relation cache entry.
  */
 
+typedef struct RelationData* Relation;
+
+typedef int (*trigger_func)(Relation, void*);
+
+typedef enum when {
+    TRIGGER_READ,
+    TRIGGER_COMMIT
+} TriggerWhen;
+
+typedef struct BufferTrigger {
+    TriggerWhen         when;
+    trigger_func        call;
+    void*               args;
+} BufferTrigger;
+
 typedef struct RelationData
 {
 	SmgrInfo        rd_smgr;		/* open file descriptor */
@@ -121,7 +130,6 @@ typedef struct RelationData
         BufferTrigger * readtrigger;
 } RelationData;
 
-typedef RelationData *Relation;
 
 
 /* ----------------

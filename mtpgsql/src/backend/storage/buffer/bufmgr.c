@@ -190,7 +190,9 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     
     if ( reln->readtrigger != NULL ) {
         BufferTrigger*  trigger = reln->readtrigger;
-        trigger->call(trigger->args);
+        if ( trigger->when == TRIGGER_READ ) {
+                trigger->call(reln,trigger->args);
+        }
     }
     
     if ( !isLocalBuf ) {

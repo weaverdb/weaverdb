@@ -45,7 +45,8 @@ PG_EXTERN void index_create(char *heapRelationName,
 			 uint16 parameterCount,
 			 Datum *parameter,
 			 Node *predicate,
-			 bool islossy,
+			 bool isdeferred,
+                         bool islossy,
 			 bool unique,
 			 bool primary);
 
@@ -72,20 +73,12 @@ PG_EXTERN void index_build(Relation heapRelation, Relation indexRelation,
 			PredInfo *predInfo);
 
 PG_EXTERN Oid IndexGetRelation(Oid indexId);
-PG_EXTERN bool IndexIsUnique(Oid indexId);
+PG_EXTERN IndexProp IndexProperties(Oid indexId);
 PG_EXTERN bool IndexIsUniqueNoCache(Oid indexId);
 
 PG_EXTERN bool activate_index(Oid indexId, bool activate);
 PG_EXTERN bool reindex_index(Oid indexId, bool force);
 PG_EXTERN bool activate_indexes_of_a_table(Oid relid, bool activate);
 PG_EXTERN bool reindex_relation(Oid relid, bool force);
-#ifdef NOTUSED
-PG_EXTERN double
-IndexBuildHeapScan(Relation heapRelation,
-				   Relation indexRelation,
-				   PredInfo *predInfo,
-				   IndexBuildCallback callback,
-				   void *callback_state);
-#endif
 
 #endif	 /* INDEX_H */

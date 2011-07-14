@@ -20,6 +20,9 @@
 #include "access/nbtree.h"
 #include "miscadmin.h"
 #include "utils/tqual.h"
+#include "utils/relcache.h"
+#include "catalog/index.h"
+#include "utils/tuplesort.h"
 
 typedef struct
 {
@@ -46,7 +49,7 @@ static OffsetNumber _bt_getoff(Page page, BlockNumber blkno);
 
 static Buffer _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf);
 
-static TransactionId _bt_check_unique(Relation rel, BTItem btitem,
+static TransactionId _bt_check_unique(Relation rel, ItemPointer other_ht,
 				 Relation heapRel, Buffer buf,
 				 ScanKey itup_scankey);
 static InsertIndexResult _bt_insertonpg(Relation rel, Buffer buf,
@@ -73,8 +76,59 @@ static void _bt_pgaddtup(Relation rel, Page page,
 			 OffsetNumber itup_off, const char *where);
 static bool _bt_isequal(TupleDesc itupdesc, Page page, OffsetNumber offnum,
 			int keysz, ScanKey scankey);
+static int _bt_processqueue(Relation rel, void* spool);
 
+InsertIndexResult
+_bt_queueinsert(Relation rel, BTItem btitem,
+			 bool index_is_unique, Relation heapRel) {
+    Tuplesortstate* spool = NULL;
+    InsertIndexResult res = NULL;
+        
+    if ( rel->readtrigger == NULL ) {
+        MemoryContext cxt = MemoryContextSwitchTo(MemoryContextGetEnv()->TopTransactionContext);
+        BufferTrigger* trigger = palloc(sizeof(BufferTrigger));
+        trigger->when = TRIGGER_COMMIT;
+        trigger->call = _bt_processqueue;
+        trigger->args = tuplesort_begin_index(rel,false,false);
+        rel->readtrigger = trigger;
+        MemoryContextSwitchTo(cxt);
+    }
+    
+    spool = rel->readtrigger->args;
+    tuplesort_puttuple(spool,&btitem->bti_itup);
+    res = palloc(sizeof(InsertIndexResultData));
+    res->result = INDEX_QUEUED;
+    ItemPointerCopy(&btitem->bti_itup.t_tid,&res->pointer);    
+    return res;
+}
 
+int
+_bt_processqueue(Relation rel, void* spool) {
+    Tuplesortstate*    state = spool;
+    bool should_free;
+    Relation heap = RelationIdGetRelation(IndexGetRelation(RelationGetRelid(rel)),DEFAULTDBOID);
+    IndexProp atts = IndexProperties(RelationGetRelid(rel));
+    IndexTuple it;
+    int processed = 0;
+    
+	tuplesort_performsort(state);
+	while (it = (IndexTuple) tuplesort_getindextuple(state, true, &should_free), it != (IndexTuple) NULL) {
+            BTItem bti = _bt_formitem(it);
+            InsertIndexResult result = _bt_doinsert(rel,bti,IndexPropIsUnique(atts),heap);
+            if (should_free)
+                    pfree((void *) it);
+            pfree(bti);
+            if ( result->result == INDEX_UNIQUE_VIOLATION ) {
+                GetEnv()->errorcode = 909;
+                elog(ERROR, "Cannot insert a duplicate key into unique index %s ",RelationGetRelationName(rel));
+            }
+            pfree(result);
+            processed += 1;
+	}    
+        tuplesort_end(state);
+        RelationClose(heap);
+        return processed;
+}
 /*
  *	_bt_doinsert() -- Handle insertion of a single btitem in the tree.
  *
@@ -90,7 +144,7 @@ _bt_doinsert(Relation rel, BTItem btitem,
 	ScanKey		itup_scankey;
 	BTStack		stack;
 	Buffer		buf;
-	InsertIndexResult res;
+	InsertIndexResult res = NULL,ir = NULL;
 
 	/* we need a scan key to do our search, so build one */
 	itup_scankey = _bt_mkscankey(rel, itup);
@@ -141,22 +195,36 @@ top:
 	if (index_is_unique  && !IsPoolsweep() )
 	{
 		TransactionId xwait;
+                ItemPointerData  other_ht;
+                
+                ItemPointerSetInvalid(&other_ht);
 
-		xwait = _bt_check_unique(rel, btitem, heapRel, buf, itup_scankey);
+		xwait = _bt_check_unique(rel, &other_ht, heapRel, buf, itup_scankey);
 
 		if (TransactionIdIsValid(xwait))
 		{
+                        _bt_relbuf(rel, buf);
 			/* Have to wait for the other guy ... */
-			_bt_relbuf(rel, buf);
 			XactLockTableWait(xwait);
+
+                        _bt_freestack(stack);
 			/* start over... */
-			_bt_freestack(stack);
 			goto top;
-		}
+		} else if ( ItemPointerIsValid(&other_ht) ) {
+                    res = palloc(sizeof(InsertIndexResultData));
+                    res->result = INDEX_UNIQUE_VIOLATION;
+                    ItemPointerCopy(&other_ht,&res->pointer);
+                }
 	}
 
 	/* do the insertion */
-	res = _bt_insertonpg(rel, buf, stack, natts, itup_scankey, btitem, 0);
+        ir = _bt_insertonpg(rel, buf, stack, natts, itup_scankey, btitem, 0);
+        
+        if ( res != NULL ) {
+            pfree(ir);
+        } else {
+            res = ir;
+        }
 
 	/* be tidy */
 	_bt_freestack(stack);
@@ -173,7 +241,7 @@ top:
  * conflict is detected, no return --- just elog().
  */
 static TransactionId
-_bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
+_bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                                  Buffer buf, ScanKey itup_scankey)
 {
         TupleDesc        itupdesc = RelationGetDescr(rel);
@@ -254,9 +322,9 @@ _bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
                                 if (buf != InvalidBuffer) {
                                     _bt_relbuf(rel, buf);  
                                 }
-                                GetEnv()->errorcode = 909;
-                                elog(ERROR, "Cannot insert a duplicate key into unique index %s hxid %lld",
-                                                 RelationGetRelationName(rel),htup.t_data->t_xmin);
+
+                                *other_ht = htup.t_self;
+                                return InvalidTransactionId;
                             }
 		}
                 /*
@@ -584,7 +652,8 @@ _bt_insertonpg(Relation rel,
 formres:;
 	/* by here, the new tuple is inserted at itup_blkno/itup_off */
 	res = (InsertIndexResult) palloc(sizeof(InsertIndexResultData));
-	ItemPointerSet(&(res->pointerData), itup_blkno, itup_off);
+	ItemPointerSet(&(res->pointer), itup_blkno, itup_off);
+        res->result = INDEX_INSERTED;
 
 	return res;
 }
@@ -816,7 +885,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 */
         LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
 	PageRestoreTempPage(leftpage, origpage);
-
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 	/* write and release the old right sibling */
 	if (!P_RIGHTMOST(ropaque))
 		_bt_wrtbuf(rel, sbuf);

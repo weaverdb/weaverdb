@@ -180,7 +180,8 @@ _hash_insertonpg(Relation rel,
 	/* by here, the new tuple is inserted */
 	res = (InsertIndexResult) palloc(sizeof(InsertIndexResultData));
 
-	ItemPointerSet(&(res->pointerData), itup_blkno, itup_off);
+	ItemPointerSet(&(res->pointer), itup_blkno, itup_off);
+        res->result = INDEX_INSERTED;
 
 	if (res != NULL)
 	{

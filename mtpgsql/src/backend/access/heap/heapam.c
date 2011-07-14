@@ -772,7 +772,11 @@ heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snaps
 	tp.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
 	tp.t_data->t_infomask &= 
                 ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
-	tp.t_data->t_ctid = tp.t_self;
+	if ( ctid != NULL ) {
+            tp.t_data->t_ctid = *ctid;
+        } else {
+            tp.t_data->t_ctid = tp.t_self;
+        }
         UnlockHeapTuple(relation,buffer,&tp);
     
 	if ( HeapTupleHasBlob(&tp) ) {

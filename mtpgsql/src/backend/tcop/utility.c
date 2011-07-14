@@ -52,6 +52,7 @@
 #include "utils/builtins.h"
 #include "utils/ps_status.h"
 #include "utils/syscache.h"
+#include "utils/relcache.h"
 
 
 /* ----------------
@@ -724,25 +725,15 @@ ProcessUtility(Node *parsetree,
 		case T_VacuumStmt:
 			(commandTag = "VACUUM");
 			CHECK_IF_ABORTED();
-	/*  poolsweep is our auto vacuum.  we must pause
-	it if we are calling vacuum or we could cause
-	an endless loop of vacuums.  Auto vacuum is
-	triggered off of buffer writes which vacuum can 
-	cause many of 12.17.2001 MKS */			
-                        /*
-			vacuum(((VacuumStmt *) parsetree)->vacrel,
-				   ((VacuumStmt *) parsetree)->verbose,
-				   ((VacuumStmt *) parsetree)->analyze,
-				   ((VacuumStmt *) parsetree)->exclusive,
-				   ((VacuumStmt *) parsetree)->fixflags,
-				   ((VacuumStmt *) parsetree)->va_spec);
-                        */
-			if ( ((VacuumStmt *) parsetree)->vacrel == NULL ) {
-	/*  if we vacuumed everything, there is
-	no need to vacuum again  MKS 12.17.2001
-	*/			
-	/*			DropVacuumRequests(GetDatabaseId());   */
-			}
+                        if ( IsPoolsweepPaused() ) {
+                       	    Relation rel = RelationNameGetRelation(((VacuumStmt *) parsetree)->vacrel,DEFAULTDBOID);
+                            if ( RelationIsValid(rel) ) {
+                                lazy_open_vacuum_rel(rel->rd_id,false,false);
+                                if ( ((VacuumStmt *) parsetree)->analyze ) {
+                                    analyze_rel(rel->rd_id);
+                                }
+                            }
+                        }
 			break;
 
 		case T_ExplainStmt:

@@ -602,7 +602,6 @@ WExec(OpaquePreparedStatement plan) {
                         case CMD_INSERT:
                             slot->val->t_data->t_oid = GetGenId();
                             ExecAppend(slot, NULL, plan->state);
-                            count++;
                             break;
                         case CMD_DELETE:
                             ExecDelete(slot, &tuple_ctid, plan->state);
@@ -612,6 +611,11 @@ WExec(OpaquePreparedStatement plan) {
                             ExecReplace(slot, &tuple_ctid, plan->state);
                             count++;
                             break;
+                        case CMD_PUT:
+                            if ( ExecPut(slot,&tuple_ctid,plan->state) == HeapTupleUpdated ) {
+                                count++;
+                            }
+                           break;
                         default:
                             elog(DEBUG, "ExecutePlan: unknown operation in queryDesc");
                             break;

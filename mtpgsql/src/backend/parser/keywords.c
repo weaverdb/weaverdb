@@ -216,6 +216,7 @@ static ScanKeyword ScanKeywords[] = {
 	{"procedure", PROCEDURE},
 	{"prune", PRUNE},
 	{"public", PUBLIC},
+	{"put", PUT},
 	{"read", READ},
 	{"references", REFERENCES},
 	{"reindex", REINDEX},

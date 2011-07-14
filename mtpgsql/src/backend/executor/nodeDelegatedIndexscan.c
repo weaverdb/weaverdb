@@ -46,7 +46,7 @@ typedef struct IndexScanArgs {
 static TupleTableSlot *DelegatedIndexNext(DelegatedIndexScan *node);
 static ScanKey BuildScanKey(List* indxqual, ExprContext* expr_cxt);
 static void* DolIndexDelegation(Delegate arg);
-static int IndexPointerTranfer(void*  args);
+static int IndexPointerTranfer(Relation rel, void*  args);
 
 static int compare_blocks(ItemPointer c1, ItemPointer c2);
 
@@ -587,6 +587,7 @@ DolIndexDelegation(Delegate arg) {
 
     IndexScanArgs* scan_args = (IndexScanArgs*)DelegatedScanArgs(arg);
     
+    trigger.when = TRIGGER_READ;
     trigger.call = (trigger_func)IndexPointerTranfer;
     trigger.args = arg;
     
@@ -600,7 +601,7 @@ DolIndexDelegation(Delegate arg) {
 
     IndexScanDesc scan = index_beginscan(rel,ScanDirectionIsBackward(scan_args->dir),scan_args->keycount,scan_args->scankey);
     
-    RelationSetReadTrigger(rel,&trigger);
+    RelationSetTrigger(rel,&trigger);
     
     while ( !scan_args->done ) {
         scan_args->done = !index_getnext(scan,scan_args->dir);
@@ -642,7 +643,7 @@ DolIndexDelegation(Delegate arg) {
         }
     }
 
-    RelationClearReadTrigger(rel);
+    RelationClearTrigger(rel);
     
     index_endscan(scan);
     index_close(rel);
@@ -657,7 +658,7 @@ DolIndexDelegation(Delegate arg) {
 }
 
 static int
-IndexPointerTranfer(void*  args) {
+IndexPointerTranfer(Relation rel, void*  args) {
     Delegate delegate = (Delegate)args;
     IndexScanArgs* scan_args = (IndexScanArgs*)DelegatedScanArgs(delegate);
     

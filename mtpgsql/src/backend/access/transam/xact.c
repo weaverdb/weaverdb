@@ -616,7 +616,6 @@ AtCommit_Cache()
 	 * Make catalog changes visible to all backend.
 	 * ----------------
 	 */
-        RelationCacheCommit();
 	RegisterInvalid(true);
         ResetCatalogCacheMemory();
 }
@@ -925,6 +924,7 @@ CommitTransaction()
 
 	CloseSequences();
 	DropNoNameRels();
+        RelationCacheCommit();
 	
         ThreadTransactionEnd();
         
@@ -1194,6 +1194,7 @@ AbortTransactionBlock(void)
 	 *	default state.
 	 * ----------------
 	 */
+        s->blockState = TBLOCK_DEFAULT;
 	elog(NOTICE, "ABORT: no transaction in progress");
 }
 

@@ -28,6 +28,7 @@
 #include "storage/smgr_spi.h"
 #include "utils/relcache.h"
 #include "env/connectionutil.h"
+#include "utils/pg_lzcompress.h"
 
 #undef DIAGNOSTIC
 
@@ -47,6 +48,7 @@ static union  logbuffer {
         long    log_id;
         long    segments;
         bool    completed;
+        bool    compressed;
         pthread_t   owner;
     } LogHeader;
     char        block[BLCKSZ];
@@ -82,14 +84,28 @@ static int max_index;
 static char*        index_log;
 static int          index_count;
 static char*        scratch_space;
-static int          scratch_size;
+static int          scratch_loc = 0;
+static bool         compress_log = FALSE;
+static PGLZ_Strategy log_strategy = {
+	32,							/* Data chunks less than 32 bytes are not
+								 * compressed */
+	0x7fffffff,					/* No upper limit on what we'll try to
+								 * compress */
+	20,							/* Require 25% compression rate, or not worth
+								 * it */
+	2048,						/* Give up if no compression in the first 1KB */
+	128,						/* Stop history lookup if a match of 128 bytes
+								 * is found */
+	20							/* Lower good match size by 10% at every loop
+								 * iteration */
+};
 
 /* routines declared here */
 static BlockNumber _vfdnblocks(File file, Size blcksz);
 static int _vfddumplogtodisk(void);
 static int _vfddumpindextomemory(void);
 static int _vfddumpindextodisk();
-static long _vfdreplaysegment(File logfile);
+static long _vfdreplaysegment(File logfile,bool compressed);
 static int _vfdreplayindexlog();
 
 static File _openlogfile(char* path, bool replay);
@@ -122,6 +138,18 @@ _openlogfile(char* logfile_path, bool replay) {
     if ( !replay && GetBoolProperty("optimize_log") ) {
            FileOptimize(file);  
     }
+    
+    if ( PropertyIsValid("compress_log") ) {
+        compress_log = GetBoolProperty("compress_log");
+    }
+    
+      if ( PropertyIsValid("compress_good") ) {
+          log_strategy.match_size_good = GetIntProperty("compress_good");
+      }
+    
+      if ( PropertyIsValid("compress_drop") ) {
+          log_strategy.match_size_drop = GetIntProperty("compress_drop");
+      }    
  
     FilePin(file,0);
     FileSeek(file,0,SEEK_SET);
@@ -142,16 +170,15 @@ vfdinit()
       if ( index_path == NULL ) {
         index_path = "pg_indexlog";
       }     
-    
+          
     log_file = _openlogfile(logfile_path, false);
     index_file = _openlogfile(index_path, false);
         
-        max_index = ((sizeof(IndexStore) - MAXALIGN((char*)&IndexStore - (char*)&IndexStore.header.blocks)) / sizeof(SmgrData));
-        max_blocks = ((sizeof(SegmentStore) - MAXALIGN((char*)&SegmentStore - (char*)&SegmentStore.header.blocks)) / sizeof(SmgrData));
-        log_count = 0;
+    max_index = ((sizeof(IndexStore) - MAXALIGN((char*)&IndexStore - (char*)&IndexStore.header.blocks)) / sizeof(SmgrData));
+    max_blocks = ((sizeof(SegmentStore) - MAXALIGN((char*)&SegmentStore - (char*)&SegmentStore.header.blocks)) / sizeof(SmgrData));
+    log_count = 0;
         
-    scratch_size = (BLCKSZ * max_blocks);
-    scratch_space = os_malloc(scratch_size);
+    scratch_space = os_malloc((compress_log) ? max_blocks * PGLZ_MAX_OUTPUT(BLCKSZ) : (BLCKSZ * max_blocks));
     
     log_pos = 0;
  
@@ -169,6 +196,7 @@ vfdshutdown()
         LogBuffer.LogHeader.header_magic = HEADER_MAGIC;
         LogBuffer.LogHeader.log_id = log_count;
         LogBuffer.LogHeader.completed = false;
+        LogBuffer.LogHeader.compressed = compress_log;
         LogBuffer.LogHeader.segments = 0;  
 
         log_pos = FileSeek(log_file,0,SEEK_END);
@@ -667,6 +695,7 @@ vfdbeginlog() {
     LogBuffer.LogHeader.header_magic = HEADER_MAGIC;
     LogBuffer.LogHeader.log_id = log_count++;
     LogBuffer.LogHeader.completed = false;
+    LogBuffer.LogHeader.compressed = compress_log;
     LogBuffer.LogHeader.segments = 0;  
     FilePin(log_file,0); 
     log_pos = FileSeek(log_file,0,SEEK_END);
@@ -682,14 +711,26 @@ vfdbeginlog() {
 
 int
 vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
-        
+    int32 put = BLCKSZ;
+    
     if ( SegmentStore.header.count == max_blocks ) {
         _vfddumplogtodisk();
     }
     
     info->nblocks = block;
-    memmove(SegmentStore.header.blocks + SegmentStore.header.count,info,sizeof(SmgrData));
-    memmove(scratch_space + (BLCKSZ * SegmentStore.header.count),buffer,BLCKSZ);
+    memmove(SegmentStore.header.blocks + SegmentStore.header.count,info,sizeof(SmgrData)); 
+    if ( compress_log ) {
+        put = pglz_compress(buffer,BLCKSZ,(PGLZ_Header*)(scratch_space + scratch_loc),&log_strategy);
+        if ( !put ) {
+            put = BLCKSZ + 4;
+            *(int32*)(scratch_space + scratch_loc) = put;
+            memmove(scratch_space + scratch_loc + 4,buffer,BLCKSZ);
+        }
+        scratch_loc += put;
+    } else {
+        memmove(scratch_space + scratch_loc,buffer,BLCKSZ);
+        scratch_loc += BLCKSZ;
+    }
     SegmentStore.header.count += 1;
     
     if ( info->relkind == RELKIND_INDEX ) {
@@ -745,6 +786,7 @@ _vfddumpindextodisk() {
 int
 _vfddumplogtodisk() {
     int ret = 0;
+    int c = 0;
     
     if ( SegmentStore.header.count == 0 ) return 0;
     
@@ -752,7 +794,8 @@ _vfddumplogtodisk() {
     SegmentStore.header.seg_id = LogBuffer.LogHeader.segments++;
     FilePin(log_file,0);
     ret += FileWrite(log_file,SegmentStore.data,BLCKSZ);
-    ret += FileWrite(log_file,scratch_space,BLCKSZ * SegmentStore.header.count);
+    ret += FileWrite(log_file,scratch_space,scratch_loc);
+    scratch_loc = 0;
     SegmentStore.header.count = 0;
     FileUnpin(log_file,0); 
     return SegmentStore.header.count;
@@ -821,6 +864,7 @@ vfdreplaylogs() {
     FileSeek(logfile,0,SEEK_SET);
     
     while (total < end) {
+        
         read = FileRead(logfile,LogBuffer.block,BLCKSZ);
 
         if ( read != BLCKSZ ) {
@@ -846,16 +890,16 @@ vfdreplaylogs() {
         }
         vfd_log("VFD Log ID: %d, complete: %s, segments: %d",LogBuffer.LogHeader.log_id,
             (LogBuffer.LogHeader.completed) ? "true":"false",LogBuffer.LogHeader.segments);   
-
+        
         for ( count=0;count<LogBuffer.LogHeader.segments;count++) {
-            long add =  _vfdreplaysegment(logfile);
+            long add =  _vfdreplaysegment(logfile,LogBuffer.LogHeader.compressed);
             if ( add < 0 ) {
                 vfd_log("exiting due to invalid segment");
                 result = SM_FAIL;
                 break;
             }
             total += add;
-        }
+        }        
 /* there are valid logs, no need to replay index  */
         logged = true; 
     }
@@ -895,16 +939,25 @@ _vfdreplayindexlog() {
     FileClose(indexfile);
 }
 
+
 static long
-_vfdreplaysegment(File logfile) {
+_vfdreplaysegment(File logfile,bool compressed) {
         int count = 0;
         long ret = 0;
         long total = 0;
         File fd = -1;
         Oid crel = 0,cdb = 0;
-    
+        char* block = scratch_space;
+        
+        union {
+            PGLZ_Header header;
+            char*       buffer;
+        }  cbuf;
+                
         ret = FileRead(logfile,SegmentStore.data,BLCKSZ);
+        
         total += ret;
+
         if ( ret != BLCKSZ ) {
             return -1;
         }
@@ -922,7 +975,16 @@ _vfdreplaysegment(File logfile) {
             vfd_log("replay %s-%s relid:%d dbid:%d block:%d",NameStr(info->relname),
                 NameStr(info->dbname),info->relid,info->dbid,info->nblocks);
 
-            ret = FileRead(logfile,scratch_space,BLCKSZ);
+            if ( compressed ) {
+                cbuf.buffer = scratch_space + BLCKSZ;
+                FileRead(logfile,(char*)&cbuf.header.vl_len_,sizeof(cbuf.header.vl_len_));
+                FileRead(logfile,(char*)&cbuf.header.rawsize,cbuf.header.vl_len_-sizeof(cbuf.header.vl_len_));
+                pglz_decompress(&cbuf.header,block);
+
+                ret = PGLZ_RAW_SIZE((&cbuf.header));
+            } else {
+                ret = FileRead(logfile,block,BLCKSZ);
+            }
             
             if ( ret == BLCKSZ ) {
                 total += ret;
@@ -941,7 +1003,7 @@ _vfdreplaysegment(File logfile) {
 
                 if ( fd > 0 ) {
                     FileSeek(fd,info->nblocks * BLCKSZ,SEEK_SET);
-                    FileWrite(fd,scratch_space,BLCKSZ);
+                    FileWrite(fd,block,BLCKSZ);
                     if (info->relkind == RELKIND_INDEX ) {
                         smgraddrecoveredpage(NameStr(info->dbname),cdb,crel,info->nblocks);
                     }

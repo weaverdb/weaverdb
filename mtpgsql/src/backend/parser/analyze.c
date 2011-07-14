@@ -133,7 +133,6 @@ static Query *
 transformStmt(ParseState *pstate, Node *parseTree)
 {
 	Query	   *result = NULL;
-	AnalyzeGlobals* env = GetAnalyzeInfo();
 
 	switch (nodeTag(parseTree))
 	{
@@ -239,7 +238,11 @@ transformStmt(ParseState *pstate, Node *parseTree)
 		case T_InsertStmt:
 			result = transformInsertStmt(pstate, (InsertStmt *) parseTree);
 			break;
-
+                        
+		case T_PutStmt:
+			result = transformInsertStmt(pstate, (InsertStmt *) parseTree);
+			break;
+                        
 		case T_DeleteStmt:
 			result = transformDeleteStmt(pstate, (DeleteStmt *) parseTree);
                         break;
@@ -322,7 +325,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	List	   *tl;
 	TupleDesc	rd_att;
 
-	qry->commandType = CMD_INSERT;
+	qry->commandType = ( stmt->type == T_PutStmt ) ? CMD_PUT : CMD_INSERT;
 	pstate->p_is_insert = true;
 
 	/*----------

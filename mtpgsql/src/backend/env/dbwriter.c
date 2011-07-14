@@ -403,7 +403,6 @@ void DBCreateWriterThread(DBMode mode) {
             }  
             break;
     }
-    logging = (mode == LOG_MODE);
 }
 
 void* SyncWriter(void *jones) {    
@@ -460,17 +459,19 @@ void FlushWriteGroup(WriteGroup cart) {
     int release = 0;
 
     pthread_mutex_unlock(&cart->checkpoint);
-    LogBuffers(cart);
+    if ( logging ) LogBuffers(cart);
     WriteGroup sync = GetSyncGroup();
-    MergeWriteGroups(sync,cart);
+    sync_buffers += MergeWriteGroups(sync,cart);
     sync->currstate = FLUSHING;
     release = SyncBuffers(sync,true);
     sync->currstate = NOT_READY;
+   if ( sync_buffers > max_logcount ) { 
     CommitPackage(sync);
     if ( logging ) ClearLogs(sync);
+   }
     elog(DEBUG,"flushed out %d buffers",release);
-    sync_buffers = MergeWriteGroups(cart,sync);
-    if ( sync_buffers ) ActivateSyncGroup();
+    release = MergeWriteGroups(cart,sync);
+    if ( release ) ActivateSyncGroup();
     pthread_mutex_lock(&cart->checkpoint);
     cart->currstate = READY;
     pthread_cond_broadcast(&cart->broadcaster);
@@ -530,9 +531,9 @@ void* DBWriter(void *jones) {
         cart->currstate = RUNNING;
         
         UnlockWriteGroup(cart);
-             
+
         releasecount = LogWriteGroup(cart);
-                       
+                                    
         if ( GetProcessingMode() == NormalProcessing && cart->loggable && (sync_buffers < max_logcount) && !primed ) {
             /*  move buffer syncs to the sync cart */
             sync_buffers += MergeWriteGroups(GetSyncGroup(), cart);
@@ -692,15 +693,10 @@ int LogWriteGroup(WriteGroup cart) {
     int releasecount = 0;
     int trans_logged = 0;
     int x=0;
-        /*  insert the buffers in the shadow log
-         * and log the transaction state, then release
-         * waiters
-         */
-/*
-        releasecount += LogBuffers(cart, NONINDEX_PASS);
- *      releasecount = LogBuffers(cart, INDEX_PASS);
-*/
-    releasecount = LogBuffers(cart);
+    
+    if ( logging ) {
+        releasecount = LogBuffers(cart);
+    }
 
     if ( cart->dotransaction ) {
         trans_logged = LogTransactions(cart);
@@ -1107,7 +1103,7 @@ int ClearLogs(WriteGroup list) {
   /*  in init processing mode, don't clear the logs
    *  just add to it 
    */
-    if ( GetProcessingMode() != InitProcessing ) {
+    if ( logging ) {
         smgrexpirelogs();
     }
 }
