@@ -387,9 +387,7 @@ ExecDelegatedSeqReScan(DelegatedSeqScan *dnode, ExprContext *exprCtxt)
 static void* 
 DolHeapDelegation(Delegate arg) {
     HeapTuple  htup;
-    int min = 8;
     BlockNumber blk = InvalidBlockNumber;
-    int buf_limit = NBuffers * DelegatedBufferMax;
     int TransferMax = DelegatedGetTransferMax();
     int buf_count = 0;
     int start_blk = 0;

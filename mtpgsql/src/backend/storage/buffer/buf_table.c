@@ -65,7 +65,7 @@ InitBufTable(int count)
         for (idx=0;idx<table_count;idx++) {
             pthread_mutex_init(&tables[idx].lock,&process_mutex_attr);
             snprintf(name,255,"Buffer Lookup Table #%d",idx);
-            tables[idx].table = (HTAB *) ShmemInitHash(name,NBuffers, NBuffers,
+            tables[idx].table = (HTAB *) ShmemInitHash(name,NBuffers, MaxBuffers,
 						&info, (HASH_ELEM | HASH_FUNCTION));
             if ( tables[idx].table == NULL ) {
 		elog(FATAL, "couldn't initialize shared buffer pool Hash Tbl");

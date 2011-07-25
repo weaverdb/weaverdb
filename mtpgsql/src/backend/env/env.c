@@ -189,7 +189,7 @@ extern bool SetEnv(void* envp)
                 pthread_mutex_unlock(env->env_guard);
             }
         } else {
-           Assert(current != NULL);
+            if ( current == NULL ) return FALSE;
            if ( current->parent != NULL ) {
 /* sub-connections cannot jump threads b/c we need to be able to join */
                 
@@ -840,6 +840,13 @@ long prandom(void) {
 
 void sprandom(unsigned int seed) {
 	srand48(seed);
+}
+
+void ptimeout(struct timespec* timeval,int to) {
+    clock_gettime(CLOCK_REALTIME,timeval);
+    timeval->tv_nsec += ((to % 1000) * 1000000);
+    timeval->tv_sec += ((to / 1000) + (timeval->tv_nsec/1000000000));
+    timeval->tv_nsec = timeval->tv_nsec % 1000000000;    
 }
 
 CommBuffer* ConnectCommBuffer(void* args,commfunc mover) {

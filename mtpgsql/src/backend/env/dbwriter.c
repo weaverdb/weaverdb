@@ -175,7 +175,6 @@ static int ResetThreadState(THREAD*  t);
 
 static int TakeFileSystemSnapshot(char* cmd);
 
-extern int      NBuffers;
 extern bool     TransactionSystemInitialized;
 
 static int      BufferFlushCount;
@@ -197,7 +196,7 @@ static bool     stopped = false;
 static int      wait_timeout = 400;
 static int      sync_timeout = 5000;
 static int      max_logcount = (512);
-
+static long   flush_time = 3000;
 /*
  * heap garbage collection threshold -- asks for a vacuum every time the
  * number of syncs on a heap/number of relation blocks is accessed
@@ -271,12 +270,12 @@ void DBWriterInit() {
     /*	pthread_mutex_init(&groupguard, NULL);  */
     /*	pthread_cond_init(&swing, NULL);  */
 
-    log_group = CreateWriteGroup(maxtrans, NBuffers);
-    log_group->next = CreateWriteGroup(maxtrans, NBuffers);
+    log_group = CreateWriteGroup(maxtrans, MaxBuffers);
+    log_group->next = CreateWriteGroup(maxtrans, MaxBuffers);
     /* link in a circle  */
     log_group->next->next = log_group;
 
-    sync_group = CreateWriteGroup(maxtrans, NBuffers);
+    sync_group = CreateWriteGroup(maxtrans, MaxBuffers);
 
     DBTableInit();
 
@@ -457,8 +456,13 @@ void ReleaseSyncGroup() {
 
 void FlushWriteGroup(WriteGroup cart) {
     int release = 0;
-
+    struct timeval t1,t2;
+    long elapsed;
+    
     pthread_mutex_unlock(&cart->checkpoint);
+    
+    gettimeofday(&t1,NULL);
+
     if ( logging ) LogBuffers(cart);
     WriteGroup sync = GetSyncGroup();
     sync_buffers += MergeWriteGroups(sync,cart);
@@ -470,8 +474,14 @@ void FlushWriteGroup(WriteGroup cart) {
     if ( logging ) ClearLogs(sync);
    }
     elog(DEBUG,"flushed out %d buffers",release);
-    release = MergeWriteGroups(cart,sync);
-    if ( release ) ActivateSyncGroup();
+     
+    gettimeofday(&t2,NULL);
+    
+    elapsed = (t2.tv_sec - t1.tv_sec) * 1000;      // sec to ms
+    elapsed += (t2.tv_usec - t1.tv_usec) / 1000;   // us to ms
+    
+    flush_time = elapsed;   
+    
     pthread_mutex_lock(&cart->checkpoint);
     cart->currstate = READY;
     pthread_cond_broadcast(&cart->broadcaster);
@@ -621,8 +631,7 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
              */
             if ( timed ) {
                 struct timespec waittime;
-                waittime.tv_sec = time(NULL) + (sync_timeout / 1000);
-                waittime.tv_nsec = (sync_timeout % 1000) * 1000000;
+                ptimeout(&waittime,sync_timeout);
                 timerr = pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
                 if (timerr == ETIMEDOUT) {
                     cart->currstate = PRIMED;
@@ -639,6 +648,7 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
                     return false;
                 }
             }
+            Assert(cart->currstate != WAITING);
             return true;
         case READY:
             timerr = 0;
@@ -647,9 +657,9 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
                     !(stopped) &&
                     cart->numberOfTrans < maxtrans) {
                 struct timespec waittime;
-                waittime.tv_sec = time(NULL) + (wait_timeout / 1000);
-                waittime.tv_nsec = (wait_timeout % 1000) * 1000000;
+
                 cart->currstate = WAITING;
+                ptimeout(&waittime,wait_timeout);
                 timerr = pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
                 if (timerr == ETIMEDOUT) {
                     if ( cart->currstate == FLUSHING ) {
@@ -659,6 +669,7 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
                     else cart->currstate = READY;
                     return false;
                 } else {
+                    Assert(cart->currstate != WAITING);
                     return true;
                 }
             }
@@ -769,9 +780,9 @@ void CommitPackage(WriteGroup cart) {
 void ResetWriteGroup(WriteGroup cart) {
     Assert(cart->currstate == COMPLETED || cart->currstate == NOT_READY);
     
-    memset(cart->buffers, 0, sizeof(bool) * NBuffers);
-    memset(cart->release, 0, sizeof(int) * NBuffers);
-    memset(cart->descriptions, 0, sizeof(BufferTag) * NBuffers);
+    memset(cart->buffers, 0, sizeof(bool) * MaxBuffers);
+    memset(cart->release, 0, sizeof(int) * MaxBuffers);
+    memset(cart->descriptions, 0, sizeof(BufferTag) * MaxBuffers);
     
     memset(cart->transactions, 0, sizeof(TransactionId) * maxtrans);
     memset(cart->transactionState, 0, sizeof(int) * maxtrans);
@@ -793,7 +804,7 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
     int moved = 0;
     
     pthread_mutex_lock(&target->checkpoint);
-    for (i = 0, bufHdr = BufferDescriptors; i < NBuffers; i++, bufHdr++) {
+    for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         
         if ( !src->buffers[i] ) {
             Assert(src->release[i] == 0);
@@ -1026,7 +1037,7 @@ int LogBuffers(WriteGroup list) {
     IOStatus        iostatus;
 
     smgrbeginlog();
-    for (i = 0, bufHdr = BufferDescriptors; i < NBuffers; i++, bufHdr++) {
+    for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         
         /* Ignore buffers that were not dirtied by me */
         if (!list->buffers[i])
@@ -1048,7 +1059,7 @@ int LogBuffers(WriteGroup list) {
 
             iostatus = LogBufferIO(bufHdr);
             if ( iostatus ) {
-                PageInsertChecksum((Page) MAKE_PTR(bufHdr->data));
+                PageInsertChecksum((Page)(bufHdr->data));
                 buffer_hits++;
                 if ( SM_FAIL == smgrlog(
                         DEFAULT_SMGR,
@@ -1058,7 +1069,7 @@ int LogBuffers(WriteGroup list) {
                         list->descriptions[i].relId.relId,
                         bufHdr->tag.blockNum,
                         bufHdr->kind,
-                        (char *) MAKE_PTR(bufHdr->data)
+                        (char *)(bufHdr->data)
                     )
                 ) {
                     ErrorBufferIO(iostatus,bufHdr);
@@ -1155,7 +1166,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 if (iostatus) {
                     Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
                     
-                    status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
+                    status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, (char *)(bufHdr->data));
                     
                     if (status == SM_FAIL) {
                         ErrorBufferIO(iostatus, bufHdr);
@@ -1190,7 +1201,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     
                     buffer_hits++;
                     cache->commit = true;
-                    PageInsertChecksum((Page) MAKE_PTR(bufHdr->data));
+                    PageInsertChecksum((Page)(bufHdr->data));
                     
                     if (bufHdr->data == 0)
                         elog(FATAL, "[DBWriter]bad buffer block in buffer sync");
@@ -1200,7 +1211,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     }
                     
                     status = smgrwrite(cache->smgrinfo, bufHdr->tag.blockNum,
-                            (char *) MAKE_PTR(bufHdr->data));
+                            (char *)(bufHdr->data));
                     
                     if ( bufHdr->kind == RELKIND_INDEX && IsDirtyBufferIO(bufHdr) ) {
             /* can't delete the log b/c an index was dirtied after a log  */
@@ -1243,9 +1254,10 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
     return freecount;
 }
 
-void FlushAllDirtyBuffers(bool wait) {
+bool FlushAllDirtyBuffers(bool wait) {
     WriteGroup          cart =  GetCurrentWriteGroup(false);
     int                 releasecount = 0;
+    bool iflushed = false;
         
     if (IsDBWriter()) {
         while ( cart->currstate != RUNNING && cart->currstate != FLUSHING ) {
@@ -1254,19 +1266,20 @@ void FlushAllDirtyBuffers(bool wait) {
         }
         FlushWriteGroup(cart);
         DTRACE_PROBE2(mtpg, dbwriter__circularflush, sync_buffers, releasecount);
-    } else {        
-        SignalDBWriter(cart);
-        cart->currstate = FLUSHING;
-       
+    } else {      
+        if ( cart->currstate != FLUSHING ) {
+            SignalDBWriter(cart);
+            cart->currstate = FLUSHING;
+            iflushed = true;
+        }
         while ( wait && cart->currstate == FLUSHING ) {
-            if (pthread_cond_wait(&cart->broadcaster, &cart->checkpoint)) {
-                UnlockWriteGroup(cart);
-                elog(FATAL, "[DBWriter] cannot attach to db write thread");
-            }
+            pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
         }
     }
     
     UnlockWriteGroup(cart);
+    
+    return iflushed;
 }
 
 static PathCache* GetPathCache(HASHACTION  mode, char *relname, char *dbname, Oid bufrel, Oid bufdb) {
@@ -1463,7 +1476,7 @@ void ResetAccessCounts(Oid relid, Oid dbid) {
 }
 
 static void PathCacheCompleteWalker(PathCache *tinfo, int dummy) {
-    double          turnstyle = NBuffers;
+    double          turnstyle = MaxBuffers;
     
     if ( tinfo->commit) {
         if ( tinfo->keepstats ) {
@@ -1566,4 +1579,9 @@ char* RequestSnapshot(char* cmd) {
     UnlockWriteGroup(cart);
     
     return NULL;
+}
+
+long
+GetFlushTime() {
+    return flush_time;
 }

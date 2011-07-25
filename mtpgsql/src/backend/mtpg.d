@@ -12,6 +12,7 @@ provider mtpg {
         probe searches(int);
         probe buffer__tailmiss(int,int,int,int);
         probe buffer__doublefree(int);
+        probe buffer__freetime(long);
         probe buffer__freesteal(int,int);
         probe buffer__miss(int, int, string);
         probe buffer__hit(int, int, int, string);

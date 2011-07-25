@@ -27,7 +27,7 @@ void DBCreateWriterThread(DBMode mode);
 
 void CommitDBBufferWrites(TransactionId xid,int state);
 
-void FlushAllDirtyBuffers(bool wait);
+bool FlushAllDirtyBuffers(bool wait);
 void RegisterBufferWrite(BufferDesc * bufHdr,bool release);
 
 void ClearAllDBWrites(BufferDesc* bufHdr);
@@ -37,6 +37,8 @@ bool IsDBWriter(void);
 void ResetAccessCounts(Oid relid,Oid dbid);
 
 char* RequestSnapshot(char* cmd);
+
+long GetFlushTime();
 
 #ifdef __cplusplus
 }

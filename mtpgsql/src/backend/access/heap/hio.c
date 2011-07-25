@@ -189,10 +189,10 @@ RelationGetTupleData(Relation rel, HeapTuple tuple, bool readonly, Buffer buffer
             BufferDesc* desc = LocalBufferSpecialAlloc(rel,ItemPointerGetBlockNumber(pointer));
             
             if ( desc != NULL ) {
-                int status = smgrread(rel->rd_smgr, ItemPointerGetBlockNumber(pointer), (char *) MAKE_PTR(desc->data));
+                int status = smgrread(rel->rd_smgr, ItemPointerGetBlockNumber(pointer), (char *)(desc->data));
                 desc->ioflags &= BM_READONLY;
                 if ( status == SM_SUCCESS ) {
-                    if ( !PageConfirmChecksum((Page)MAKE_PTR(desc->data) ) ) {
+                    if ( !PageConfirmChecksum((Page)(desc->data) ) ) {
                         elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", rel->rd_rel->relname, ItemPointerGetBlockNumber(pointer));
                     }
                 }

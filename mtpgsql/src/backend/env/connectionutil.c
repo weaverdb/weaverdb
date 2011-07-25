@@ -71,7 +71,6 @@ static  bool				isPrivate = true;
 extern void					StartupXLOG(void);
 extern void					ShutdownXLOG(void);
 
-extern int 					NBuffers;
 extern int 					DebugLvl;
 static int 					MaxBackends = MAXBACKENDS;
 
@@ -200,6 +199,10 @@ extern bool initweaverbackend(char* vars)
                 NBuffers = GetIntProperty("page_buffers");
         } else if ( PropertyIsValid("buffercount") ) {
                 NBuffers = GetIntProperty("buffercount");
+        }
+    
+        if ( PropertyIsValid("maxbuffers") ) {
+		MaxBuffers = GetIntProperty("maxbuffers");
         }
     
 	if ( PropertyIsValid("maxbackends") ) {

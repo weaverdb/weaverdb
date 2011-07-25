@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <zlib.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -86,6 +87,8 @@ static int          index_count;
 static char*        scratch_space;
 static int          scratch_loc = 0;
 static bool         compress_log = FALSE;
+static bool         log_index = TRUE;
+static int         compress_level = Z_BEST_SPEED;
 static PGLZ_Strategy log_strategy = {
 	32,							/* Data chunks less than 32 bytes are not
 								 * compressed */
@@ -93,10 +96,10 @@ static PGLZ_Strategy log_strategy = {
 								 * compress */
 	20,							/* Require 25% compression rate, or not worth
 								 * it */
-	2048,						/* Give up if no compression in the first 1KB */
+	1024,						/* Give up if no compression in the first 1KB */
 	128,						/* Stop history lookup if a match of 128 bytes
 								 * is found */
-	20							/* Lower good match size by 10% at every loop
+	10							/* Lower good match size by 10% at every loop
 								 * iteration */
 };
 
@@ -113,6 +116,8 @@ static File _openlogfile(char* path, bool replay);
 static void  vfd_log(char* pattern, ...);
 
 
+
+
 File
 _openlogfile(char* logfile_path, bool replay) {
       File  file;
@@ -127,7 +132,7 @@ _openlogfile(char* logfile_path, bool replay) {
         }
 
 #ifdef LINUX        
-    if ( !replay && GetBoolProperty("optimize_log") ) {
+    if ( !replay && GetBoolProperty("vfdoptimize_log") ) {
         fileflags |= O_DIRECT;
     }
 #endif      
@@ -135,21 +140,9 @@ _openlogfile(char* logfile_path, bool replay) {
      if ( file < 0 ) {
         elog(FATAL,"unable to access %s",logfile_path);
     }
-    if ( !replay && GetBoolProperty("optimize_log") ) {
+    if ( !replay && GetBoolProperty("vfdoptimize_log") ) {
            FileOptimize(file);  
     }
-    
-    if ( PropertyIsValid("compress_log") ) {
-        compress_log = GetBoolProperty("compress_log");
-    }
-    
-      if ( PropertyIsValid("compress_good") ) {
-          log_strategy.match_size_good = GetIntProperty("compress_good");
-      }
-    
-      if ( PropertyIsValid("compress_drop") ) {
-          log_strategy.match_size_drop = GetIntProperty("compress_drop");
-      }    
  
     FilePin(file,0);
     FileSeek(file,0,SEEK_SET);
@@ -170,7 +163,27 @@ vfdinit()
       if ( index_path == NULL ) {
         index_path = "pg_indexlog";
       }     
-          
+      
+      if ( PropertyIsValid("vfdlogindex") ) {
+          log_index = GetBoolProperty("vfdlogindex");
+      }
+     
+    if ( PropertyIsValid("vfdcompress_log") ) {
+        compress_log = GetBoolProperty("vfdcompress_log");
+    }
+    
+      if ( PropertyIsValid("vfdcompress_good") ) {
+          log_strategy.match_size_good = GetIntProperty("vfdcompress_good");
+      }
+    
+      if ( PropertyIsValid("vfdcompress_drop") ) {
+          log_strategy.match_size_drop = GetIntProperty("vfdcompress_drop");
+      }   
+    
+      if ( PropertyIsValid("vfdcompress_level") ) {
+          compress_level = GetIntProperty("vfdcompress_level");
+      } 
+      
     log_file = _openlogfile(logfile_path, false);
     index_file = _openlogfile(index_path, false);
         
@@ -711,7 +724,7 @@ vfdbeginlog() {
 
 int
 vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
-    int32 put = BLCKSZ;
+    uLongf put = BLCKSZ;
     
     if ( SegmentStore.header.count == max_blocks ) {
         _vfddumplogtodisk();
@@ -720,12 +733,16 @@ vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
     info->nblocks = block;
     memmove(SegmentStore.header.blocks + SegmentStore.header.count,info,sizeof(SmgrData)); 
     if ( compress_log ) {
+        compress2(scratch_space + scratch_loc + 4,&put,buffer,BLCKSZ,compress_level);
+        *(int32*)(scratch_space + scratch_loc) = put;
+        /*
         put = pglz_compress(buffer,BLCKSZ,(PGLZ_Header*)(scratch_space + scratch_loc),&log_strategy);
         if ( !put ) {
             put = BLCKSZ + 4;
             *(int32*)(scratch_space + scratch_loc) = put;
             memmove(scratch_space + scratch_loc + 4,buffer,BLCKSZ);
         }
+        */
         scratch_loc += put;
     } else {
         memmove(scratch_space + scratch_loc,buffer,BLCKSZ);
@@ -733,7 +750,7 @@ vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
     }
     SegmentStore.header.count += 1;
     
-    if ( info->relkind == RELKIND_INDEX ) {
+    if ( info->relkind == RELKIND_INDEX && log_index ) {
         if ( IndexStore.header.count + 1 >= max_index ) {
             _vfddumpindextomemory();
         }
@@ -844,7 +861,7 @@ vfdreplaylogs() {
     long id = 0;
     int result = SM_SUCCESS;
     bool logged = false;
-    
+        
       char* logfile_path = GetProperty("vfdlogfile");
       
       if ( logfile_path == NULL ) {
@@ -949,10 +966,12 @@ _vfdreplaysegment(File logfile,bool compressed) {
         Oid crel = 0,cdb = 0;
         char* block = scratch_space;
         
+/*
         union {
             PGLZ_Header header;
             char*       buffer;
         }  cbuf;
+*/
                 
         ret = FileRead(logfile,SegmentStore.data,BLCKSZ);
         
@@ -976,12 +995,19 @@ _vfdreplaysegment(File logfile,bool compressed) {
                 NameStr(info->dbname),info->relid,info->dbid,info->nblocks);
 
             if ( compressed ) {
-                cbuf.buffer = scratch_space + BLCKSZ;
+                int32  get = BLCKSZ;
+                uLongf bget;
+                FileRead(logfile,(char*)&get,sizeof(get));
+                FileRead(logfile,(char*)block,get);
+               bget = get;
+ /*
+  *                cbuf.buffer = scratch_space + BLCKSZ;
                 FileRead(logfile,(char*)&cbuf.header.vl_len_,sizeof(cbuf.header.vl_len_));
                 FileRead(logfile,(char*)&cbuf.header.rawsize,cbuf.header.vl_len_-sizeof(cbuf.header.vl_len_));
                 pglz_decompress(&cbuf.header,block);
-
-                ret = PGLZ_RAW_SIZE((&cbuf.header));
+*/
+                uncompress(block + BLCKSZ,&bget,block,get);
+                ret = bget;
             } else {
                 ret = FileRead(logfile,block,BLCKSZ);
             }

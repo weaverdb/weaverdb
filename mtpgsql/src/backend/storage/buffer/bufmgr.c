@@ -72,7 +72,6 @@
 pthread_t lockowner;
 
 extern SPINLOCK BufMgrLock;
-extern SLock *SLockArray;
 
 static BufferDesc *BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr);
 static bool SyncShadowPage(BufferDesc* bufHdr);
@@ -209,28 +208,28 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
         }
     }
     
-    status = smgrread(reln->rd_smgr, blockNum, (char *) MAKE_PTR(bufHdr->data));
+    status = smgrread(reln->rd_smgr, blockNum, (char *) (bufHdr->data));
     
     if ( !isLocalBuf && status == SM_SUCCESS ) {
         if ( reln->rd_rel->relkind == RELKIND_INDEX ) {
-            if ( !PageIsNew((Page)MAKE_PTR(bufHdr->data)) && !PageConfirmChecksum((Page)MAKE_PTR(bufHdr->data)) ) {
+            if ( !PageIsNew((Page)bufHdr->data) && !PageConfirmChecksum((Page)bufHdr->data) ) {
                 char* index = GetProperty("index_corruption");
                 if ( index == NULL || (strcasecmp(index,"IGNORE") != 0)  ) {
                     AddReindexRequest(RelationGetRelationName(reln),GetDatabaseName(),bufHdr->tag.relId.relId,bufHdr->tag.relId.dbId);
                     status = SM_FAIL;
                 }
                 elog(NOTICE, "Index Page is corrupted name:%s page:%d check:%d\n", reln->rd_rel->relname, blockNum,check);
-                elog(NOTICE, "checksum=%lld\n", ((PageHeader)MAKE_PTR(bufHdr->data))->checksum);
+                elog(NOTICE, "checksum=%lld\n", ((PageHeader)bufHdr->data)->checksum);
             }
         } else if ( reln->rd_rel->relkind == RELKIND_RELATION ) {
-            if ( !PageIsNew((Page)MAKE_PTR(bufHdr->data)) && !PageConfirmChecksum((Page)MAKE_PTR(bufHdr->data)) ) {
+            if ( !PageIsNew((Page)(bufHdr->data)) && !PageConfirmChecksum((Page)(bufHdr->data)) ) {
                 char* heap = GetProperty("heap_corruption");
 
                 if ( heap != NULL && (strcasecmp(heap,"IGNORE") == 0)  ) {
-                    PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
+                    PageInsertChecksum((Page)(bufHdr->data));
                     SetBufferCommitInfoNeedsSave(BufferDescriptorGetBuffer(bufHdr));
                 } else {
-                    PageInit((Page)MAKE_PTR(bufHdr->data),BLCKSZ,0);
+                    PageInit((Page)(bufHdr->data),BLCKSZ,0);
                     status = SM_FAIL;
                 }
                 elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", reln->rd_rel->relname, blockNum);
@@ -474,10 +473,10 @@ we don't have to lock  */
         iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus ) {
             if ( rel->rd_rel->relkind != RELKIND_SPECIAL )  {
-                PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
+                PageInsertChecksum((Page)(bufHdr->data));
             }
 
-            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, (char *) MAKE_PTR(bufHdr->data));
+            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, (char *)(bufHdr->data));
 
             if (status == SM_FAIL) {
                 ErrorBufferIO(iostatus,bufHdr);
@@ -584,7 +583,7 @@ ResetBufferPool(bool isCommit) {
     BufferEnv* env = GetBufferCxt();
     
     /*	printf("reseting buffer pool\n");   */
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (env->PrivateRefCount[i] != 0) {
             BufferDesc *buf;
             buf = &BufferDescriptors[i];
@@ -614,7 +613,7 @@ BufferPoolCheckLeak() {
     int			result = 0;
     BufferEnv* env = GetBufferCxt();
     
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (env->PrivateRefCount[i] != 0) {
             BufferDesc *buf = &(BufferDescriptors[i]);
             
@@ -636,7 +635,7 @@ BufferPoolCountHolds() {
     int			result = 0;
     BufferEnv* env = GetBufferCxt();
     
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (env->PrivateRefCount[i] != 0) {
                result++;
         }
@@ -705,7 +704,7 @@ InvalidateRelationBuffers(Relation rel) {
     
     FlushAllDirtyBuffers(true);
     
-    for (i = 1; i <= NBuffers; i++) {
+    for (i = 1; i <= MaxBuffers; i++) {
         buf = &BufferDescriptors[i - 1];
         
         if ( PinBuffer(bufcxt, buf) ) {
@@ -737,7 +736,7 @@ DropBuffers(Oid dbid) {
     BufferCxt    bufcxt = GetBufferCxt();
     
     FlushAllDirtyBuffers(true);
-    for (i = 1; i <= NBuffers; i++) {
+    for (i = 1; i <= MaxBuffers; i++) {
         buf = &BufferDescriptors[i - 1];
         
         if ( PinBuffer(bufcxt, buf) ) {
@@ -765,7 +764,7 @@ PrintBufferDescs() {
     
     if (IsMultiuser()) {
         lockowner = pthread_self();
-        for (i = 0; i < NBuffers; ++i, ++buf) {
+        for (i = 0; i < MaxBuffers; ++i, ++buf) {
             elog(DEBUG, "[%02d] (freeNext=%ld, relname=%s, \
             blockNum=%d, flags=0x%x, refCount=%d %ld)",
             i, buf->freeNext,
@@ -774,7 +773,7 @@ PrintBufferDescs() {
         }
     } else {
         /* interactive backend */
-        for (i = 0; i < NBuffers; ++i, ++buf) {
+        for (i = 0; i < MaxBuffers; ++i, ++buf) {
             printf("[%-2d] (%s, %d) flags=0x%x, refcnt=%d %ld)\n",
             i, buf->blind.relname, buf->tag.blockNum,
             buf->ioflags, buf->refCount, env->PrivateRefCount[i]);
@@ -789,7 +788,7 @@ PrintPinnedBufs() {
     BufferEnv* env = GetBufferCxt();
     
     lockowner = pthread_self();
-    for (i = 0; i < NBuffers; ++i, ++buf) {
+    for (i = 0; i < MaxBuffers; ++i, ++buf) {
         if (env->PrivateRefCount[i] > 0)
             elog(NOTICE, "[%02d] (freeNext=%ld, relname=%s, \
             blockNum=%d, flags=0x%x, refCount=%d %ld)\n",
@@ -885,11 +884,10 @@ SetBufferCommitInfoNeedsSave(Buffer buffer) {
 void
 UnlockBuffers(void) {
     BufferDesc *buf;
-    bits8	   *buflock;
     int			i;
     BufferEnv* bufenv = GetBufferCxt();
     
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (bufenv->BufferLocks[i] == 0)
             continue;
         
@@ -1428,7 +1426,6 @@ bool
 SyncShadowPage(BufferDesc* bufHdr) {
     /*  copy into shadow */
 #ifdef USE_SHADOW_PAGES
-    memcpy((char*)MAKE_PTR(bufHdr->data), (char*)MAKE_PTR(bufHdr->shadow), BLCKSZ);
 #endif
 }
 
@@ -1442,9 +1439,9 @@ SyncShadowPage(BufferDesc* bufHdr) {
 Block BufferGetBlock(Buffer buffer) {
     Assert(BufferIsValid(buffer));
     if ( BufferIsLocal(buffer) ) {
-        return (Block) MAKE_PTR(GetLocalBufferDescriptor((-buffer) - 1)->data);
+        return (Block) (GetLocalBufferDescriptor((-buffer) - 1)->data);
     } else {
-        return (Block) MAKE_PTR(BufferDescriptors[(buffer) - 1].data);
+        return (Block) (BufferDescriptors[(buffer) - 1].data);
     }
 }
 
@@ -1521,18 +1518,18 @@ GetBufferCxt() {
         
         env->guard = 0xCAFEBABECAFEBABEL;
         
-        env->PrivateRefCount = (long *)palloc(NBuffers*sizeof(long));
-        memset(env->PrivateRefCount, 0, NBuffers*sizeof(long));
+        env->PrivateRefCount = (long *)palloc(MaxBuffers*sizeof(long));
+        memset(env->PrivateRefCount, 0, MaxBuffers*sizeof(long));
         env->total_pins = 0;
         
-        env->BufferLocks = (bits8 *) palloc(NBuffers*sizeof(bits8));
-        memset(env->BufferLocks, 0, NBuffers* sizeof(bits8));
+        env->BufferLocks = (bits8 *) palloc(MaxBuffers*sizeof(bits8));
+        memset(env->BufferLocks, 0, MaxBuffers* sizeof(bits8));
         
-        env->BufferTagLastDirtied = (BufferTag *) palloc(NBuffers*sizeof(BufferTag));
-        memset(env->BufferTagLastDirtied, 0, NBuffers*sizeof(BufferTag));
+        env->BufferTagLastDirtied = (BufferTag *) palloc(MaxBuffers*sizeof(BufferTag));
+        memset(env->BufferTagLastDirtied, 0, MaxBuffers*sizeof(BufferTag));
         
-        env->BufferBlindLastDirtied = (BufferBlindId *) palloc(NBuffers*sizeof(BufferBlindId));
-        memset(env->BufferBlindLastDirtied , 0, NBuffers*sizeof(BufferBlindId));
+        env->BufferBlindLastDirtied = (BufferBlindId *) palloc(MaxBuffers*sizeof(BufferBlindId));
+        memset(env->BufferBlindLastDirtied , 0, MaxBuffers*sizeof(BufferBlindId));
         
         env->DidWrite    = false;
         

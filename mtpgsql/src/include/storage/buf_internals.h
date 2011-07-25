@@ -20,10 +20,7 @@
 /* Buf Mgr constants */
 /* in bufmgr.c */
 extern int	NBuffers;
-extern int	Data_Descriptors;
-extern int	Free_List_Descriptor;
-extern int	Lookup_List_Descriptor;
-extern int	Num_Descriptors;
+extern int	MaxBuffers;
 
 /*
  * Flags for buffer descriptors
@@ -37,6 +34,7 @@ extern int	Num_Descriptors;
 #define BM_EXCLUSIVE				(1 << 5)/* 32 */
 #define BM_CRITICAL                             (1 << 6)/*64*/
 #define BM_WRITEIO                             (1 << 7)/*128*/
+#define BM_RETIRED                             (1 << 8)/*256*/
 #define BM_CRITICALMASK                          (BM_WRITELOCK | BM_CRITICAL)
 #define BM_EXCLUSIVEMASK                          (BM_WRITELOCK | BM_EXCLUSIVE | BM_CRITICAL)
 #define BM_REMOVEWRITEMASK                          ~(BM_WRITELOCK | BM_EXCLUSIVE | BM_CRITICAL)
@@ -102,7 +100,7 @@ typedef struct bufblindid
 	char		relname[NAMEDATALEN];	/* name of reln */
 }			BufferBlindId;
 
-#define BAD_BUFFER_ID(bid) ((bid) < 1 || (bid) > NBuffers)
+#define BAD_BUFFER_ID(bid) ((bid) < 1 || (bid) > MaxBuffers)
 #define INVALID_DESCRIPTOR (-3)
 #define DETACHED_DESCRIPTOR (-4)
 
@@ -127,8 +125,7 @@ typedef struct iogate {
 typedef struct sbufdesc
 {
 	Buffer		freeNext;		/* links for freelist chain */
-	SHMEM_OFFSET 	data;			/* pointer to data in buf pool */
-	SHMEM_OFFSET 	shadow;			/* pointer to data in buf pool */
+	char*           data;			/* pointer to data in buf pool */
 
 	/* tag and id must be together for table lookup to work */
 	BufferTag	tag;			/* file/block identifier */
@@ -203,6 +200,7 @@ typedef struct _bmtrace
 
 /*freelist.c*/
 
+PG_EXTERN void AddBuffersToTail(BufferDesc* buf);
 
 PG_EXTERN int ManualPin(BufferDesc* buf, bool pageaccess);
 PG_EXTERN int ManualUnpin(BufferDesc* buf, bool pageaccess);

@@ -845,8 +845,6 @@ RelationGetNumberOfBlocks(Relation relation)
 int
 RecommendAllocation(Relation rel,FreeSpace* freespace) {
     int create = 0;
-    /*  assume freespace is already locked */
-    double dead_per = ((double)freespace->last_dead_tuple_count /(double)freespace->last_live_tuple_count);
 
 /*  if Bootstrap go one block at a time */
     if ( IsBootstrapProcessingMode() ) {

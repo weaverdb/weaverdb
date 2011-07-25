@@ -27,11 +27,11 @@ MACOSINC=\
 
 ifeq ($(PORTNAME),solaris)
 MYLIBS=\
--lpthread -lrt -lm -lsocket -lnsl -lc -lumem
+-lpthread -lrt -lm -lsocket -lnsl -lc -lumem -lz
 endif
 ifeq ($(PORTNAME),linux)
 MYLIBS=\
--lpthread -lrt -lm -lnsl -lc
+-lpthread -lrt -lm -lnsl -lc -lz
 endif
 
 MACOSLIBS=\

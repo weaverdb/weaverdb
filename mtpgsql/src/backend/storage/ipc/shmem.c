@@ -205,10 +205,10 @@ InitShmem(unsigned int key, size_t size,int maxBackends)
 		*ShmemFreeStart = currFreeSpace;
 		*(ShmemFreeStart + 1) = size;
 		memset(ShmemVariableCache, 0, sizeof(*ShmemVariableCache));
-		ShmemVariableCache->buffers = NBuffers;
+		ShmemVariableCache->buffers = MaxBuffers;
 		ShmemVariableCache->maxbackends = maxBackends;   
 	} else {
-		NBuffers = ShmemVariableCache->buffers;
+		MaxBuffers = ShmemVariableCache->buffers;
 		maxBackends = ShmemVariableCache->maxbackends;		
 		ShmemSize = *(unsigned long *)(ShmemFreeStart + 1);
 		ShmemEnd = (unsigned long) sharedRegion + ShmemSize;    

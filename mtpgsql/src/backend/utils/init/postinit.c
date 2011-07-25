@@ -221,8 +221,6 @@ InitCommunication()
  *		Be very careful with the order of calls in the InitPostgres function.
  * --------------------------------
  */
-extern int	NBuffers;
-
 int			lockingOff = 0;		/* backend -L switch */
 
 void 

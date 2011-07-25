@@ -52,13 +52,12 @@ MK_NO_LORDER=true
 CC=cc
 CPP=CC
 #debug new SUNspro Express
-#CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
-#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
-#CFLAGS+= -DDEBUGLOGS
+CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
+CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
+CFLAGS+= -DDEBUGLOGS
 # performance
-CFLAGS+= -xO4 -m64 -KPIC
-#CFLAGS+= -xO4 -xtarget=${CPU} -m64 -KPIC
-CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
+#CFLAGS+= -xO4 -m64 -KPIC
+#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
 
 #for java
 #CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${PORTNAME}
@@ -74,11 +73,11 @@ AROPT= crs
 CFLAGS_SL=
 ifeq ($(OS),SUNOS) 
 LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU}
-LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket 
+LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket -lz
 endif
 ifeq ($(OS),LINUX) 
 LDFLAGS= -L/usr/lib64 
-LIBS= -lnsl -lrt -lm -lcrypt -lmcheck
+LIBS= -lnsl -lrt -lm -lcrypt -lmcheck -lz
 endif
 
 INSTALL= $(SRCDIR)/install-sh -c

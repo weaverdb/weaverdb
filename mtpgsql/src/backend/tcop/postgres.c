@@ -117,7 +117,6 @@ extern char XLogDir[];
 extern char ControlFilePath[];
 
 extern int	lockingOff;
-extern int	NBuffers;
 
 int			dontExecute = 0;
 static int	ShowStats;
@@ -129,8 +128,6 @@ DLLIMPORT sigjmp_buf Warn_restart;
 bool		Warn_restart_ready = false;
 bool		InError = false;
 bool		ExitAfterAbort = false;
-
-PG_EXTERN int	NBuffers;
 
 static bool EchoQuery = false;	/* default don't echo */
 char		pg_pathname[MAXPGPATH];

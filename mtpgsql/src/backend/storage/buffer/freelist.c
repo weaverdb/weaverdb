@@ -25,6 +25,8 @@
  *		semaphore has been acquired by the caller.
  */
 #include <signal.h>
+#include <errno.h>
+#include <sys/time.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -40,18 +42,15 @@
 
 
 extern SPINLOCK FreeBufMgrLock;
-extern SLock *SLockArray;
-
-
-static BufferDesc *SharedFreeList;
 
 
 typedef struct {
     int                 head;
     int                 tail;
     int 		last;
+    int                 waiting;
     pthread_mutex_t     guard;
-    
+    pthread_cond_t     gate;
 } FreeList;
 
 typedef struct flush_manager {
@@ -77,13 +76,21 @@ static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf);
 static void SetTailBuffer(BufferDesc* buf);
 static BufferDesc* GetHead(Relation rel);
 static void SetHead(BufferDesc* buf);
-static bool InitiateFlush();
+static long InitiateFlush();
+static void FlushCallback();
+static int buffer_wait = 400;
+static float addscale = .10;
 
 static BufferDesc* GetHead(Relation rel) {
     BufferDesc*  head = NULL;
-    bool         flushpick = false;
+    long         longwait = 0;
+    int timerr = 0;
+    long elapsed;
+    struct timespec t1,t2;
     
-/*
+    clock_gettime(CLOCK_HIGHRES,&t1);
+    
+ /*   
     FreeList* which = ( rel->rd_rel->relkind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
 */
     FreeList* which = MasterList;
@@ -93,14 +100,26 @@ static BufferDesc* GetHead(Relation rel) {
     while ( which->head == INVALID_DESCRIPTOR  ) {
         FreeList* oplist = ( which == IndexList || IndexList == NULL ) ? MasterList : IndexList;
 
-        pthread_mutex_unlock(&which->guard);
-        pthread_mutex_lock(&oplist->guard);
+        if ( which != oplist ) {
+                pthread_mutex_unlock(&which->guard);
+                pthread_mutex_lock(&oplist->guard);
+        }
 
         if ( oplist->head == INVALID_DESCRIPTOR ) {
-            pthread_mutex_unlock(&oplist->guard);
-            flushpick = InitiateFlush();
-            /*  going back to original list so lock it  */
-            pthread_mutex_lock(&which->guard);
+                oplist->waiting++;
+                struct timespec waittime;
+                
+                ptimeout(&waittime,(buffer_wait + longwait));
+                timerr = pthread_cond_timedwait(&oplist->gate, &oplist->guard, &waittime);
+                oplist->waiting--;
+                if (timerr == ETIMEDOUT) {
+                    pthread_mutex_unlock(&oplist->guard);
+                    longwait = InitiateFlush();
+                    /*  going back to original list so lock it  */
+                    pthread_mutex_lock(&which->guard);
+                } else {
+                    which = oplist;
+                }
         } else {
             /*  we are going to pull the opposite list so switch to it  */
             which = oplist;
@@ -108,7 +127,7 @@ static BufferDesc* GetHead(Relation rel) {
         }
     }
     
-    Assert(which->head >= 0 && which->head < NBuffers);
+    Assert(which->head >= 0 && which->head < MaxBuffers);
     head = &BufferDescriptors[which->head];
 
     pthread_mutex_lock(&head->cntx_lock.guard);
@@ -130,7 +149,13 @@ static BufferDesc* GetHead(Relation rel) {
      */
     
     pthread_mutex_unlock(&which->guard);
+    clock_gettime(CLOCK_HIGHRES,&t2);
 
+    elapsed = (t2.tv_sec - t1.tv_sec) * 1000;      // sec to ms
+    elapsed += (t2.tv_nsec - t1.tv_nsec) / 1000000;   // ns to ms
+    
+    DTRACE_PROBE1(mtpg,buffer__freetime,elapsed);
+    
     return head;
 }
 
@@ -153,13 +178,11 @@ static void SetHead(BufferDesc* buf) {
     pthread_mutex_unlock(&which->guard);
 }
 
-static void SetTailBuffer(BufferDesc* buf) {
+void AddBuffersToTail(BufferDesc* buf) {
     BufferDesc*  tail = NULL;
+    FreeList* which = MasterList;
     
-    DTRACE_PROBE3(mtpg,buffer__store,buf->blind.dbname,buf->blind.relname,buf->tag.blockNum);
-    FreeList* which = ( buf->kind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
     pthread_mutex_lock(&which->guard);
-    
     /* must deal with special cases of when the head
      * or the tail is invalid
      **/
@@ -169,14 +192,44 @@ static void SetTailBuffer(BufferDesc* buf) {
         tail = &BufferDescriptors[which->head];
     } else {
         tail = &BufferDescriptors[which->tail];
+    } 
+     
+    if (tail == NULL) {
+        which->head = buf->buf_id;
+    } else {
+        pthread_mutex_lock(&tail->cntx_lock.guard);
+        Assert((tail->locflags & BM_FREE));
+        Assert((tail->freeNext == INVALID_DESCRIPTOR));
+        tail->freeNext = buf->buf_id;
+        pthread_mutex_unlock(&tail->cntx_lock.guard);
     }
     
-    pthread_mutex_lock(&buf->cntx_lock.guard);
-    Assert(buf->freeNext == DETACHED_DESCRIPTOR);
-  /*  BM_FREE signals intention to add to list and should already be set  */
-    Assert((buf->locflags & BM_FREE));
-    buf->freeNext = INVALID_DESCRIPTOR;
-    pthread_mutex_unlock(&buf->cntx_lock.guard);   
+    while ( buf->freeNext != INVALID_DESCRIPTOR ) {
+        buf = &BufferDescriptors[buf->freeNext];
+    }
+    
+    which->tail = buf->buf_id;
+    if ( which->waiting ) pthread_cond_broadcast(&which->gate);
+    pthread_mutex_unlock(&which->guard);
+}
+
+static void SetTailBuffer(BufferDesc* buf) {
+    BufferDesc*  tail = NULL;
+    
+    DTRACE_PROBE3(mtpg,buffer__store,buf->blind.dbname,buf->blind.relname,buf->tag.blockNum);
+    FreeList* which = ( buf->kind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
+    pthread_mutex_lock(&which->guard);
+
+    /* must deal with special cases of when the head
+     * or the tail is invalid
+     **/
+    if ( which->head == INVALID_DESCRIPTOR ) {
+        tail = NULL;
+    } else if ( which->tail == INVALID_DESCRIPTOR ) {
+        tail = &BufferDescriptors[which->head];
+    } else {
+        tail = &BufferDescriptors[which->tail];
+    } 
      
     if (tail == NULL) {
         which->head = buf->buf_id;
@@ -184,37 +237,44 @@ static void SetTailBuffer(BufferDesc* buf) {
     } else {
         pthread_mutex_lock(&tail->cntx_lock.guard);
         Assert((tail->locflags & BM_FREE));
+        Assert((buf->freeNext == INVALID_DESCRIPTOR));
         Assert((tail->freeNext == INVALID_DESCRIPTOR));
         tail->freeNext = buf->buf_id;
         which->tail = buf->buf_id;
         pthread_mutex_unlock(&tail->cntx_lock.guard);
     }
-    
+    if ( which->waiting ) pthread_cond_broadcast(&which->gate);
     pthread_mutex_unlock(&which->guard);
 }
 
-static bool InitiateFlush() {
+static long InitiateFlush() {
     bool iflushed = false;
     pthread_mutex_lock(&FlushBlock.flush_gate);
     if ( IsDBWriter() ) {
         FlushAllDirtyBuffers(false);
     } else if ( FlushBlock.flushing ) {
-        FlushBlock.waiting[GetEnv()->eid] = TRUE;
-        pthread_cond_wait(&FlushBlock.flush_wait, &FlushBlock.flush_gate);
-        FlushBlock.waiting[GetEnv()->eid] = FALSE;
+
     } else {
-        iflushed = true;
         FlushBlock.flushing = true;
         FlushBlock.waiting[GetEnv()->eid] = TRUE;
         pthread_mutex_unlock(&FlushBlock.flush_gate);
-        FlushAllDirtyBuffers(true);
+        iflushed = FlushAllDirtyBuffers(false);
         pthread_mutex_lock(&FlushBlock.flush_gate);
         FlushBlock.waiting[GetEnv()->eid] = FALSE;
         FlushBlock.flushing = false;
         pthread_cond_broadcast(&FlushBlock.flush_wait);
+        if ( iflushed && NBuffers < MaxBuffers ) {
+            AddMoreBuffers(NBuffers * addscale);
+        }
     }
     pthread_mutex_unlock(&FlushBlock.flush_gate);
-    return iflushed;
+    return GetFlushTime();
+}
+
+static void
+FlushCallback() {
+
+
 }
 
 static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf) {
@@ -237,7 +297,7 @@ static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf) {
                 next->locflags &= ~(BM_FREE | BM_USED);
             } else if ( lingeringbuffers && (next->locflags & BM_USED) ) {
                 bf->freeNext = next->freeNext;
-                next->freeNext = DETACHED_DESCRIPTOR;
+                next->freeNext = INVALID_DESCRIPTOR;
          /*  we are in the freelist and going to be added back to the end  */
                 Assert(next->locflags & BM_FREE);
                 next->locflags &= ~(BM_USED);
@@ -329,6 +389,8 @@ int ManualUnpin(BufferDesc* buf, bool pageaccess) {
             buf->locflags &= ~(BM_USED);
             add = true;
             buf->locflags |= BM_FREE;
+            Assert(buf->freeNext == DETACHED_DESCRIPTOR);
+            buf->freeNext = INVALID_DESCRIPTOR;
         }
     }
 
@@ -394,6 +456,7 @@ BufferDesc * GetFreeBuffer(Relation rel) {
             valid = false;
             if ( !(head->locflags & BM_FREE) ) {
                 head->locflags |= BM_FREE;
+                head->freeNext = INVALID_DESCRIPTOR;
                 tail = true;
             }
         } else if ( lingeringbuffers && (head->locflags & BM_USED) ) {
@@ -401,6 +464,7 @@ BufferDesc * GetFreeBuffer(Relation rel) {
             valid = false;
             if ( !(head->locflags & BM_FREE) ) {
                 head->locflags |= BM_FREE;
+                head->freeNext = INVALID_DESCRIPTOR;
                 tail = true;
             }
         } else {
@@ -439,17 +503,24 @@ BufferDesc * GetFreeBuffer(Relation rel) {
  */
 void InitFreeList(bool init) {
     int count = 0;
-    SharedFreeList = &(BufferDescriptors[Free_List_Descriptor]);
     
     double reserve = ( PropertyIsValid("index_buffer_reserve") ) ?
         GetFloatProperty("index_buffer_reserve")
     :
         IndexBufferReserve;
     
+    if ( PropertyIsValid("buffer_scale")) {
+        addscale = GetFloatProperty("buffer_scale");
+    }
+    
     lingeringbuffers = GetBoolProperty("lingering_buffers");
     if ( !lingeringbuffers ) {
         /* backward compatible */
         lingeringbuffers = GetBoolProperty("lingeringbuffers");
+    }
+    
+    if ( PropertyIsValid("buffer_wait")) {
+        buffer_wait = GetIntProperty("buffer_wait");
     }
             
     if (init) {
@@ -463,18 +534,22 @@ void InitFreeList(bool init) {
         if ( split != 0 ) {
             IndexList = os_malloc(sizeof(FreeList));
             pthread_mutex_init(&IndexList->guard, &process_mutex_attr);
+            pthread_cond_init(&IndexList->gate, &process_cond_attr);
             IndexList->head = 0;
             IndexList->tail = split - 1;
             IndexList->last = 0;
+            IndexList->waiting = 0;
         } else {
             IndexList = NULL;
         }
         
         MasterList = os_malloc(sizeof(FreeList));
         pthread_mutex_init(&MasterList->guard, &process_mutex_attr);
+        pthread_cond_init(&MasterList->gate, &process_cond_attr);
         MasterList->head = split;
         MasterList->tail = NBuffers - 1;
         MasterList->last = 0;
+        MasterList->waiting = 0;
         
         for (count=0;count<NBuffers;count++) {
             BufferDesc*  buf = &BufferDescriptors[count];
@@ -482,7 +557,7 @@ void InitFreeList(bool init) {
             buf->locflags |= BM_FREE;
         }
         
-        BufferDescriptors[split - 1].freeNext = INVALID_DESCRIPTOR;
+        if ( split != 0 ) BufferDescriptors[split - 1].freeNext = INVALID_DESCRIPTOR;
         BufferDescriptors[NBuffers - 1].freeNext = INVALID_DESCRIPTOR;
     }
     

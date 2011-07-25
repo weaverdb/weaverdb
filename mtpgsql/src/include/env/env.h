@@ -251,6 +251,7 @@ void SetProcessingMode(ProcessingMode mode);
 
 long prandom(void);
 void sprandom(unsigned int seed);
+void ptimeout(struct timespec* ts,int to);
 
 void user_log(char* pattern, ...);
 
