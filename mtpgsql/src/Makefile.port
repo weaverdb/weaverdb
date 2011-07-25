@@ -52,12 +52,12 @@ MK_NO_LORDER=true
 CC=cc
 CPP=CC
 #debug new SUNspro Express
-CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
-CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
-CFLAGS+= -DDEBUGLOGS
+#CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
+#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
+#CFLAGS+= -DDEBUGLOGS
 # performance
-#CFLAGS+= -xO4 -m64 -KPIC
-#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
+CFLAGS+= -xO4 -m64 -KPIC
+CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
 
 #for java
 #CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${PORTNAME}
