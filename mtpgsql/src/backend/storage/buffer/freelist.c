@@ -58,6 +58,8 @@ typedef struct flush_manager {
     pthread_cond_t      flush_wait;
     pthread_mutex_t     flush_gate;
     bool                waiting[MAXBACKENDS];
+    int                 flush_count;
+    long                flush_time;
 } FlushManager;
 
 
@@ -263,8 +265,11 @@ static long InitiateFlush() {
         FlushBlock.waiting[GetEnv()->eid] = FALSE;
         FlushBlock.flushing = false;
         pthread_cond_broadcast(&FlushBlock.flush_wait);
-        if ( iflushed && NBuffers < MaxBuffers ) {
-            AddMoreBuffers(NBuffers * addscale);
+        if ( iflushed ) {
+            if ( FlushBlock.flush_count++ > 0 && NBuffers < MaxBuffers ) {
+                AddMoreBuffers(NBuffers * addscale);
+                FlushBlock.flush_count = 0;
+            }
         }
     }
     pthread_mutex_unlock(&FlushBlock.flush_gate);

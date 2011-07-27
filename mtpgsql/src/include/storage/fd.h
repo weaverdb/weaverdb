@@ -66,6 +66,7 @@ PG_EXTERN File OpenTemporaryFile(void);
 PG_EXTERN char* FileGetName(File file);
 PG_EXTERN void FileClose(File file);
 PG_EXTERN void FileUnlink(File file);
+PG_EXTERN void FileRename(File file, char* newname);
 PG_EXTERN int	FileRead(File file, char *buffer, int amount);
 PG_EXTERN int	FileWrite(File file, char *buffer, int amount);
 PG_EXTERN long FileSeek(File file, long offset, int whence);

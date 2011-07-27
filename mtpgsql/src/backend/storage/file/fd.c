@@ -884,6 +884,25 @@ FileUnlink(File file)
 	FileClose(file);
 }
 
+/*
+ * close a file and forcibly delete the underlying Unix file
+ */
+void
+FileRename(File file, char* newname)
+{
+	Assert(FileIsValid(file));
+
+	Vfd* virtf = GetVirtualFD(file);
+        pthread_mutex_lock(&virtf->pin);
+        if ( virtf->fd != VFD_CLOSED ) {
+            RetireFile(virtf);
+        }
+        rename(virtf->fileName,newname);
+        pthread_mutex_unlock(&virtf->pin);
+
+	FileClose(file);
+}
+
 int
 FileRead(File file, char *buffer, int amount)
 {
