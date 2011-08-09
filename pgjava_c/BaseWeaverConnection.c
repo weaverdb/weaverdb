@@ -51,8 +51,8 @@
 
 JavaVM*   jvm;
 
-jobject 		javaSideLog[MAXBACKENDS];
-StmtMgr                 theManagers[MAXBACKENDS];
+jobject 		*javaSideLog;
+StmtMgr                 *theManagers;
 static          javacache*      Cache;
 
 static pthread_mutex_t		allocator;
@@ -92,9 +92,6 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
 	char		datapass[2048];
 	memset(datapass,0,2048);
 	
-	memset(javaSideLog,0,sizeof(javaSideLog));
-	memset(theManagers,0,sizeof(theManagers));
-	
 	pthread_mutexattr_init(&allocatt);
 	pthread_mutex_init(&allocator,&allocatt);
 	
@@ -107,6 +104,12 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
             (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment not valid, see db log");
             return;
         }
+        
+        javaSideLog = malloc(GetMaxBackends() * sizeof(jobject));
+        theManagers = malloc(GetMaxBackends() * sizeof(StmtMgr));
+	memset(javaSideLog,0,GetMaxBackends() * sizeof(jobject));
+	memset(theManagers,0,GetMaxBackends() * sizeof(StmtMgr));
+        
         Cache = CreateCache(env);
 		
 	(*env)->GetJavaVM(env,&jvm);
@@ -267,7 +270,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
             else
             {
                 long count = 0;
-                for(count=0;count<MAXBACKENDS;count++)
+                for(count=0;count<GetMaxBackends();count++)
                 {
                     if ( (*env)->IsSameObject(env,talkerObject, javaSideLog[count]) )
                     {
@@ -735,7 +738,7 @@ static jint getProperAgent(JNIEnv * env,jobject talker)
         
 	jint 	        link =  (*env)->GetIntField(env,tracker,Cache->tracker);
 
-        if ( link >= MAXBACKENDS || link < 0 ) {
+        if ( link >= GetMaxBackends() || link < 0 ) {
             link = -1;
         }
 

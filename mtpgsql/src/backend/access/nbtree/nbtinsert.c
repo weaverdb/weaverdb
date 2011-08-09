@@ -319,9 +319,11 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                                  * Otherwise we have a definite conflict.  release the buffer we are erroring out
                                  */
                                 
+/*
                                 if (buf != InvalidBuffer) {
                                     _bt_relbuf(rel, buf);  
                                 }
+*/
 
                                 *other_ht = htup.t_self;
                                 return InvalidTransactionId;
@@ -663,7 +665,6 @@ _bt_insertuple(Relation rel, Buffer buf,
 			   Size itemsz, BTItem btitem, OffsetNumber newitemoff)
 {
 	Page		page = BufferGetPage(buf);
-	BTPageOpaque pageop = (BTPageOpaque) PageGetSpecialPointer(page);
         LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
 	_bt_pgaddtup(rel, page, itemsz, btitem, newitemoff, "page");
         LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);

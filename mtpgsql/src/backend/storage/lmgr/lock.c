@@ -34,6 +34,7 @@
 
 #include "postgres.h"
 #include "env/env.h"
+#include "env/connectionutil.h"
 
 #include "access/xact.h"
 #include "miscadmin.h"
@@ -1499,7 +1500,7 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 			}
 
 			/* Recursively check this process's lockQueue. */
-			Assert(nprocs < MAXBACKENDS);
+			Assert(nprocs < GetMaxBackends());
 			checked_procs[nprocs++] = waitProc;
 
 			if (DeadLockCheck(waitProc, findlock))

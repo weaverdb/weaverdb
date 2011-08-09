@@ -454,7 +454,7 @@ btbuildCallback(Relation index,
  *		return an InsertIndexResult to the caller.
  */
 Datum
-btinsert(Relation rel, Datum *datum, char *nulls, ItemPointer ht_ctid, Relation heapRel)
+btinsert(Relation rel, Datum *datum, char *nulls, ItemPointer ht_ctid, Relation heapRel, bool is_put)
 {
 	InsertIndexResult res;
 	BTItem		btitem;
@@ -466,7 +466,7 @@ btinsert(Relation rel, Datum *datum, char *nulls, ItemPointer ht_ctid, Relation 
 	itup->t_tid = *ht_ctid;
 	btitem = _bt_formitem(itup);
 
-        if ( IndexPropIsDeferred(atts) ) {
+        if (!is_put && IndexPropIsDeferred(atts) ) {
                 res = _bt_queueinsert(rel,btitem,IndexPropIsUnique(atts), heapRel);
         } else {
                 res = _bt_doinsert(rel, btitem, IndexPropIsUnique(atts), heapRel);

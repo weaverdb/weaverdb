@@ -57,7 +57,6 @@ typedef struct flush_manager {
     bool                flushing;
     pthread_cond_t      flush_wait;
     pthread_mutex_t     flush_gate;
-    bool                waiting[MAXBACKENDS];
     int                 flush_count;
     long                flush_time;
 } FlushManager;
@@ -258,11 +257,9 @@ static long InitiateFlush() {
 
     } else {
         FlushBlock.flushing = true;
-        FlushBlock.waiting[GetEnv()->eid] = TRUE;
         pthread_mutex_unlock(&FlushBlock.flush_gate);
         iflushed = FlushAllDirtyBuffers(false);
         pthread_mutex_lock(&FlushBlock.flush_gate);
-        FlushBlock.waiting[GetEnv()->eid] = FALSE;
         FlushBlock.flushing = false;
         pthread_cond_broadcast(&FlushBlock.flush_wait);
         if ( iflushed ) {
@@ -534,7 +531,6 @@ void InitFreeList(bool init) {
         pthread_mutex_init(&FlushBlock.flush_gate, &process_mutex_attr);
         pthread_cond_init(&FlushBlock.flush_wait, &process_cond_attr);
         FlushBlock.flushing = false;
-        memset(FlushBlock.waiting,0x00,sizeof(bool) * MAXBACKENDS);
         
         if ( split != 0 ) {
             IndexList = os_malloc(sizeof(FreeList));
@@ -566,13 +562,5 @@ void InitFreeList(bool init) {
         BufferDescriptors[NBuffers - 1].freeNext = INVALID_DESCRIPTOR;
     }
     
-}
-
-bool IsWaitingForFlush(unsigned owner) {
-    bool iswaiting = FALSE;
-        pthread_mutex_lock(&FlushBlock.flush_gate);
-        iswaiting = FlushBlock.waiting[owner];
-        pthread_mutex_unlock(&FlushBlock.flush_gate);     
-        return iswaiting;
 }
 

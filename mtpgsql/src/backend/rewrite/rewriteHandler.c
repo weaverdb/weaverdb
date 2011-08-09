@@ -1129,6 +1129,7 @@ fireRules(Query *parsetree,
 
 			switch (parsetree->commandType)
 			{
+				case CMD_PUT:
 				case CMD_INSERT:
 					reqperm = ACL_AP;
 					break;
@@ -1193,7 +1194,7 @@ fireRules(Query *parsetree,
 
 			qual_info.rule_action = qual_product;
 
-			if (event == CMD_INSERT || event == CMD_UPDATE)
+			if (event == CMD_PUT || event == CMD_INSERT || event == CMD_UPDATE)
 				FixNew(&qual_info, qual_product);
 
 			*qual_products = lappend(NIL, qual_product);
@@ -1266,7 +1267,7 @@ fireRules(Query *parsetree,
 			 *	  entry for appropriate field name in insert/update
 			 *--------------------------------------------------
 			 */
-			if ((info->event == CMD_INSERT) || (info->event == CMD_UPDATE))
+			if ((info->event == CMD_PUT) || (info->event == CMD_INSERT) || (info->event == CMD_UPDATE))
 				FixNew(info, parsetree);
 
 			/*--------------------------------------------------

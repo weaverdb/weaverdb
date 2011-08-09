@@ -852,6 +852,7 @@ get_query_def(Query *query, StringInfo buf, List *parentrtables)
 			get_update_query_def(query, &context);
 			break;
 
+		case CMD_PUT:
 		case CMD_INSERT:
 			get_insert_query_def(query, &context);
 			break;

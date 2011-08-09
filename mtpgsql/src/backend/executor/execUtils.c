@@ -1111,7 +1111,7 @@ ExecInsertIndexTuples(TupleTableSlot *slot,
 							  datum,	/* array of heaptuple Datums */
 							  nulls,	/* info on nulls */
 							  &(heapTuple->t_self),		/* tid of heap tuple */
-							  heapRelation);
+							  heapRelation,is_put);
 
                 if ( result->result == INDEX_UNIQUE_VIOLATION ) {
                     if ( !is_put ) {

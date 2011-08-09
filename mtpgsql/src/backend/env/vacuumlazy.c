@@ -1187,7 +1187,7 @@ repair_insert_index_for_entry(Relation onerel, HeapTuple newtup, FragRepairInfo*
                                            repair_info->idatum,
                                            repair_info->inulls,
                                         &newtup->t_self,
-                                           onerel);
+                                           onerel,false);
                     if (iresult)
                             pfree(iresult);
             }

@@ -351,7 +351,7 @@ InitPostgres(const char *dbname)
 	 */
 	InitSharedInvalidationState();
 
-	if (GetMyBackendId() > MAXBACKENDS || GetMyBackendId() <= 0)
+	if (GetMyBackendId() > GetMaxBackends() || GetMyBackendId() <= 0)
 	{
 		elog(FATAL, "cinit2: bad backend id %d (%d)",
                      GetMyBackendTag(),

@@ -1375,7 +1375,7 @@ failed to add item with len = %u to page %ld (free space %u, nusd %u, noff %u)",
 										   idatum,
 										   inulls,
 										   &newtup->t_self,
-										   onerel);
+										   onerel, false);
 					if (iresult)
 						pfree(iresult);
 				}

@@ -260,7 +260,7 @@ typedef HashItemData *HashItem;
 		  AttrNumber *attnum, IndexStrategy istrat, uint16 pcount,
 		  Datum *params, FuncIndexInfo *finfo, PredInfo *predInfo);
 /* extern */ InsertIndexResult hashinsert(Relation rel, Datum *datum, char *nulls,
-		   ItemPointer ht_ctid, Relation heapRel);
+		   ItemPointer ht_ctid, Relation heapRel, bool is_put);
 /* extern */ char *hashgettuple(IndexScanDesc scan, ScanDirection dir);
 /* extern */ char *hashbeginscan(Relation rel, bool fromEnd, uint16 keysz,
 			  ScanKey scankey);
