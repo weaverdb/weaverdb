@@ -269,10 +269,10 @@ ExtractDateValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject target
     if ( (*env)->IsInstanceOf(env,target,Cache->datetype) ) {
         union {
             char    buffer[8];
-            jlong  val;
+            jdouble  val;
         }   convert;
 
-        convert.val = (*env)->CallLongMethod(env,target,Cache->datevalue);
+        convert.val = (jdouble)(*env)->CallLongMethod(env,target,Cache->datevalue);
         convert.val /= 1000;
         convert.val -= (10957 * 86400);
 
@@ -353,7 +353,7 @@ static jobject CreateDoubleField(jdouble* var, JNIEnv* env) {
     return (*env)->NewObject(env,Cache->doubletype,Cache->createdouble,var);
 }
 
-static jobject CreateDateField(jlong* var, JNIEnv* env) {
+static jobject CreateDateField(jdouble* var, JNIEnv* env) {
     *var += (10957 * 86400);
     *var *= 1000;
     return (*env)->NewObject(env,Cache->datetype,Cache->createdate,(jlong)*var);
