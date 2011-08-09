@@ -140,7 +140,7 @@ ValidateRule(int event_type,
 			 int is_instead,
 			 Oid event_attype)
 {
-	if (((event_type == CMD_INSERT) || (event_type == CMD_DELETE)) &&
+	if (((event_type == CMD_PUT) || (event_type == CMD_INSERT) || (event_type == CMD_DELETE)) &&
 		eslot_string)
 	{
 		elog(ERROR,

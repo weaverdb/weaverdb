@@ -1864,7 +1864,7 @@ DefaultBuild(Relation heapRelation,
 		indexTuple->t_tid = heapTuple->t_self;
 
 		insertResult = index_insert(indexRelation, datum, nullv,
-									&(heapTuple->t_self), heapRelation);
+									&(heapTuple->t_self), heapRelation,false);
 
 		if (insertResult)
 			pfree(insertResult);

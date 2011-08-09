@@ -18,7 +18,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
-#include <zlib.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -29,12 +28,12 @@
 #include "storage/smgr_spi.h"
 #include "utils/relcache.h"
 #include "env/connectionutil.h"
-#include "utils/pg_lzcompress.h"
+#include "utils/lzf.h"
 
 #undef DIAGNOSTIC
 
 static File     log_file;
-static File     index_file;
+
 static long     log_count;
 static long     log_pos;
 
@@ -55,17 +54,6 @@ static union  logbuffer {
     char        block[BLCKSZ];
 } LogBuffer;
 
-typedef struct indexsegment {
-    long        index_magic;
-    int         count;
-    SmgrData    blocks[1];
-} IndexSegment;
-
-static union indexstore {
-    IndexSegment    header;
-    char            data[BLCKSZ];
-} IndexStore;
-
 typedef struct logsegment {
     long        segment_magic;
     long        seg_id;
@@ -79,37 +67,21 @@ static union segmentstore {
 } SegmentStore;
 
 static int max_blocks;
-static int max_index;
+
 
 /*  block cache space, created in the init script  */
-static char*        index_log;
-static int          index_count;
+
 static char*        scratch_space;
 static int          scratch_loc = 0;
 static bool         compress_log = FALSE;
 static bool         log_index = TRUE;
-static int         compress_level = Z_BEST_SPEED;
-static PGLZ_Strategy log_strategy = {
-	32,							/* Data chunks less than 32 bytes are not
-								 * compressed */
-	0x7fffffff,					/* No upper limit on what we'll try to
-								 * compress */
-	20,							/* Require 25% compression rate, or not worth
-								 * it */
-	1024,						/* Give up if no compression in the first 1KB */
-	128,						/* Stop history lookup if a match of 128 bytes
-								 * is found */
-	10							/* Lower good match size by 10% at every loop
-								 * iteration */
-};
 
 /* routines declared here */
 static BlockNumber _vfdnblocks(File file, Size blcksz);
 static int _vfddumplogtodisk(void);
-static int _vfddumpindextomemory(void);
-static int _vfddumpindextodisk();
-static long _vfdreplaysegment(File logfile,bool compressed);
-static int _vfdreplayindexlog();
+
+static bool _vfdreplaylogfile(File logfile, bool indexonly);
+static long _vfdreplaysegment(File logfile,bool indexingonly, bool compressed);
 
 static File _openlogfile(char* path, bool replay);
 
@@ -154,49 +126,28 @@ _openlogfile(char* logfile_path, bool replay) {
 int
 vfdinit()
 {    
-      char* index_path = GetProperty("vfdindexlog");
       char* logfile_path = GetProperty("vfdlogfile");
 
       if ( logfile_path == NULL ) {
-        logfile_path = "pg_shadowlog";
+          logfile_path = "pg_shadowlog";
       }
-      if ( index_path == NULL ) {
-        index_path = "pg_indexlog";
-      }     
       
       if ( PropertyIsValid("vfdlogindex") ) {
           log_index = GetBoolProperty("vfdlogindex");
       }
      
-    if ( PropertyIsValid("vfdcompress_log") ) {
-        compress_log = GetBoolProperty("vfdcompress_log");
-    }
-    
-      if ( PropertyIsValid("vfdcompress_good") ) {
-          log_strategy.match_size_good = GetIntProperty("vfdcompress_good");
-      }
-    
-      if ( PropertyIsValid("vfdcompress_drop") ) {
-          log_strategy.match_size_drop = GetIntProperty("vfdcompress_drop");
-      }   
-    
-      if ( PropertyIsValid("vfdcompress_level") ) {
-          compress_level = GetIntProperty("vfdcompress_level");
-      } 
+      if ( PropertyIsValid("vfdcompress_log") ) {
+          compress_log = GetBoolProperty("vfdcompress_log");
+      }  
       
     log_file = _openlogfile(logfile_path, false);
-    index_file = _openlogfile(index_path, false);
-        
-    max_index = ((sizeof(IndexStore) - MAXALIGN((char*)&IndexStore - (char*)&IndexStore.header.blocks)) / sizeof(SmgrData));
+
     max_blocks = ((sizeof(SegmentStore) - MAXALIGN((char*)&SegmentStore - (char*)&SegmentStore.header.blocks)) / sizeof(SmgrData));
     log_count = 0;
         
-    scratch_space = os_malloc((compress_log) ? max_blocks * PGLZ_MAX_OUTPUT(BLCKSZ) : (BLCKSZ * max_blocks));
+    scratch_space = os_malloc((BLCKSZ + 4) * (max_blocks + 1));
     
     log_pos = 0;
- 
-    index_log = NULL;
-    index_count = 0;
     
     return SM_SUCCESS;
 }
@@ -219,17 +170,6 @@ vfdshutdown()
         FileClose(log_file);
     }
     
-    if ( index_file > 0 ) {
-        FilePin(index_file,0);
-        IndexStore.header.index_magic = INDEX_MAGIC;
-        IndexStore.header.count = 0;  
-
-        FileSeek(index_file,0,SEEK_END);
-
-        FileWrite(index_file,IndexStore.data,BLCKSZ);
-        FileUnpin(index_file,0);
-        FileClose(index_file);
-    }    
     os_free(scratch_space);
     return SM_SUCCESS;
 }
@@ -717,14 +657,17 @@ vfdbeginlog() {
     FileSync(log_file);
     
     SegmentStore.header.count = 0;
-    IndexStore.header.count = 0;
+    
     FileUnpin(log_file,0); 
     return SM_SUCCESS;
 }
 
 int
 vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
-    uLongf put = BLCKSZ;
+/*
+    int32 put = BLCKSZ;
+*/
+    ulong put = BLCKSZ;
     
     if ( SegmentStore.header.count == max_blocks ) {
         _vfddumplogtodisk();
@@ -733,77 +676,27 @@ vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
     info->nblocks = block;
     memmove(SegmentStore.header.blocks + SegmentStore.header.count,info,sizeof(SmgrData)); 
     if ( compress_log ) {
-        compress2(scratch_space + scratch_loc + 4,&put,buffer,BLCKSZ,compress_level);
-        *(int32*)(scratch_space + scratch_loc) = put;
-        /*
-        put = pglz_compress(buffer,BLCKSZ,(PGLZ_Header*)(scratch_space + scratch_loc),&log_strategy);
+        put = lzf_compress(buffer,BLCKSZ,scratch_space + scratch_loc + 4,BLCKSZ-1);
         if ( !put ) {
-            put = BLCKSZ + 4;
+            put = BLCKSZ;
             *(int32*)(scratch_space + scratch_loc) = put;
             memmove(scratch_space + scratch_loc + 4,buffer,BLCKSZ);
+        } else {
+            *(int32*)(scratch_space + scratch_loc) = put;
         }
-        */
-        scratch_loc += put;
+        scratch_loc += put + 4;
     } else {
         memmove(scratch_space + scratch_loc,buffer,BLCKSZ);
         scratch_loc += BLCKSZ;
     }
     SegmentStore.header.count += 1;
     
-    if ( info->relkind == RELKIND_INDEX && log_index ) {
-        if ( IndexStore.header.count + 1 >= max_index ) {
-            _vfddumpindextomemory();
-        }
-        memmove(&IndexStore.header.blocks[IndexStore.header.count++],info,sizeof(SmgrData));
-    }
-    
     return SM_SUCCESS;    
-}
-
-int
-_vfddumpindextomemory() {
-    if ( IndexStore.header.count == 0 ) return 0;
-    IndexStore.header.index_magic = INDEX_MAGIC;
-    if ( !index_log ) {
-        index_log = os_malloc(BLCKSZ);
-    } else {
-        index_log = os_realloc(index_log,BLCKSZ * (index_count + 1));
-    }
-    memcpy(index_log + (BLCKSZ * index_count),IndexStore.data,BLCKSZ);
-    index_count += 1;
-    IndexStore.header.count = 0;
-    
-    return IndexStore.header.count;
-}
-
-int
-_vfddumpindextodisk() {
-    int ret = 0;
-    FilePin(index_file,0);
-    FileSeek(index_file,0,SEEK_SET); 
-    if ( index_log ) {
-        FileWrite(index_file,index_log,BLCKSZ * index_count);
-        os_free(index_log);
-        index_log = NULL;
-        ret = index_count;
-        index_count = 0;
-    }
-    
-    if ( IndexStore.header.count != 0 ) {
-        IndexStore.header.index_magic = INDEX_MAGIC;
-        FileWrite(index_file,IndexStore.data,BLCKSZ);
-        ret += 1;
-        IndexStore.header.count = 0;
-    }
-    FileTruncate(index_file,ret * BLCKSZ);
-    FileUnpin(index_file,0); 
-    return ret;
 }
     
 int
 _vfddumplogtodisk() {
     int ret = 0;
-    int c = 0;
     
     if ( SegmentStore.header.count == 0 ) return 0;
     
@@ -835,31 +728,21 @@ vfdcommitlog() {
 
 int
 vfdexpirelogs() {    
-    _vfddumpindextodisk();
 
-    if ( index_log ) {
-       os_free(index_log);
-       index_log = NULL;
-       index_count = 0;
-    }
-    IndexStore.header.count = 0;
-    FilePin(log_file,0);
-    FileTruncate(log_file,0);
-    FileSeek(log_file,0,SEEK_SET);
-    FileSync(log_file);
-    FileUnpin(log_file,0); 
-    log_pos = 0;
-    return SM_SUCCESS;
+    char newname[1024];
+    memset(newname,0x00,1024);
+    int len = strlen(FileGetName(log_file));
+    
+    strncpy(newname,FileGetName(log_file),len);
+    strncpy(newname + len,".old",4);
+    
+    FileRename(log_file,newname);
+    newname[len] = 0x00;
+    log_file = _openlogfile(newname,false);
 }
 
 int
 vfdreplaylogs() {
-    int      count;
-    long read = 0;
-    long total = 0;
-    long end = 0;
-    long id = 0;
-    int result = SM_SUCCESS;
     bool logged = false;
         
       char* logfile_path = GetProperty("vfdlogfile");
@@ -868,7 +751,37 @@ vfdreplaylogs() {
         logfile_path = "pg_shadowlog";
       }
         
-        File logfile = _openlogfile(logfile_path,true);
+    File logfile = _openlogfile(logfile_path,true);
+    logged = _vfdreplaylogfile(logfile,false);
+    log_count = LogBuffer.LogHeader.log_id + 1;
+    FileClose(logfile);
+    
+    if ( !logged ) {
+        char newname[1024];
+       
+        memset(newname,0x00,1024);
+        int len = strlen(logfile_path);
+    
+        strncpy(newname,logfile_path,len);
+        strncpy(newname + len,".old",4);
+    
+        logfile = _openlogfile(newname,true);
+        _vfdreplaylogfile(logfile,true);
+        FileClose(logfile);
+    }
+    
+    return SM_SUCCESS;
+}
+
+static bool
+_vfdreplaylogfile(File logfile, bool indexonly) {
+    int      count;
+    long read = 0;
+    long total = 0;
+    long end = 0;
+    long id = 0;
+    int result = SM_SUCCESS;
+    bool logged = false;
     
     vfd_log("--- Replaying VFD storage manager log ---");
    	 
@@ -909,7 +822,7 @@ vfdreplaylogs() {
             (LogBuffer.LogHeader.completed) ? "true":"false",LogBuffer.LogHeader.segments);   
         
         for ( count=0;count<LogBuffer.LogHeader.segments;count++) {
-            long add =  _vfdreplaysegment(logfile,LogBuffer.LogHeader.compressed);
+            long add =  _vfdreplaysegment(logfile,indexonly,LogBuffer.LogHeader.compressed);
             if ( add < 0 ) {
                 vfd_log("exiting due to invalid segment");
                 result = SM_FAIL;
@@ -922,56 +835,20 @@ vfdreplaylogs() {
     }
     log_count = LogBuffer.LogHeader.log_id + 1;
     FileUnpin(logfile,0);
-    FileClose(logfile);
     
-    if ( !logged ) _vfdreplayindexlog();
-    
-    return SM_SUCCESS;
+    return logged;    
 }
-
-static int 
-_vfdreplayindexlog() {
-      char* index_path = GetProperty("vfdindexlog");
-
-      if ( index_path == NULL ) {
-        index_path = "pg_indexlog";
-      }  
-      
-      File indexfile = _openlogfile(index_path,true);
-        
-    int x =0;
-    long count = BLCKSZ;
-    FilePin(indexfile,0);
-    while ( count == BLCKSZ ) {
-        if ( IndexStore.header.index_magic != INDEX_MAGIC ) break;
-
-        for ( x=0;x<IndexStore.header.count;x++) {
-            SmgrData* data = IndexStore.header.blocks + x;
-            smgraddrecoveredpage(NameStr(data->dbname),data->dbid,data->relid,data->nblocks);
-        }
-
-        count = FileRead(indexfile,IndexStore.data,BLCKSZ);
-    }
-    FileUnpin(indexfile,0);
-    FileClose(indexfile);
-}
-
 
 static long
-_vfdreplaysegment(File logfile,bool compressed) {
+_vfdreplaysegment(File logfile,bool indexingonly, bool compressed) {
         int count = 0;
         long ret = 0;
         long total = 0;
         File fd = -1;
         Oid crel = 0,cdb = 0;
-        char* block = scratch_space;
-        
-/*
-        union {
-            PGLZ_Header header;
-            char*       buffer;
-        }  cbuf;
-*/
+        char* read_block = scratch_space;
+        char* write_block = scratch_space + BLCKSZ;
+       
                 
         ret = FileRead(logfile,SegmentStore.data,BLCKSZ);
         
@@ -996,23 +873,26 @@ _vfdreplaysegment(File logfile,bool compressed) {
 
             if ( compressed ) {
                 int32  get = BLCKSZ;
-                uLongf bget;
                 FileRead(logfile,(char*)&get,sizeof(get));
-                FileRead(logfile,(char*)block,get);
-               bget = get;
- /*
-  *                cbuf.buffer = scratch_space + BLCKSZ;
-                FileRead(logfile,(char*)&cbuf.header.vl_len_,sizeof(cbuf.header.vl_len_));
-                FileRead(logfile,(char*)&cbuf.header.rawsize,cbuf.header.vl_len_-sizeof(cbuf.header.vl_len_));
-                pglz_decompress(&cbuf.header,block);
-*/
-                uncompress(block + BLCKSZ,&bget,block,get);
-                ret = bget;
+                FileRead(logfile,(char*)read_block,get);
+
+               if ( get != BLCKSZ ) {
+                   write_block = read_block + BLCKSZ;
+                   ret = lzf_decompress(read_block,get,write_block,BLCKSZ);
+               } else {
+                   write_block = read_block;
+                   ret = BLCKSZ;
+               }
             } else {
-                ret = FileRead(logfile,block,BLCKSZ);
+                ret = FileRead(logfile,read_block,BLCKSZ);
+                write_block = read_block;
             }
             
-            if ( ret == BLCKSZ ) {
+            if ( indexingonly ) {
+                if (info->relkind == RELKIND_INDEX ) {
+                        smgraddrecoveredpage(NameStr(info->dbname),info->dbid,info->relid,info->nblocks);
+                }
+            } else if ( ret == BLCKSZ ) {
                 total += ret;
                 if ( cdb != info->dbid || crel != info->relid) {
                     char* path = relpath_blind(NameStr(info->dbname),NameStr(info->relname),info->dbid,info->relid);
@@ -1029,7 +909,7 @@ _vfdreplaysegment(File logfile,bool compressed) {
 
                 if ( fd > 0 ) {
                     FileSeek(fd,info->nblocks * BLCKSZ,SEEK_SET);
-                    FileWrite(fd,block,BLCKSZ);
+                    FileWrite(fd,write_block,BLCKSZ);
                     if (info->relkind == RELKIND_INDEX ) {
                         smgraddrecoveredpage(NameStr(info->dbname),cdb,crel,info->nblocks);
                     }

@@ -178,39 +178,67 @@ InitBufferPool(IPCKey key)
 	InitFreeList(!foundDescs);
 }
 
-BufferDesc*
+int
 AddMoreBuffers(int count) {
-    if ( NBuffers == MaxBuffers ) return NULL;
-    if ( buffer_cxt == NULL ) return NULL;
-    if ( count > MaxBuffers - NBuffers ) count = MaxBuffers - NBuffers;
-    
-    InitializeBuffers(NBuffers,count,NULL);
-    AddBuffersToTail(&BufferDescriptors[NBuffers]);
-    NBuffers += count;
-    return NULL;
+    if ( NBuffers == MaxBuffers ) {
+        int i;
+        BufferDesc *buf,*head,*tail;
+        int activate = 0;
+        
+        head = NULL;
+        tail = NULL;
+        
+        for (i = 0; i < MaxBuffers, activate < count; i++)
+        {
+            buf = &BufferDescriptors[i];
+            pthread_mutex_lock(&buf->cntx_lock.guard);
+            if ( buf->locflags & BM_RETIRED ) {
+                activate += 1;
+                buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+                buf->locflags &= ~(BM_RETIRED);
+                buf->freeNext = INVALID_DESCRIPTOR;
+                if ( head == NULL ) {
+                    head = buf;
+                    tail = buf;
+                } else {
+                    tail->freeNext = i;
+                    tail = buf;
+                }
+            }
+            pthread_mutex_unlock(&buf->cntx_lock.guard);
+        }
+        AddBuffersToTail(head);
+        return activate;
+    } else {
+        if ( buffer_cxt == NULL ) return NULL;
+        if ( count > MaxBuffers - NBuffers ) count = MaxBuffers - NBuffers;
+
+        InitializeBuffers(NBuffers,count,NULL);
+        AddBuffersToTail(&BufferDescriptors[NBuffers]);
+        NBuffers += count;
+        return count;
+    }
 }
 
-void
+int
 RetireBuffers(int start, int count) {
     int i;
-    if ( start >= NBuffers ) return;
-    if ( buffer_cxt == NULL ) return;
+    if ( start >= NBuffers ) return 0;
+    if ( buffer_cxt == NULL ) return 0;
     if ( start + count >= NBuffers ) count = NBuffers - start;
     BufferDesc* buf = &BufferDescriptors[start];
     
     for (i = start; i < count; buf++, i++) {
+        pthread_mutex_lock(&buf->cntx_lock.guard);
         Assert ( buf->locflags & BM_DELETED ) ;
         Assert ( buf->refCount == 0 ) ;
-        pthread_mutex_destroy(&buf->io_in_progress_lock.guard);
-        pthread_cond_destroy(&buf->io_in_progress_lock.gate);
-        pthread_mutex_destroy(&buf->cntx_lock.guard);
-        pthread_cond_destroy(&buf->cntx_lock.gate);
         buf->locflags |= ( BM_RETIRED ) ;
         buf->locflags &= ~( BM_VALID ) ;
         pfree(buf->data);
+        pthread_mutex_unlock(&buf->cntx_lock.guard);
     }
     
-    if ( i == NBuffers ) NBuffers = start;
+    return count;
 }
 
 void

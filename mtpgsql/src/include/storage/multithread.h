@@ -34,10 +34,6 @@
  * by the lock mgr) we can keep track of.  It must be a multiple of
  * PROC_NSEMS_PER_SET.
  */
-/*
-#define  PROC_NSEMS_PER_SET		22
-#define  MAX_PROC_SEMS			(((MAXBACKENDS-1)/PROC_NSEMS_PER_SET+1)*PROC_NSEMS_PER_SET)
-*/
 
 typedef struct procglobal
 {
@@ -48,7 +44,6 @@ typedef struct procglobal
         int             free;
         int             alloc;
         int             created;
-/*	sema_t*		semMap[MAX_PROC_SEMS];    */
 
 	/*
 	 * In each freeSemMap entry, the PROC_NSEMS_PER_SET least-significant

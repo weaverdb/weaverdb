@@ -38,7 +38,7 @@ static int                      envid = 0;
 static pthread_key_t		envkey;
 static CommitType               default_type = SOFT_COMMIT;
 
-static Env*                     envmap[MAXBACKENDS];
+static Env*                     *envmap;
 
 
 pthread_condattr_t		process_cond_attr;
@@ -84,16 +84,12 @@ Env* InitSystem(bool  isPrivate) {
 #ifdef SUNOS
         umem_nofail_callback(memory_fail);
 #endif
-#ifdef _GNU_SOURCE
-        /*
-        mcheck(glibc_memory_fail);
-*/
-#endif
 	pthread_mutex_init(&envlock,NULL);
 	
+        envmap = os_malloc(sizeof(Env*) * GetMaxBackends());
 	
 	envcount = 0;
-    	for (counter=0;counter<MAXBACKENDS;counter++) {
+    	for (counter=0;counter<GetMaxBackends();counter++) {
      	   envmap[counter] = NULL;
     	}
         
@@ -213,7 +209,7 @@ pthread_t FindChildThread(Env* env) {
     pthread_t   child = 0;
     int counter =0;
     pthread_mutex_lock(&envlock);
-    for (counter=0;counter<MAXBACKENDS;counter++) {
+    for (counter=0;counter<GetMaxBackends();counter++) {
         if ( envmap[counter] == env ) {
             child = env->owner;
             break;
@@ -239,8 +235,6 @@ CancelEnvAndJoin(Env* env) {
 }
 
 Env* CreateEnv(Env* parent) {
-        int counter = 0;
-                
 	MemoryContext top = ( parent == NULL ) ? NULL : parent->global_context;
 
 	Env* env = ( top == NULL ) ? os_malloc(sizeof(Env)) : MemoryContextAlloc(top,sizeof(Env));
@@ -284,17 +278,23 @@ Env* CreateEnv(Env* parent) {
 	{
             int counter = 0;
             pthread_mutex_lock(&envlock);
-            for (counter=0;counter<MAXBACKENDS;counter++) {
+            for (counter=0;counter<GetMaxBackends();counter++) {
                 if ( envmap[counter] == NULL ) break;
             }
 		
-            if ( counter != MAXBACKENDS ) {
+            if ( counter != GetMaxBackends() ) {
 		envmap[counter] = env;
 		env->eid = counter;
 		envcount++;
 	    } else {
 		printf("too many connections\n");
-		os_free(env);
+                pthread_mutex_destroy(env->env_guard);
+                MemoryContextDelete(env->global_context);    
+                if ( top ) {
+                    pfree(env);
+                } else {
+                    os_free(env);
+                }
 		env = NULL;
             }
             pthread_mutex_unlock(&envlock);
@@ -309,7 +309,7 @@ void DiscardAllInvalids()
     SetEnv(NULL);
     elog(DEBUG,"discarding invalids for all backends, message queue close to capacity");
     pthread_mutex_lock(&envlock);
-    for (counter = 0;counter <MAXBACKENDS;counter++) {
+    for (counter = 0;counter <GetMaxBackends();counter++) {
         if ( envmap[counter] != NULL ) {
             pthread_mutex_lock(envmap[counter]->env_guard);
             if ( !envmap[counter]->in_transaction ) {
@@ -843,7 +843,7 @@ void sprandom(unsigned int seed) {
 }
 
 void ptimeout(struct timespec* timeval,int to) {
-    clock_gettime(CLOCK_REALTIME,timeval);
+    clock_gettime(WHICH_CLOCK,timeval);
     timeval->tv_nsec += ((to % 1000) * 1000000);
     timeval->tv_sec += ((to / 1000) + (timeval->tv_nsec/1000000000));
     timeval->tv_nsec = timeval->tv_nsec % 1000000000;    
@@ -870,7 +870,7 @@ PrintEnvMemory( void ) {
     Env* home = GetEnv();
     SetEnv(NULL);
     pthread_mutex_lock(&envlock);
-    for (counter = 0;counter <MAXBACKENDS;counter++) {
+    for (counter = 0;counter <GetMaxBackends();counter++) {
         if ( envmap[counter] != NULL ) {
             pthread_mutex_lock(envmap[counter]->env_guard);
             if ( !envmap[counter]->owner == 0 ) {

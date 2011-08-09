@@ -19,9 +19,9 @@ all: submake SUBSYS.o
 
 OBJS = fmgrtab.o adt/SUBSYS.o cache/SUBSYS.o error/SUBSYS.o \
        fmgr/SUBSYS.o hash/SUBSYS.o init/SUBSYS.o misc/SUBSYS.o mmgr/SUBSYS.o \
-       sort/SUBSYS.o time/SUBSYS.o
+       sort/SUBSYS.o time/SUBSYS.o lzf/SUBSYS.o
 
-DIRS = adt cache error fmgr hash init misc mmgr sort time
+DIRS = adt cache error fmgr hash init misc mmgr sort time lzf
 
 ifdef MULTIBYTE
 OBJS += mb/SUBSYS.o

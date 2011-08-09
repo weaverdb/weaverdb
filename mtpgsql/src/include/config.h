@@ -595,5 +595,12 @@ extern char *strdup(char const *);
 #  define SIGNAL_ARGS int postgres_signal_arg
 #endif
 
+#ifdef SUNOS
+#define WHICH_CLOCK CLOCK_HIGHRES
+#elif LINUX
+#define WHICH_CLOCK CLOCK_REALTIME
+#endif
+
+
 
 #endif /* CONFIG_H */

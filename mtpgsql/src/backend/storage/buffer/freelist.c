@@ -57,7 +57,8 @@ typedef struct flush_manager {
     bool                flushing;
     pthread_cond_t      flush_wait;
     pthread_mutex_t     flush_gate;
-    bool                waiting[MAXBACKENDS];
+    int                 flush_count;
+    long                flush_time;
 } FlushManager;
 
 
@@ -87,9 +88,8 @@ static BufferDesc* GetHead(Relation rel) {
     int timerr = 0;
     long elapsed;
     struct timespec t1,t2;
-    
-    clock_gettime(CLOCK_HIGHRES,&t1);
-    
+   
+    clock_gettime(WHICH_CLOCK,&t1);
  /*   
     FreeList* which = ( rel->rd_rel->relkind == RELKIND_INDEX && IndexList != NULL ) ? IndexList : MasterList;
 */
@@ -149,7 +149,7 @@ static BufferDesc* GetHead(Relation rel) {
      */
     
     pthread_mutex_unlock(&which->guard);
-    clock_gettime(CLOCK_HIGHRES,&t2);
+    clock_gettime(WHICH_CLOCK,&t2);
 
     elapsed = (t2.tv_sec - t1.tv_sec) * 1000;      // sec to ms
     elapsed += (t2.tv_nsec - t1.tv_nsec) / 1000000;   // ns to ms
@@ -256,15 +256,16 @@ static long InitiateFlush() {
 
     } else {
         FlushBlock.flushing = true;
-        FlushBlock.waiting[GetEnv()->eid] = TRUE;
         pthread_mutex_unlock(&FlushBlock.flush_gate);
         iflushed = FlushAllDirtyBuffers(false);
         pthread_mutex_lock(&FlushBlock.flush_gate);
-        FlushBlock.waiting[GetEnv()->eid] = FALSE;
         FlushBlock.flushing = false;
         pthread_cond_broadcast(&FlushBlock.flush_wait);
-        if ( iflushed && NBuffers < MaxBuffers ) {
-            AddMoreBuffers(NBuffers * addscale);
+        if ( iflushed ) {
+            if ( FlushBlock.flush_count++ > 0 && NBuffers < MaxBuffers ) {
+                AddMoreBuffers(NBuffers * addscale);
+                FlushBlock.flush_count = 0;
+            }
         }
     }
     pthread_mutex_unlock(&FlushBlock.flush_gate);
@@ -529,7 +530,6 @@ void InitFreeList(bool init) {
         pthread_mutex_init(&FlushBlock.flush_gate, &process_mutex_attr);
         pthread_cond_init(&FlushBlock.flush_wait, &process_cond_attr);
         FlushBlock.flushing = false;
-        memset(FlushBlock.waiting,0x00,sizeof(bool) * MAXBACKENDS);
         
         if ( split != 0 ) {
             IndexList = os_malloc(sizeof(FreeList));
@@ -561,13 +561,5 @@ void InitFreeList(bool init) {
         BufferDescriptors[NBuffers - 1].freeNext = INVALID_DESCRIPTOR;
     }
     
-}
-
-bool IsWaitingForFlush(unsigned owner) {
-    bool iswaiting = FALSE;
-        pthread_mutex_lock(&FlushBlock.flush_gate);
-        iswaiting = FlushBlock.waiting[owner];
-        pthread_mutex_unlock(&FlushBlock.flush_gate);     
-        return iswaiting;
 }
 

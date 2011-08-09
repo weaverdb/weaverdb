@@ -587,6 +587,7 @@ ExecCheckRTEPerms(RangeTblEntry *rte, CmdType operation,
 		switch (operation)
 		{
 			case CMD_INSERT:
+			case CMD_PUT:
 				/* Accept either APPEND or WRITE access for this */
 				aclcheck_result = CHECK(ACL_AP);
 				if (aclcheck_result != ACLCHECK_OK)
@@ -796,6 +797,7 @@ InitPlan(CmdType operation, Query *parseTree, Plan *plan, EState *estate)
 		{
 			case CMD_SELECT:
 			case CMD_INSERT:
+			case CMD_PUT:
 				foreach(tlist, targetList)
 				{
 					TargetEntry *tle = (TargetEntry *) lfirst(tlist);
@@ -1171,6 +1173,7 @@ lnext:	;
 				result = slot;
 				break;
 
+			case CMD_PUT:
 			case CMD_INSERT:
 				ExecAppend(slot, tupleid, estate);
 				result = NULL;
@@ -1325,7 +1328,7 @@ ExecPut(TupleTableSlot *slot,
 	 */
 	numIndices = resultRelationInfo->ri_NumIndices;
 	if (numIndices > 0)
-		ExecInsertIndexTuples(slot, tupleid, estate, false);
+		ExecInsertIndexTuples(slot, tupleid, estate, true);
         
         if ( ItemPointerIsValid(tupleid) ) {
             ctid=tuple->t_self;
