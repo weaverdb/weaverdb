@@ -185,14 +185,12 @@ _bt_tryroot(Relation rel, bool create)
 			 * type on the new root page.  Since this is the first page in
 			 * the tree, it's a leaf as well as the root.
 			 */
-                        LockBuffer(rel,metabuf,BUFFER_LOCK_NOTCRITICAL);
 			Buffer rootbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
-                        LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
 			Page rootpage = BufferGetPage(rootbuf);
                         root = BufferGetBlockNumber(rootbuf);
 
 			/* NO ELOG(ERROR) till meta is updated */
-
+                        LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
 			metad->btm_root = root;
 			metad->btm_level = 1;
 
