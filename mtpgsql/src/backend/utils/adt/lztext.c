@@ -26,7 +26,7 @@
 #endif
 
 #define UNCOMPRESSED(length) ((length | 0x80000000))
-#define ISCOMPRESSED(length) (!(length & 0x80000000))
+#define ISCOMPRESSED(lz) (!(lz->vl_len_ & 0x80000000))
 
 /* ----------
  * lztextin -
@@ -154,11 +154,11 @@ lztextout(lztext *lz)
 int32
 lztextlen(lztext *lz)
 {
+	int			l;
 #ifdef MULTIBYTE
 	unsigned char *s1,
 			   *s2;
 	int			len;
-	int			l;
 	int			wl;
 
 #endif
