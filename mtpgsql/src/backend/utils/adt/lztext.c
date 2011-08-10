@@ -67,6 +67,10 @@ lztextin(char *str)
 	 * sequence.
 	 * ----------
 	 */
+        if ( clen == 0 ) {
+            clen = rawsize + sizeof(lztext);
+        }
+        
 	if (tmp_size - clen < 256 ||
 		tmp_size -  clen < tmp_size / 4)
 		result = tmp;
@@ -77,6 +81,7 @@ lztextin(char *str)
 		pfree(tmp);
 	}
 
+        SETVARSIZE(result,clen);
 	return result;
 }
 
@@ -116,7 +121,11 @@ lztextout(lztext *lz)
 	 * Decompress and add terminating ZERO
 	 * ----------
 	 */
-	pglz_decompress(lz, result);
+        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) + sizeof(lztext) ) {
+                memmove(result,((char*)lz)+sizeof(lztext),PGLZ_RAW_SIZE(lz));
+        } else {
+                pglz_decompress(lz, result);
+        }
 	result[lz->rawsize] = '\0';
 
 	/* ----------
@@ -244,7 +253,11 @@ text_lztext(text *txt)
 	 * sequence.
 	 * ----------
 	 */
-	if (tmp_size - clen < 256 ||
+        if ( clen == 0 ) {
+            clen = rawsize + sizeof(lztext);
+        }
+        
+        if (tmp_size - clen < 256 ||
 		tmp_size - clen < tmp_size / 4)
 		result = tmp;
 	else
@@ -254,6 +267,7 @@ text_lztext(text *txt)
 		pfree(tmp);
 	}
 
+        SETVARSIZE(result,clen);
 	return result;
 }
 
@@ -288,7 +302,11 @@ lztext_text(lztext *lz)
 	 * ----------
 	 */
 	VARDATA(result)[lz->rawsize] = 0;
-	pglz_decompress(lz, VARDATA(result));
+        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) + sizeof(lztext) ) {
+                memmove(result,((char*)lz)+sizeof(lztext),PGLZ_RAW_SIZE(lz));
+        } else {
+            pglz_decompress(lz, VARDATA(result));
+        }
 
 	return result;
 }
