@@ -223,7 +223,7 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
         info->relid = relid;
         info->dbid = dbid;        
         
-	while ((*(smgrsw[which].smgr_open)) (info) < 0) {
+	while ((*(smgrsw[which].smgr_open)) (info) == SM_FAIL) {
 		elog(NOTICE, "cannot open %s-%s", relname, dbname);
                 perror("SMGR open:");
                 if ( count ++ > 3 ) {

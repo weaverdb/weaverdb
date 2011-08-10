@@ -136,10 +136,6 @@ makeConst(Oid consttype,
 {
 	Const	   *cnst = makeNode(Const);
 
-	if ( consttype == 1625 ) {
-		printf("stop\n");
-	}
-
 	cnst->consttype = consttype;
 	cnst->constlen = constlen;
 	cnst->constvalue = constvalue;

@@ -350,7 +350,7 @@ vfdopen(SmgrInfo info)
 
 	pfree(path);
 
-	return fd;
+	return SM_SUCCESS;
 }
 
 /*
