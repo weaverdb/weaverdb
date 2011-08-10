@@ -333,7 +333,14 @@ int BiasPinned(BufferDesc* buf) {
 int ManualPin(BufferDesc* buf, bool pageaccess) {
     int valid = 0;
     BufferDesc*  tail = NULL;
+    
+    
     pthread_mutex_lock(&buf->cntx_lock.guard);
+
+    if ( buf->locflags & BM_RETIRED ) {
+        pthread_mutex_unlock(&buf->cntx_lock.guard);
+        return 0;
+    }
     /*  if we are doing a pageaccess ( not the dbwriter ) and there is an e_lock
      *  then wait for the e_lock to be released, do this before
      *  valid check because the buffer could no longer be valid

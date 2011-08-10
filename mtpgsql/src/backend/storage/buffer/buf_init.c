@@ -164,11 +164,7 @@ InitBufferPool(IPCKey key)
                 /* both should be present or neither */
                 Assert(foundDescs && foundBufs);
         } else {
-            int i=0;
-                InitializeBuffers(0,NBuffers,BufferBlocks);
-                for (i=NBuffers;i<MaxBuffers;i++) {
-                    BufferDescriptors[i].locflags = (BM_RETIRED);
-                }
+                InitializeBuffers(0,MaxBuffers,BufferBlocks);
         }
         
         elog(DEBUG,"using %d buffers max buffers %d",NBuffers,MaxBuffers);
@@ -210,10 +206,17 @@ AddMoreBuffers(int count) {
         AddBuffersToTail(head);
         return activate;
     } else {
+        BufferDesc* buf = NULL;
+        int i=0;
         if ( buffer_cxt == NULL ) return NULL;
         if ( count > MaxBuffers - NBuffers ) count = MaxBuffers - NBuffers;
-
-        InitializeBuffers(NBuffers,count,NULL);
+        for (i=NBuffers;i<count;i++) {
+            buf = &BufferDescriptors[start];
+            pthread_mutex_lock(&buf->cntx_lock.guard);
+            buf->locflags &= ~(BM_RETIRED);
+            buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+            pthread_mutex_unlock(&buf->cntx_lock.guard);
+        }
         AddBuffersToTail(&BufferDescriptors[NBuffers]);
         NBuffers += count;
         return count;
@@ -250,14 +253,19 @@ InitializeBuffers(int start, int count, char* block) {
         {
             buf = &BufferDescriptors[i];
             CLEAR_BUFFERTAG(&(buf->tag));
-            if ( block ) {
-                buf->data = block;
-                block += BLCKSZ;
+            buf->locflags = (BM_DELETED | BM_FREE);
+            
+            if ( i >= NBuffers ) {
+                buf->locflags |= BM_RETIRED;
             } else {
-                buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+                if ( block ) {
+                    buf->data = block;
+                    block += BLCKSZ;
+                } else {
+                    buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+                }
             }
 
-            buf->locflags = (BM_DELETED | BM_FREE);
             buf->ioflags = 0;
             buf->refCount = 0;
             buf->pageaccess = 0;
