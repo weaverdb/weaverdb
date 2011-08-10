@@ -25,6 +25,9 @@
 #include "mb/pg_wchar.h"
 #endif
 
+#define UNCOMPRESSED(length) ((length | 0x80000000))
+#define ISCOMPRESSED(length) (!(length & 0x80000000))
+
 /* ----------
  * lztextin -
  *
@@ -38,7 +41,7 @@ lztextin(char *str)
 	int32		rawsize;
 	lztext	   *tmp;
 	int			tmp_size;
-        int clen;
+        int     clen;
 
 	/* ----------
 	 * Handle NULL
@@ -68,11 +71,13 @@ lztextin(char *str)
 	 * ----------
 	 */
         if ( clen == 0 ) {
-            clen = rawsize + sizeof(lztext);
-            PGLZ_RAW_SIZE(tmp) = rawsize;
-        }
+            memmove(VARDATA(tmp),str,rawsize);
+            SETVARSIZE(tmp,UNCOMPRESSED(rawsize + VARHDRSZ));
+            return tmp;
+        } 
         
-	if (tmp_size - clen < 256 ||
+        
+        if (tmp_size - clen < 256 ||
 		tmp_size -  clen < tmp_size / 4)
 		result = tmp;
 	else
@@ -116,18 +121,20 @@ lztextout(lztext *lz)
 	 * have to diddle with realloc's.
 	 * ----------
 	 */
-	result = (char *) palloc(PGLZ_RAW_SIZE(lz) + 1);
 
 	/* ----------
 	 * Decompress and add terminating ZERO
 	 * ----------
 	 */
-        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
-                memmove(result,((char*)lz)+sizeof(lztext),PGLZ_RAW_SIZE(lz));
+        if ( !ISCOMPRESSED(lz) )  {
+                result = (char *) palloc(VARSIZE(lz) - VARHDRSZ + 1);
+                memmove(result,VARDATA(lz),VARSIZE(lz) - VARHDRSZ);
+                result[VARSIZE(lz) - VARHDRSZ] = '\0';
         } else {
+                result = (char *) palloc(PGLZ_RAW_SIZE(lz) + 1);
                 pglz_decompress(lz, result);
+        	result[lz->rawsize] = '\0';
         }
-	result[lz->rawsize] = '\0';
 
 	/* ----------
 	 * Return the result
@@ -162,10 +169,12 @@ lztextlen(lztext *lz)
 	if (lz == NULL)
 		return 0;
 
+        if ( !ISCOMPRESSED(lz) ) l = VARSIZE(lz) - VARHDRSZ;
+        else l = PGLZ_RAW_SIZE(lz);
+
 #ifdef MULTIBYTE
 	len = 0;
 	s1 = s2 = (unsigned char *) lztextout(lz);
-	l = PGLZ_RAW_SIZE(lz);
 	while (l > 0)
 	{
 		wl = pg_mblen(s1);
@@ -180,7 +189,7 @@ lztextlen(lztext *lz)
 	 * without multibyte support, it's the remembered rawsize
 	 * ----------
 	 */
-	return PGLZ_RAW_SIZE(lz);
+        return l;
 #endif
 }
 
@@ -255,8 +264,9 @@ text_lztext(text *txt)
 	 * ----------
 	 */
         if ( clen == 0 ) {
-            clen = rawsize + sizeof(lztext);
-            PGLZ_RAW_SIZE(tmp) = rawsize;
+            memmove(VARDATA(tmp),str,rawsize);
+            SETVARSIZE(tmp,UNCOMPRESSED(rawsize + VARHDRSZ));
+            return tmp;
         }
         
         if (tmp_size - clen < 256 ||
@@ -293,21 +303,17 @@ lztext_text(lztext *lz)
 		return NULL;
 
 	/* ----------
-	 * Allocate and initialize the text result
-	 * ----------
-	 */
-	result = (text *) palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ + 1);
-	SETVARSIZE(result,lz->rawsize + VARHDRSZ);
-
-	/* ----------
 	 * Decompress directly into the text data area.
 	 * ----------
 	 */
-	VARDATA(result)[lz->rawsize] = 0;
-        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
-                memmove(result,((char*)lz)+sizeof(lztext),PGLZ_RAW_SIZE(lz));
+        if ( !ISCOMPRESSED(lz) ) {
+            result = palloc(VARSIZE(lz));
+            memmove(VARDATA(result),VARDATA(lz),VARSIZE(lz) - VARHDRSZ);
+            SETVARSIZE(result,VARSIZE(lz));
         } else {
+            result = palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ);
             pglz_decompress(lz, VARDATA(result));
+            SETVARSIZE(result,PGLZ_RAW_SIZE(lz) + VARHDRSZ);
         }
 
 	return result;

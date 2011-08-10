@@ -1100,7 +1100,8 @@ CommitTransactionCommand()
 			break;
 
 		case TBLOCK_AUTO:
-			CommitTransaction();
+			if ( TBLOCK_ABORTONLY ) AbortTransaction();
+                        else CommitTransaction();
 			s->blockState = TBLOCK_DEFAULT;
 			break;
 
