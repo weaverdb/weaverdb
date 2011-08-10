@@ -122,7 +122,7 @@ lztextout(lztext *lz)
 	 * Decompress and add terminating ZERO
 	 * ----------
 	 */
-        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) + sizeof(lztext) ) {
+        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
                 memmove(result,((char*)lz)+sizeof(lztext),PGLZ_RAW_SIZE(lz));
         } else {
                 pglz_decompress(lz, result);
@@ -304,7 +304,7 @@ lztext_text(lztext *lz)
 	 * ----------
 	 */
 	VARDATA(result)[lz->rawsize] = 0;
-        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) + sizeof(lztext) ) {
+        if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
                 memmove(result,((char*)lz)+sizeof(lztext),PGLZ_RAW_SIZE(lz));
         } else {
             pglz_decompress(lz, VARDATA(result));
