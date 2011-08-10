@@ -1100,23 +1100,24 @@ CommitTransactionCommand()
 			break;
 
 		case TBLOCK_AUTO:
-			if ( TBLOCK_ABORTONLY ) AbortTransaction();
-                        else CommitTransaction();
+			CommitTransaction();
 			s->blockState = TBLOCK_DEFAULT;
 			break;
 
 		case TBLOCK_MANUAL:
-		case TBLOCK_ABORTONLY:
 			CommandCounterIncrement();
 			MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->TransactionCommandContext);
 			break;
-
+            
+                case TBLOCK_ABORTONLY:
+                        AbortTransaction();
+                        s->blockState = TBLOCK_DEFAULT;
+                        break;
 
 		case TBLOCK_COMMIT:
 			CommitTransaction();
 			s->blockState = TBLOCK_DEFAULT;
 			break;
-
 
 		case TBLOCK_ABORT:
 			AbortTransaction();

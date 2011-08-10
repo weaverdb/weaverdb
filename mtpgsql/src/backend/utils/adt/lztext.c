@@ -130,6 +130,10 @@ lztextout(lztext *lz)
                 result = (char *) palloc(VARSIZE(lz) - VARHDRSZ + 1);
                 memmove(result,VARDATA(lz),VARSIZE(lz) - VARHDRSZ);
                 result[VARSIZE(lz) - VARHDRSZ] = '\0';
+        } else if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
+                result = (char *) palloc(PGLZ_RAW_SIZE(lz) + 1);
+                memmove(result,((char*)lz) + sizeof(lztext),PGLZ_RAW_SIZE(lz));
+                result[PGLZ_RAW_SIZE(lz)] = '\0';
         } else {
                 result = (char *) palloc(PGLZ_RAW_SIZE(lz) + 1);
                 pglz_decompress(lz, result);
@@ -310,6 +314,10 @@ lztext_text(lztext *lz)
             result = palloc(VARSIZE(lz));
             memmove(VARDATA(result),VARDATA(lz),VARSIZE(lz) - VARHDRSZ);
             SETVARSIZE(result,VARSIZE(lz));
+        } else if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
+            result = (char *) palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ);
+            memmove(VARDATA(result),((char*)lz) + sizeof(lztext),PGLZ_RAW_SIZE(lz));
+            SETVARSIZE(result,PGLZ_RAW_SIZE(lz) + VARHDRSZ);
         } else {
             result = palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ);
             pglz_decompress(lz, VARDATA(result));

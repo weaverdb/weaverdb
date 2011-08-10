@@ -1518,6 +1518,8 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 
                 if ( IsTransactionBlock() ) {
                     AbortTransactionBlock();
+                } else {
+                    SetAbortOnly();
                 }
                 CommitTransactionCommand();
 		InError = false;
