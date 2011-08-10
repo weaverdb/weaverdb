@@ -211,7 +211,7 @@ AddMoreBuffers(int count) {
         if ( buffer_cxt == NULL ) return NULL;
         if ( count > MaxBuffers - NBuffers ) count = MaxBuffers - NBuffers;
         for (i=NBuffers;i<count;i++) {
-            buf = &BufferDescriptors[start];
+            buf = &BufferDescriptors[i];
             pthread_mutex_lock(&buf->cntx_lock.guard);
             buf->locflags &= ~(BM_RETIRED);
             buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
