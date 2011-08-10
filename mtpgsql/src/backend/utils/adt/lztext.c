@@ -69,6 +69,7 @@ lztextin(char *str)
 	 */
         if ( clen == 0 ) {
             clen = rawsize + sizeof(lztext);
+            PGLZ_RAW_SIZE(tmp) = rawsize;
         }
         
 	if (tmp_size - clen < 256 ||
@@ -255,6 +256,7 @@ text_lztext(text *txt)
 	 */
         if ( clen == 0 ) {
             clen = rawsize + sizeof(lztext);
+            PGLZ_RAW_SIZE(tmp) = rawsize;
         }
         
         if (tmp_size - clen < 256 ||
