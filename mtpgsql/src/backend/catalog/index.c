@@ -2190,6 +2190,7 @@ reindex_index(Oid indexId, bool force)
 	 */
 	InvalidateRelationBuffers(iRel);
 	/* Now truncate the actual data and set blocks to zero */
+        ForgetFreespace(iRel);
 	smgrtruncate(iRel->rd_smgr, 0);
 	iRel->rd_nblocks = 0;
 

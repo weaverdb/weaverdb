@@ -1112,6 +1112,7 @@ _bt_check_nextpage(Relation rel, BlockNumber left,BlockNumber parent, BlockNumbe
     }
 
     if ( truncate ) {
+        ForgetFreespace(rel);
         smgrtruncate(rel->rd_smgr,right);
     }
     

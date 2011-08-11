@@ -1249,7 +1249,7 @@ RelationTruncateIndexes(Relation heapRelation)
 		 */
                 
                 InvalidateRelationBuffers(currentIndex);
-               
+                ForgetFreespace(currentIndex);
 		/* Now truncate the actual data and set blocks to zero */
 		smgrtruncate(currentIndex->rd_smgr, 0);
 		currentIndex->rd_nblocks = 0;
