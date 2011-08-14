@@ -236,7 +236,6 @@ void DBWriterInit() {
     }
     if ( PropertyIsValid("synctimeout") ) {
         sync_timeout = GetIntProperty("synctimeout");
-        if ( sync_timeout < 0 ) sync_timeout = 5000;
     }    
     if ( PropertyIsValid("gcthreshold") ) {
         hgc_threshold = GetFloatProperty("gcthreshold");
@@ -390,10 +389,12 @@ WriteGroup DestroyWriteGroup(WriteGroup w) {
 void DBCreateWriterThread(DBMode mode) {
     switch ( mode ) {
         case LOG_MODE:
-            writerid = os_realloc(writerid, sizeof(pthread_t) * (writercount + 1));
-            if (pthread_create(&writerid[writercount++], &writerprops, SyncWriter, NULL) != 0) {
-                elog(FATAL, "[DBWriter]could not create sync writer\n");
-            }  
+            if ( sync_timeout >= 0 ) {
+                writerid = os_realloc(writerid, sizeof(pthread_t) * (writercount + 1));
+                if (pthread_create(&writerid[writercount++], &writerprops, SyncWriter, NULL) != 0) {
+                    elog(FATAL, "[DBWriter]could not create sync writer\n");
+                }  
+            }
             /*  fall through so that both threads are created */
         case SYNC_MODE: 
             writerid = os_realloc(writerid, sizeof(pthread_t) * (writercount + 1));

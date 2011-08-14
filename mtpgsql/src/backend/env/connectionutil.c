@@ -201,6 +201,7 @@ extern bool initweaverbackend(char* vars)
                 NBuffers = GetIntProperty("buffercount");
         }
     
+        MaxBuffers = NBuffers;
         if ( PropertyIsValid("maxbuffers") ) {
 		MaxBuffers = GetIntProperty("maxbuffers");
         }

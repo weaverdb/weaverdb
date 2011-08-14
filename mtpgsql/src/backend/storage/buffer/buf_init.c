@@ -135,7 +135,7 @@ InitBufferPool(IPCKey key)
 {
 	bool		foundBufs = false,foundDescs = false;
 
-        if ( MaxBuffers <= NBuffers ) MaxBuffers = NBuffers;
+        if ( MaxBuffers < NBuffers ) MaxBuffers = NBuffers;
                 
         if ( key == PrivateIPCKey ) {
             buffer_cxt = AllocSetContextCreate(NULL,"BufferMainMemory",
