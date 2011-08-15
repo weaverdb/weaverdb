@@ -309,7 +309,7 @@ Poolsweep(void *args) {
             pthread_mutex_lock(&list_guard);
             tool->requests = ( item ) ? item->next : NULL;
             pthread_mutex_unlock(&list_guard);
-            pfree(item);
+            if ( item != NULL ) pfree(item);
             item = NULL;
             if (CurrentXactInProgress()) {
                 AbortTransaction();
