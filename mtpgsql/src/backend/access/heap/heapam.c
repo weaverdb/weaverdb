@@ -840,13 +840,15 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
                 oldtup.t_data->t_xmin = oldtup.t_data->progress.t_vtran;
                 oldtup.t_data->progress.cmd.t_cmin = FirstCommandId;
         }
+/*
         if (!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid)) {
-            elog(NOTICE,"self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
+            elog(NOTICE,"make sure aborted in heap_update self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
                     oldtup.t_self,oldtup.t_data->t_ctid,oldtup.t_data->t_xmax,xid,
                     TransactionIdDidCommit(oldtup.t_data->t_xmax)?"yes":"no",
                     TransactionIdDidCrash(oldtup.t_data->t_xmax)?"yes":"no",
                     TransactionIdDidAbort(oldtup.t_data->t_xmax)?"yes":"no");
         }
+*/
         oldtup.t_data->t_xmax = xid;
         oldtup.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
         oldtup.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);

@@ -347,7 +347,6 @@ HeapTupleSatisfiesUpdate(void* env,HeapTuple tuple, Snapshot snapshot)
 			return HeapTupleMayBeUpdated;
 		} else if (TransactionIdDidCrash(th->t_xmax)) {
 			th->t_infomask |= HEAP_XMAX_INVALID;		/* aborted */
-                        elog(DEBUG,"crashmark");
 			return HeapTupleMayBeUpdated;
 		}
 		/* running xact */

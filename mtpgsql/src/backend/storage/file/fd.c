@@ -645,9 +645,6 @@ filepath(char* buf, char *filename, int len)
 
 static void
 CheckFileAccess(Vfd* target) {
-    if ( target->owner == 0 ) {
-        target->owner = pthread_self();
-    }
 
     Assert(pthread_equal(target->owner,pthread_self()));
 
@@ -907,6 +904,7 @@ int
 FileRead(File file, char *buffer, int amount)
 {
 	ssize_t			blit;
+        int                     fails = 0;
         int                     request = amount;
         Vfd*    target = GetVirtualFD(file);
 	Assert(FileIsValid(file));
@@ -916,8 +914,11 @@ FileRead(File file, char *buffer, int amount)
 	while ( amount > 0 ) {
             blit = read(target->fd, buffer, amount);
             if ( blit < 0 ) {
-                perror("FileRead");
-                return -1;
+                if ( fails++ > 5 ) {
+                    char* err = strerror(errno);
+                    elog(NOTICE,"bad read file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
+                    return -1;
+                }
             } else if ( blit == 0 ) {
                 /* EOF  */
                 target->seekPos += (request - amount);
@@ -937,14 +938,18 @@ FileWrite(File file, char *buffer, int amount)
 {
 	Vfd*  target = GetVirtualFD(file);
         int request = amount;
+        int fails = 0;
 
 	CheckFileAccess(target);
 
         while ( amount > 0 ) {
             ssize_t blit = write(target->fd, buffer, amount);
             if ( blit < 0 ) {
-                perror("FileWrite");
-                return -1;
+                if ( fails++ > 5 ) {
+                    char* err = strerror(errno);
+                    elog(NOTICE,"bad write file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
+                    return -1;
+                }
             } else if ( blit == 0 ) {
                 elog(NOTICE,"partial write %s",target->fileName);
                 return (request - amount);
@@ -964,9 +969,8 @@ FileSeek(File file, long offset, int whence)
 {
 	Vfd* target = GetVirtualFD(file);
         off_t blit = 0;
-
-        Assert(pthread_equal(target->owner,pthread_self()));
-	
+        int fails = 0;
+        	
 	if (target->fd == VFD_CLOSED)
 	{
 		switch (whence)
@@ -995,8 +999,11 @@ FileSeek(File file, long offset, int whence)
 		CheckFileAccess(target);
                 blit = lseek(target->fd, offset, whence);
                 if ( blit < 0 ) {
-                    perror("FileSeek");
-                    return -1;
+                    if ( fails++ > 5 ) {
+                        char* err = strerror(errno);
+                        elog(NOTICE,"bad seek file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
+                        return -1;
+                    }
                 } else {
                     target->seekPos = blit;
                 }
