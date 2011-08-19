@@ -1300,6 +1300,9 @@ repair_page_fragmentation(Relation onerel, Buffer buffer, FragRepairInfo* repair
                 last_block = GetFreespace(onerel,newtup->t_len,0);
                 while ( !handled && last_block < current ) {                    
                     Buffer try_buffer = ReadBuffer(onerel,last_block);
+                    if ( !BufferIsValid(try_buffer) ) {
+                        elog(ERROR,"bad buffer read repairing fragmentation");
+                    }
                     
                     LockBuffer(onerel,try_buffer,BUFFER_LOCK_EXCLUSIVE);
                     if ( PageGetFreeSpace(BufferGetPage(try_buffer)) >= newtup->t_len ) {
@@ -1390,6 +1393,9 @@ lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_inf
 			}
 		}               
                 buf = ReadBuffer(onerel, marker);
+                if ( !BufferIsValid(buf) ) {
+                    elog(ERROR,"bad read under respanning");
+                }
                 LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);
                 page = BufferGetPage(buf);
                 maxoff = PageGetMaxOffsetNumber(page);
@@ -1525,6 +1531,9 @@ lazy_repair_fragmentation(Relation onerel, FragRepairInfo* repair_info) {
 		}
                 
 		buf = ReadBuffer(onerel, blkno);
+                if ( !BufferIsValid(buf) ) {
+                    elog(ERROR,"bad buffer read under repair fragmentation");
+                }
                 LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);
                 page_altered = repair_page_fragmentation(onerel, buf, repair_info);
                 LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);

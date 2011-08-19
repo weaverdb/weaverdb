@@ -894,12 +894,14 @@ FindEndSpace(Relation rel, FreeSpace* entry) {
 
      for (count=nblocks;count>0;count--) {
         Buffer buf = ReadBuffer(rel,count-1);
-        Page page = BufferGetPage(buf);
-        bool empty = PageIsEmpty(page);
-        ReleaseBuffer(rel,buf);
-        if ( !empty ) break;
-        else free_pages++;
-        if ( free_pages > next_extent * 10 ) break;
+        if ( BufferIsValid(buf) ) {
+            Page page = BufferGetPage(buf);
+            bool empty = PageIsEmpty(page);
+            ReleaseBuffer(rel,buf);
+            if ( !empty ) break;
+            else free_pages++;
+            if ( free_pages > next_extent * 10 ) break;
+        }
     }
 
     if ( free_pages > 0 ) {

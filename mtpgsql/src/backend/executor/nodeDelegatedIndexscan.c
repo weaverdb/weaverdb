@@ -626,9 +626,11 @@ DolIndexDelegation(Delegate arg) {
                     BlockNumber next = ItemPointerGetBlockNumber(&scan_args->items[move]);
                     if ( next != check ) {
                         Buffer buf = ReadBuffer(heap,next);
-                        BiasBuffer(heap,buf);
-                        ReleaseBuffer(heap,buf);
-                        check = next;
+                        if ( !BufferIsValid(buf) ) {
+                            BiasBuffer(heap,buf);
+                            ReleaseBuffer(heap,buf);
+                            check = next;
+                        }
                     }
                 }
             } else {
