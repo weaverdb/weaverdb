@@ -914,9 +914,9 @@ FileRead(File file, char *buffer, int amount)
 	while ( amount > 0 ) {
             blit = read(target->fd, buffer, amount);
             if ( blit < 0 ) {
+                char* err = strerror(errno);
+                elog(NOTICE,"bad read file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                 if ( fails++ > 5 ) {
-                    char* err = strerror(errno);
-                    elog(NOTICE,"bad read file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                     return -1;
                 }
             } else if ( blit == 0 ) {
@@ -945,9 +945,9 @@ FileWrite(File file, char *buffer, int amount)
         while ( amount > 0 ) {
             ssize_t blit = write(target->fd, buffer, amount);
             if ( blit < 0 ) {
+                char* err = strerror(errno);
+                elog(NOTICE,"bad write file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                 if ( fails++ > 5 ) {
-                    char* err = strerror(errno);
-                    elog(NOTICE,"bad write file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                     return -1;
                 }
             } else if ( blit == 0 ) {
@@ -999,9 +999,9 @@ FileSeek(File file, long offset, int whence)
 		CheckFileAccess(target);
                 blit = lseek(target->fd, offset, whence);
                 if ( blit < 0 ) {
+                    char* err = strerror(errno);
+                    elog(NOTICE,"bad seek file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                     if ( fails++ > 5 ) {
-                        char* err = strerror(errno);
-                        elog(NOTICE,"bad seek file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                         return -1;
                     }
                 } else {

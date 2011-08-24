@@ -314,7 +314,6 @@ BufferShmemSize()
 	size += hash_estimate_size(SHMEM_INDEX_SIZE,SHMEM_INDEX_ENTRYSIZE);
 
 	/* size of buffer descriptors */
-        if ( MaxBuffers <= NBuffers ) MaxBuffers = NBuffers + 1;
 	size += MAXALIGN((MaxBuffers) * sizeof(BufferDesc));
 
 	/* size of data pages */
