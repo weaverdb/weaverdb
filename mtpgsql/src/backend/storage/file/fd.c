@@ -369,8 +369,10 @@ HashDropFD(Vfd * target) {
 static bool
 ActivateFile(Vfd* vfdP)
 {
+    
     Assert(vfdP->fd == VFD_CLOSED);
     errno = 0;
+    
     while (vfdP->fd == VFD_CLOSED && errno == 0)
     {
          ReleaseFileIfNeeded();
@@ -645,16 +647,20 @@ filepath(char* buf, char *filename, int len)
 
 static void
 CheckFileAccess(Vfd* target) {
+    int trys = 0;
 
     Assert(pthread_equal(target->owner,pthread_self()));
 
-    if ( target->fd == VFD_CLOSED ) {
-        ActivateFile(target);
+    while ( target->fd == VFD_CLOSED && trys++ < 5 ) {
+        if ( !ActivateFile(target) ) {
+            char* err = strerror(errno);
+            elog(NOTICE,"bad file activation: %s loc: %d err: %s",target->fileName,target->seekPos,err);
+        }
     }
     
     Assert(target->fd != VFD_CLOSED);
 
-    target->usage_count++;
+    target->usage_count+=1;
     time(&target->access_time);
     target->sweep_valid = false;
 }
@@ -1369,6 +1375,7 @@ ReleaseFileIfNeeded() {
                     pthread_mutex_unlock(&target->pin);
                     continue;
                 }
+                Assert(target->owner == 0);
                 if ( difftime(access,target->access_time) > 0 ) {
                     target->newer_access_time = access;
                     access = target->access_time;
