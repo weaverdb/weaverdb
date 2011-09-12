@@ -2018,6 +2018,9 @@ IndexProperties(Oid indexId)
         if ( index->indisunique ) {
             result |= INDEX_UNIQUE;
         }
+        if ( index->indisprimary ) {
+            result |= INDEX_PRIMARY;
+        }
 	return result;
 }
 

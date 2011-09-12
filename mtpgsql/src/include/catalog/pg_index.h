@@ -71,9 +71,11 @@ typedef char              IndexProp;
 #define INDEX_LOSSY 1
 #define INDEX_DEFERRED 2
 #define INDEX_UNIQUE   4
+#define INDEX_PRIMARY   8
 #define IndexIsLossy(value) (value->indattributes & 1)
 #define IndexIsDeferred(value) (value->indattributes & 2)
 #define IndexPropIsUnique(value) (value & 4)
+#define IndexPropIsPrimary(value) (value & 8)
 #define IndexPropIsDeferred(value) (value & 2)
 
 /* ----------------

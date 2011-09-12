@@ -195,7 +195,7 @@ index_insert(Relation relation,
 	 *	have the am's insert proc do all the work.
 	 * ----------------
 	 */
-
+        
 
 	specificResult = (InsertIndexResult)
 		fmgr(procedure, relation, datum, nulls, heap_t_ctid, heapRel, is_put);

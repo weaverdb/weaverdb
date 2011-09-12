@@ -1113,13 +1113,17 @@ ExecInsertIndexTuples(TupleTableSlot *slot,
 							  &(heapTuple->t_self),		/* tid of heap tuple */
 							  heapRelation,is_put);
 
-                if ( result->result == INDEX_UNIQUE_VIOLATION ) {
-                    if ( !is_put ) {
-                        GetEnv()->errorcode = 909;
-                        elog(ERROR, "Cannot insert a duplicate key into unique index %s ",RelationGetRelationName(relationDescs[i]));
-                     } else {
-                        *tupleid = result->pointer;
-                     }
+                while ( result->result == INDEX_UNIQUE_VIOLATION ) {
+                    if ( is_put ) {
+                        IndexProp  atts = IndexProperties(RelationGetRelid(relationDescs[i]));
+                        if ( IndexPropIsPrimary(atts) ) {
+                            *tupleid = result->pointer;
+                            break;
+                        }
+                    }
+                    GetEnv()->errorcode = 909;
+                    elog(ERROR, "Cannot insert a duplicate key into unique index %s ",RelationGetRelationName(relationDescs[i]));
+                    break;
                 }
 		/* ----------------
 		 *		keep track of index inserts for debugging
