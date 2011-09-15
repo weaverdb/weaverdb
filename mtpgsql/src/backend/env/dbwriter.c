@@ -247,8 +247,8 @@ void DBWriterInit() {
         hgc_update = GetFloatProperty("gcupdatefactor");
     }
     
-    elog(DEBUG, "[DBWriter]waiting time %li", wait_timeout);
-    elog(DEBUG, "[DBWriter]sync timeout %li", sync_timeout);
+    elog(DEBUG, "[DBWriter]waiting time %d", wait_timeout);
+    elog(DEBUG, "[DBWriter]sync timeout %d", sync_timeout);
     elog(DEBUG, "[DBWriter]default commit type %d", GetTransactionCommitType());
     elog(DEBUG, "[DBWriter]maximum numbers of transactions %d", maxtrans);
     memset(&writerprops, 0, sizeof(pthread_attr_t));
