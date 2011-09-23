@@ -659,7 +659,7 @@ InitSysCache(char *relname,
 	cp = (CatCache *) palloc(sizeof(CatCache));
 	MemSet((char *) cp, 0, sizeof(CatCache));
         /* allocate a new cache context for this cache  */
-        cp->cachecxt = AllocSetContextCreate(cglobal->catmemcxt,mem_name);  
+        cp->cachecxt = SubSetContextCreate(cglobal->catmemcxt,mem_name);  
 
        
 	/* ----------------
@@ -1225,7 +1225,7 @@ InitializeCacheGlobal(void) {
                                                            ALLOCSET_DEFAULT_INITSIZE,
                                                            ALLOCSET_DEFAULT_MAXSIZE);
 
-        cglobal->workingcxt =  AllocSetContextCreate(cglobal->catmemcxt,
+        cglobal->workingcxt =  SubSetContextCreate(cglobal->catmemcxt,
 					"WorkingCacheMemoryContext");  
                 
         cglobal->indexSelfOid = InvalidOid;

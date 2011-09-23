@@ -24,6 +24,7 @@
 #define USE_ASSERT_CHECKING 1
 #define ABORT_ON_ASSERT 1
 #define NO_PS_STATUS 1
+#define SUBSETISALLOC 1
 /*  #define MULTITHREAD_DEBUG  */
 /*  #define SHOW_MEMORY_STATS   */
 /*  #define SPI_EXECUTOR_STATS  */

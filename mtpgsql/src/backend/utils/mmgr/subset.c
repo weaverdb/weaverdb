@@ -76,9 +76,14 @@ static MemoryContextMethods SubSetMethods = {
  * maxBlockSize: maximum allocation block size
  */
 MemoryContext
-SubSetContextCreate(MemoryContext parent,
-					  const char *name)
+SubSetContextCreate(MemoryContext parent,const char *name)
 {
+#ifdef SUBSETISALLOC
+    return AllocSetContextCreate(parent,name,            
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
+#else
 	SubSetContext*	context;
         Assert( parent->type != T_SubSetContext );
 	/* Do the type-independent part of context creation */
@@ -92,6 +97,7 @@ SubSetContextCreate(MemoryContext parent,
 	context->map_size = 10;
 	context->highmark = 1;
 	return (MemoryContext) context;
+#endif
 }
 
 /*
@@ -109,6 +115,9 @@ SubSetContextCreate(MemoryContext parent,
 static void
 SubSetInit(MemoryContext context)
 {
+#ifdef SUBSETISALLOC
+    AllocSetInit(context);
+#endif
 	/*
 	 * Since MemoryContextCreate already zeroed the context node, we don't
 	 * have to do anything here: it's already OK.
@@ -128,7 +137,10 @@ SubSetInit(MemoryContext context)
 static void
 SubSetReset(MemoryContext context)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+#ifdef SUBSETISALLOC
+    AllocSetReset(context);
+#else
+    SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
 	for (x=0;x<sub->map_size;x++) {
@@ -143,6 +155,7 @@ SubSetReset(MemoryContext context)
 	sub->alloced_pointers = MemoryContextAlloc(sub->header.parent,sizeof(void*) * sub->highmark);
 	memset(sub->alloced_pointers,0x00,sizeof(void*) * sub->highmark);
 	sub->map_size = sub->highmark;
+#endif
 }
 
 /*
@@ -156,7 +169,10 @@ SubSetReset(MemoryContext context)
 static void
 SubSetDelete(MemoryContext context)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+#ifdef SUBSETISALLOC
+    AllocSetDelete(context);
+#else
+    SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
 	for (x=0;x<sub->map_size;x++) {
@@ -169,6 +185,7 @@ SubSetDelete(MemoryContext context)
 	}
 	pfree(sub->alloced_pointers);
 	sub->map_size = 0;
+#endif
 }
 
 /*
@@ -179,7 +196,10 @@ SubSetDelete(MemoryContext context)
 static void *
 SubSetAlloc(MemoryContext context, Size size)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+#ifdef SUBSETISALLOC
+    return AllocSetAlloc(context,size);
+#else
+    SubSetContext*  sub = (SubSetContext*)context;
 	void* pointer = MemoryContextAlloc(sub->header.parent,size);
 	int x;
 	void** store = sub->alloced_pointers;
@@ -199,6 +219,7 @@ SubSetAlloc(MemoryContext context, Size size)
 	if ( x > sub->highmark ) sub->highmark = x;
 	GetMemoryContext(pointer) = context;
 	return pointer;
+#endif
 }
 
 /*
@@ -208,7 +229,10 @@ SubSetAlloc(MemoryContext context, Size size)
 static void
 SubSetFree(MemoryContext context, void *pointer)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+#ifdef SUBSETISALLOC
+    AllocSetFree(context,pointer);
+#else
+    SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void** store = sub->alloced_pointers;
 	for ( x=0;x<sub->map_size;x++ ) {
@@ -220,6 +244,7 @@ SubSetFree(MemoryContext context, void *pointer)
 	}
 	GetMemoryContext(pointer) = sub->header.parent;
 	pfree(pointer);
+#endif
 }
 
 /*
@@ -231,6 +256,9 @@ SubSetFree(MemoryContext context, void *pointer)
 static void *
 SubSetRealloc(MemoryContext context, void *pointer, Size size)
 {
+#ifdef SUBSETISALLOC
+    return AllocSetRealloc(context,pointer,size);
+#else
 	SubSetContext*  sub = (SubSetContext*)context;
 	void* save;
 	GetMemoryContext(pointer) = sub->header.parent;
@@ -246,6 +274,7 @@ SubSetRealloc(MemoryContext context, void *pointer, Size size)
         }
 	GetMemoryContext(save) = context;
 	return save;
+#endif
 }
 
 /*
@@ -255,6 +284,9 @@ SubSetRealloc(MemoryContext context, void *pointer, Size size)
 static size_t
 SubSetStats(MemoryContext context)
 {	
+#ifdef SUBSETISALLOC
+    return AllocSetStats(context);
+#else
 	int x = 0;
 	Size hold = 0;
 	SubSetContext* sub = (SubSetContext*)context;
@@ -268,6 +300,7 @@ SubSetStats(MemoryContext context)
 	user_log("%s: %ld used from %s",
 			sub->header.name,hold,sub->header.parent->name);
 	return 0;
+#endif
 }
 
 
