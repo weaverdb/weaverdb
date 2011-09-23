@@ -710,7 +710,7 @@ vacuum_respan_tuple_blob(Relation rel, HeapTuple tuple, bool exclude_self)
 
 	MemoryContext   parent = MemoryContextGetCurrentContext();
 
-	MemoryContext   blob_context = SubSetContextCreate(parent, "SpanBlobContext");
+	MemoryContext   blob_context = AllocSetContextCreate(parent, "SpanBlobContext");
 	MemoryContextSwitchTo(blob_context);
 
 	values = palloc(atts->natts * sizeof(Datum));
@@ -801,7 +801,7 @@ span_buffered_blob(Relation rel, HeapTuple tuple)
 
 	MemoryContext   parent = MemoryContextGetCurrentContext();
 
-	MemoryContext   blob_context = SubSetContextCreate(parent, "SpanBlobContext");
+	MemoryContext   blob_context = AllocSetContextCreate(parent, "SpanBlobContext");
 	MemoryContextSwitchTo(blob_context);
 
 	values = palloc(atts->natts * sizeof(Datum));
@@ -889,7 +889,7 @@ store_tuple_blob(Relation rel, HeapTuple tuple,int16 attnum)
 	BlockNumber     limit = 0;
 
 	MemoryContext   parent = MemoryContextGetCurrentContext();
-	MemoryContext   blob_context = SubSetContextCreate(parent, "SpanBlobContext");
+	MemoryContext   blob_context = AllocSetContextCreate(parent, "SpanBlobContext");
 	MemoryContextSwitchTo(blob_context);
 
 	list = prioritize_blobs(rel, tuple, attnum);

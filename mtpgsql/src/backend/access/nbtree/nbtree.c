@@ -117,7 +117,7 @@ btbuild(Relation heap,Relation index, int natts,
 					       ALLOCSET_DEFAULT_MINSIZE,
 					       ALLOCSET_DEFAULT_INITSIZE,
 					       ALLOCSET_DEFAULT_MAXSIZE);
-	MemoryContext           scan_cxt = SubSetContextCreate(build_context,"BuildScanContext");
+	MemoryContext           scan_cxt = AllocSetContextCreate(build_context,"BuildScanContext");
 	
 	MemoryContextSwitchTo(build_context);	
 	
