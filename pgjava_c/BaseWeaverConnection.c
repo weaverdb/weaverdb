@@ -249,8 +249,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
     //	get proper agent	
 	jint link = getProperAgent(env,talkerObject);
         if ( link < 0 ) return;
-        
-        
+
 	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
         
         if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {

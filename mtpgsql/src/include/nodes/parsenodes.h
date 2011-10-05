@@ -744,8 +744,8 @@ typedef struct VariableResetStmt
  */
 typedef struct LockStmt
 {
-	NodeTag		type;
-	char	   *relname;		/* relation to lock */
+	NodeTag                 type;
+	char	   *            relname;                            /* relation to lock */
 	int			mode;			/* lock mode */
 } LockStmt;
 
