@@ -388,10 +388,16 @@ MemoryContextCreate(NodeTag tag, Size size,
  */
 void*
 MemoryContextAlloc(MemoryContext context, Size size) {
+    void* pointer = NULL;
     if (!AllocSizeIsValid(size))
         elog(ERROR, "MemoryContextAlloc:%s invalid request size %lu", context->name,
             (unsigned long) size);
-    return (*context->methods->alloc) (context, size);
+    pointer = (*context->methods->alloc) (context, size);
+    if ( pointer == NULL ) {
+        elog(FATAL, "MemoryContextAlloc:%s failed to allocate request size %lu", context->name,
+            (unsigned long) size);
+    }
+    return pointer;
 }
 
 void*

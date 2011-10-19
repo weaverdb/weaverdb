@@ -493,7 +493,7 @@ AllocSetAlloc(MemoryContext context, Size size)
 		{
 			MemoryContextStats(MemoryContextGetTopContext());
                         GetEnv()->errorcode;
-			elog(ERROR, "Memory exhausted in AllocSetAlloc(%lu)",
+			elog(FATAL, "Memory exhausted in AllocSetAlloc(%lu)",
 				 (unsigned long) size);
 		}
 		block->aset = set;
