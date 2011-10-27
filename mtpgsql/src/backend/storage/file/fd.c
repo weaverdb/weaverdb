@@ -294,6 +294,7 @@ RetireFile(Vfd* vfdP)
             RealFiles.nfile -= 1;
             DTRACE_PROBE3(mtpg,file__retired,vfdP->id,vfdP->fileName,RealFiles.nfile);
             vfdP->fd = VFD_CLOSED;
+            vfdP->fileFlags &= ~(O_TRUNC | O_EXCL | O_CREAT);
 	} else {
             perror("RetireFile");
 	}
