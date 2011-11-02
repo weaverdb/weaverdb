@@ -412,11 +412,11 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
                 status = SM_FAIL_BASE;
             } else if ( blit == 0 ) {
                 long checkpos = FileSeek(fd,0L,SEEK_END);
+                MemSet(buffer, 0, BLCKSZ);
                 if ( seekpos >= checkpos ) {
                     if ( seekpos > checkpos ) {
                         elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
                     }
-                    MemSet(buffer, 0, BLCKSZ);
                 } else {
                     if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
                         status = SM_FAIL_SEEK;
