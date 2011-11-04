@@ -37,7 +37,31 @@
 typedef struct trigger_info {
 	TriggerData*		CurrentTriggerData;  
 	MemoryContext 		deftrig_global_cxt;  
-	MemoryContext 		deftrig_cxt;   
+	MemoryContext 		deftrig_cxt;  
+        
+ /* ----------
+ * Global data that tells which triggers are actually in
+ * state IMMEDIATE or DEFERRED.
+ * ----------
+ */
+        bool deftrig_dfl_all_isset;
+        bool deftrig_dfl_all_isdeferred;
+        List *deftrig_dfl_trigstates;
+
+        bool deftrig_all_isset;
+        bool deftrig_all_isdeferred;
+        List *deftrig_trigstates;
+
+/* ----------
+ * The list of events during the entire transaction.
+ *
+ * XXX This must finally be held in a file because of the huge
+ *	   number of events that could occur in the real world.
+ * ----------
+ */
+        int	deftrig_n_events;
+        List *deftrig_events;       
+        
 } TriggerInfo;
 
 static SectionId  trigger_id = SECTIONID("TRIG");
@@ -1026,30 +1050,6 @@ ltrmark:;
  * end.
  * ----------
  */
- 
-/* ----------
- * Global data that tells which triggers are actually in
- * state IMMEDIATE or DEFERRED.
- * ----------
- */
-static bool deftrig_dfl_all_isset = false;
-static bool deftrig_dfl_all_isdeferred = false;
-static List *deftrig_dfl_trigstates = NIL;
-
-static bool deftrig_all_isset;
-static bool deftrig_all_isdeferred;
-static List *deftrig_trigstates;
-
-/* ----------
- * The list of events during the entire transaction.
- *
- * XXX This must finally be held in a file because of the huge
- *	   number of events that could occur in the real world.
- * ----------
- */
-static int	deftrig_n_events;
-static List *deftrig_events;
-
 
 /* ----------
  * deferredTriggerCheckState()
@@ -1079,7 +1079,7 @@ deferredTriggerCheckState(Oid tgoid, int32 itemstate)
 	 * Lookup if we know an individual state for this trigger
 	 * ----------
 	 */
-	foreach(sl, deftrig_trigstates)
+	foreach(sl, info->deftrig_trigstates)
 	{
 		trigstate = (DeferredTriggerStatus) lfirst(sl);
 		if (trigstate->dts_tgoid == tgoid)
@@ -1092,8 +1092,8 @@ deferredTriggerCheckState(Oid tgoid, int32 itemstate)
 	 * triggers default state.
 	 * ----------
 	 */
-	if (deftrig_all_isset)
-		return deftrig_all_isdeferred;
+	if (info->deftrig_all_isset)
+		return info->deftrig_all_isdeferred;
 
 	/* ----------
 	 * No ALL state known either, remember the default state
@@ -1107,7 +1107,7 @@ deferredTriggerCheckState(Oid tgoid, int32 itemstate)
 	trigstate->dts_tgoid = tgoid;
 	trigstate->dts_tgisdeferred =
 		((itemstate & TRIGGER_DEFERRED_INITDEFERRED) != 0);
-	deftrig_trigstates = lappend(deftrig_trigstates, trigstate);
+	info->deftrig_trigstates = lappend(info->deftrig_trigstates, trigstate);
 
 	MemoryContextSwitchTo(oldcxt);
 
@@ -1124,8 +1124,9 @@ deferredTriggerCheckState(Oid tgoid, int32 itemstate)
 static void
 deferredTriggerAddEvent(DeferredTriggerEvent event)
 {
-	deftrig_events = lappend(deftrig_events, event);
-	deftrig_n_events++;
+	TriggerInfo* info = GetTriggerInfo();
+        info->deftrig_events = lappend(info->deftrig_events, event);
+	info->deftrig_n_events++;
 
 	return;
 }
@@ -1143,10 +1144,11 @@ deferredTriggerGetPreviousEvent(Oid relid, ItemPointer ctid)
 {
 	DeferredTriggerEvent previous;
 	int			n;
+        TriggerInfo*             info = GetTriggerInfo();
 
-	for (n = deftrig_n_events - 1; n >= 0; n--)
+	for (n = info->deftrig_n_events - 1; n >= 0; n--)
 	{
-		previous = (DeferredTriggerEvent) nth(n, deftrig_events);
+		previous = (DeferredTriggerEvent) nth(n, info->deftrig_events);
 
 		if (previous->dte_relid != relid)
 			continue;
@@ -1287,6 +1289,7 @@ deferredTriggerInvokeEvents(bool immediate_only)
 	int			still_deferred_ones;
 	int			eventno = -1;
 	int			i;
+        TriggerInfo*            info = GetTriggerInfo();
 
 	/* ----------
 	 * For now we process all events - to speedup transaction blocks
@@ -1297,7 +1300,7 @@ deferredTriggerInvokeEvents(bool immediate_only)
 	 * SET CONSTRAINTS ... command finishes and calls EndQuery.
 	 * ----------
 	 */
-	foreach(el, deftrig_events)
+	foreach(el, info->deftrig_events)
 	{
 		eventno++;
 
@@ -1371,7 +1374,10 @@ GetTriggerInfo(void)
                                             1024,
                                             ALLOCSET_DEFAULT_MAXSIZE);
         info->deftrig_cxt = NULL;
-
+        info->deftrig_dfl_all_isset = false;
+        info->deftrig_dfl_all_isdeferred = false;
+        info->deftrig_dfl_trigstates = NIL;
+        
         trigger_globals = info;
     }
 	return info;
@@ -1404,18 +1410,18 @@ DeferredTriggerBeginXact(void)
 	 * from the per session context to here.
 	 * ----------
 	 */
-	info->deftrig_cxt = AllocSetContextCreate(MemoryContextGetCurrentContext(),
+	info->deftrig_cxt = AllocSetContextCreate(MemoryContextGetEnv()->TopTransactionContext,
                                                               "DeferredTriggerContext",
                                                                ALLOCSET_DEFAULT_MINSIZE,
                                                                ALLOCSET_DEFAULT_INITSIZE,
                                                                ALLOCSET_DEFAULT_MAXSIZE);
 	oldcxt = MemoryContextSwitchTo((MemoryContext) info->deftrig_cxt);
 
-	deftrig_all_isset = deftrig_dfl_all_isset;
-	deftrig_all_isdeferred = deftrig_dfl_all_isdeferred;
+	info->deftrig_all_isset = info->deftrig_dfl_all_isset;
+	info->deftrig_all_isdeferred = info->deftrig_dfl_all_isdeferred;
 
-	deftrig_trigstates = NIL;
-	foreach(l, deftrig_dfl_trigstates)
+	info->deftrig_trigstates = NIL;
+	foreach(l, info->deftrig_dfl_trigstates)
 	{
 		dflstat = (DeferredTriggerStatus) lfirst(l);
 		stat = (DeferredTriggerStatus)
@@ -1424,13 +1430,13 @@ DeferredTriggerBeginXact(void)
 		stat->dts_tgoid = dflstat->dts_tgoid;
 		stat->dts_tgisdeferred = dflstat->dts_tgisdeferred;
 
-		deftrig_trigstates = lappend(deftrig_trigstates, stat);
+		info->deftrig_trigstates = lappend(info->deftrig_trigstates, stat);
 	}
 
 	MemoryContextSwitchTo(oldcxt);
 
-	deftrig_n_events = 0;
-	deftrig_events = NIL;
+	info->deftrig_n_events = 0;
+	info->deftrig_events = NIL;
 }
 
 
@@ -1548,7 +1554,7 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 			 * session.
 			 * ----------
 			 */
-			l = deftrig_dfl_trigstates;
+			l = info->deftrig_dfl_trigstates;
 			while (l != NIL)
 			{
 				lnext = lnext(l);
@@ -1556,14 +1562,14 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 				pfree(l);
 				l = lnext;
 			}
-			deftrig_dfl_trigstates = NIL;
+			info->deftrig_dfl_trigstates = NIL;
 
 			/* ----------
 			 * Set the session ALL state to known.
 			 * ----------
 			 */
-			deftrig_dfl_all_isset = true;
-			deftrig_dfl_all_isdeferred = stmt->deferred;
+			info->deftrig_dfl_all_isset = true;
+			info->deftrig_dfl_all_isdeferred = stmt->deferred;
 
 			MemoryContextSwitchTo(oldcxt);
 
@@ -1582,7 +1588,7 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 			 * transaction.
 			 * ----------
 			 */
-			l = deftrig_trigstates;
+			l = info->deftrig_trigstates;
 			while (l != NIL)
 			{
 				lnext = lnext(l);
@@ -1590,14 +1596,14 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 				pfree(l);
 				l = lnext;
 			}
-			deftrig_trigstates = NIL;
+			info->deftrig_trigstates = NIL;
 
 			/* ----------
 			 * Set the per transaction ALL state to known.
 			 * ----------
 			 */
-			deftrig_all_isset = true;
-			deftrig_all_isdeferred = stmt->deferred;
+			info->deftrig_all_isset = true;
+			info->deftrig_all_isdeferred = stmt->deferred;
 
 			MemoryContextSwitchTo(oldcxt);
 
@@ -1722,7 +1728,7 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 		foreach(l, loid)
 		{
 			found = false;
-			foreach(ls, deftrig_dfl_trigstates)
+			foreach(ls, info->deftrig_dfl_trigstates)
 			{
 				state = (DeferredTriggerStatus) lfirst(ls);
 				if (state->dts_tgoid == (Oid) lfirst(l))
@@ -1739,8 +1745,8 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 				state->dts_tgoid = (Oid) lfirst(l);
 				state->dts_tgisdeferred = stmt->deferred;
 
-				deftrig_dfl_trigstates =
-					lappend(deftrig_dfl_trigstates, state);
+				info->deftrig_dfl_trigstates =
+					lappend(info->deftrig_dfl_trigstates, state);
 			}
 		}
 
@@ -1760,7 +1766,7 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 		foreach(l, loid)
 		{
 			found = false;
-			foreach(ls, deftrig_trigstates)
+			foreach(ls, info->deftrig_trigstates)
 			{
 				state = (DeferredTriggerStatus) lfirst(ls);
 				if (state->dts_tgoid == (Oid) lfirst(l))
@@ -1777,8 +1783,8 @@ DeferredTriggerSetState(ConstraintsSetStmt *stmt)
 				state->dts_tgoid = (Oid) lfirst(l);
 				state->dts_tgisdeferred = stmt->deferred;
 
-				deftrig_trigstates =
-					lappend(deftrig_trigstates, state);
+				info->deftrig_trigstates =
+					lappend(info->deftrig_trigstates, state);
 			}
 		}
 

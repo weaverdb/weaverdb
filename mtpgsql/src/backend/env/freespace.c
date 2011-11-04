@@ -657,11 +657,6 @@ AllocateMoreSpace(Relation rel) {
 
     nb = PerformAllocation(rel, freespace, recommend);
     
-    if ( nb == 0 ) {
-        BlockNumber count = smgrnblocks(rel->rd_smgr);
-        
-    }
-    
     return nb;
 }
 

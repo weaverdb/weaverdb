@@ -422,6 +422,9 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
                         status = SM_FAIL_SEEK;
                     }
                 }
+            } else if ( blit != BLCKSZ ) {
+                elog(NOTICE,"bad read %d filename:%s,db:%s,rel:%s,blk no.:%llu,read length:%d",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum,blit);
+                status = SM_FAIL_BASE;
             }
         }
 

@@ -116,7 +116,9 @@ static void
 SubSetInit(MemoryContext context)
 {
 #ifdef SUBSETISALLOC
+/*
     AllocSetInit(context);
+*/
 #endif
 	/*
 	 * Since MemoryContextCreate already zeroed the context node, we don't
@@ -138,7 +140,9 @@ static void
 SubSetReset(MemoryContext context)
 {
 #ifdef SUBSETISALLOC
+/*
     AllocSetReset(context);
+*/
 #else
     SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
@@ -170,7 +174,9 @@ static void
 SubSetDelete(MemoryContext context)
 {
 #ifdef SUBSETISALLOC
+/*
     AllocSetDelete(context);
+*/
 #else
     SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
@@ -197,7 +203,9 @@ static void *
 SubSetAlloc(MemoryContext context, Size size)
 {
 #ifdef SUBSETISALLOC
+/*
     return AllocSetAlloc(context,size);
+*/
 #else
     SubSetContext*  sub = (SubSetContext*)context;
 	void* pointer = MemoryContextAlloc(sub->header.parent,size);
@@ -230,7 +238,9 @@ static void
 SubSetFree(MemoryContext context, void *pointer)
 {
 #ifdef SUBSETISALLOC
+/*
     AllocSetFree(context,pointer);
+*/
 #else
     SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
@@ -257,7 +267,9 @@ static void *
 SubSetRealloc(MemoryContext context, void *pointer, Size size)
 {
 #ifdef SUBSETISALLOC
+/*
     return AllocSetRealloc(context,pointer,size);
+*/
 #else
 	SubSetContext*  sub = (SubSetContext*)context;
 	void* save;
@@ -285,7 +297,9 @@ static size_t
 SubSetStats(MemoryContext context)
 {	
 #ifdef SUBSETISALLOC
+/*
     return AllocSetStats(context);
+*/
 #else
 	int x = 0;
 	Size hold = 0;
