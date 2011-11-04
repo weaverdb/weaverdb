@@ -115,11 +115,6 @@ SubSetContextCreate(MemoryContext parent,const char *name)
 static void
 SubSetInit(MemoryContext context)
 {
-#ifdef SUBSETISALLOC
-/*
-    AllocSetInit(context);
-*/
-#endif
 	/*
 	 * Since MemoryContextCreate already zeroed the context node, we don't
 	 * have to do anything here: it's already OK.
@@ -139,11 +134,6 @@ SubSetInit(MemoryContext context)
 static void
 SubSetReset(MemoryContext context)
 {
-#ifdef SUBSETISALLOC
-/*
-    AllocSetReset(context);
-*/
-#else
     SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
@@ -172,11 +162,6 @@ SubSetReset(MemoryContext context)
 static void
 SubSetDelete(MemoryContext context)
 {
-#ifdef SUBSETISALLOC
-/*
-    AllocSetDelete(context);
-*/
-#else
     SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
@@ -200,11 +185,6 @@ SubSetDelete(MemoryContext context)
 static void *
 SubSetAlloc(MemoryContext context, Size size)
 {
-#ifdef SUBSETISALLOC
-/*
-    return AllocSetAlloc(context,size);
-*/
-#else
     SubSetContext*  sub = (SubSetContext*)context;
 	void* pointer = MemoryContextAlloc(sub->header.parent,size);
 	int x;
@@ -234,11 +214,6 @@ SubSetAlloc(MemoryContext context, Size size)
 static void
 SubSetFree(MemoryContext context, void *pointer)
 {
-#ifdef SUBSETISALLOC
-/*
-    AllocSetFree(context,pointer);
-*/
-#else
     SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void** store = sub->alloced_pointers;
@@ -262,11 +237,6 @@ SubSetFree(MemoryContext context, void *pointer)
 static void *
 SubSetRealloc(MemoryContext context, void *pointer, Size size)
 {
-#ifdef SUBSETISALLOC
-/*
-    return AllocSetRealloc(context,pointer,size);
-*/
-#else
 	SubSetContext*  sub = (SubSetContext*)context;
 	void* save;
 	GetMemoryContext(pointer) = sub->header.parent;
@@ -291,11 +261,6 @@ SubSetRealloc(MemoryContext context, void *pointer, Size size)
 static size_t
 SubSetStats(MemoryContext context)
 {	
-#ifdef SUBSETISALLOC
-/*
-    return AllocSetStats(context);
-*/
-#else
 	int x = 0;
 	Size hold = 0;
 	SubSetContext* sub = (SubSetContext*)context;
