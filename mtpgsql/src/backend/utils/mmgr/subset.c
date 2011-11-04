@@ -159,7 +159,6 @@ SubSetReset(MemoryContext context)
 	sub->alloced_pointers = MemoryContextAlloc(sub->header.parent,sizeof(void*) * sub->highmark);
 	memset(sub->alloced_pointers,0x00,sizeof(void*) * sub->highmark);
 	sub->map_size = sub->highmark;
-#endif
 }
 
 /*
@@ -191,7 +190,6 @@ SubSetDelete(MemoryContext context)
 	}
 	pfree(sub->alloced_pointers);
 	sub->map_size = 0;
-#endif
 }
 
 /*
@@ -227,7 +225,6 @@ SubSetAlloc(MemoryContext context, Size size)
 	if ( x > sub->highmark ) sub->highmark = x;
 	GetMemoryContext(pointer) = context;
 	return pointer;
-#endif
 }
 
 /*
@@ -254,7 +251,6 @@ SubSetFree(MemoryContext context, void *pointer)
 	}
 	GetMemoryContext(pointer) = sub->header.parent;
 	pfree(pointer);
-#endif
 }
 
 /*
@@ -286,7 +282,6 @@ SubSetRealloc(MemoryContext context, void *pointer, Size size)
         }
 	GetMemoryContext(save) = context;
 	return save;
-#endif
 }
 
 /*
@@ -314,7 +309,6 @@ SubSetStats(MemoryContext context)
 	user_log("%s: %ld used from %s",
 			sub->header.name,hold,sub->header.parent->name);
 	return 0;
-#endif
 }
 
 
