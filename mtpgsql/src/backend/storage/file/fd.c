@@ -63,6 +63,10 @@
 #define FD_MINFREE 50
 #endif
 
+#ifndef NOFILE
+#define NOFILE 512
+#endif
+
 
 #define VFD_CLOSED (-1)
 
@@ -223,6 +227,7 @@ pg_nofile(void)
 
 	if (no_files == 0)
 	{
+            double fraction = GetFloatProperty("vfdallocation");
 		/* need do this calculation only once */
 #ifndef HAVE_SYSCONF
 		no_files = (long) NOFILE;
@@ -242,7 +247,11 @@ pg_nofile(void)
 			elog(FATAL, "pg_nofile: insufficient File Descriptors in postmaster to start backend (%ld).\n"
 				 "                   O/S allows %ld, Postmaster reserves %d, We need %d (MIN) after that.",
 				 no_files - RESERVE_FOR_LD, no_files, RESERVE_FOR_LD, FD_MINFREE);
-		no_files /= 2;
+                if ( fraction > 0 ) {
+                    no_files *= fraction;
+                } else {
+                        no_files /= 2;
+                }
 	}
 
 	return no_files;
