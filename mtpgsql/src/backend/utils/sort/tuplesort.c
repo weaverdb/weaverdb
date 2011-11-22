@@ -570,15 +570,15 @@ tuplesort_end(Tuplesortstate *state)
 {
 	int			i;
 
-	if (state->tapeset)
-		LogicalTapeSetClose(state->tapeset);
-	else {
+	if (state->tapeset) {
+            LogicalTapeSetClose(state->tapeset);
+        } else {
             MemoryContextDelete(state->data_cxt);
-       }
-            if (state->memtuples)
-                pfree(state->memtuples);
-            if (state->memtupindex)
-                pfree(state->memtupindex);
+        }
+        if (state->memtuples)
+            pfree(state->memtuples);
+        if (state->memtupindex)
+            pfree(state->memtupindex);
 
 }
 

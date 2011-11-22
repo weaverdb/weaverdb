@@ -336,8 +336,7 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                         offset = OffsetNumberNext(offset);
                 else
                 {
-                        if (P_RIGHTMOST(opaque))
-									break;
+                        if (P_RIGHTMOST(opaque)) break;
                         /* If scankey == hikey we gotta check the next page too */
                         if (!_bt_isequal(itupdesc, page, P_HIKEY, natts, itup_scankey))
                                 break;
@@ -689,13 +688,14 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 		  OffsetNumber *itup_off, BlockNumber *itup_blkno)
 {
 	Buffer		rbuf;
-	Page		origpage;
+	Page		orig_leftpage,
+                        orig_rightpage;
 	Page		leftpage,
-				rightpage;
+			rightpage;
 	BTPageOpaque ropaque,
 				lopaque,
 				oopaque;
-	Buffer		sbuf = 0;
+	Buffer		sbuf = InvalidBuffer;
 	Page		spage = 0;
 	Size		itemsz;
 	ItemId		itemid;
@@ -708,18 +708,26 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 
 	rbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
 
-	origpage = BufferGetPage(buf);
-	leftpage = PageGetTempPage(origpage, sizeof(BTPageOpaqueData));
-	rightpage = BufferGetPage(rbuf);
+	orig_leftpage = BufferGetPage(buf);
+	leftpage = PageGetTempPage(orig_leftpage, sizeof(BTPageOpaqueData));
+        
+	orig_rightpage = BufferGetPage(rbuf);
+        rightpage = PageGetTempPage(orig_rightpage, sizeof(BTPageOpaqueData));
+ 	/* init btree private data */
+	oopaque = (BTPageOpaque) PageGetSpecialPointer(orig_leftpage);
+	lopaque = (BTPageOpaque) PageGetSpecialPointer(leftpage);
+	ropaque = (BTPageOpaque) PageGetSpecialPointer(rightpage);
+        
+        lopaque->btpo_parent = InvalidBlockNumber; 
+        lopaque->btpo_flags |= BTP_SPLIT;
+        
+        memmove(orig_rightpage,leftpage,PageGetPageSize(orig_rightpage));
+        WriteNoReleaseBuffer(rel,rbuf);
+        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 
 	_bt_pageinit(leftpage, BufferGetPageSize(buf));
 	_bt_pageinit(rightpage, BufferGetPageSize(rbuf));
-        
-        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
-	/* init btree private data */
-	oopaque = (BTPageOpaque) PageGetSpecialPointer(origpage);
-	lopaque = (BTPageOpaque) PageGetSpecialPointer(leftpage);
-	ropaque = (BTPageOpaque) PageGetSpecialPointer(rightpage);
 
 	/* if we're splitting this page, it won't be the root when we're done */
 	lopaque->btpo_flags = oopaque->btpo_flags;
@@ -729,6 +737,8 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	lopaque->btpo_next = BufferGetBlockNumber(rbuf);
 	ropaque->btpo_prev = BufferGetBlockNumber(buf);
 	ropaque->btpo_next = oopaque->btpo_next;
+        Assert(lopaque->btpo_prev != BufferGetBlockNumber(buf));
+        Assert(ropaque->btpo_prev != BufferGetBlockNumber(rbuf));
 
 	/*
 	 * Must copy the original parent link into both new pages, even though
@@ -745,13 +755,16 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * will be user data.
 	 */
 	rightoff = P_HIKEY;
-
+        
 	if (!P_RIGHTMOST(oopaque))
 	{
-		itemid = PageGetItemId(origpage, P_HIKEY);
+		itemid = PageGetItemId(orig_leftpage, P_HIKEY);
 		itemsz = ItemIdGetLength(itemid);
-		item = (BTItem) PageGetItem(origpage, itemid);
-                Assert(BufferIsCritical(rbuf));
+		item = (BTItem) PageGetItem(orig_leftpage, itemid);
+              /*  Assert(BufferIsCritical(rbuf));
+               * 
+               * this is a temporary copy page so buffer does not need to be critical  
+               */
 		if (PageAddItem(rightpage, (Item) item, itemsz, rightoff,
 						LP_USED) == InvalidOffsetNumber)
 			elog(FATAL, "btree: failed to add hikey to the right sibling");
@@ -773,9 +786,9 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	else
 	{
 		/* existing item at firstright will become first on right page */
-		itemid = PageGetItemId(origpage, firstright);
+		itemid = PageGetItemId(orig_leftpage, firstright);
 		itemsz = ItemIdGetLength(itemid);
-		item = (BTItem) PageGetItem(origpage, itemid);
+		item = (BTItem) PageGetItem(orig_leftpage, itemid);
 	}
 	lhikey = item;
                        
@@ -787,13 +800,13 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	/*
 	 * Now transfer all the data items to the appropriate page
 	 */
-	maxoff = PageGetMaxOffsetNumber(origpage);
+	maxoff = PageGetMaxOffsetNumber(orig_leftpage);
 
         for (i = P_FIRSTDATAKEY(oopaque); i <= maxoff; i = OffsetNumberNext(i))
 	{
-		itemid = PageGetItemId(origpage, i);
+		itemid = PageGetItemId(orig_leftpage, i);
 		itemsz = ItemIdGetLength(itemid);
-		item = (BTItem) PageGetItem(origpage, itemid);
+		item = (BTItem) PageGetItem(orig_leftpage, itemid);
 
 		/* does new item belong before this one? */
 		if (i == newitemoff)
@@ -859,14 +872,13 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * and all readers release locks on a page before trying to fetch its
 	 * neighbors.
 	 */
-        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
-        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
 	if (!P_RIGHTMOST(ropaque))
 	{
 		sbuf = _bt_getbuf(rel, ropaque->btpo_next, BT_READYWRITE);	
 		spage = BufferGetPage(sbuf);
-                BTPageOpaque sopaque = (BTPageOpaque) PageGetSpecialPointer(rightpage);
+                BTPageOpaque sopaque = (BTPageOpaque) PageGetSpecialPointer(spage);
                 sopaque->btpo_prev = BufferGetBlockNumber(rbuf);
+                Assert(sopaque->btpo_prev != ropaque->btpo_next);
 	}
 
 	/*
@@ -885,10 +897,14 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * is just to compact the data by reinserting it into a new left page.
 	 */
         LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
-	PageRestoreTempPage(leftpage, origpage);
+	PageRestoreTempPage(leftpage, orig_leftpage);
         LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
-	/* write and release the old right sibling */
-	if (!P_RIGHTMOST(ropaque))
+        
+        LockBuffer(rel,rbuf,BUFFER_LOCK_CRITICAL);
+	PageRestoreTempPage(rightpage, orig_rightpage);
+        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
+        /* write and release the old right sibling */
+	if (BufferIsValid(sbuf))
 		_bt_wrtbuf(rel, sbuf);
 
 	/* split's done */

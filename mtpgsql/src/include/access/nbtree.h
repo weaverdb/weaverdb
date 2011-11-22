@@ -50,6 +50,7 @@ typedef BTPageOpaqueData *BTPageOpaque;
 #define BTP_FREE		(1 << 2)	/* page not in use */
 #define BTP_META		(1 << 3)	/* meta-page */
 #define BTP_REORDER		(1 << 4)	/* items need reordering */
+#define BTP_SPLIT		(1 << 5)	/* page was split */
 
 
 /*
@@ -204,6 +205,7 @@ typedef BTStackData *BTStack;
 #define P_RIGHTMOST(opaque)		((opaque)->btpo_next == P_NONE)
 #define P_ISLEAF(opaque)		((opaque)->btpo_flags & BTP_LEAF)
 #define P_ISROOT(opaque)		((opaque)->btpo_flags & BTP_ROOT)
+#define P_ISSPLIT(opaque)		((opaque)->btpo_flags & BTP_SPLIT)
 
 /*
  *	Lehman and Yao's algorithm requires a ``high key'' on every non-rightmost

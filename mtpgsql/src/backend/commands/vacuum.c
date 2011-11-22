@@ -195,7 +195,7 @@ vacuum(char *vacrel, bool verbose, bool analyze,bool exclusive, bool fix,List *v
 	/* clean up */
 	vc_shutdown(exclusive);
 	
-    MemoryContextDelete(portalmem);
+        MemoryContextDelete(portalmem);
 	
 	if ( VacRelName == NULL ) SetTransactionLowWaterMark(lowwater);
 }

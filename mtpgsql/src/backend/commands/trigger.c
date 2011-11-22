@@ -1483,8 +1483,9 @@ DeferredTriggerEndXact(void)
 		return;
 
 	deferredTriggerInvokeEvents(false);
-
+/*  Don't worry about this, it goes away with the transaction
 	MemoryContextDelete(info->deftrig_cxt);
+ */
         info->deftrig_cxt = NULL;
 }
 
@@ -1509,7 +1510,9 @@ DeferredTriggerAbortXact(void)
 	if (info->deftrig_cxt == NULL)
 		return;
 	
+/*
 	MemoryContextDelete(info->deftrig_cxt);
+*/
         info->deftrig_cxt = NULL;
 }
 

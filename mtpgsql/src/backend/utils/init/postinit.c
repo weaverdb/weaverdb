@@ -394,7 +394,7 @@ InitPostgres(const char *dbname)
         if ( !bootstrap ) {
 /*
             PoolsweepInit(0);   
- */
+*/
             on_proc_exit(PoolsweepDestroy, NULL);
 /*  if there are recovered pages are present,
  *  index pages need to be scanned and items 
@@ -406,6 +406,7 @@ InitPostgres(const char *dbname)
                 List*  item;
 
                 if ( dbids != NULL ) {
+                    PoolsweepInit(0);   
                     foreach(item, dbids) {
                         AddRecoverRequest(smgrdbrecoveryname(lfirsti(item)), lfirsti(item));
                     }
@@ -414,6 +415,7 @@ InitPostgres(const char *dbname)
                     }   
                     
                     smgrcompleterecovery();
+                    PoolsweepDestroy();
                 }
             }
         }
