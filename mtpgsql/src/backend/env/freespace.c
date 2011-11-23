@@ -248,11 +248,11 @@ RegisterFreespace(Relation rel, int space,BlockNumber* index,
             for (c=0;c<space;c++) {
                 run[c].live = true;
                 run[c].tryblock = index[c];
-                run[c].avail = sa[c];
+                if ( sa ) run[c].avail = sa[c];
+                if ( unused_pointers) run[c].unused_pointers = unused_pointers[c];
                 run[c].misses = 0;
-                run[c].unused_pointers = unused_pointers[c];
  
-                entry->total_available += sa[c];         
+                entry->total_available += run[c].avail;         
             }
             
             qsort(run,space,sizeof(FreeRun),cmp_freeruns);
@@ -646,16 +646,24 @@ AllocateMoreSpace(Relation rel) {
 
 /*  if not recommending a value, then the extender is not set and need to get an extension value  */
     pthread_mutex_lock(&freespace->accessor);
-    while ( freespace->extender != 0 ) {
-/*  forget it someone else is already extending the relation  */
-        pthread_cond_wait(&freespace->creator,&freespace->accessor);
+    if ( freespace->pointer < freespace->size ) {
+        FreeRun* next = &freespace->blocks[freespace->pointer++];
+        Assert(next->live);
+        nb = next->tryblock;
+        next->live = false;
+    } else {
+        while ( freespace->extender != 0 ) {
+    /*  forget it someone else is already extending the relation  */
+            pthread_cond_wait(&freespace->creator,&freespace->accessor);
+        }
+        recommend = RecommendAllocation(rel,freespace);
+        freespace->extender = pthread_self();
     }
-    recommend = RecommendAllocation(rel,freespace);
-    freespace->extender = pthread_self();
-    pthread_mutex_unlock(&freespace->accessor);
     
-
-    nb = PerformAllocation(rel, freespace, recommend);
+    pthread_mutex_unlock(&freespace->accessor);
+    if ( recommend > 0 ) {
+        nb = PerformAllocation(rel, freespace, recommend);
+    }
     
     return nb;
 }
