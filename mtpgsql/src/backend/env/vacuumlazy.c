@@ -174,7 +174,7 @@ static TupleCount
 lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
 	       Relation * Irel, int nindexes);
 static void     lazy_vacuum_heap(Relation onerel, LVRelStats * vacrelstats);
-static TupleCount lazy_scan_index(Relation indrel, Relation heap, LVRelStats * vacrelstats);
+static TupleCount lazy_scan_index(Relation indrel);
 static TupleCount lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats);
 static int 
 lazy_vacuum_page(Relation onerel, BlockNumber blkno, Buffer buffer,
@@ -197,6 +197,8 @@ static void
 
 static void
                 lazy_vacuum_rel(Relation onerel, bool scanonly, bool force_trim);
+static void
+                lazy_index_freespace(Relation onerel);
 
 static void
                 vac_close_indexes(int nindexes, Relation * Irel);
@@ -223,7 +225,7 @@ lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_inf
 static int
 lazy_record_recently_dead(LVRelStats * vacrelstats, ItemPointer item);
 static void
-lazy_update_index_stats(Relation irel, TupleCount i_tups, LVRelStats * vacrelstats);
+lazy_update_index_stats(Relation irel, TupleCount i_tups);
 
 static const char * vac_show_rusage(VacRUsage * ru0, char *buf);
 static void vac_init_rusage(VacRUsage * ru0);
@@ -245,9 +247,13 @@ lazy_open_vacuum_rel(Oid relid, bool force_trim, bool scanonly)
                 LockRelation(rel, ShareUpdateExclusiveLock);
 
                 lazy_vacuum_rel(rel, scanonly, force_trim);
+            } else if (rel->rd_rel->relkind == RELKIND_INDEX) {
+
+                lazy_index_freespace(rel);
             } else {
-                    RegisterFreespace(rel, 0, NULL, NULL,
-                                      NULL, 0, 0, 0, 0, 0, true);
+
+                RegisterFreespace(rel, 0, NULL, NULL,
+                      NULL, 0, 0, 0, 0, 0, true);
             }
             RelationClose(rel);
 	}
@@ -438,6 +444,43 @@ lazy_freespace_scan_rel(Oid relid)
         }
         RelationClose(rel);
     }
+}
+
+
+static void
+lazy_index_freespace(Relation onerel)
+{
+	LVRelStats     *vacrelstats;
+        BlockNumber     cpage;
+
+	vacrelstats = (LVRelStats *) palloc(sizeof(LVRelStats));
+	MemSet(vacrelstats, 0, sizeof(LVRelStats));
+	vacrelstats->reapid = GetCheckpointId();
+	vacrelstats->scanonly = true;
+	vacrelstats->force_trim = false;
+        vacrelstats->freespace_scan = true;
+    
+        vacuum_log(onerel,"Checkpoint Id: %d",vacrelstats->reapid);
+        
+        vacrelstats->rel_pages = RelationGetNumberOfBlocks(onerel);
+        for(cpage=1;cpage<vacrelstats->rel_pages;cpage++) {
+            if ( cpage == index_recoverpage(onerel,cpage) ) {
+                vacrelstats->free_pages[vacrelstats->num_free_pages++] = cpage;
+                if ( vacrelstats->num_free_pages >= vacrelstats->max_free_pages) break;
+            }
+        }
+        
+
+	RegisterFreespace(onerel, vacrelstats->num_free_pages,
+                      vacrelstats->free_pages, vacrelstats->free_spaceavail, vacrelstats->free_pointers,
+                      vacrelstats->min_size, vacrelstats->max_size, vacrelstats->ave_size,
+                      vacrelstats->rel_live_tuples,
+                      vacrelstats->rel_dead_tuples + vacrelstats->rel_kept_tuples, true);
+
+/*  don't do this for now, not optimized properly */
+
+	pfree(vacrelstats);
+
 }
 
 /*
@@ -877,7 +920,7 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
             for (i = 0; i < nindexes; i++) {
                     TupleCount      i_tup = lazy_vacuum_index(Irel[i], vacrelstats);
                     if (i_tup == vacrelstats->num_dead_tuples) {
-                            lazy_update_index_stats(Irel[i], i_tup, vacrelstats);
+                            lazy_update_index_stats(Irel[i], i_tup);
                     }
             }
 
@@ -896,8 +939,8 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
             /* Scan indexes just to update pg_class statistics about them */
             if ( !vacrelstats->freespace_scan ) {
                 for (i = 0; i < nindexes; i++) {
-                        TupleCount      i_tups = lazy_scan_index(Irel[i], onerel, vacrelstats);
-                        lazy_update_index_stats(Irel[i], i_tups, vacrelstats);
+                        TupleCount      i_tups = lazy_scan_index(Irel[i]);
+                        lazy_update_index_stats(Irel[i], i_tups);
                 }
             }
 	}
@@ -1066,16 +1109,12 @@ lazy_vacuum_page(Relation onerel, BlockNumber blkno, Buffer buffer,
  * We use this when we have no deletions to do.
  */
 static          TupleCount
-lazy_scan_index(Relation indrel, Relation heap, LVRelStats * vacrelstats)
+lazy_scan_index(Relation indrel)
 {
 	TupleCount      nitups, other, recently_dead_tups, live, dead;
 	long            nipages = 0;
 	long            notemptypages = 0;
-	ItemPointer     heapptr;
 	IndexScanDesc   iscan;
-	HeapTuple       tuple;
-	Buffer          targetb = InvalidBuffer;
-	Buffer          pinnedb = InvalidBuffer;
 	VacRUsage       ru0;
 
 	char            rubuf[255];
@@ -1088,7 +1127,6 @@ lazy_scan_index(Relation indrel, Relation heap, LVRelStats * vacrelstats)
 	dead = live = nitups = other = recently_dead_tups = 0;
 
 	while (index_getnext(iscan, ForwardScanDirection)) {
-
 		nitups++;
 		if (cpage != ItemPointerGetBlockNumber(&iscan->currentItemData)) {
 			notemptypages++;
@@ -1099,14 +1137,19 @@ lazy_scan_index(Relation indrel, Relation heap, LVRelStats * vacrelstats)
 	}
 
 	index_endscan(iscan);
+        
 	nipages = RelationGetNumberOfBlocks(indrel);
 
 	if (nipages > 50 && ((double) (nipages - notemptypages) / (double) nipages) > 0.75) {
 		vacuum_log(indrel,"Index: adding reindex request index pages: %d used pages: %d number of tuples: %d", nipages, notemptypages, nitups);
 		AddReindexRequest(NameStr(indrel->rd_rel->relname), GetDatabaseName(),
 				  indrel->rd_id, GetDatabaseId());
-	}
+	} else if ( nipages - notemptypages > 20 ) {
+            lazy_index_freespace(indrel);
+        }
+/*
 	vac_update_relstats(RelationGetRelid(indrel), nipages, nitups, false);
+*/
 	vacuum_log(indrel,"Index: Pages %ld; Empty: %ld; Tuples %ld.", nipages, (nipages - notemptypages), nitups);
 	vacuum_log(indrel,"%s", vac_show_rusage(&ru0, rubuf));
 
@@ -1115,7 +1158,7 @@ lazy_scan_index(Relation indrel, Relation heap, LVRelStats * vacrelstats)
 }
 
 static void
-lazy_update_index_stats(Relation irel, TupleCount i_tups, LVRelStats * vacrelstats)
+lazy_update_index_stats(Relation irel, TupleCount i_tups)
 {
 	BlockNumber     nipages = RelationGetNumberOfBlocks(irel);
 	vac_update_relstats(RelationGetRelid(irel), nipages, i_tups, false);
@@ -1132,14 +1175,7 @@ lazy_update_index_stats(Relation irel, TupleCount i_tups, LVRelStats * vacrelsta
 static          TupleCount
 lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats)
 {
-	bool            res;
-	TupleCount      nitups;
 	TupleCount      nitupsremoved = 0;
-	TupleCount      nipages = 0;
-	ItemPointer     heapptr;
-	IndexScanDesc   iscan;
-	Buffer          cp = InvalidBuffer;
-	BlockNumber     blk;
 
 	VacRUsage       ru0;
 	char            rubuf[255];

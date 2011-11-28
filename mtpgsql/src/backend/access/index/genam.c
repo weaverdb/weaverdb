@@ -203,94 +203,14 @@ index_recoverpages(List* pages) {
     }
 }
 
-#ifdef NOT_USED
-/* ----------------
- *	IndexScanRestart -- Restart an index scan.
- *
- *		This routine isn't used by any existing access method.  It's
- *		appropriate if relation level locks are what you want.
- *
- *	Returns:
- *		None.
- *
- *	Side Effects:
- *		None.
- * ----------------
- */
-void
-IndexScanRestart(IndexScanDesc scan,
-				 bool scanFromEnd,
-				 ScanKey key)
-{
-	if (!IndexScanIsValid(scan))
-		elog(ERROR, "IndexScanRestart: invalid scan");
-
-	ItemPointerSetInvalid(&scan->currentItemData);
-
-	if (RelationGetNumberOfBlocks(scan->relation) == 0)
-		scan->flags = ScanUnmarked;
-	else if (scanFromEnd)
-		scan->flags = ScanUnmarked | ScanUncheckedPrevious;
-	else
-		scan->flags = ScanUnmarked | ScanUncheckedNext;
-
-	scan->scanFromEnd = (bool) scanFromEnd;
-
-	if (scan->numberOfKeys > 0)
-		memmove(scan->keyData,
-				key,
-				scan->numberOfKeys * sizeof(ScanKeyData));
+BlockNumber
+index_recoverpage(Relation rel,BlockNumber page) {
+    if ( rel->rd_rel->relkind == RELKIND_INDEX ) {
+        RegProcedure procedure = rel->rd_am->amfreetuple;   /*  this one is deprecated and we are using the slot for recover page */
+        if ( RegProcedureIsValid(procedure) ) {
+            return DatumGetLong(fmgr(procedure, rel, page));
+        }
+    }
+    return InvalidBlockNumber;
 }
 
-/* ----------------
- *	IndexScanMarkPosition -- Mark current position in a scan.
- *
- *		This routine isn't used by any existing access method, but is the
- *		one that AM implementors should use, if they don't want to do any
- *		special locking.  If relation-level locking is sufficient, this is
- *		the routine for you.
- *
- *	Returns:
- *		None.
- *
- *	Side Effects:
- *		None.
- * ----------------
- */
-void
-IndexScanMarkPosition(IndexScanDesc scan)
-{
-	bool result;
-
-	scan->currentMarkData = scan->currentItemData;
-
-	scan->flags = 0x0;			/* XXX should have a symbolic name */
-}
-
-/* ----------------
- *	IndexScanRestorePosition -- Restore position on a marked scan.
- *
- *		This routine isn't used by any existing access method, but is the
- *		one that AM implementors should use if they don't want to do any
- *		special locking.  If relation-level locking is sufficient, then
- *		this is the one you want.
- *
- *	Returns:
- *		None.
- *
- *	Side Effects:
- *		None.
- * ----------------
- */
-void
-IndexScanRestorePosition(IndexScanDesc scan)
-{
-	if (scan->flags & ScanUnmarked)
-		elog(ERROR, "IndexScanRestorePosition: no mark to restore");
-
-	scan->currentItemData = scan->currentMarkData;
-
-	scan->flags = 0x0;			/* XXX should have a symbolic name */
-}
-
-#endif

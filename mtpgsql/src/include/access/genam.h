@@ -40,6 +40,7 @@ IndexGlobals* GetIndexGlobals( void );
  * ----------------
  */
 void index_recoverpages(List* pages);
+BlockNumber index_recoverpage(Relation rel,BlockNumber page);
 
 /* extern */  Relation index_open(Oid relationId);
 /* extern */  Relation index_openr(char *relationName);
