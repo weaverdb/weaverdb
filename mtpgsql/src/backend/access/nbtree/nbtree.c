@@ -697,7 +697,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
     /*  notthing to check on meta */
     if (block == BTREE_METAPAGE) return LongGetDatum(InvalidBlockNumber);
 
-    buffer = _bt_getbuf(rel, block, BT_READYWRITE);
+    buffer = _bt_getbuf(rel, block, BT_WRITE);
     page = BufferGetPage(buffer);
     opaque = (BTPageOpaque) PageGetSpecialPointer(page);
     if (P_ISSPLIT(opaque)) {
@@ -748,10 +748,12 @@ btrecoverpage(Relation rel, BlockNumber block) {
                 }
 
                 if (deleteit) {
+                    LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
                     PageIndexTupleDelete(page, current);
                     elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %d offset: %d", block, current);
                     current = OffsetNumberPrev(current);
                     changed = true;
+                    LockBuffer(rel,buffer,BUFFER_LOCK_NOTCRITICAL);
                 } else {
                     /*
                                     elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
@@ -767,18 +769,16 @@ btrecoverpage(Relation rel, BlockNumber block) {
 
                 BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, current));
                 ItemPointer pointer = &item->bti_itup.t_tid;
-                Buffer leafbuffer = _bt_getbuf(rel, ItemPointerGetBlockNumber(pointer),BT_WRITE);
+                Buffer leafbuffer = _bt_getbuf(rel, ItemPointerGetBlockNumber(pointer),BT_READYWRITE);
 
                 if (!BufferIsValid(leafbuffer)) {
                     deleteit = true;
                 } else {
                     Page leafpage = BufferGetPage(leafbuffer);
                     BTPageOpaque lopaque = (BTPageOpaque) PageGetSpecialPointer(leafpage);
-                    if (lopaque->btpo_parent != block || P_FIRSTDATAKEY(lopaque) > PageGetMaxOffsetNumber(leafpage)) {
-                        LockBuffer(rel,leafbuffer,BUFFER_LOCK_CRITICAL);
+                    if ( BTreeInvalidParent(lopaque) || P_FIRSTDATAKEY(lopaque) > PageGetMaxOffsetNumber(leafpage)) {
                         deleteit = true;
                         lopaque->btpo_parent = InvalidBlockNumber;
-                        LockBuffer(rel,leafbuffer,BUFFER_LOCK_NOTCRITICAL);
                         _bt_wrtbuf(rel, leafbuffer);
                     } else {
                         _bt_relbuf(rel, leafbuffer);
@@ -786,10 +786,12 @@ btrecoverpage(Relation rel, BlockNumber block) {
                 }
 
                 if (deleteit) {
+                    LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
                     PageIndexTupleDelete(page, current);
                     elog(NOTICE, "nbtree: Removing btree parent page index tuple block: %d offset: %d", block, current);
                     current = OffsetNumberPrev(current);
                     changed = true;
+                    LockBuffer(rel,buffer,BUFFER_LOCK_NOTCRITICAL);
                 } else {
                     /*
                                     elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
@@ -803,6 +805,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
 
     if (changed) {
         if ( P_FIRSTDATAKEY(opaque) > PageGetMaxOffsetNumber(page) && !P_ISROOT(opaque)) {
+            LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
             opaque->btpo_parent = InvalidBlockNumber;
         }
         _bt_wrtbuf(rel, buffer);
