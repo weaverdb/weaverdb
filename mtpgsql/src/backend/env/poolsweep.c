@@ -204,6 +204,7 @@ PoolsweepDestroy() {
     } else {
         printf("no poolsweep context");
     }
+    inited = false;
     pthread_mutex_unlock(&list_guard);
 }
 
@@ -849,7 +850,7 @@ PausePoolsweep() {
 
 bool
 IsPoolsweepPaused() {
-    return paused;
+    return (!inited || paused);
 }
 
 void

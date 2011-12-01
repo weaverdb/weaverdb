@@ -450,36 +450,31 @@ lazy_freespace_scan_rel(Oid relid)
 static void
 lazy_index_freespace(Relation onerel)
 {
-	LVRelStats     *vacrelstats;
+        BlockNumber*    free_pages;
         BlockNumber     cpage;
+        BlockNumber     size;
+        int             num_free = 0;
+        int             max_free = 4096;
 
-	vacrelstats = (LVRelStats *) palloc(sizeof(LVRelStats));
-	MemSet(vacrelstats, 0, sizeof(LVRelStats));
-	vacrelstats->reapid = GetCheckpointId();
-	vacrelstats->scanonly = true;
-	vacrelstats->force_trim = false;
-        vacrelstats->freespace_scan = true;
-    
-        vacuum_log(onerel,"Checkpoint Id: %d",vacrelstats->reapid);
+	free_pages = palloc(sizeof(BlockNumber) * max_free);
+	MemSet(free_pages, 0, sizeof(BlockNumber) * max_free);
         
-        vacrelstats->rel_pages = RelationGetNumberOfBlocks(onerel);
-        for(cpage=1;cpage<vacrelstats->rel_pages;cpage++) {
+        size = RelationGetNumberOfBlocks(onerel);
+        for(cpage=1;cpage<size;cpage++) {
             if ( cpage == index_recoverpage(onerel,cpage) ) {
-                vacrelstats->free_pages[vacrelstats->num_free_pages++] = cpage;
-                if ( vacrelstats->num_free_pages >= vacrelstats->max_free_pages) break;
+                free_pages[num_free++] = cpage;
+                if ( num_free >= max_free) break;
             }
         }
         
 
-	RegisterFreespace(onerel, vacrelstats->num_free_pages,
-                      vacrelstats->free_pages, vacrelstats->free_spaceavail, vacrelstats->free_pointers,
-                      vacrelstats->min_size, vacrelstats->max_size, vacrelstats->ave_size,
-                      vacrelstats->rel_live_tuples,
-                      vacrelstats->rel_dead_tuples + vacrelstats->rel_kept_tuples, true);
+	RegisterFreespace(onerel, num_free,free_pages, 0, 0,
+                      0, 0, 0,
+                      0,0, true);
 
 /*  don't do this for now, not optimized properly */
 
-	pfree(vacrelstats);
+	pfree(free_pages);
 
 }
 
@@ -1144,7 +1139,7 @@ lazy_scan_index(Relation indrel)
 		vacuum_log(indrel,"Index: adding reindex request index pages: %d used pages: %d number of tuples: %d", nipages, notemptypages, nitups);
 		AddReindexRequest(NameStr(indrel->rd_rel->relname), GetDatabaseName(),
 				  indrel->rd_id, GetDatabaseId());
-	} else if ( nipages - notemptypages > 20 ) {
+	} else {
             lazy_index_freespace(indrel);
         }
 /*

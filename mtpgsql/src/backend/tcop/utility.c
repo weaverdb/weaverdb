@@ -733,6 +733,7 @@ ProcessUtility(Node *parsetree,
                                     analyze_rel(rel->rd_id);
                                 }
                             }
+                            RelationClose(rel);
                         }
 			break;
 

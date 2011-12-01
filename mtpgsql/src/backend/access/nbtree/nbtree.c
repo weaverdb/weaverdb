@@ -694,6 +694,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
     Page page;
     BTPageOpaque opaque;
     bool changed = false;
+    BlockNumber  relsize = RelationGetNumberOfBlocks(rel);
     /*  notthing to check on meta */
     if (block == BTREE_METAPAGE) return LongGetDatum(InvalidBlockNumber);
 
@@ -769,14 +770,20 @@ btrecoverpage(Relation rel, BlockNumber block) {
 
                 BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, current));
                 ItemPointer pointer = &item->bti_itup.t_tid;
-                Buffer leafbuffer = _bt_getbuf(rel, ItemPointerGetBlockNumber(pointer),BT_READYWRITE);
+                BlockNumber lblock = ItemPointerGetBlockNumber(pointer);
+                Buffer leafbuffer = InvalidBuffer;
+                
+                if ( lblock != block && lblock < relsize ) leafbuffer = _bt_getbuf(rel, lblock, BT_READYWRITE);
 
                 if (!BufferIsValid(leafbuffer)) {
                     deleteit = true;
                 } else {
                     Page leafpage = BufferGetPage(leafbuffer);
                     BTPageOpaque lopaque = (BTPageOpaque) PageGetSpecialPointer(leafpage);
-                    if ( BTreeInvalidParent(lopaque) || P_FIRSTDATAKEY(lopaque) > PageGetMaxOffsetNumber(leafpage)) {
+                    if ( BTreeInvalidParent(lopaque) ) {
+                        deleteit = true;
+                        _bt_relbuf(rel, leafbuffer);
+                    } else if ( P_FIRSTDATAKEY(lopaque) > PageGetMaxOffsetNumber(leafpage)) {
                         deleteit = true;
                         lopaque->btpo_parent = InvalidBlockNumber;
                         _bt_wrtbuf(rel, leafbuffer);
@@ -804,10 +811,6 @@ btrecoverpage(Relation rel, BlockNumber block) {
     }
 
     if (changed) {
-        if ( P_FIRSTDATAKEY(opaque) > PageGetMaxOffsetNumber(page) && !P_ISROOT(opaque)) {
-            LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
-            opaque->btpo_parent = InvalidBlockNumber;
-        }
         _bt_wrtbuf(rel, buffer);
     } else {
         _bt_relbuf(rel, buffer);
@@ -1097,11 +1100,16 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
         _bt_relbuf(rel, tbuffer);
     } else if ( PageIsNew(tpage) ) {
         LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
-        _bt_pageinit(tpage,PageGetPageSize(tpage));
+        _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
         _bt_wrtbuf(rel, tbuffer);
         reap = target;
     } else if ( P_RIGHTMOST(topaque) ) {
         _bt_relbuf(rel, tbuffer);
+    } else if ( PageGetPageSize(tpage) != BufferGetPageSize(tbuffer) ) {
+        LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+        _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
+        _bt_wrtbuf(rel, tbuffer);
+        reap = target;
     } else {
         Buffer nbuffer = _bt_getbuf(rel,topaque->btpo_next,BT_READYWRITE);
         Page npage = BufferGetPage(nbuffer);
@@ -1120,11 +1128,11 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                     reap = target;
                     nopaque->btpo_prev = 0;
                     LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
-                    _bt_pageinit(tpage,PageGetPageSize(tpage));
+                    _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
                 } else {
                     BlockNumber next = nopaque->btpo_next;
                     reap = BufferGetBlockNumber(nbuffer);
-                    _bt_pageinit(npage,PageGetPageSize(npage));
+                    _bt_pageinit(npage,BufferGetPageSize(nbuffer));
                     _bt_wrtbuf(rel, nbuffer);
                     nbuffer = _bt_getbuf(rel, next, BT_READYWRITE);
                     npage = BufferGetPage(nbuffer);

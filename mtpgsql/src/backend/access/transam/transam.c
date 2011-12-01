@@ -527,6 +527,7 @@ of the pg_log for commits
 		SpinRelease(OidGenLockId);
                 smgrreplaylogs();
 		TransRecover(logRelation);
+                smgrexpirelogs();
 		SpinAcquire(OidGenLockId);
 	} else {
 		SpinRelease(OidGenLockId);
