@@ -149,7 +149,7 @@ _bt_doinsert(Relation rel, BTItem btitem,
 	/* we need a scan key to do our search, so build one */
 	itup_scankey = _bt_mkscankey(rel, itup);
 
-top:
+top:;
 	/* find the page containing this key */
 	stack = _bt_search(rel, natts, itup_scankey, &buf, BT_WRITE);
 
@@ -246,8 +246,7 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
 {
         TupleDesc        itupdesc = RelationGetDescr(rel);
         int                        natts = rel->rd_rel->relnatts;
-        OffsetNumber offset,
-                                maxoff;
+        OffsetNumber offset,maxoff;
         Page                page;
         BTPageOpaque opaque;
         Buffer                nbuf = InvalidBuffer;
@@ -294,7 +293,7 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
 
                         cbti = (BTItem) PageGetItem(page, curitemid);
                         htup.t_self = cbti->bti_itup.t_tid;
-                        if ( heap_fetch(heapRel, Dirty, &htup, &hbuffer)) {
+                        if (heap_fetch(heapRel, Dirty, &htup, &hbuffer)) {
                                /* it is a duplicate */
                                 TransactionId xwait =
                                 (TransactionIdIsValid(Dirty->xmin)) ?
@@ -315,16 +314,6 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                                        return xwait;
                                 }
 
-                                /*
-                                 * Otherwise we have a definite conflict.  release the buffer we are erroring out
-                                 */
-                                
-/*
-                                if (buf != InvalidBuffer) {
-                                    _bt_relbuf(rel, buf);  
-                                }
-*/
-
                                 *other_ht = htup.t_self;
                                 return InvalidTransactionId;
                             }
@@ -332,8 +321,9 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                 /*
                  * Advance to next tuple to continue checking.
                  */
-                if (offset < maxoff)
+                if (offset < maxoff) {
                         offset = OffsetNumberNext(offset);
+                }
                 else
                 {
                         if (P_RIGHTMOST(opaque)) break;
@@ -342,7 +332,7 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                                 break;
 
                         nblkno = opaque->btpo_next;
-                        if (nbuf != InvalidBuffer)
+                        if (BufferIsValid(nbuf))
                                 _bt_relbuf(rel, nbuf);
                         nbuf = _bt_getbuf(rel, nblkno, BT_READ);
 
@@ -352,7 +342,7 @@ _bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                         offset = P_FIRSTDATAKEY(opaque);
                 }
        	 }
-        if (nbuf != InvalidBuffer)
+        if (BufferIsValid(nbuf))
                 _bt_relbuf(rel, nbuf);
 
         return InvalidTransactionId;
@@ -424,8 +414,7 @@ _bt_insertonpg(Relation rel,
 	page = BufferGetPage(buf);
 	lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
 
-	itemsz = IndexTupleDSize(btitem->bti_itup)
-		+ (sizeof(BTItemData) - sizeof(IndexTupleData));
+	itemsz = IndexTupleDSize(btitem->bti_itup) + (sizeof(BTItemData) - sizeof(IndexTupleData));
 
 	itemsz = MAXALIGN(itemsz);	/* be safe, PageAddItem will do this but
 								 * we need to be consistent */
@@ -468,7 +457,7 @@ _bt_insertonpg(Relation rel,
 		 */
 		bool		movedright = false;
 
-		while (  PageGetFreeSpace(page) < itemsz &&
+                while (  (lpageop->btpo_parent == InvalidBlockNumber || PageGetFreeSpace(page) < itemsz) &&
 			   !P_RIGHTMOST(lpageop) &&
 			   _bt_compare(rel, keysz, scankey, page, P_HIKEY) == 0 &&
 			   prandom() > (MAX_RANDOM_VALUE / 100))
@@ -490,7 +479,6 @@ _bt_insertonpg(Relation rel,
 			lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
 			movedright = true;
 		}
-
 		/*
 		 * Now we are on the right page, so find the insert position. If
 		 * we moved right at all, we know we should insert at the start of
@@ -650,7 +638,6 @@ _bt_insertonpg(Relation rel,
 		_bt_wrtbuf(rel, buf);
 	}
 
-formres:;
 	/* by here, the new tuple is inserted at itup_blkno/itup_off */
 	res = (InsertIndexResult) palloc(sizeof(InsertIndexResultData));
 	ItemPointerSet(&(res->pointer), itup_blkno, itup_off);
@@ -664,6 +651,8 @@ _bt_insertuple(Relation rel, Buffer buf,
 			   Size itemsz, BTItem btitem, OffsetNumber newitemoff)
 {
 	Page		page = BufferGetPage(buf);
+	BTPageOpaque lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
+        Assert(lpageop->btpo_parent != InvalidBlockNumber);
         LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
 	_bt_pgaddtup(rel, page, itemsz, btitem, newitemoff, "page");
         LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);

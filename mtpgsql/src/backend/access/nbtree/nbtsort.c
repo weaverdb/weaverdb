@@ -514,6 +514,7 @@ _bt_uppershutdown(Relation index, BTPageState * state)
 		 */
 		if (s->btps_next == (BTPageState *) NULL) {
 			opaque->btpo_flags |= BTP_ROOT;
+			opaque->btpo_parent = BTREE_METAPAGE;
 			_bt_metaproot(index, blkno, s->btps_level + 1);
 		} else {
 			Assert(s->btps_minkey != NULL);

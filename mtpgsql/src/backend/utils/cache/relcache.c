@@ -1413,9 +1413,7 @@ RelationClearRelation(Relation relation, bool rebuildIt) {
                 relation->rd_lockInfo.lockRelId.dbId,
                 relation->rd_lockInfo.lockRelId.relId);
         relation->rd_nblocks = 0;
-        /*
-                    relation->rd_nblocks = RelationGetNumberOfBlocks(relation);
-         */
+
         return;
     }
     /*
@@ -1535,10 +1533,6 @@ RelationClearRelation(Relation relation, bool rebuildIt) {
         relation->rd_smgr = smgropen(DEFAULT_SMGR, GetDatabaseName(), RelationGetRelationName(relation),
                 relation->rd_lockInfo.lockRelId.dbId,
                 relation->rd_lockInfo.lockRelId.relId);
-
-        /*
-                        relation->rd_nblocks = RelationGetNumberOfBlocks(relation);
-         */
 
     }
 

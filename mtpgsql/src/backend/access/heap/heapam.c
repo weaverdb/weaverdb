@@ -676,7 +676,7 @@ Oid
 heap_insert(Relation relation, HeapTuple tup)
 {
 	TransactionId   xid;
-	
+        BlockNumber   last = relation->last_insert;
 	/* ----------------
 	 *	increment access statistics
 	 * ----------------
@@ -718,7 +718,7 @@ heap_insert(Relation relation, HeapTuple tup)
 	tup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
 	tup->t_data->t_infomask |= HEAP_XMAX_INVALID;
 
-	RelationPutHeapTupleAtFreespace(relation, tup, 0);
+	relation->last_insert = RelationPutHeapTupleAtFreespace(relation, tup, 0);
 
 	if (IsSystemRelationName(RelationGetRelationName(relation)))
 		RelationMark4RollbackHeapTuple(relation, tup);

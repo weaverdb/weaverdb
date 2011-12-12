@@ -701,9 +701,7 @@ InvalidateRelationBuffers(Relation rel) {
         }
         return;
     }
-    
-    FlushAllDirtyBuffers(true);
-    
+        
     for (i = 1; i <= MaxBuffers; i++) {
         buf = &BufferDescriptors[i - 1];
         
@@ -1188,7 +1186,7 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
         pthread_cond_wait(&buf->io_in_progress_lock.gate, &buf->io_in_progress_lock.guard);
     }
 
-    if ( (buf->ioflags & BM_IO_ERROR) ) {
+    if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         if ( iostatus & BL_R_LOCK ) {
             LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
@@ -1225,7 +1223,9 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
     
     iostatus = LockBuffer(NULL,BufferDescriptorGetBuffer(buf),( mode == WRITE_COMMIT ) ?  BUFFER_LOCK_WRITEIO : BUFFER_LOCK_FLUSHIO);
 
-    if ( iostatus == BL_NOLOCK ) return iostatus;
+    if ( iostatus == BL_NOLOCK ) {
+        return iostatus;
+    }
 
     iostatus = BL_R_LOCK;
 
@@ -1235,7 +1235,7 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
         pthread_cond_wait(&buf->io_in_progress_lock.gate, &buf->io_in_progress_lock.guard);
     }
 
-    if ( (buf->ioflags & BM_IO_ERROR) ) {
+    if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         if ( iostatus == BL_R_LOCK) {
             LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
@@ -1289,10 +1289,8 @@ DirtyBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     bool dirty = false;
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
     
-    if ( !(buf->ioflags & BM_IO_ERROR) ) {
-        buf->ioflags |= (BM_DIRTY); 
-        dirty = true;
-    }
+    buf->ioflags |= (BM_DIRTY); 
+    dirty = true;
     
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
     
@@ -1318,8 +1316,7 @@ ErrorBufferIO(IOStatus iostatus, BufferDesc *buf) {
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
-    buf->ioflags |= BM_IO_ERROR;
-    buf->ioflags &= ~(BM_IOOP_MASK);
+    buf->ioflags = BM_IO_ERROR;
 
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
 
@@ -1344,7 +1341,7 @@ ClearBufferIO(BufferDesc *buf) {
         pthread_cond_wait(&buf->io_in_progress_lock.gate, &buf->io_in_progress_lock.guard);
     }
 
-    buf->ioflags |= BM_IO_ERROR;
+    buf->ioflags = BM_IO_ERROR;
 
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);    
 

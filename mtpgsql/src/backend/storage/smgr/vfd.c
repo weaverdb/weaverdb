@@ -419,6 +419,7 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
                     }
                 } else {
                     if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
+                        elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
                         status = SM_FAIL_SEEK;
                     }
                 }
@@ -566,8 +567,6 @@ vfdtruncate(SmgrInfo info, long nblocks)
 {
 	BlockNumber			curnblk;
         File        fd = info->fd;
-
-        FileBaseSync(fd,nblocks * BLCKSZ);
         
         FilePin(fd, 7);
         
@@ -588,6 +587,7 @@ vfdtruncate(SmgrInfo info, long nblocks)
 		return -1;
         }
         
+        FileBaseSync(fd,nblocks * BLCKSZ);
         info->nblocks = nblocks;
 
         FileUnpin(fd, 7);

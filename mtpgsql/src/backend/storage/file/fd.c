@@ -184,7 +184,7 @@ static bool HashDropFD(Vfd* target);
 
 static bool ActivateFile(Vfd* file);
 static void  RetireFile(Vfd* file);
-static void CheckFileAccess(Vfd* target);
+static bool CheckFileAccess(Vfd* target);
 
 static bool ReleaseFileIfNeeded();
 
@@ -194,8 +194,6 @@ static void FreeVfd(Vfd* file);
 static Vfd* GetVirtualFD(int index);
 static Index InitializeBlock(int start);
 static int  GetVfdPoolSize();
-
-static File     FileOpen(FileName fileName, int fileFlags, int fileMode);
 
 static char *filepath(char* buf, char *filename, int len);
 static long pg_nofile(void);
@@ -416,7 +414,7 @@ ActivateFile(Vfd* vfdP)
    }
 
     /* seek to the right position */
-    if (vfdP->seekPos != 0L && errno == 0)
+    if (vfdP->seekPos != 0L)
     {
         off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
         if ( check != vfdP->seekPos ) {
@@ -655,7 +653,7 @@ filepath(char* buf, char *filename, int len)
 	return buf;
 }
 
-static void
+static bool
 CheckFileAccess(Vfd* target) {
     int trys = 0;
 
@@ -668,11 +666,13 @@ CheckFileAccess(Vfd* target) {
         }
     }
     
-    Assert(target->fd != VFD_CLOSED);
+    if ( target->fd == VFD_CLOSED ) return FALSE;
 
     target->usage_count+=1;
     time(&target->access_time);
     target->sweep_valid = false;
+    
+    return TRUE;
 }
 
 
@@ -925,7 +925,7 @@ FileRead(File file, char *buffer, int amount)
         Vfd*    target = GetVirtualFD(file);
 	Assert(FileIsValid(file));
 
-	CheckFileAccess(target);
+	if ( !CheckFileAccess(target) ) return -1;
         
 	while ( amount > 0 ) {
             blit = read(target->fd, buffer, amount);
@@ -956,7 +956,7 @@ FileWrite(File file, char *buffer, int amount)
         int request = amount;
         int fails = 0;
 
-	CheckFileAccess(target);
+	if ( !CheckFileAccess(target) ) return -1;
 
         while ( amount > 0 ) {
             ssize_t blit = write(target->fd, buffer, amount);
@@ -998,7 +998,7 @@ FileSeek(File file, long offset, int whence)
 				target->seekPos += offset;
 				break;
 			case SEEK_END:
-                                CheckFileAccess(target);
+                                if ( !CheckFileAccess(target) ) return -1;
 				blit = lseek(target->fd, offset, whence);
                                 if ( blit < 0 ) {
                                     perror("FileSeek");
@@ -1012,7 +1012,7 @@ FileSeek(File file, long offset, int whence)
 				break;
 		}
 	} else {
-		CheckFileAccess(target);
+                if ( !CheckFileAccess(target) ) return -1;
                 blit = lseek(target->fd, offset, whence);
                 if ( blit < 0 ) {
                     char* err = strerror(errno);
@@ -1038,6 +1038,7 @@ FileTruncate(File file, long offset)
 	FileSync(file);
 
 	returnCode = ftruncate(target->fd, offset);
+        pg_fsync(target->fd);
         
 	return returnCode;
 }
@@ -1096,7 +1097,7 @@ FileSync(File file)
 		 * file to the front of the LRU ring; we aren't expecting to
 		 * access it again soon.
 		 */
-                CheckFileAccess(target);
+                if ( !CheckFileAccess(target) ) return -1;
 		returnCode = pg_fsync(target->fd);
 		if (returnCode == 0)
                     target->fdstate &= ~FD_DIRTY;
@@ -1290,13 +1291,12 @@ FreeFile(FILE *file)
 int
 FileBaseSync(File file, long pos)
 {
-int count = 0;
+        int             count = 0;
 	Index		i;
 
     pthread_mutex_lock(&VfdCache.guard);
 
     Vfd* base = GetVirtualFD(file);
-/*    elog(DEBUG,"basing %s",base->fileName);   */
     for (i = 1; i < VfdCache.size; i++)
     {
             Vfd* target = GetVirtualFD(i);
@@ -1306,12 +1306,10 @@ int count = 0;
             pthread_mutex_lock(&target->pin);
 
             if ( target->refCount > 0 ) {
-/*                elog(DEBUG,"checking %s",target->fileName);   */
                 if ( strcmp(base->fileName,target->fileName) == 0 ) {
                     if ( target->fd != VFD_CLOSED ) {
                         RetireFile(target);
                     }
-/*                    elog(DEBUG,"retiring %d",target->id); */
                     if ( target->seekPos > pos ) target->seekPos = pos;
                     count++;
                 }

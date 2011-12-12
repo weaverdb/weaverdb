@@ -196,6 +196,7 @@ _bt_tryroot(Relation rel, bool create)
 
 			_bt_pageinit(rootpage, BufferGetPageSize(rootbuf));
 			((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_flags |= (BTP_LEAF | BTP_ROOT);
+                        ((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_parent = BTREE_METAPAGE;
 
 			_bt_wrtbuf(rel, rootbuf);
 
@@ -326,8 +327,8 @@ _bt_pageinit(Page page, Size size)
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_parent =
 		InvalidBlockNumber;
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_next =
-		0;
-	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_parent =
+		0;       
+	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_prev =
 		0;        
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_flags =
 		0;                

@@ -583,12 +583,12 @@ LockAcquire(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 		{
 			if (holder->nHolding == 0)
 			{
-				SHMQueueLock(&holder->queue);
-				SHMQueueDelete(&holder->queue);
-				SHMQueueRelease(&holder->queue);
-				SearchHolderTable(lockmethod, &holder->tag,HASH_REMOVE);
+                            SHMQueueLock(&holder->queue);
+                            SHMQueueDelete(&holder->queue);
+                            SHMQueueRelease(&holder->queue);
+                            SearchHolderTable(lockmethod, &holder->tag,HASH_REMOVE);
 			} else {
-				HOLDER_PRINT("LockAcquire: NHOLDING", holder);
+                            HOLDER_PRINT("LockAcquire: NHOLDING", holder);
                         }
 			lock->nHolding--;
 			lock->holders[lockmode]--;

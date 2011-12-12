@@ -37,6 +37,7 @@ typedef enum ProcessingMode
 	BootstrapProcessing,		/* bootstrap creation of template database */
 	InitProcessing,				/* initializing system */
 	NormalProcessing,			/* normal processing */
+        ReadOnlyProcessing,
 	ShutdownProcessing			/* processing */
 } ProcessingMode;
 
@@ -193,6 +194,7 @@ extern masterlock_t*		masterlock;
 
 
 #define IsBootstrapProcessingMode() ((bool)(GetProcessingMode() == BootstrapProcessing))
+#define IsReadOnlyProcessingMode() ((bool)(GetProcessingMode() == ReadOnlyProcessing))
 #define IsInitProcessingMode() ((bool)(GetProcessingMode() == InitProcessing))
 #define IsNormalProcessingMode() ((bool)(GetProcessingMode() == NormalProcessing))
 #define IsShutdownProcessingMode() ((bool)(GetProcessingMode() == ShutdownProcessing))

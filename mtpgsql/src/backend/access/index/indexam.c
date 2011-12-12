@@ -198,7 +198,7 @@ index_insert(Relation relation,
         
 
 	specificResult = (InsertIndexResult)
-		fmgr(procedure, relation, datum, nulls, heap_t_ctid, heapRel, is_put);
+		DatumGetPointer(fmgr(procedure, relation, datum, nulls, heap_t_ctid, heapRel, is_put));
 
 	/* must be pfree'ed */
 	return specificResult;

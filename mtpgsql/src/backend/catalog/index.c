@@ -1221,7 +1221,7 @@ index_drop(Oid indexId)
 	 */
 	InvalidateRelationBuffers(userIndexRelation);
         DropVacuumRequests(indexId,GetDatabaseId());        
-        ForgetFreespace(userIndexRelation);
+        ForgetFreespace(userIndexRelation,true);
 	
         if (smgrunlink(userIndexRelation->rd_smgr) != SM_SUCCESS) {
               elog(ERROR, "index_drop: unlink: %m");
@@ -2193,7 +2193,7 @@ reindex_index(Oid indexId, bool force)
 	 */
 	InvalidateRelationBuffers(iRel);
 	/* Now truncate the actual data and set blocks to zero */
-        ForgetFreespace(iRel);
+        ForgetFreespace(iRel,false);
 	smgrtruncate(iRel->rd_smgr, 0);
 	iRel->rd_nblocks = 0;
 

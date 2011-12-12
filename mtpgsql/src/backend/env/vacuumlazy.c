@@ -198,7 +198,7 @@ static void
 static void
                 lazy_vacuum_rel(Relation onerel, bool scanonly, bool force_trim);
 static void
-                lazy_index_freespace(Relation onerel);
+                lazy_index_freespace(Relation onerel,bool alter);
 
 static void
                 vac_close_indexes(int nindexes, Relation * Irel);
@@ -245,11 +245,10 @@ lazy_open_vacuum_rel(Oid relid, bool force_trim, bool scanonly)
 */
             if (rel->rd_rel->relkind == RELKIND_RELATION) {
                 LockRelation(rel, ShareUpdateExclusiveLock);
-
                 lazy_vacuum_rel(rel, scanonly, force_trim);
             } else if (rel->rd_rel->relkind == RELKIND_INDEX) {
-
-                lazy_index_freespace(rel);
+                LockRelation(rel, ShareUpdateExclusiveLock);
+                lazy_index_freespace(rel,true);
             } else {
 
                 RegisterFreespace(rel, 0, NULL, NULL,
@@ -438,6 +437,8 @@ lazy_freespace_scan_rel(Oid relid)
                       vacrelstats->rel_dead_tuples + vacrelstats->rel_kept_tuples, false);
                       
                 pfree(vacrelstats);
+        } else if (rel->rd_rel->relkind == RELKIND_INDEX) {
+                lazy_index_freespace(rel, false);
         } else {
                 RegisterFreespace(rel, 0, NULL, NULL,
                                   NULL, 0, 0, 0, 0, 0, true);
@@ -448,17 +449,21 @@ lazy_freespace_scan_rel(Oid relid)
 
 
 static void
-lazy_index_freespace(Relation onerel)
+lazy_index_freespace(Relation onerel, bool alter)
 {
         BlockNumber*    free_pages;
         BlockNumber     cpage;
         BlockNumber     size;
         int             num_free = 0;
         int             max_free = 4096;
+        ProcessingMode  mode = GetProcessingMode();
+        
+        Assert(onerel->rd_rel->relkind == RELKIND_INDEX);
 
 	free_pages = palloc(sizeof(BlockNumber) * max_free);
 	MemSet(free_pages, 0, sizeof(BlockNumber) * max_free);
         
+        if ( !alter ) SetProcessingMode(ReadOnlyProcessing);
         size = RelationGetNumberOfBlocks(onerel);
         for(cpage=1;cpage<size;cpage++) {
             if ( cpage == index_recoverpage(onerel,cpage) ) {
@@ -467,7 +472,7 @@ lazy_index_freespace(Relation onerel)
             }
         }
         
-
+        if ( !alter ) SetProcessingMode(mode);
 	RegisterFreespace(onerel, num_free,free_pages, 0, 0,
                       0, 0, 0,
                       0,0, true);
@@ -566,13 +571,7 @@ lazy_vacuum_rel(Relation onerel, bool scanonly, bool force_trim)
             random = prandom();
             
             vacuum_log(onerel,"defrag chance stats -- ratio:%.2f random:%d threshold:%.0f",ratio, random, (MAX_RANDOM_VALUE * ratio));
-                               
-/*
-            if ((random < (MAX_RANDOM_VALUE * ratio)) && !scanonly) {
-                    AddDefragRequest(NameStr(onerel->rd_rel->relname), GetDatabaseName(), 
-                            onerel->rd_id, GetDatabaseId(), true, (vacrelstats->rel_live_tuples * 0.01));
-            }
-*/
+
             if (random < (MAX_RANDOM_VALUE * 0.20)) {
                     AddAnalyzeRequest(NameStr(onerel->rd_rel->relname), GetDatabaseName(), onerel->rd_id, GetDatabaseId());
             }
@@ -1140,7 +1139,7 @@ lazy_scan_index(Relation indrel)
 		AddReindexRequest(NameStr(indrel->rd_rel->relname), GetDatabaseName(),
 				  indrel->rd_id, GetDatabaseId());
 	} else {
-            lazy_index_freespace(indrel);
+            lazy_index_freespace(indrel, true);
         }
 /*
 	vac_update_relstats(RelationGetRelid(indrel), nipages, nitups, false);
@@ -1659,6 +1658,9 @@ lazy_truncate_heap(Relation onerel, LVRelStats * vacrelstats)
 	/*
 	 * Do the physical truncation.
 	 */
+        SetTransactionCommitType(TRANSACTION_SYNCED_COMMIT);
+        FlushAllDirtyBuffers(true);
+        ForgetFreespace(onerel,false);
 	InvalidateRelationBuffers(onerel);
 	TruncateHeapRelation(onerel, new_rel_pages);
 	onerel->rd_nblocks = new_rel_pages;
@@ -1673,14 +1675,14 @@ lazy_truncate_heap(Relation onerel, LVRelStats * vacrelstats)
 	n = vacrelstats->num_free_pages;
 	j = 0;
 	for (i = 0; i < n; i++) {
-		if (pages[i] < new_rel_pages) {
-			pages[j] = pages[i];
-			spaceavail[j] = spaceavail[i];
-			pointers[j] = pointers[i];
-			j++;
-		} else {
-			vacrelstats->total_free -= (spaceavail[i] > MaxTupleSize) ? MaxTupleSize : spaceavail[i];
-		}
+            if (pages[i] < new_rel_pages) {
+                    pages[j] = pages[i];
+                    spaceavail[j] = spaceavail[i];
+                    pointers[j] = pointers[i];
+                    j++;
+            } else {
+                    vacrelstats->total_free -= (spaceavail[i] > MaxTupleSize) ? MaxTupleSize : spaceavail[i];
+            }
 	}
 	vacrelstats->num_free_pages = j;
 	/*

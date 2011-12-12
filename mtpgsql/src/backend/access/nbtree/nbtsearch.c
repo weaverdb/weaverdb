@@ -158,14 +158,12 @@ _bt_moveright(Relation rel,
 	 * It could even have split more than once, so scan as far as needed.
 	 */
 	while (!P_RIGHTMOST(opaque) &&
-		   _bt_compare(rel, keysz, scankey, page, P_HIKEY) > 0)
+		   ( _bt_compare(rel, keysz, scankey, page, P_HIKEY) > 0 || opaque->btpo_parent == InvalidBlockNumber ) ) 
 	{
 		/* step right one page */
 		BlockNumber rblkno = opaque->btpo_next;
-		/*
-                 * elog(NOTICE,"moving right on %s from: %d to: %d",RelationGetRelationName(rel),BufferGetBlockNumber(buf),rblkno);
-		*/
-                 _bt_relbuf(rel, buf);
+
+                _bt_relbuf(rel, buf);
 		buf = _bt_getbuf(rel, rblkno, access);
 		page = BufferGetPage(buf);
 		opaque = (BTPageOpaque) PageGetSpecialPointer(page);
@@ -205,8 +203,7 @@ _bt_binsrch(Relation rel,
 {
 	TupleDesc	itupdesc;
 	BTPageOpaque opaque;
-	OffsetNumber low,
-				high;
+	OffsetNumber low,high;
 	int32		result;
 
 	itupdesc = RelationGetDescr(rel);
@@ -234,7 +231,6 @@ _bt_binsrch(Relation rel,
 
 	while (high > low)
 	{
-		bool valid;
 		OffsetNumber mid = low + ((high - low) / 2);
 
 		/* We have low <= mid < high, so mid points at a real slot */
@@ -1032,7 +1028,10 @@ _bt_endpoint(IndexScanDesc scan, ScanDirection dir)
 
 	if (ScanDirectionIsForward(dir))
 	{
+/*   This check is no longer valid b/c the upper levels may hae been vacuumed while the lower levels still need to be cleaned.  
+ *   it is assumed that left pages are empty.
 		Assert(P_LEFTMOST(opaque));
+*/
 
 		start = P_FIRSTDATAKEY(opaque);
 	}

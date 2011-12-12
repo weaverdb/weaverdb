@@ -530,7 +530,7 @@ void PrintFreespaceMemory( )
 /*  rely on locking at the relation level to protect from 
     removing a referenced freespace
 */
-int ForgetFreespace(Relation rel) {
+int ForgetFreespace(Relation rel, bool gone) {
 	FreeKey tag;
 	bool found;
         FreeSpace* entry;
@@ -557,7 +557,7 @@ int ForgetFreespace(Relation rel) {
 
 	pthread_mutex_unlock(&freespace_access);
 
-        RemoveExtentForRelation(rel);
+        if ( gone ) RemoveExtentForRelation(rel);
 
         return 0;
 }
@@ -640,6 +640,7 @@ FreeSpace* FindFreespace(Relation rel,char* dbname,bool create) {
 
 BlockNumber
 AllocateMoreSpace(Relation rel) {
+    
     FreeSpace*  freespace = FindFreespace(rel,NULL,true);
     int recommend = 0;
     BlockNumber nb = InvalidBlockNumber;

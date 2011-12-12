@@ -50,14 +50,6 @@ typedef struct {
 
 static BlockNumber
 _bt_check_pagelinks(Relation rel, BlockNumber target);
-/*
-static bool
-_bt_fix_linktriangle(Relation rel, Buffer pbuffer, BlockNumber left, BlockNumber right);
-*/
-/*
-static BlockNumber
-_bt_fixsplit(Relation rel, BlockNumber left, BlockNumber parent, BlockNumber right);
-*/
 
 static int
 cmp_itemptr(const void *left, const void *right);
@@ -762,7 +754,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
                 }
             }
             RelationClose(heaprel);
-        } else {
+        } else if ( !P_ISLEAF(opaque) && !IsReadOnlyProcessingMode() ) {
             OffsetNumber current;
 
             for (current = P_FIRSTDATAKEY(opaque); current <= PageGetMaxOffsetNumber(page); current = OffsetNumberNext(current)) {
@@ -783,10 +775,18 @@ btrecoverpage(Relation rel, BlockNumber block) {
                     if ( BTreeInvalidParent(lopaque) ) {
                         deleteit = true;
                         _bt_relbuf(rel, leafbuffer);
-                    } else if ( P_FIRSTDATAKEY(lopaque) > PageGetMaxOffsetNumber(leafpage)) {
-                        deleteit = true;
-                        lopaque->btpo_parent = InvalidBlockNumber;
-                        _bt_wrtbuf(rel, leafbuffer);
+                    } else if ( P_FIRSTDATAKEY(lopaque) > PageGetMaxOffsetNumber(leafpage) ) {
+                        if ( !P_RIGHTMOST(lopaque) ) {
+                            deleteit = true;
+                            lopaque->btpo_parent = InvalidBlockNumber;
+                            _bt_wrtbuf(rel, leafbuffer);
+                        } else if ( P_LEFTMOST(lopaque) ) {
+                            deleteit = true;
+                            lopaque->btpo_parent = InvalidBlockNumber;
+                            _bt_wrtbuf(rel, leafbuffer);
+                        } else {
+                            _bt_relbuf(rel, leafbuffer);
+                        }
                     } else {
                         _bt_relbuf(rel, leafbuffer);
                     }
@@ -795,7 +795,6 @@ btrecoverpage(Relation rel, BlockNumber block) {
                 if (deleteit) {
                     LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
                     PageIndexTupleDelete(page, current);
-                    elog(NOTICE, "nbtree: Removing btree parent page index tuple block: %d offset: %d", block, current);
                     current = OffsetNumberPrev(current);
                     changed = true;
                     LockBuffer(rel,buffer,BUFFER_LOCK_NOTCRITICAL);
@@ -811,11 +810,13 @@ btrecoverpage(Relation rel, BlockNumber block) {
     }
 
     if (changed) {
+        if ( P_RIGHTMOST(opaque) && P_LEFTMOST(opaque) && PageGetMaxOffsetNumber(page) == 0 ) {
+            opaque->btpo_flags |= BTP_LEAF;
+        }
         _bt_wrtbuf(rel, buffer);
     } else {
         _bt_relbuf(rel, buffer);
     }
-
     return LongGetDatum(_bt_check_pagelinks(rel, block));
 }
 
@@ -828,7 +829,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
  */
 Datum
 btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
-    long tuples_removed, tuples_aborted;
+    long tuples_removed;
     long num_index_tuples;
     IndexScanDesc scan;
     BTScanOpaque so;
@@ -837,7 +838,6 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
     long used_pages = 0;
 
     tuples_removed = 0;
-    tuples_aborted = 0;
     num_index_tuples = 0;
 
     /*  array is seq scan so ItemPointers are in order */
@@ -990,7 +990,7 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
 
     btendscan(scan);
 
-    return LongGetDatum(tuples_removed - tuples_aborted);
+    return LongGetDatum(tuples_removed);
 }
 
 /*
@@ -1097,12 +1097,30 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
     topaque = (BTPageOpaque) PageGetSpecialPointer(tpage);
 
     if ( P_ISROOT(topaque) ) {
-        _bt_relbuf(rel, tbuffer);
+        if ( !P_ISLEAF(topaque) && P_FIRSTDATAKEY(topaque) > PageGetMaxOffsetNumber(topaque) ) {
+            topaque->btpo_flags |= BTP_LEAF;
+            _bt_wrtbuf(rel, tbuffer);
+        } else {
+            _bt_relbuf(rel, tbuffer);
+        }
     } else if ( PageIsNew(tpage) ) {
         LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
         _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
         _bt_wrtbuf(rel, tbuffer);
         reap = target;
+    } else if ( P_LEFTMOST(topaque) && BTreeInvalidParent(topaque) ) {
+        reap = target;
+        /*  if this is rightmost too, it should never get here. */
+        Assert(!P_RIGHTMOST(topaque));
+        Buffer nbuffer = _bt_getbuf(rel,topaque->btpo_next,BT_READYWRITE);
+        Page npage = BufferGetPage(nbuffer);
+        BTPageOpaque nopaque = (BTPageOpaque) PageGetSpecialPointer(npage);
+        nopaque->btpo_prev = 0;
+        LockBuffer(rel,nbuffer,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+        _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
+        _bt_wrtbuf(rel, nbuffer);
+        _bt_wrtbuf(rel, tbuffer);
     } else if ( P_RIGHTMOST(topaque) ) {
         _bt_relbuf(rel, tbuffer);
     } else if ( PageGetPageSize(tpage) != BufferGetPageSize(tbuffer) ) {
@@ -1121,35 +1139,29 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
                 memmove(tpage, npage, PageGetPageSize(npage));
                 _bt_pageinit(npage,PageGetPageSize(npage));
+                _bt_wrtbuf(rel, nbuffer);
                 _bt_wrtbuf(rel, tbuffer);
-                _bt_wrtbuf(rel, nbuffer);
-            } else if (P_FIRSTDATAKEY(nopaque) > PageGetMaxOffsetNumber(npage)) {
-                if ( P_LEFTMOST(topaque) ) {
-                    reap = target;
-                    nopaque->btpo_prev = 0;
-                    LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
-                    _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
-                } else {
-                    BlockNumber next = nopaque->btpo_next;
-                    reap = BufferGetBlockNumber(nbuffer);
-                    _bt_pageinit(npage,BufferGetPageSize(nbuffer));
-                    _bt_wrtbuf(rel, nbuffer);
-                    nbuffer = _bt_getbuf(rel, next, BT_READYWRITE);
-                    npage = BufferGetPage(nbuffer);
-                    nopaque = (BTPageOpaque) PageGetSpecialPointer(npage); 
-                    nopaque->btpo_prev = target;
-                    LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
-                    topaque->btpo_next = next;
-                }
-                _bt_wrtbuf(rel, tbuffer);
-                _bt_wrtbuf(rel, nbuffer);
-            } else if ( topaque->btpo_next != nopaque->btpo_prev ) {
-                nopaque->btpo_prev = target;
-                _bt_relbuf(rel, tbuffer);
-                _bt_wrtbuf(rel, nbuffer);
             } else {
-                _bt_relbuf(rel, tbuffer);
-                _bt_relbuf(rel, nbuffer);
+                BlockNumber next = nopaque->btpo_next;
+
+                Assert(P_FIRSTDATAKEY(nopaque) > PageGetMaxOffsetNumber(npage));
+                reap = BufferGetBlockNumber(nbuffer);
+                _bt_pageinit(npage,BufferGetPageSize(nbuffer));
+                LockBuffer(rel,nbuffer,BUFFER_LOCK_NOTCRITICAL);
+                if ( next != 0 ) {
+                    Buffer sbuffer = _bt_getbuf(rel, next, BT_READYWRITE);
+                    Page spage = BufferGetPage(sbuffer);
+                    BTPageOpaque sopaque = (BTPageOpaque) PageGetSpecialPointer(spage); 
+                    sopaque->btpo_prev = target;
+                    _bt_wrtbuf(rel, sbuffer);
+                }
+                LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+                topaque->btpo_next = next;
+                if ( P_RIGHTMOST(topaque) ) {
+                    PageIndexTupleDelete(tpage,P_HIKEY);
+                }
+                _bt_wrtbuf(rel, nbuffer);
+                _bt_wrtbuf(rel, tbuffer);
             }
         } else {
             if ( nopaque->btpo_prev != target ) {

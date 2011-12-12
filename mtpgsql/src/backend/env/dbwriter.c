@@ -287,7 +287,7 @@ void DBWriterInit() {
 
         logging = true;
 
-        max_logcount = NBuffers;
+        max_logcount = MaxBuffers;
 
         if ( mlog >= 0 ) {
             /*  user provided sync timeout in microsecounds  */
@@ -406,6 +406,15 @@ void DBCreateWriterThread(DBMode mode) {
 }
 
 void* SyncWriter(void *jones) {    
+    Env            *env = CreateEnv(NULL);
+    char           dbuser[255];
+    
+    SetEnv(env);
+    env->Mode = InitProcessing;
+        
+    MemoryContextInit();
+    MemoryContextSwitchTo(MemoryContextGetTopContext());
+    
     while (!stopped) { 
         int releases = 0;
         
@@ -426,6 +435,10 @@ void* SyncWriter(void *jones) {
         pthread_cond_signal(&sync_group->broadcaster);
         pthread_mutex_unlock(&sync_group->checkpoint);
     }
+    
+    
+    SetEnv(NULL);
+    DestroyEnv(env);    
     
     return NULL;
 }
@@ -921,12 +934,10 @@ void RegisterBufferWrite(BufferDesc * bufHdr, bool release) {
         }
     } else {
         if (
-                (
                 bufHdr->tag.relId.dbId != cart->descriptions[bufHdr->buf_id].relId.dbId ||
                 bufHdr->tag.relId.relId != cart->descriptions[bufHdr->buf_id].relId.relId ||
                 bufHdr->tag.blockNum != cart->descriptions[bufHdr->buf_id].blockNum
-                )
-                ) {
+            ) {
             elog(NOTICE, "register write should not happen");
             elog(FATAL, "dbid:%d relid:%d blk:%d\n",
                     bufHdr->tag.relId.dbId,
@@ -1088,8 +1099,8 @@ int LogBuffers(WriteGroup list) {
                         list->descriptions[i].relId.relId,
                         list->descriptions[i].blockNum);
                 elog(NOTICE, "dbid:%d relid:%d blk:%d\n",
-                        list->descriptions[i].relId.dbId,
-                        list->descriptions[i].relId.relId,
+                        bufHdr->tag.relId.dbId,
+                        bufHdr->tag.relId.relId,
                         bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus,bufHdr);
             } else {
@@ -1130,7 +1141,8 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
     int iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_COMMIT;
 
 
-    for (i = 0, bufHdr = BufferDescriptors; i < NBuffers; i++, bufHdr++) {
+    for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
+        bool written = false;
       /* Ignore buffers that were not dirtied by me */
         if (!list->buffers[i])
             continue;
@@ -1139,7 +1151,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
             bool   exit = false;
             pthread_mutex_lock(&list->checkpoint);
             exit = (list->currstate == COMPLETED);
-            iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_COMMIT; /* just in case, piggyback on this mutex */
+            iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_NORMAL; /* just in case, piggyback on this mutex */
             pthread_mutex_unlock(&list->checkpoint);
             if ( exit ) break;
         }
@@ -1168,6 +1180,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
                     
                     status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, (char *)(bufHdr->data));
+                    written = true;
                     
                     if (status == SM_FAIL) {
                         ErrorBufferIO(iostatus, bufHdr);
@@ -1213,11 +1226,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     
                     status = smgrwrite(cache->smgrinfo, bufHdr->tag.blockNum,
                             (char *)(bufHdr->data));
-                    
-                    if ( bufHdr->kind == RELKIND_INDEX && IsDirtyBufferIO(bufHdr) ) {
-            /* can't delete the log b/c an index was dirtied after a log  */
-                        DTRACE_PROBE2(mtpg, dbwriter__indexdirty,NameStr(cache->relname),bufHdr->tag.blockNum);
-                    }
+                    written = true;
                     
                     if ( status == SM_FAIL ) {
                         ErrorBufferIO(iostatus, bufHdr);
@@ -1242,6 +1251,10 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
         }
         
         while(list->release[i] > 0) {
+            if ( !written ) {
+                BufferTag* tag = &list->descriptions[i];
+                BufferTag* bt = &bufHdr->tag;
+            }
             if ( ManualUnpin(bufHdr, false) ) {
                 freecount++;
             }

@@ -1249,7 +1249,7 @@ RelationTruncateIndexes(Relation heapRelation)
 		 */
                 
                 InvalidateRelationBuffers(currentIndex);
-                ForgetFreespace(currentIndex);
+                ForgetFreespace(currentIndex, false);
 		/* Now truncate the actual data and set blocks to zero */
 		smgrtruncate(currentIndex->rd_smgr, 0);
 		currentIndex->rd_nblocks = 0;
@@ -1316,7 +1316,7 @@ heap_truncate(char *relname)
         
         DropVacuumRequests(rid,GetDatabaseId());   
         InvalidateRelationBuffers(rel);
-        ForgetFreespace(rel);
+        ForgetFreespace(rel,false);
 	/* Now truncate the actual data and set blocks to zero */
 	
         smgrtruncate(rel->rd_smgr, 0);
@@ -1624,7 +1624,7 @@ heap_drop_with_catalog(const char *relname)
 	 */
 
         DropVacuumRequests(rid,GetDatabaseId());
-        ForgetFreespace(rel);
+        ForgetFreespace(rel,true);
         ImmediateSharedRelationCacheInvalidate(rel);
 	RelationForgetRelation(rid,GetDatabaseId());
 
@@ -1653,7 +1653,7 @@ heap_drop(Relation rel)
 	heap_close(rel, NoLock);
 	RemoveFromNoNameRelList(rel);
         DropVacuumRequests(rid,GetDatabaseId());        
-        ForgetFreespace(rel);
+        ForgetFreespace(rel,true);
         ImmediateSharedRelationCacheInvalidate(rel);
 	RelationForgetRelation(rid,GetDatabaseId());
 }

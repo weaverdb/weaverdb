@@ -95,9 +95,9 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
 	 * If we're gonna fail for oversize tuple, do it right away... this
 	 * code should go away eventually.
 	*/ 
-	 if ( tuple->t_info & TUPLE_HASBUFFERED ) {
-                limit =  span_buffered_blob(relation,tuple);
-	 }
+	if ( tuple->t_info & TUPLE_HASBUFFERED ) {
+            limit =  span_buffered_blob(relation,tuple);
+	}
 	len = MAXALIGN(tuple->t_len);		/* be conservative */
 	if (len > MaxTupleSize) {
             if ( relation->rd_att->blobatt > 0 ) {
@@ -167,7 +167,6 @@ manager may be old and incorrect.   MKS 12.31.2001
                 ItemPointerSet(&((HeapTupleHeader)item)->t_ctid, lastblock, offnum);
                 ItemPointerSet(&tuple->t_self, lastblock, offnum);	
                 ItemPointerSet(&tuple->t_data->t_ctid, lastblock, offnum);	
-
             }
             
             LockBuffer(relation, buffer, BUFFER_LOCK_UNLOCK);

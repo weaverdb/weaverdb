@@ -108,6 +108,7 @@ typedef struct RelationData
 {
 	SmgrInfo        rd_smgr;		/* open file descriptor */
         long            rd_nblocks;
+        long            last_insert;
 	uint16		rd_refcnt;		/* reference count */
 	bool		rd_myxactonly;	/* rel uses the local buffer mgr */
 	bool		rd_isnailed;	/* rel is nailed in cache */
