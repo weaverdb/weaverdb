@@ -797,6 +797,9 @@ btrecoverpage(Relation rel, BlockNumber block) {
                     PageIndexTupleDelete(page, current);
                     current = OffsetNumberPrev(current);
                     changed = true;
+                    if ( P_RIGHTMOST(opaque) && P_LEFTMOST(opaque) && PageGetMaxOffsetNumber(page) == 0 ) {
+                        opaque->btpo_flags |= BTP_LEAF;
+                    }                    
                     LockBuffer(rel,buffer,BUFFER_LOCK_NOTCRITICAL);
                 } else {
                     /*
@@ -810,9 +813,6 @@ btrecoverpage(Relation rel, BlockNumber block) {
     }
 
     if (changed) {
-        if ( P_RIGHTMOST(opaque) && P_LEFTMOST(opaque) && PageGetMaxOffsetNumber(page) == 0 ) {
-            opaque->btpo_flags |= BTP_LEAF;
-        }
         _bt_wrtbuf(rel, buffer);
     } else {
         _bt_relbuf(rel, buffer);
