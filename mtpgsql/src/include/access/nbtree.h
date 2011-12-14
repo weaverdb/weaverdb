@@ -51,6 +51,7 @@ typedef BTPageOpaqueData *BTPageOpaque;
 #define BTP_META		(1 << 3)	/* meta-page */
 #define BTP_REORDER		(1 << 4)	/* items need reordering */
 #define BTP_SPLIT		(1 << 5)	/* page was split */
+#define BTP_REAPED		(1 << 6)	/* page was reaped */
 
 
 /*
@@ -206,6 +207,7 @@ typedef BTStackData *BTStack;
 #define P_ISLEAF(opaque)		((opaque)->btpo_flags & BTP_LEAF)
 #define P_ISROOT(opaque)		((opaque)->btpo_flags & BTP_ROOT)
 #define P_ISSPLIT(opaque)		((opaque)->btpo_flags & BTP_SPLIT)
+#define P_ISREAPED(opaque)		((opaque)->btpo_flags & BTP_REAPED)
 
 /*
  *	Lehman and Yao's algorithm requires a ``high key'' on every non-rightmost
@@ -290,6 +292,7 @@ PG_EXTERN void _bt_relbuf(Relation rel, Buffer buf);
 PG_EXTERN void _bt_wrtbuf(Relation rel, Buffer buf);
 PG_EXTERN void _bt_wrtnorelbuf(Relation rel, Buffer buf);
 PG_EXTERN void _bt_pageinit(Page page, Size size);
+PG_EXTERN bool _bt_empty(Page page);
 PG_EXTERN void _bt_metaproot(Relation rel, BlockNumber rootbknum, int level);
 PG_EXTERN void _bt_itemdel(Relation rel, Buffer buf, ItemPointer tid);
 

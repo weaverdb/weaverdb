@@ -823,7 +823,7 @@ BlockNumber
 RelationGetNumberOfBlocks(Relation relation)
 {
     if ( inited && 
-        ( relation->rd_rel->relkind == RELKIND_RELATION || relation->rd_rel->relkind == RELKIND_UNCATALOGED ) ) {
+        ( relation->rd_rel->relkind == RELKIND_INDEX || relation->rd_rel->relkind == RELKIND_RELATION || relation->rd_rel->relkind == RELKIND_UNCATALOGED ) ) {
 	FreeSpace* freespace = FindFreespace(relation,NULL,false);
         
         if ( freespace == NULL ) {
@@ -833,14 +833,8 @@ RelationGetNumberOfBlocks(Relation relation)
             relation->rd_nblocks = freespace->relsize;
             pthread_mutex_unlock(&freespace->accessor);
         }
-    } else if ( relation->rd_rel->relkind == RELKIND_SEQUENCE || relation->rd_rel->relkind == RELKIND_INDEX ) {
-        if ( relation->rd_nblocks == 0 ) {
-            relation->rd_nblocks = smgrnblocks(relation->rd_smgr);
-        }
     } else {
-        if (!relation->rd_myxactonly) {
-            relation->rd_nblocks = smgrnblocks(relation->rd_smgr);
-        }
+        relation->rd_nblocks = smgrnblocks(relation->rd_smgr);
     }
 
     return relation->rd_nblocks;

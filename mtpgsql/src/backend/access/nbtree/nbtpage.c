@@ -244,7 +244,6 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	else
 	{
 		Page		page;
-
 		/*
 		 * Extend the relation by one page.
 		 *
@@ -261,6 +260,10 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 
 		/* Initialize the new page before returning it */
 		page = BufferGetPage(buf);
+/*
+                Assert(((BTPageOpaque)PageGetSpecialPointer(page))->btpo_parent == InvalidBlockNumber &&
+                        PageGetMaxOffsetNumber(page) == 0);
+*/
 		_bt_pageinit(page, BufferGetPageSize(buf));
 	}
 
@@ -332,6 +335,14 @@ _bt_pageinit(Page page, Size size)
 		0;        
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_flags =
 		0;                
+}
+
+bool 
+_bt_empty(Page page) {
+    BTPageOpaque opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+    OffsetNumber first = P_FIRSTDATAKEY(opaque);
+    OffsetNumber max = PageGetMaxOffsetNumber(page);
+    return (first > max);
 }
 
 /*

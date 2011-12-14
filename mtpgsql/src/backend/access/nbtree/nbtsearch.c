@@ -71,6 +71,7 @@ _bt_search(Relation rel, int keysz, ScanKey scankey,
 		page = BufferGetPage(current);
                 Assert(PageIsValid(page));
 		opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+                Assert(opaque->btpo_parent != InvalidBlockNumber);
                 
 		if (P_ISLEAF(opaque)) {
 			break;
@@ -158,7 +159,9 @@ _bt_moveright(Relation rel,
 	 * It could even have split more than once, so scan as far as needed.
 	 */
 	while (!P_RIGHTMOST(opaque) &&
-		   ( _bt_compare(rel, keysz, scankey, page, P_HIKEY) > 0 || opaque->btpo_parent == InvalidBlockNumber ) ) 
+		   ( opaque->btpo_parent == InvalidBlockNumber || 
+                ( !P_ISLEAF(opaque) && _bt_empty(page) ) || 
+                _bt_compare(rel, keysz, scankey, page, P_HIKEY) > 0 ) ) 
 	{
 		/* step right one page */
 		BlockNumber rblkno = opaque->btpo_next;
@@ -168,7 +171,7 @@ _bt_moveright(Relation rel,
 		page = BufferGetPage(buf);
 		opaque = (BTPageOpaque) PageGetSpecialPointer(page);
 	}
-
+        Assert(opaque->btpo_parent != InvalidBlockNumber);
 	return buf;
 }
 
