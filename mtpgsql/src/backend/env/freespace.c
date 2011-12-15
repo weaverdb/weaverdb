@@ -112,7 +112,6 @@ void
 InitFreespace()
 {
 	HASHCTL ctl;
-	HTAB* temptable;
     MemoryContext  hash_cxt,old;
 	
     free_cxt = AllocSetContextCreate((MemoryContext) NULL,
@@ -727,7 +726,7 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, int size) {
         
         firstfree = freespace->relsize;
         
-        if ( freespace->relkind == RELKIND_RELATION ) {
+        if ( freespace->relkind == RELKIND_RELATION || freespace->relkind == RELKIND_INDEX ) {
             Size                total = (BLCKSZ - sizeof(PageHeaderData));
             int                 counter = 0;
             MemoryContext       old;
@@ -744,6 +743,7 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, int size) {
                 freespace->index_size[counter] = 0;
             }
         
+            if ( freespace->blocks != NULL ) pfree(freespace->blocks);
             freespace->blocks = palloc(sizeof(FreeRun) * freespace->size);
             for (counter=0;counter<create;counter++) {
                 freespace->blocks[counter].live = true;
@@ -849,7 +849,9 @@ RecommendAllocation(Relation rel,FreeSpace* freespace) {
         return 1;
     }
     
+/*
     if ( freespace->relkind == RELKIND_INDEX ) return 1;
+*/
 
     if ( freespace->extent == 0 ) {
 /*  system relations should only be increased by 1 block, they are not accessed that much  */

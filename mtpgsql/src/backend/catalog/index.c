@@ -1356,6 +1356,7 @@ IndexesAreActive(Oid relid, bool confirmCommitted)
 
 	if (isactive)
 		return isactive;
+        
 	indexRelation = heap_openr(IndexRelationName, AccessShareLock);
 
 	ScanKeyEntryInitialize(&entry, 0, Anum_pg_index_indrelid,
@@ -2057,8 +2058,11 @@ IndexIsUniqueNoCache(Oid indexId)
 
 	/* NO CACHE */
 	tuple = heap_getnext(scandesc);
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "IndexIsUniqueNoCache: can't find index id %u", indexId);
+	if (!HeapTupleIsValid(tuple)) {
+            heap_endscan(scandesc);
+            heap_close(pg_index, AccessShareLock);
+            elog(ERROR, "IndexIsUniqueNoCache: can't find index id %u", indexId);
+        }
 
 	index = (Form_pg_index) GETSTRUCT(tuple);
 	Assert(index->indexrelid == indexId);
@@ -2274,8 +2278,7 @@ reindex_relation(Oid relid, bool force)
 	indexRelation = heap_openr(IndexRelationName, AccessShareLock);
 	ScanKeyEntryInitialize(&entry, 0, Anum_pg_index_indrelid,
 						   F_OIDEQ, ObjectIdGetDatum(relid));
-	scan = heap_beginscan(indexRelation, SnapshotNow,
-						  1, &entry);
+	scan = heap_beginscan(indexRelation, SnapshotNow, 1, &entry);
 	reindexed = false;
 	while (HeapTupleIsValid(indexTuple = heap_getnext(scan)))
 	{
