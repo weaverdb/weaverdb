@@ -32,6 +32,7 @@
 #include "env/freespace.h"
 
 static Buffer _bt_tryroot(Relation rel,bool create);
+static bool _bt_buffer_reaped_check(Relation rel, Buffer buf);
 
 /*
  *	We use high-concurrency locking on btrees.	There are two cases in
@@ -261,7 +262,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
                         0
                     };
                     
-                    buf = ReadBuffer(rel,AllocateMoreSpace(rel,&init,sizeof(BTPageOpaqueData)));
+                    buf = ReadBuffer(rel,AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData)));
                     
                     if ( !BufferIsValid(buf) ) {
                         elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
@@ -271,11 +272,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
                     opaque = (BTPageOpaque)PageGetSpecialPointer(page);
 
                     /* Initialize the new page before returning it */
-                    if ( !P_ISREAPED((BTPageOpaque)PageGetSpecialPointer(page))
-                            && !PageChecksumIsInit(page)
-                            && !BufferIsPrivate(rel,buf)
-                            || BufferGetBlockNumber(buf) == 0
-                    ) {
+                    if ( !BufferPrivateCheck(rel, buf, _bt_buffer_reaped_check) ) {
                         ReleaseBuffer(rel,buf);
                         buf = InvalidBuffer;
                     }
@@ -292,6 +289,16 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 
 	/* ref count and lock type are correct */
 	return buf;
+}
+
+bool
+_bt_buffer_reaped_check(Relation rel, Buffer buf) {
+    Page page = BufferGetPage(buf);
+         if ( BufferGetBlockNumber(buf) == 0 ) return false;
+       if ( PageIsNew(page) ) return true;
+        if ( PageChecksumIsInit(page) ) return true;
+        if ( P_ISREAPED((BTPageOpaque)PageGetSpecialPointer(page)) )  return true;
+        return false;
 }
 
 /*

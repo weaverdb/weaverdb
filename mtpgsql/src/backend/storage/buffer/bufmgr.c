@@ -357,6 +357,25 @@ bool BufferIsPrivate(Relation relation, Buffer buffer) {
     return priv;
 }
 
+bool BufferPrivateCheck(Relation relation, Buffer buffer,buffer_check check) {
+    BufferDesc*  buf;
+    BufferEnv* cxt = RelationGetBufferCxt(relation);
+    bool priv = false;
+    
+    if (BufferIsLocal(buffer))
+        return true;
+
+    buf = &(BufferDescriptors[buffer - 1]);
+
+    pthread_mutex_lock(&(buf->cntx_lock.guard));
+    priv = (buf->pageaccess == 1 && cxt->PrivateRefCount[buf->buf_id] == 1);
+    if ( priv ) {
+        priv = check(relation,buffer);
+    }
+    pthread_mutex_unlock(&(buf->cntx_lock.guard));
+    return priv;    
+}
+
 static void BufferMiss(Oid relid, Oid dbid, char* name) {
     DTRACE_PROBE3(mtpg, buffer__miss, relid, dbid, name);
 }

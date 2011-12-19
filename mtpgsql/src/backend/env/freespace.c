@@ -729,6 +729,7 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, BlockNumber nb
     }
 
     if ( found == 0 ) allocated = AllocatePagesViaSmgr(rel,sdata,ssize,size);
+    else rel->rd_nblocks = smgrnblocks(rel->rd_smgr);
 
     pthread_mutex_lock(&freespace->accessor);
     

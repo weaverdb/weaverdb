@@ -41,6 +41,7 @@ typedef void* Block;
 
 typedef bits16 BufferLock;
 
+typedef bool (*buffer_check)(Relation rel, Buffer buf);
 
 /**********************************************************************
 
@@ -169,6 +170,7 @@ PG_EXTERN int LockBuffer(Relation rel, Buffer buffer, int mode);
 PG_EXTERN bool BufferHasError(Buffer buf);
 PG_EXTERN bool BufferIsCritical(Buffer buffer);
 PG_EXTERN bool BufferIsPrivate(Relation relation, Buffer buffer);
+PG_EXTERN bool BufferPrivateCheck(Relation relation, Buffer buffer,buffer_check check);
 
 PG_EXTERN void AbortBufferIO(void);
 PG_EXTERN void ErrorBufferIO(IOStatus locks, BufferDesc* buf);
