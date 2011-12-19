@@ -168,6 +168,7 @@ PG_EXTERN int LockBuffer(Relation rel, Buffer buffer, int mode);
 
 PG_EXTERN bool BufferHasError(Buffer buf);
 PG_EXTERN bool BufferIsCritical(Buffer buffer);
+PG_EXTERN bool BufferIsPrivate(Relation relation, Buffer buffer);
 
 PG_EXTERN void AbortBufferIO(void);
 PG_EXTERN void ErrorBufferIO(IOStatus locks, BufferDesc* buf);

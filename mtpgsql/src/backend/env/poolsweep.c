@@ -418,7 +418,7 @@ Poolsweep(void *args) {
                 Relation rel = RelationIdGetRelation(item->relid, DEFAULTDBOID);
                 poolsweep_log(item->relid, "starting space allocation job");
 /*
-                AllocateMoreSpace(rel);
+                AllocateMoreSpace(rel, NULL);
 */
                 RelationClose(rel);
             } else if ( item->jobtype == WAIT_JOB ) {

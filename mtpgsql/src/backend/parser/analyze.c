@@ -2079,9 +2079,13 @@ transformFkeyGetPrimaryKey(FkConstraint *fkconstraint)
 	 * Check that we found it
 	 * ----------
 	 */
-	if (!HeapTupleIsValid(indexTup))
+	if (!HeapTupleIsValid(indexTup)) {
+            heap_endscan(indexSd);
+            heap_close(indexRd, AccessShareLock);
+            heap_close(pkrel, AccessShareLock);
 		elog(ERROR, "PRIMARY KEY for referenced table \"%s\" not found",
 			 fkconstraint->pktable_name);
+        }
 
 	/* ----------
 	 * Now build the list of PK attributes from the indkey definition

@@ -68,7 +68,7 @@ _bt_metapinit(Relation rel)
 		elog(ERROR, "Cannot initialize non-empty btree %s",
 			 RelationGetRelationName(rel));
 
-	buf = ReadBuffer(rel,AllocateMoreSpace(rel));
+	buf = _bt_getbuf(rel,BTREE_METAPAGE,BT_READYWRITE);
         if (!BufferIsValid(buf) ) 
                     elog(ERROR,"bad buffer read while scanning btree %s",RelationGetRelationName(rel));
 	pg = BufferGetPage(buf);
@@ -82,8 +82,9 @@ _bt_metapinit(Relation rel)
 
 	op = (BTPageOpaque) PageGetSpecialPointer(pg);
 	op->btpo_flags = BTP_META;
+        op->btpo_parent = 0;
 
-	WriteBuffer(rel, buf);
+	_bt_wrtbuf(rel, buf);
 
 	/* all done */
 	if (USELOCKING)
@@ -232,6 +233,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	if (blkno != P_NEW)
 	{
 		/* Read an existing block of the relation */
+
 		buf = ReadBuffer(rel, blkno);
                 if ( !BufferIsValid(buf) ) {
 /*  ok this is will undoubtly cause buffer leaks and 
@@ -243,27 +245,48 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	}
 	else
 	{
-		Page		page;
+		Page		page;     
+                BTPageOpaque opaque;
 		/*
 		 * Extend the relation by one page.
 		 *
 		 * Extend bufmgr code is unclean and so we have to use extra locking
 		 * here.
 		 */
-		buf = ReadBuffer(rel,AllocateMoreSpace(rel));
-                
-                if ( !BufferIsValid(buf) ) {
-                    elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
-                }	
-                
-                LockBuffer((rel),  buf, access);
+                while ( !BufferIsValid(buf) ) {
+                    BTPageOpaqueData init = {
+                        BTP_REAPED,
+                        0,
+                        InvalidBlockNumber,
+                        0
+                    };
+                    
+                    buf = ReadBuffer(rel,AllocateMoreSpace(rel,&init,sizeof(BTPageOpaqueData)));
+                    
+                    if ( !BufferIsValid(buf) ) {
+                        elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
+                    }                    
+                    
+                    page = BufferGetPage(buf);
+                    opaque = (BTPageOpaque)PageGetSpecialPointer(page);
 
-		/* Initialize the new page before returning it */
-		page = BufferGetPage(buf);
+                    /* Initialize the new page before returning it */
+                    if ( !P_ISREAPED((BTPageOpaque)PageGetSpecialPointer(page))
+                            && !PageChecksumIsInit(page)
+                            && !BufferIsPrivate(rel,buf)
+                            || BufferGetBlockNumber(buf) == 0
+                    ) {
+                        ReleaseBuffer(rel,buf);
+                        buf = InvalidBuffer;
+                    }
+                }
 /*
                 Assert(((BTPageOpaque)PageGetSpecialPointer(page))->btpo_parent == InvalidBlockNumber &&
                         PageGetMaxOffsetNumber(page) == 0);
 */
+                Assert(access == BT_WRITE || access == BT_READYWRITE);
+                LockBuffer((rel),  buf, access);
+
 		_bt_pageinit(page, BufferGetPageSize(buf));
 	}
 
@@ -326,7 +349,8 @@ _bt_wrtnorelbuf(Relation rel, Buffer buf)
 void
 _bt_pageinit(Page page, Size size)
 {
-	PageInit(page, size, sizeof(BTPageOpaqueData));
+        PageInit(page, size, sizeof(BTPageOpaqueData));
+        PageInsertInvalidChecksum(page);
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_parent =
 		InvalidBlockNumber;
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_next =

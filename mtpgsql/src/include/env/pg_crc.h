@@ -123,6 +123,7 @@ typedef struct pg_crc64
 
 
 #define InvalidCRC64	0x00LL
+#define InitCRC64	0x01LL
 
 typedef uint64 crc64;
 

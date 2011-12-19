@@ -693,6 +693,15 @@ btrecoverpage(Relation rel, BlockNumber block) {
     buffer = _bt_getbuf(rel, block, BT_WRITE);
     page = BufferGetPage(buffer);
     opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+    
+    if ( PageIsNew(page) ) {
+        LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
+        _bt_pageinit(page,BufferGetPageSize(buffer));
+        opaque->btpo_flags |= BTP_REAPED;
+        _bt_wrtbuf(rel, buffer);
+        return LongGetDatum(block);
+    }
+    
     if (P_ISSPLIT(opaque)) {
         _bt_relbuf(rel,buffer);
         return LongGetDatum(InvalidBlockNumber);
@@ -701,13 +710,18 @@ btrecoverpage(Relation rel, BlockNumber block) {
     if ( P_ISREAPED(opaque) || 
             (
                 !P_ISROOT(opaque) 
-                && opaque->btpo_parent == InvalidBlockNumber
+                && BTreeInvalidParent(opaque)
                 && P_RIGHTMOST(opaque) 
                 && P_LEFTMOST(opaque)
                 && _bt_empty(page)
             )
     ) {
-        _bt_relbuf(rel,buffer);
+        if ( !P_ISREAPED(opaque) ) {
+                opaque->btpo_flags |= BTP_REAPED;
+                _bt_wrtbuf(rel,buffer);
+        } else {
+                _bt_relbuf(rel,buffer);
+        }
         return LongGetDatum(block);
     }
 
@@ -1092,7 +1106,13 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
     tpage = BufferGetPage(tbuffer);
     topaque = (BTPageOpaque) PageGetSpecialPointer(tpage);
     
-    if ( P_ISREAPED(topaque) ) {
+    if ( PageIsNew(tpage) ) {
+        LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+        _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
+        ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
+        _bt_wrtbuf(rel, tbuffer);
+        reap = target;
+    } else if ( P_ISREAPED(topaque) ) {
         _bt_relbuf(rel,tbuffer);
         return target;
     } else if ( P_ISROOT(topaque) ) {
@@ -1148,12 +1168,6 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
             _bt_wrtbuf(rel,metabuf);
             reap = root;
         } 
-    } else if ( PageIsNew(tpage) ) {
-        LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
-        _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
-        ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
-        _bt_wrtbuf(rel, tbuffer);
-        reap = target;
     } else if ( P_LEFTMOST(topaque) && BTreeInvalidParent(topaque) ) {
         reap = target;
         /*  if this is rightmost too, it should never get here. */

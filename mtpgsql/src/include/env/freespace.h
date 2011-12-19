@@ -36,7 +36,7 @@ void	GetTupleSizes(Relation rel,Size* min,Size* max,Size* ave);
 void	DeactivateFreespace(Relation rel,BlockNumber blk,Size realspace);
 void	PrintFreespaceMemory(void);
 
-BlockNumber AllocateMoreSpace(Relation rel);
+BlockNumber AllocateMoreSpace(Relation rel,char* sdata, int ssize);
 BlockNumber TruncateHeapRelation(Relation rel, BlockNumber new_size);
 
 void    SetNextExtent(Relation,int blockcount, bool percent);

@@ -1660,7 +1660,6 @@ lazy_truncate_heap(Relation onerel, LVRelStats * vacrelstats)
 	 */
         SetTransactionCommitType(TRANSACTION_SYNCED_COMMIT);
         FlushAllDirtyBuffers(true);
-        ForgetFreespace(onerel,false);
 	InvalidateRelationBuffers(onerel);
 	TruncateHeapRelation(onerel, new_rel_pages);
 	onerel->rd_nblocks = new_rel_pages;

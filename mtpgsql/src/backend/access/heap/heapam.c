@@ -1046,6 +1046,8 @@ NextGenGetTup(Relation relation,
             tuple->t_info = 0;
             tuple->t_data = NULL;
             tuple->t_len = 0;
+            if ( BufferIsValid(target) ) 
+                ReleaseBuffer(relation,target);
             return InvalidBuffer;
 	}
         
