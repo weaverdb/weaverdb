@@ -284,7 +284,9 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
                 Assert(access == BT_WRITE || access == BT_READYWRITE);
                 LockBuffer((rel),  buf, access);
 
+/*
 		_bt_pageinit(page, BufferGetPageSize(buf));
+*/
 	}
 
 	/* ref count and lock type are correct */
@@ -294,10 +296,11 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 bool
 _bt_buffer_reaped_check(Relation rel, Buffer buf) {
     Page page = BufferGetPage(buf);
-         if ( BufferGetBlockNumber(buf) == 0 ) return false;
-       if ( PageIsNew(page) ) return true;
-        if ( PageChecksumIsInit(page) ) return true;
-        if ( P_ISREAPED((BTPageOpaque)PageGetSpecialPointer(page)) )  return true;
+        if ( BufferGetBlockNumber(buf) == 0 ) return false;
+        if ( PageIsNew(page) || PageChecksumIsInit(page) || P_ISREAPED((BTPageOpaque)PageGetSpecialPointer(page)) )  {
+            _bt_pageinit(page,BufferGetPageSize(buf));
+            return true;
+        }
         return false;
 }
 
