@@ -1151,12 +1151,11 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 Assert(((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_next == 0);
                 ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_flags |= BTP_ROOT;
                 ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_parent |= BTREE_METAPAGE;
-                _bt_wrtbuf(rel,leafbuffer);
 
                 LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
                 metad->btm_root = lblock;
 
-                LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
+                LockBuffer(rel,rootbuf,BUFFER_LOCK_CRITICAL);
                 ((BTPageOpaque)PageGetSpecialPointer(rootpg))->btpo_flags |= BTP_REAPED;
 
                 _bt_wrtbuf(rel,rootbuf);
@@ -1164,6 +1163,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 rootpg = leafpage;
                 reap = root;
             }
+            
             _bt_wrtbuf(rel,rootbuf);
             _bt_wrtbuf(rel,metabuf);
             reap = root;
