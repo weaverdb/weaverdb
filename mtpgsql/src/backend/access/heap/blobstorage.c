@@ -643,19 +643,52 @@ rebuild_indirect_blob(Datum item)
 	return data;
 }
 
+BlobSeg* index_blob(Datum item) {
+	int             pos = 0;
+	ItemPointerData link;        
+        blob_header     header;
+        Relation        rel;
+        int size        = 2;
+        BlobSeg*        segs = palloc(sizeof(BlobSeg) * size);
+
+        memmove(&header,DatumGetPointer(item),sizeof(blob_header));
+	rel = RelationIdGetRelation(header.relid, DEFAULTDBOID);
+	LockRelation(rel, AccessShareLock);
+
+	link = header.forward_pointer;
+
+	while ( ItemPointerIsValid(&link) ) {
+            if ( pos == size ) {
+                size *= 2;
+                segs = repalloc(segs,sizeof(BlobSegs) * size);
+            }
+            ItemPointerCopy(&link,&segs[pos].pointer);
+            segs[pos++].length = get_segment(rel, &link,true,NULL,BLCKSZ);
+            if ( pos == size ) {
+                size *= 2;
+                segs = repalloc(segs,sizeof(BlobSegs) * size);
+            }
+	}
+        ItemPointerSetInvalid(&segs[pos].pointer);
+        segs[pos].length = 0;
+        UnlockRelation(rel,AccessShareLock);
+        RelationClose(rel);
+
+	return segs;
+}
+
 int 
 delete_indirect_blob(Datum item)
 {
 	int             pos = 0;
 	ItemPointerData link;        
         blob_header     header;
+        Relation        rel;
 
         memmove(&header,DatumGetPointer(item),sizeof(blob_header));
-	Relation        rel = RelationIdGetRelation(header.relid, DEFAULTDBOID);
+	rel = RelationIdGetRelation(header.relid, DEFAULTDBOID);
 	LockRelation(rel, AccessShareLock);
 
-        bytea          *data = (bytea *) palloc(header.blob_length);
-	SETVARSIZE(data, header.blob_length);
 	link = header.forward_pointer;
 
 	while ( ItemPointerIsValid(&link) ) {
@@ -791,7 +824,6 @@ span_buffered_blob(Relation rel, HeapTuple tuple)
 	TupleDesc       atts = rel->rd_att;
 
 	int             c = 0;
-	blob_header    *header;
 	Datum          *values;
 	char           *nulls;
 	char           *replaces;

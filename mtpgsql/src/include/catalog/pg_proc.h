@@ -2539,6 +2539,12 @@ DATA(insert OID = 2018 ( java_noteq	PGUID 11 f t f 2 f 16 "1830 1830" 100 0 0 10
 DATA(insert OID = 2016 ( javatextin	PGUID 11 f t f 1 f 1830 "0" 100 0 0 100	javatextin - ));
 DATA(insert OID = 2017 ( javatextout	PGUID 11 f t f 1 f 25 "0" 100 0 0 100	javatextout - ));
 
+#ifdef NOT_USED
+DATA(insert OID = 2007 ( blobsegout	PGUID 11 f t f 1 f 1843 "0" 100 0 0 100	blobsegout - ));
+DATA(insert OID = 2008 ( blobsegtextout	PGUID 11 f t f 1 f 25 "0" 100 0 0 100	blobsegtextout - ));
+DATA(insert OID = 2009 ( blobsegtotext	PGUID 11 f t f 1 f 25 "1843" 100 0 0 100	blobsegtotext - ));
+#endif
+
 DATA(insert OID =  1831 (  javain		   PGUID 11 f t t 1 f 1830 "17" 100 0 0 100  javain - ));
 #define JAVAINOID 1831
 DESCR("(internal)");

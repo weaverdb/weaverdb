@@ -118,14 +118,12 @@ btbuild(Relation heap, Relation index, int natts,
 
 #ifndef OMIT_PARTIAL_INDEX
     ExprContext * econtext = (ExprContext *) NULL;
-    TupleTable tupleTable = (TupleTable) NULL;
     TupleTableSlot * slot = (TupleTableSlot *) NULL;
 #endif
 
     Node *pred = predInfo->pred,
             *oldPred = predInfo->oldPred;
 
-    Env* env = GetEnv();
     BTBuildState buildstate;
 
     /* set flag to disable locking */
@@ -177,13 +175,6 @@ btbuild(Relation heap, Relation index, int natts,
     hscan = heap_beginscan(heap, SnapshotAny, 0, (ScanKey) NULL);
 
     while (HeapTupleIsValid(htup = heap_getnext(hscan))) {
-        HeapTupleData tp;
-
-        ItemId lp;
-        PageHeader dp;
-        OffsetNumber offnum;
-        int len = 0;
-
         reltuples++;
 
         CheckForCancel();
@@ -1154,6 +1145,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
 
                 LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
                 metad->btm_root = lblock;
+                LockBuffer(rel,metabuf,BUFFER_LOCK_NOTCRITICAL);
 
                 LockBuffer(rel,rootbuf,BUFFER_LOCK_CRITICAL);
                 ((BTPageOpaque)PageGetSpecialPointer(rootpg))->btpo_flags |= BTP_REAPED;

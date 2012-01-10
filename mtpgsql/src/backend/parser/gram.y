@@ -2401,6 +2401,7 @@ RevokeStmt:  REVOKE privileges ON relation_name_list FROM grantee
 
 IndexStmt:	CREATE index_opt_unique INDEX index_name ON relation_name
 			access_method_clause '(' index_params ')' opt_with
+                        where_clause
 				{
 					/* should check that access_method is valid,
 					   etc ... but doesn't */
@@ -2411,7 +2412,7 @@ IndexStmt:	CREATE index_opt_unique INDEX index_name ON relation_name
 					n->accessMethod = $7;
 					n->indexParams = $9;
 					n->withClause = $11;
-					n->whereClause = NULL;
+					n->whereClause = $12;
 					$$ = (Node *)n;
 				}
 		;
