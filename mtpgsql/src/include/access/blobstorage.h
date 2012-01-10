@@ -21,12 +21,12 @@
 #define SIZE_SPAN 0  /*  span the blobs based on size, greatest to smallest  */
 #define LOC_SPAN -1  /*  span the blobs based on location, only the ones that should be stored locally in the same relation  */
 
-typedef struct blobseg {
-    ItemPointer   pointer;
+typedef struct blobindex {
+    ItemPointerData   pointer;
     int32         length;
-} BlobSeg;
+} BlobIndex;
 
-BlobSeg* index_blob(Relation rel, HeapTuple direct);
+BlobIndex* index_blob(Datum item);
 
 int delete_tuple_blob(Relation rel, HeapTuple direct, HeapTuple newtup);
 BlockNumber store_tuple_blob(Relation rel, HeapTuple direct, int16 attnum);

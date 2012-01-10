@@ -643,13 +643,13 @@ rebuild_indirect_blob(Datum item)
 	return data;
 }
 
-BlobSeg* index_blob(Datum item) {
+BlobIndex* index_blob(Datum item) {
 	int             pos = 0;
 	ItemPointerData link;        
         blob_header     header;
         Relation        rel;
         int size        = 2;
-        BlobSeg*        segs = palloc(sizeof(BlobSeg) * size);
+        BlobIndex*        segs = palloc(sizeof(BlobIndex) * size);
 
         memmove(&header,DatumGetPointer(item),sizeof(blob_header));
 	rel = RelationIdGetRelation(header.relid, DEFAULTDBOID);
@@ -660,13 +660,13 @@ BlobSeg* index_blob(Datum item) {
 	while ( ItemPointerIsValid(&link) ) {
             if ( pos == size ) {
                 size *= 2;
-                segs = repalloc(segs,sizeof(BlobSegs) * size);
+                segs = repalloc(segs,sizeof(BlobIndex) * size);
             }
             ItemPointerCopy(&link,&segs[pos].pointer);
             segs[pos++].length = get_segment(rel, &link,true,NULL,BLCKSZ);
             if ( pos == size ) {
                 size *= 2;
-                segs = repalloc(segs,sizeof(BlobSegs) * size);
+                segs = repalloc(segs,sizeof(BlobIndex) * size);
             }
 	}
         ItemPointerSetInvalid(&segs[pos].pointer);
