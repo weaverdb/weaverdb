@@ -643,6 +643,7 @@ rebuild_indirect_blob(Datum item)
 	return data;
 }
 
+
 Datum index_blob(Datum item) {
 	int             pos = 0;
 	ItemPointerData link;        
