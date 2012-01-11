@@ -1112,7 +1112,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
 	BTMetaPageData *metad;
         BlockNumber     root;
         
-        bool reroot = (PageGetMaxOffsetNumber(tpage) == 1);
+        bool reroot = (PageGetMaxOffsetNumber(tpage) == 1 && !P_ISLEAF(topaque));
         
         _bt_relbuf(rel, tbuffer);
 

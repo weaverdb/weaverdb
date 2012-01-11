@@ -643,13 +643,14 @@ rebuild_indirect_blob(Datum item)
 	return data;
 }
 
-BlobSeg* index_blob(Datum item) {
+Datum index_blob(Datum item) {
 	int             pos = 0;
 	ItemPointerData link;        
         blob_header     header;
         Relation        rel;
         int size        = 2;
-        BlobSeg*        segs = palloc(sizeof(BlobSeg) * size);
+        struct varlena*        ret = palloc(VARHDRSZ + (sizeof(BlobIndex) * size));
+        BlobIndex*             segs = (BlobIndex*)VARDATA(ret);
 
         memmove(&header,DatumGetPointer(item),sizeof(blob_header));
 	rel = RelationIdGetRelation(header.relid, DEFAULTDBOID);
@@ -658,23 +659,52 @@ BlobSeg* index_blob(Datum item) {
 	link = header.forward_pointer;
 
 	while ( ItemPointerIsValid(&link) ) {
-            if ( pos == size ) {
-                size *= 2;
-                segs = repalloc(segs,sizeof(BlobSegs) * size);
-            }
             ItemPointerCopy(&link,&segs[pos].pointer);
             segs[pos++].length = get_segment(rel, &link,true,NULL,BLCKSZ);
             if ( pos == size ) {
                 size *= 2;
-                segs = repalloc(segs,sizeof(BlobSegs) * size);
+                ret = repalloc(ret,VARHDRSZ + (sizeof(BlobIndex) * size));
+                segs = (BlobIndex*)VARDATA(ret);
             }
 	}
         ItemPointerSetInvalid(&segs[pos].pointer);
         segs[pos].length = 0;
         UnlockRelation(rel,AccessShareLock);
         RelationClose(rel);
+        SETVARSIZE(ret,VARHDRSZ + (sizeof(BlobIndex) * pos));
 
-	return segs;
+	return PointerGetDatum(ret);
+}
+
+
+Datum seek_blob(Relation rel, Datum blob, Datum index, uint32 seek) {
+	int             pieces = (VARSIZE(index) - VARHDRSZ)/sizeof(BlobIndex);
+	ItemPointerData link;        
+        uint32 pos        = 0;
+        int loc         = 0;
+        BlobIndex*      segs = (BlobIndex*)VARDATA(index);
+        Datum ret = NULL;
+
+	LockRelation(rel, AccessShareLock);
+
+	ItemPointerCopy(&segs[loc].pointer,&link);
+
+	while ( ItemPointerIsValid(&link) && pos + segs[loc].length < seek && loc < pieces) {
+            pos += segs[loc++].length;
+            ItemPointerCopy(&segs[loc].pointer,&link);
+	}
+        if ( ItemPointerIsValid(&link) ) {
+            ret = open_read_pipeline_blob(blob,true);
+            read_pipeline* pipe = (read_pipeline*)DatumGetPointer(ret);
+            ItemPointerCopy(&link,&pipe->head_pointer);
+            pipe->cache_data = MemoryContextAlloc(pipe->cxt,BLCKSZ);
+            pipe->length = get_segment(rel,&link,true,pipe->cache_data,BLCKSZ);
+            pipe->cache_offset = seek - pos;
+            ItemPointerCopy(&link,&pipe->tail_pointer);
+        }
+        UnlockRelation(rel,AccessShareLock);
+        
+	return ret;
 }
 
 int 
