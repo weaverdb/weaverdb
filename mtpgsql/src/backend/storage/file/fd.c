@@ -934,7 +934,9 @@ FileRead(File file, char *buffer, int amount)
                 elog(NOTICE,"bad read file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                 if ( fails++ > 5 ) {
                     return -1;
-                }
+                } else {
+					blit = 0;
+				}
             } else if ( blit == 0 ) {
                 /* EOF  */
                 target->seekPos += (request - amount);
@@ -965,7 +967,9 @@ FileWrite(File file, char *buffer, int amount)
                 elog(NOTICE,"bad write file: %s loc: %d err: %s",target->fileName,target->seekPos,err);
                 if ( fails++ > 5 ) {
                     return -1;
-                }
+                } else {
+					blit = 0;
+				}
             } else if ( blit == 0 ) {
                 elog(NOTICE,"partial write %s",target->fileName);
                 return (request - amount);
