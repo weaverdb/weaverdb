@@ -258,7 +258,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
                         InvalidBlockNumber,
                         0
                     };
-                    
+
                     buf = ReadBuffer(rel,AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData)));
                     
                     if ( !BufferIsValid(buf) ) {
@@ -274,16 +274,10 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
                         buf = InvalidBuffer;
                     }
                 }
-/*
-                Assert(((BTPageOpaque)PageGetSpecialPointer(page))->btpo_parent == InvalidBlockNumber &&
-                        PageGetMaxOffsetNumber(page) == 0);
-*/
+
                 Assert(access == BT_WRITE || access == BT_READYWRITE);
                 LockBuffer((rel),  buf, access);
 
-/*
-		_bt_pageinit(page, BufferGetPageSize(buf));
-*/
 	}
 
 	/* ref count and lock type are correct */

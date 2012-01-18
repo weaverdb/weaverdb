@@ -648,10 +648,17 @@ FreeSpace* FindFreespace(Relation rel,char* dbname,bool create) {
 BlockNumber
 AllocateMoreSpace(Relation rel, char* sdata, int ssize) {
     
-    FreeSpace*  freespace = FindFreespace(rel,NULL,true);
+    FreeSpace*  freespace = FindFreespace(rel,NULL,!rel->rd_myxactonly);
     int recommend = 0;
     BlockNumber nb = InvalidBlockNumber;
 
+    if ( freespace == NULL ) {
+        if ( rel->rd_rel->relkind == RELKIND_INDEX && rel->rd_nblocks = 0 ) {
+                return PerformAllocation(rel, freespace, nb, sdata, ssize, 2) + 1;
+        } else {
+                return PerformAllocation(rel, freespace, nb, sdata, ssize, 1);
+        }
+    }
 /*  if not recommending a value, then the extender is not set and need to get an extension value  */
     pthread_mutex_lock(&freespace->accessor);
     while ( freespace->extender != 0 ) {
@@ -718,6 +725,11 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, BlockNumber nb
     int             found = 0,allocated = 0;
     BlockNumber     firstfree = InvalidBlockNumber;
     
+    if ( freespace == NULL ) {
+        allocated = AllocatePagesViaSmgr(rel,sdata,ssize,size);
+        return rel->rd_nblocks - allocated;
+    }
+    
     Assert(pthread_equal(freespace->extender,pthread_self()));
     
     if ( nblocks > 0 && !freespace->end_scanned ) {
@@ -743,6 +755,11 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, BlockNumber nb
     }
 
     if ( found + allocated > 0  ) {
+        
+        if ( freespace->relsize == 0 && freespace->relkind == RELKIND_INDEX ) {
+            freespace->relsize = 1;
+            allocated -= 1;
+        }
         
         firstfree = freespace->relsize;
         

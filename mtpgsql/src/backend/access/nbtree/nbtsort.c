@@ -546,9 +546,6 @@ _bt_load(Relation index, BTSpool * btspool)
 	IndexTuple      it = NULL;
 	BTItem          bti = NULL;
 	bool            should_free;
-	TupleDesc       tupdes = RelationGetDescr(index);
-	int             i, keysz = RelationGetNumberOfAttributes(index);
-	ScanKey         indexScanKey = NULL;
 
 	while (it = (IndexTuple) tuplesort_getindextuple(btspool->sortstate, true, &should_free), it != (IndexTuple) NULL) {
 		/* When we see first tuple, create first index page */
