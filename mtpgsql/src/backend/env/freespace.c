@@ -653,7 +653,7 @@ AllocateMoreSpace(Relation rel, char* sdata, int ssize) {
     BlockNumber nb = InvalidBlockNumber;
 
     if ( freespace == NULL ) {
-        if ( rel->rd_rel->relkind == RELKIND_INDEX && rel->rd_nblocks = 0 ) {
+        if ( rel->rd_rel->relkind == RELKIND_INDEX && rel->rd_nblocks == 0 ) {
                 return PerformAllocation(rel, freespace, nb, sdata, ssize, 2) + 1;
         } else {
                 return PerformAllocation(rel, freespace, nb, sdata, ssize, 1);
