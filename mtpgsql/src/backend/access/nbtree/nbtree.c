@@ -1136,6 +1136,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 Buffer leafbuffer = InvalidBuffer;    
                 Page leafpage = NULL;
 
+                Assert(lblock != BTREE_METAPAGE);
                 leafbuffer = _bt_getbuf(rel,lblock,BT_READYWRITE);
                 leafpage = BufferGetPage(leafbuffer);
                 Assert(((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_prev == 0);
