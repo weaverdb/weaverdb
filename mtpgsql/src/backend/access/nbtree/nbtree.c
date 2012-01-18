@@ -1129,7 +1129,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
             
             rootbuf = _bt_getbuf(rel, root, BT_WRITE);
             rootpg = BufferGetPage(rootbuf);
-            while (PageGetMaxOffsetNumber(rootpg) == 1) {
+            while (PageGetMaxOffsetNumber(rootpg) == 1 && !P_ISLEAF((BTPageOpaque) PageGetSpecialPointer(rootpg))) {
                 BTItem item = (BTItem) PageGetItem(rootpg, PageGetItemId(rootpg, 1));
                 ItemPointer pointer = &item->bti_itup.t_tid;
                 BlockNumber lblock = ItemPointerGetBlockNumber(pointer);
@@ -1141,7 +1141,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 Assert(((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_prev == 0);
                 Assert(((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_next == 0);
                 ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_flags |= BTP_ROOT;
-                ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_parent |= BTREE_METAPAGE;
+                ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_parent = BTREE_METAPAGE;
 
                 LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
                 metad->btm_root = lblock;
