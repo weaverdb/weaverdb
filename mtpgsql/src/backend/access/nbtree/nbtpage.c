@@ -227,11 +227,19 @@ Buffer
 _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 {
 	Buffer		buf = InvalidBuffer;
+    BTPageOpaqueData init = {
+        BTP_REAPED,
+        0,
+        InvalidBlockNumber,
+        0
+    };
 
 	if (blkno != P_NEW)
 	{
 		/* Read an existing block of the relation */
-
+		while (blkno >= rel->rd_nblock) {
+			buf = AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData));
+		}
 		buf = ReadBuffer(rel, blkno);
                 if ( !BufferIsValid(buf) ) {
 /*  ok this is will undoubtly cause buffer leaks and 
@@ -252,13 +260,6 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 		 * here.
 		 */
                 while ( !BufferIsValid(buf) ) {
-                    BTPageOpaqueData init = {
-                        BTP_REAPED,
-                        0,
-                        InvalidBlockNumber,
-                        0
-                    };
-
                     buf = ReadBuffer(rel,AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData)));
                     
                     if ( !BufferIsValid(buf) ) {
