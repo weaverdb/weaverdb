@@ -238,7 +238,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	{
 		/* Read an existing block of the relation */
 		while (blkno >= rel->rd_nblock) {
-			buf = AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData));
+			AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData));
 		}
 		buf = ReadBuffer(rel, blkno);
                 if ( !BufferIsValid(buf) ) {
