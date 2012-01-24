@@ -227,19 +227,11 @@ Buffer
 _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 {
 	Buffer		buf = InvalidBuffer;
-    BTPageOpaqueData init = {
-        BTP_REAPED,
-        0,
-        InvalidBlockNumber,
-        0
-    };
 
 	if (blkno != P_NEW)
 	{
 		/* Read an existing block of the relation */
-		while (blkno >= rel->rd_nblock) {
-			AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData));
-		}
+            Assert(blkno == BTREE_METAPAGE || blkno < RelationGetNumberOfBlocks(rel));
 		buf = ReadBuffer(rel, blkno);
                 if ( !BufferIsValid(buf) ) {
 /*  ok this is will undoubtly cause buffer leaks and 
@@ -253,7 +245,13 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	{
 		Page		page;     
                 BTPageOpaque opaque;
-		/*
+                BTPageOpaqueData init = {
+                    BTP_REAPED,
+                    0,
+                    InvalidBlockNumber,
+                    0
+                };
+                 /*
 		 * Extend the relation by one page.
 		 *
 		 * Extend bufmgr code is unclean and so we have to use extra locking
