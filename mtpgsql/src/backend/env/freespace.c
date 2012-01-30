@@ -653,11 +653,7 @@ AllocateMoreSpace(Relation rel, char* sdata, int ssize) {
     BlockNumber nb = InvalidBlockNumber;
 
     if ( freespace == NULL ) {
-        if ( rel->rd_rel->relkind == RELKIND_INDEX && rel->rd_nblocks == 0 ) {
-                return PerformAllocation(rel, freespace, nb, sdata, ssize, 2) + 1;
-        } else {
-                return PerformAllocation(rel, freespace, nb, sdata, ssize, 1);
-        }
+        return PerformAllocation(rel, freespace, nb, sdata, ssize, 1);
     }
 /*  if not recommending a value, then the extender is not set and need to get an extension value  */
     pthread_mutex_lock(&freespace->accessor);
@@ -755,12 +751,6 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, BlockNumber nb
     }
 
     if ( found + allocated > 0  ) {
-        
-        if ( freespace->relsize == 0 && freespace->relkind == RELKIND_INDEX ) {
-            freespace->relsize = 1;
-            allocated -= 1;
-        }
-        
         firstfree = freespace->relsize;
         
         if ( freespace->relkind == RELKIND_RELATION || freespace->relkind == RELKIND_INDEX ) {

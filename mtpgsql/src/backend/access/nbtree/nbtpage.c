@@ -258,7 +258,11 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 		 * here.
 		 */
                 while ( !BufferIsValid(buf) ) {
-                    buf = ReadBuffer(rel,AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData)));
+                    BlockNumber blk = BTREE_METAPAGE;
+                    while( blk == BTREE_METAPAGE ) {
+                        blk = AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData));
+                    }
+                    buf = ReadBuffer(rel,blk);
                     
                     if ( !BufferIsValid(buf) ) {
                         elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
