@@ -362,7 +362,7 @@ WBegin(OpaqueWConn conn, long trans) {
     connection->stage = TRAN_INVALID;
     /*  only do this if we are a top level connection  */
     if (connection->parent == NULL) {
-        WResetQuery(connection);
+        WResetQuery(connection,false);
         StartTransaction();
         SetQuerySnapshot();
     } else {
@@ -777,13 +777,13 @@ WCommit(OpaqueWConn conn) {
     /* clean up executor   */
     if (connection->stage == TRAN_ABORTONLY) {
         if (CurrentXactInProgress()) {
-            WResetQuery(connection);
+            WResetQuery(connection,false);
             AbortTransaction();
         }
         elog(NOTICE, "transaction in abort only mode");
     } else {
         connection->stage = TRAN_COMMIT;
-        WResetQuery(connection);
+        WResetQuery(connection,false);
         if (connection->parent == NULL) {
             CommitTransaction();
         } else {
@@ -820,7 +820,7 @@ WRollback(OpaqueWConn conn) {
 
     connection->stage = TRAN_ABORT;
     if (CurrentXactInProgress()) {
-        WResetQuery(connection);
+        WResetQuery(connection,false);
         if (connection->parent == NULL) {
             AbortTransaction();
         } else {
@@ -1329,7 +1329,7 @@ WStreamExec(OpaqueWConn conn, char *statement) {
 
         CommitTransactionCommand();
     }
-    WResetQuery(connection);
+    WResetQuery(connection,false);
     connection->stage = TRAN_INVALID;
     SetEnv(NULL);
     return err;
@@ -1389,7 +1389,7 @@ WHandleError(WConn connection, int sqlError) {
         return;
     }
     
-    WResetQuery(connection);
+    WResetQuery(connection,true);
 
     memset(connection->CDA.state,0x00, 40);
     memset(connection->CDA.text,0x00, 256);
@@ -1399,12 +1399,12 @@ WHandleError(WConn connection, int sqlError) {
 }
 
 void
-WResetQuery(WConn connection) {
+WResetQuery(WConn connection,bool err) {
     /*  if we are in abort don't worry about shutting down,
     abort cleanup will take care of it.  */
     OpaquePreparedStatement plan = connection->plan;
     while ( plan ) {
-        if (plan->qdesc != NULL) {
+        if (plan->qdesc != NULL && !err) {
             ExecutorEnd(plan->qdesc, plan->state);
         }
         plan->tupdesc = NULL;

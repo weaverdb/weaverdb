@@ -246,14 +246,13 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
   (JNIEnv *env, jobject talkerObject, jobject linkid)
 {
 	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
-    //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;
-
-	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
         
         if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
-//  free all resources associated with this connection
+    //	get proper agent	
+            jint link = getProperAgent(env,talkerObject);
+            if ( link < 0 ) return;
+        
+        //  free all resources associated with this connection
             pthread_mutex_lock(&allocator);
 
             if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link]))
@@ -281,15 +280,13 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
                     }
                 }
             }
-                pthread_mutex_unlock(&allocator);
+            pthread_mutex_unlock(&allocator);
                 
         } else {
-            if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link])) {
-                StmtMgr ref = getStmtMgr(env,linkid);
-    if ( ref == NULL ) return;
-                Init(ref,clean_input,clean_output);
-                DestroyWeaverStmtManager(ref); 
-            }
+            StmtMgr ref = getStmtMgr(env,linkid);
+            if ( ref == NULL ) return;
+            Init(ref,clean_input,clean_output);
+            DestroyWeaverStmtManager(ref); 
         }
 
 }

@@ -125,7 +125,7 @@ extern "C" {
 #endif
 void WHandleError( WConn conn,int sqlError );
 void  WResetExecutor(PreparedPlan* plan);
-void WResetQuery(WConn conn);
+void WResetQuery(WConn conn,bool err);
 
 bool
 TransferValue(Output* output, Form_pg_attribute desc, Datum value);
