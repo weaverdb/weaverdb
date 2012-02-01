@@ -284,7 +284,12 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
                 
         } else {
             StmtMgr ref = getStmtMgr(env,linkid);
-            if ( ref == NULL ) return;
+            if ( ref == NULL ) {
+                if ( (*env)->ExceptionOccurred(env) ) {
+                    (*env)->ExceptionClear(env);
+                }
+                return;
+            }
             Init(ref,clean_input,clean_output);
             DestroyWeaverStmtManager(ref); 
         }
@@ -664,8 +669,9 @@ static StmtMgr getStmtMgr(JNIEnv* env, jobject linkid) {
         (*env)->ReleaseByteArrayElements(env,linkid,pointer,NULL);
     }
     if ( !IsValid(ref) ) {
-        if (!(*env)->ExceptionOccurred(env) ) 
+        if (!(*env)->ExceptionOccurred(env) ) {
             (*env)->ThrowNew(env,Cache->exception,"agent not valid");   
+        }
         ref = NULL;
     }
     return ref;
