@@ -210,7 +210,7 @@ AddMoreBuffers(int count) {
         int i=0;
         if ( buffer_cxt == NULL ) return NULL;
         if ( count > MaxBuffers - NBuffers ) count = MaxBuffers - NBuffers;
-        for (i=NBuffers;i<count;i++) {
+        for (i=NBuffers;i<NBuffers+count;i++) {
             buf = &BufferDescriptors[i];
             pthread_mutex_lock(&buf->cntx_lock.guard);
             buf->locflags &= ~(BM_RETIRED);
@@ -238,6 +238,7 @@ RetireBuffers(int start, int count) {
         buf->locflags |= ( BM_RETIRED ) ;
         buf->locflags &= ~( BM_VALID ) ;
         pfree(buf->data);
+        buf->data = NULL;
         pthread_mutex_unlock(&buf->cntx_lock.guard);
     }
     
