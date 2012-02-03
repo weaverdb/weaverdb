@@ -677,11 +677,11 @@ fileNameOpenFile(FileName fileName,
             bool allocated = false;
             vfdP = HashScanFD(fileName, fileFlags, fileMode, &allocated);
             Assert(vfdP != NULL);
-            pthread_mutex_lock(vfdP->pin);
+            pthread_mutex_lock(&vfdP->pin);
             vfdP->owner = pthread_self();
-            allocated = allocated ? !ActivateFile(vfdP) : !CheckFileAccess(vfdP);
+            allocated = allocated ? ActivateFile(vfdP) : CheckFileAccess(vfdP);
             vfdP->owner = 0;
-            pthread_mutex_unlock(vfdP->pin);
+            pthread_mutex_unlock(&vfdP->pin);
             if ( !allocated ) {
                 HashDropFD(vfdP);
                 vfdP = NULL;
@@ -1095,9 +1095,8 @@ FilePin(File file, int key) {
     while (pthread_mutex_lock(&target->pin)) {
         perror("FilePin");
     }
-    
-    Assert(target->owner != 0);
-
+    Assert(target->owner == 0);
+ 
     target->owner = pthread_self();
     target->key = key;
 
