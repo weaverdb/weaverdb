@@ -659,7 +659,6 @@ fileNameOpenFile(FileName fileName,
         int fileMode) {
     Vfd *vfdP = NULL;
     errno = 0;
-    bool allocated = false;
     bool private = (IsDBWriter() || IsPoolsweep() || IsBootstrapProcessingMode()
             || (fileFlags & (O_CREAT | O_EXCL | O_TRUNC))) ? true : false;
 
@@ -674,28 +673,32 @@ fileNameOpenFile(FileName fileName,
         private = true;
     }
 
-    while (vfdP == NULL) {
         if (!private && vfdsharemax > 1) {
+            bool allocated = false;
             vfdP = HashScanFD(fileName, fileFlags, fileMode, &allocated);
             Assert(vfdP != NULL);
+            if ( allocated ? !ActivateFile(vfdP) : !CheckFileAccess(vfdP) ) {
+                HashDropFD(vfdP);
+                vfdP = NULL;
+            }
         } else {
             vfdP = AllocateVfd(fileName, fileFlags, fileMode, private);
             /* activate your file to make sure that it can be created, this is important in bootstrap mode 
              * because if the allocation fails, we try again with file creation 
              */
+            Assert(vfdP != NULL);
+            if ( !ActivateFile(vfdP) ) {
+                vfdP->refCount = 0;
+                FreeVfd(vfdP);
+                vfdP = NULL;
+            }
         }
             
-        if (ActivateFile(vfdP)) {
-            allocated = true;
-        } else {
-            Assert(vfdP->refCount == 1);
-            vfdP->refCount = 0;
-            FreeVfd(vfdP);
+        if (vfdP == NULL) {
             return VFD_CLOSED;
         }
         
         DTRACE_PROBE2(mtpg, file__opened, vfdP->id, vfdP->fileName);
-    }
 
     return vfdP->id;
 }
