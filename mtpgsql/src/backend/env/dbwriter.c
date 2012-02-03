@@ -478,16 +478,17 @@ void FlushWriteGroup(WriteGroup cart) {
     gettimeofday(&t1,NULL);
 
     if ( logging ) LogBuffers(cart);
+    
     WriteGroup sync = GetSyncGroup();
     sync_buffers += MergeWriteGroups(sync,cart);
     sync->currstate = FLUSHING;
     release = SyncBuffers(sync,true);
     sync->currstate = NOT_READY;
-   if ( sync_buffers > max_logcount ) { 
-    CommitPackage(sync);
-    if ( logging ) ClearLogs(sync);
-   }
-    elog(DEBUG,"flushed out %d buffers",release);
+    if ( sync_buffers > max_logcount ) { 
+        CommitPackage(sync);
+        if ( logging ) ClearLogs(sync);
+    }
+    elog(DEBUG, "flushed out %d buffers",release);
      
     gettimeofday(&t2,NULL);
     

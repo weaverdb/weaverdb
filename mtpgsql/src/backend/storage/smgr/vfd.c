@@ -904,10 +904,12 @@ _vfdreplaysegment(File logfile,bool indexingonly, bool compressed) {
                         FileClose(fd);
                     }
                     fd = FileNameOpenFile(path, O_WRONLY | O_LARGEFILE, 0600);
-                    FilePin(fd,0);
-	            cdb = info->dbid;
-                    crel = info->relid;
-                    pfree(path);
+                    if ( fd >= 0 ) {
+                        FilePin(fd,0);
+                        cdb = info->dbid;
+                        crel = info->relid;
+                        pfree(path);
+                    }
                 }
 
                 if ( fd > 0 ) {
