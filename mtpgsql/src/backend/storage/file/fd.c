@@ -677,7 +677,10 @@ fileNameOpenFile(FileName fileName,
             bool allocated = false;
             vfdP = HashScanFD(fileName, fileFlags, fileMode, &allocated);
             Assert(vfdP != NULL);
-            if ( allocated ? !ActivateFile(vfdP) : !CheckFileAccess(vfdP) ) {
+            FilePin(vfdP,0);
+            allocated = allocated ? !ActivateFile(vfdP) : !CheckFileAccess(vfdP);
+            FileUnpin(vfdP,0);
+            if ( !allocated ) {
                 HashDropFD(vfdP);
                 vfdP = NULL;
             }
