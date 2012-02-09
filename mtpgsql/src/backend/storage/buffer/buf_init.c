@@ -200,6 +200,7 @@ AddMoreBuffers(int count) {
                     tail->freeNext = i;
                     tail = buf;
                 }
+                Assert(buf->data != NULL);
             }
             pthread_mutex_unlock(&buf->cntx_lock.guard);
         }
@@ -216,7 +217,9 @@ AddMoreBuffers(int count) {
             buf->locflags &= ~(BM_RETIRED);
             buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
             pthread_mutex_unlock(&buf->cntx_lock.guard);
+            Assert(buf->data != NULL);
         }
+        buf->freeNext = INVALID_DESCRIPTOR;
         AddBuffersToTail(&BufferDescriptors[NBuffers]);
         NBuffers += count;
         return count;
@@ -265,6 +268,7 @@ InitializeBuffers(int start, int count, char* block) {
                 } else {
                     buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
                 }
+                Assert(buf->data != NULL);
             }
 
             buf->ioflags = 0;
@@ -318,7 +322,7 @@ BufferShmemSize()
 	size += MAXALIGN((MaxBuffers) * sizeof(BufferDesc));
 
 	/* size of data pages */
-	size += NBuffers * MAXALIGN(BLCKSZ);
+	size += MaxBuffers * MAXALIGN(BLCKSZ);
 
         size += NTables * sizeof(BufferTable);
 	/* size of buffer hash table */
