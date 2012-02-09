@@ -891,7 +891,6 @@ FileRename(File file, char* newname) {
 int
 FileRead(File file, char *buffer, int amount) {
     ssize_t blit;
-    int fails = 0;
     int request = amount;
     Vfd* target = GetVirtualFD(file);
     Assert(FileIsValid(file));
@@ -906,14 +905,7 @@ FileRead(File file, char *buffer, int amount) {
             char* err = strerror(errno);
             errno = 0;
             elog(NOTICE, "bad read file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
-            if (fails++ > 10) {
-                return -1;
-            } else {
-                close(target->fd);
-                target->fd = open(target->fileName, target->fileFlags, target->fileMode);
-                lseek(target->fd,target->seekPos,SEEK_SET);
-                blit = 0;
-            }
+            return -1;
         } else if (blit == 0) {
             /* EOF  */
             blit = lseek(target->fd,0,SEEK_END);
@@ -938,7 +930,6 @@ int
 FileWrite(File file, char *buffer, int amount) {
     Vfd* target = GetVirtualFD(file);
     int request = amount;
-    int fails = 0;
     
     errno = 0;
 
@@ -950,15 +941,7 @@ FileWrite(File file, char *buffer, int amount) {
         if (blit < 0) {
             char* err = strerror(errno);
             elog(NOTICE, "bad write file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
-            errno = 0;
-            if (fails++ > 10) {
-                return -1;
-            } else {
-                close(target->fd);
-                target->fd = open(target->fileName, target->fileFlags, target->fileMode);
-                lseek(target->fd,target->seekPos,SEEK_SET);                
-                blit = 0;
-            }
+            return -1;
         } else if (blit == 0) {
             elog(NOTICE, "partial write %s", target->fileName);
             return (request - amount);
