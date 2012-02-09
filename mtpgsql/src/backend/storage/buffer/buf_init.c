@@ -52,6 +52,7 @@ int			ShowPinTrace = 0;
 
 int                     NTables = 1;
 int			NBuffers = DEF_NBUFFERS;	/* default is set in config.h */
+int			SBuffers = DEF_NBUFFERS;	/* default is set in config.h */
 int                     MaxBuffers = DEF_NBUFFERS;
 int			Num_Descriptors;
 
@@ -240,7 +241,7 @@ RetireBuffers(int start, int count) {
         Assert ( buf->refCount == 0 ) ;
         buf->locflags |= ( BM_RETIRED ) ;
         buf->locflags &= ~( BM_VALID ) ;
-        pfree(buf->data);
+        if ( buf->data < BufferBlocks || buf->data > BufferBlocks + ( BLCKSZ * SBuffers ) ) pfree(buf->data);
         buf->data = NULL;
         pthread_mutex_unlock(&buf->cntx_lock.guard);
     }
@@ -252,6 +253,8 @@ void
 InitializeBuffers(int start, int count, char* block) {
     int i;
     BufferDesc* buf = &BufferDescriptors[start];
+    
+    SBuffers = NBuffers;
     
         for (i = start; i < start + count; i++)
         {
@@ -322,7 +325,7 @@ BufferShmemSize()
 	size += MAXALIGN((MaxBuffers) * sizeof(BufferDesc));
 
 	/* size of data pages */
-	size += MaxBuffers * MAXALIGN(BLCKSZ);
+	size += NBuffers * MAXALIGN(BLCKSZ);
 
         size += NTables * sizeof(BufferTable);
 	/* size of buffer hash table */
