@@ -134,9 +134,13 @@ public class BaseWeaverConnection {
         cancelTransaction();
     }
 
-    public void abort() throws SQLException {
+    public void abort() {
         clearBinds();
-        abortTransaction();
+        try {
+            abortTransaction();
+        } catch ( SQLException exp ) {
+            throw new RuntimeException(exp);
+        }
     }
 
     public void commit() throws SQLException {
