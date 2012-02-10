@@ -361,7 +361,7 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
     int         recommend   = 0;
     int 	space = request;
 
-    Assert(rel->rd_rel->relkind == RELKIND_RELATION);
+    Assert(rel->rd_rel->relkind == RELKIND_RELATION || IsBootstrapProcessingMode());
     entry = FindFreespace(rel,NULL,true);	
     if ( entry ) {
         int p = 0;
