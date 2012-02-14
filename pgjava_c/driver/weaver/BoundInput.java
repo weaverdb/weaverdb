@@ -70,6 +70,11 @@ public class BoundInput<T> extends Bound<T> {
 //        if ( !isActive() ) {
 //            throw new SQLException("output variable is orphaned");
 //        }
+        if ( value == null ) {
+            owner.setInput(link,name, getTypeId(), value);
+            return;
+        }
+        
         switch (getType()) {
             case BLOB:
                 if (value instanceof InputStream) {

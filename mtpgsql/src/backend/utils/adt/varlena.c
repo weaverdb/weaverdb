@@ -875,7 +875,12 @@ bytea*
 md5(struct varlena* src) {
     bytea* output = palloc(VARHDRSZ + 16);
     SETVARSIZE(output,VARHDRSZ + 16);
-    if ( !ISINDIRECT(src) ) {
+    if ( src == NULL ) {
+	MD5_CTX cxt;
+	md5_init(&cxt);
+        md5_pad(&cxt);
+	md5_result((uint8*)VARDATA(output),&cxt);
+    } else if ( !ISINDIRECT(src) ) {
 	MD5_CTX cxt;
 	md5_init(&cxt);
 	md5_loop(&cxt,(uint8*)VARDATA(src),VARSIZE(src));
@@ -903,7 +908,11 @@ bytea*
 sha2(struct varlena* src) {
     bytea* output = palloc(VARHDRSZ + SHA256_DIGEST_LENGTH);
     SETVARSIZE(output,VARHDRSZ + SHA256_DIGEST_LENGTH);
-    if ( !ISINDIRECT(src) ) {
+    if ( src == NULL ) {
+	SHA256_CTX cxt;
+	SHA256_Init(&cxt);
+	SHA256_Final((uint8*)VARDATA(output),&cxt);
+    } else if ( !ISINDIRECT(src) ) {
 	SHA256_CTX cxt;
 	SHA256_Init(&cxt);
 	SHA256_Update(&cxt,(uint8*)VARDATA(src),VARSIZE(src));
