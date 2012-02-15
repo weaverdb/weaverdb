@@ -60,6 +60,7 @@ typedef enum stage {
 	STMT_EXEC,
 	STMT_FETCH,
         STMT_EOD,
+        STMT_EMPTY,
         TRAN_COMMIT,
         TRAN_ABORT,
         TRAN_ABORTONLY,

@@ -543,6 +543,7 @@ WExec(OpaquePreparedStatement plan) {
     }
 
     WResetExecutor(plan);
+    plan->stage = STMT_EMPTY;
 
     plan = ParsePlan(plan);
 
@@ -628,6 +629,7 @@ WExec(OpaquePreparedStatement plan) {
                 } while (true);
                 plan->processed += count;
                 WResetExecutor(plan);
+                plan->stage = STMT_EMPTY;
             }
         }
    }
@@ -677,8 +679,8 @@ WFetch(OpaquePreparedStatement plan) {
 
     if (TupIsNull(slot)) {
         err = 4; /*  EOT ( End of Transmission ascii code */
-        plan->stage = STMT_EOD;
         WResetExecutor(plan);
+        plan->stage = STMT_EOD;
    } else {
         HeapTuple tuple = slot->val;
         TupleDesc tdesc = slot->ttc_tupleDescriptor;
@@ -1329,8 +1331,8 @@ WStreamExec(OpaqueWConn conn, char *statement) {
 
         CommitTransactionCommand();
     }
-    WResetQuery(connection,false);
     connection->stage = TRAN_INVALID;
+    WResetQuery(connection,false);
     SetEnv(NULL);
     return err;
 }
@@ -1412,6 +1414,7 @@ WResetQuery(WConn connection,bool err) {
         plan->state = NULL;
         plan->fetch_cxt = NULL;
         plan->exec_cxt = NULL;
+        plan->stage = STMT_EMPTY;
         plan = plan->next;
     }
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
@@ -1429,7 +1432,7 @@ WResetExecutor(PreparedPlan * plan) {
 
     if ( plan->exec_cxt != NULL ) {
 #ifdef MEMORY_STATS
-    fprintf(stderr, "memory at exec: %d\n", MemoryContextStats(plan->exec_cxt));
+        fprintf(stderr, "memory at exec: %d\n", MemoryContextStats(plan->exec_cxt));
 #endif
         MemoryContextResetAndDeleteChildren(plan->exec_cxt);
     } else {
@@ -1446,6 +1449,7 @@ WResetExecutor(PreparedPlan * plan) {
     plan->qdesc = NULL;
 
     plan->fetch_cxt = NULL;
+    plan->stage = STMT_EMPTY;
 }
 
 /* create copies in case underlying buffer goes away  */
