@@ -630,10 +630,11 @@ WExec(OpaquePreparedStatement plan) {
                 plan->processed += count;
                 WResetExecutor(plan);
                 plan->stage = STMT_EMPTY;
+            } else {
+                plan->stage = STMT_EXEC;
             }
         }
    }
-    plan->stage = STMT_EXEC;
     RELEASE(connection);
     return err;
 }
