@@ -1557,7 +1557,10 @@ ParsePlan(PreparedPlan* plan) {
     /* parse out a new query and setup plan  */
     /* init for set type */
     if (!plan->node_cxt) {
-        plan->node_cxt = SubSetContextCreate(plan->plan_cxt, "ParseContext");
+        plan->node_cxt = AllocSetContextCreate(plan->plan_cxt, "ParseContext",
+						    ALLOCSET_DEFAULT_MINSIZE,
+						  ALLOCSET_DEFAULT_INITSIZE,
+						  ALLOCSET_DEFAULT_MAXSIZE);
         old = MemoryContextSwitchTo(plan->node_cxt);
         if ( plan->input_count > 0 ) {
             targs = palloc(sizeof(Oid) * plan->input_count);
