@@ -1449,7 +1449,7 @@ WResetExecutor(PreparedPlan * plan) {
     plan->state = NULL;
     plan->qdesc = NULL;
 
-    plan->fetch_cxt = NULL;
+    plan->fetch_cxt = NULL;    
     plan->stage = STMT_EMPTY;
 }
 

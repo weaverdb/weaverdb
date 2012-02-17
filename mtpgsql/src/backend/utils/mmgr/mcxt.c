@@ -454,6 +454,27 @@ pfree(void *pointer) {
     (*header->context->methods->free_p) (header->context, pointer);
 }
 
+MemoryContext MemoryContextSameContext(Pointer pointer) {
+
+    StandardChunkHeader *header;
+
+    /*
+     * Try to detect bogus pointers handed to us, poorly though we can.
+     * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
+     * allocated chunk.
+     */
+    Assert(pointer != NULL);
+    Assert(pointer == (void *) MAXALIGN(pointer));
+
+    /*
+     * OK, it's probably safe to look at the chunk header.
+     */
+    header = (StandardChunkHeader *)
+            ((char *) pointer - STANDARDCHUNKHEADERSIZE);
+
+    return MemoryContextSwitchTo(header->context);
+}
+
 /*
  * repalloc
  *

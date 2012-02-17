@@ -89,7 +89,7 @@ fmgr_c(FmgrInfo *finfo,
 	   bool *isNull)
 {
 	char	   *returnValue = (char *) NULL;
-	int			n_arguments = finfo->fn_nargs;
+	int		n_arguments = finfo->fn_nargs;
 	func_ptr	user_fn = fmgr_faddr(finfo);
 
 	/*

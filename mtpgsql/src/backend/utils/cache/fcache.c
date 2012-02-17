@@ -273,7 +273,7 @@ setFcache(Node *node, Oid foid, List *argList, ExprContext *econtext)
 	Oper	   *onode;
 	FunctionCachePtr fcache;
 
-        MemoryContext old = MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
+        MemoryContext old = MemoryContextSameContext(node);
 	fcache = init_fcache(foid, true, argList, econtext);
         MemoryContextSwitchTo(old);
         
