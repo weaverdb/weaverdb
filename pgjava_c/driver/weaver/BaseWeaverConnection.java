@@ -275,8 +275,10 @@ public class BaseWeaverConnection {
         }
         
         public void dispose() {
-            if ( link != null ) BaseWeaverConnection.this.dispose(link);
-            link = null;
+            synchronized (BaseWeaverConnection.this) {
+                if ( id != null && link != null ) BaseWeaverConnection.this.dispose(link);
+                link = null;
+            }
         }
         
         @Override
