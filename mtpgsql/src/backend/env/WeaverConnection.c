@@ -95,10 +95,8 @@ static bool ReadyConnection(WConn connection);
     \
     err = setjmp(target->env->errorContext);\
     if (err != 0) {\
-        if (GetTransactionInfo()->SharedBufferChanged) {\
-            strncpy(connection->env->state, "ABORTONLY", 39);\
-            target->stage = TRAN_ABORTONLY;\
-        }\
+        strncpy(connection->env->state, "ABORTONLY", 39);\
+        target->stage = TRAN_ABORTONLY;\
         SetAbortOnly();\
         WHandleError(target,err);\
     } else {\
@@ -408,6 +406,11 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
         SetError(connection, err, "CONTEXT", "context not valid, check call sequence");
         return NULL;
     }
+    
+    if ( connection->stage == TRAN_ABORTONLY ) {
+        err = 456;
+        SetError(connection, err, "CONTEXT", "context not valid, an error has already occured");
+    }
 
     READY(connection, err);
 
@@ -535,7 +538,13 @@ WExec(OpaquePreparedStatement plan) {
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
-
+    
+    if ( connection->stage == TRAN_ABORTONLY ) {
+        err = 456;
+        SetError(connection, err, "CONTEXT", "context not valid, an error has already occured");
+        return err;
+    }
+    
     READY(connection, err);
 
     if (CheckForCancel()) {
