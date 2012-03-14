@@ -679,7 +679,7 @@ fileNameOpenFile(FileName fileName,
             Assert(vfdP != NULL);
             pthread_mutex_lock(&vfdP->pin);
             vfdP->owner = pthread_self();
-            allocated = allocated ? ActivateFile(vfdP) : CheckFileAccess(vfdP);
+            allocated = CheckFileAccess(vfdP);
             vfdP->owner = 0;
             pthread_mutex_unlock(&vfdP->pin);
             if ( !allocated ) {

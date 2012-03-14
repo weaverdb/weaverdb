@@ -957,7 +957,8 @@ WDisposeConnection(OpaqueWConn conn) {
     if (connection->env == NULL)
         return sqlError;
     
-    SetEnv(connection->env);
+    if ( !SetEnv(connection->env) ) return -1;
+    
     if (setjmp(connection->env->errorContext) == 0) {
         if (connection->validFlag == 1 && CurrentXactInProgress()) {
             if (connection->parent != NULL) {
