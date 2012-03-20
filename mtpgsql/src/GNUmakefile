@@ -26,9 +26,6 @@ XARGS = /usr/bin/xargs
 all:
 	chmod 755 config.buildtime
 	/bin/sh -e config.buildtime
-	chmod 755 config.mflex
-	/bin/sh -e config.mflex
-	$(MAKE) -C mflex all
 	$(MAKE) -C utils all
 	$(MAKE) -C backend all
 	$(MAKE) -C interfaces all
@@ -41,9 +38,6 @@ all:
 install: installdirs
 	chmod 755 config.buildtime
 	/bin/sh -e config.buildtime
-	chmod 755 config.mflex
-	/bin/sh -e config.mflex
-	$(MAKE) -C mflex all
 	$(MAKE) -C utils install
 	$(MAKE) -C backend install
 	$(MAKE) -C interfaces install
@@ -57,7 +51,6 @@ installdirs: mkinstalldirs
 	$(SRCDIR)/mkinstalldirs $(BINDIR) $(LIBDIR) $(INCLUDEDIR)
 
 clean:
-	$(MAKE) -C mflex clean
 	$(MAKE) -C utils clean
 	$(MAKE) -C backend clean
 	$(MAKE) -C interfaces clean
@@ -74,9 +67,6 @@ installclean:
 .DEFAULT:
 	chmod 755 config.buildtime
 	/bin/sh -e config.buildtime
-	chmod 755 config.mflex
-	/bin/sh -e config.mflex
-	$(MAKE) -C mflex $@
 	$(MAKE) -C utils $@
 	$(MAKE) -C backend $@
 	$(MAKE) -C interfaces $@

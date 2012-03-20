@@ -11,10 +11,12 @@
 SRCDIR=../mtpgsql/src
 include ${SRCDIR}/Makefile.global
 
+ifeq ($(JAVA_HOME),"") 
 ifeq ($(PORTNAME), macosx)
 JAVA_HOME=/Library/Java/Home
 else
 JAVA_HOME=/usr/jdk/latest
+endif
 endif
 
 MYINC=\

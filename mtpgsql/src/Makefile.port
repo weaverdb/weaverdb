@@ -56,7 +56,11 @@ CFLAGS+= -DDEBUGLOGS
 #CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo
 
 #for java
-CFLAGS+= -I/usr/jdk/latest/include -I/usr/jdk/latest/include/${PORTNAME}
+ifeq ($(JAVA_HOME),"")
+JAVA_HOME=/usr/jdk/latest
+endif
+
+CFLAGS+= -I${JAVA_HOME}/include -I${JAVA_HOME}/include/${PORTNAME}
 BKIOPTS+= -DNOARRAY -I../../include -I..
 
 #CFLAGS+= -DDEBUG_INDEX_INSERT

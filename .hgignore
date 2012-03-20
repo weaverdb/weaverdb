@@ -1,2 +1,7 @@
 syntax: regexp
 ^mtpgsql/src/mtpg/
+
+syntax: glob
+*.o
+*.class
+*.so
