@@ -183,7 +183,7 @@ index_insert(Relation relation,
 			 Datum *datum,
 			 char *nulls,
 			 ItemPointer heap_t_ctid,
-			 Relation heapRel)
+			 Relation heapRel,bool is_put)
 {
 	RegProcedure procedure;
 	InsertIndexResult specificResult;
@@ -195,10 +195,10 @@ index_insert(Relation relation,
 	 *	have the am's insert proc do all the work.
 	 * ----------------
 	 */
-
+        
 
 	specificResult = (InsertIndexResult)
-		fmgr(procedure, relation, datum, nulls, heap_t_ctid, heapRel, NULL);
+		DatumGetPointer(fmgr(procedure, relation, datum, nulls, heap_t_ctid, heapRel, is_put));
 
 	/* must be pfree'ed */
 	return specificResult;

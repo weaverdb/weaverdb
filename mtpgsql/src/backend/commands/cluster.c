@@ -276,7 +276,8 @@ copy_index(Oid OIDOldIndex, Oid OIDNewHeap)
 				 Old_pg_index_Form->indclass,
 				 (uint16) 0, (Datum *) NULL,
 				 (Node *) NULL,	/* XXX where's the predicate? */
-				 Old_pg_index_Form->indislossy,
+				 IndexIsDeferred(Old_pg_index_Form),
+				 IndexIsLossy(Old_pg_index_Form),
 				 Old_pg_index_Form->indisunique,
 				 Old_pg_index_Form->indisprimary);
 

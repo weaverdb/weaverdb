@@ -78,13 +78,13 @@ createdb(const char *dbname, const char *dbpath, int encoding)
 	char		new_record_nulls[Natts_pg_database] = {' ', ' ', ' ', ' '};
 /* due raw database file reads, be careful here  */
 	SetTransactionCommitType(TRANSACTION_SYNCED_COMMIT);
-	if (!get_user_info(GetPgUserName(), &user_id, &use_super, &use_createdb))
+        if (!get_user_info(GetPgUserName(), &user_id, &use_super, &use_createdb))
 		elog(ERROR, "current user name is invalid");
 
 	if (!use_createdb && !use_super)
 		elog(ERROR, "CREATE DATABASE: permission denied");
 
-	if (get_db_info(dbname, NULL, NULL, NULL))
+        if (get_db_info(dbname, NULL, NULL, NULL))
 		elog(ERROR, "CREATE DATABASE: database \"%s\" already exists", dbname);
 
 	/* don't call this in a transaction block */
@@ -177,7 +177,7 @@ createschema(const char *schemaname,int encoding)
         Datum 		new_schema[Natts_pg_schema];
         char		new_nulls[Natts_pg_schema];
         int             ct = 0;
-        int             user_id;
+        int4             user_id;
         bool            use_super,use_createdb;
         Relation 	schema_relation;
         TupleDesc	schema_dsc;
@@ -187,10 +187,10 @@ createschema(const char *schemaname,int encoding)
             new_schema[ct] = (Datum)NULL;
             new_nulls[ct] = ' ';
         }
-    
-	if (!get_user_info(GetPgUserName(), &user_id, &use_super, &use_createdb))
+
+        if (!get_user_info(GetPgUserName(), &user_id, &use_super, &use_createdb))
 		elog(ERROR, "current user name is invalid");
-        
+
         memset(buf,0,2 * MAXPGPATH + 100);
         memset(locbuf,0,512);
         strcpy(locbuf, schemaname);
@@ -358,7 +358,7 @@ dropdb(const char *dbname)
 {
 	int4		user_id,
 				db_owner;
-	bool		use_super;
+	bool		use_super,use_createdb;
 	Oid			db_id;
 	char	   *path,
 				dbpath[MAXPGPATH],
@@ -380,16 +380,16 @@ dropdb(const char *dbname)
 	if (IsTransactionBlock())
 		elog(ERROR, "DROP DATABASE: May not be called in a transaction block");
 
-	if (!get_user_info(GetPgUserName(), &user_id, &use_super, NULL))
+	if (!get_user_info(GetPgUserName(), &user_id, &use_super, &use_createdb) )
 		elog(ERROR, "Current user name is invalid");
 
 	if (!get_db_info(dbname, dbpath, &db_id, &db_owner))
 		elog(ERROR, "DROP DATABASE: Database \"%s\" does not exist", dbname);
-
+        
 	if (user_id != db_owner && !use_super)
 		elog(ERROR, "DROP DATABASE: Permission denied");
 
-	path = ExpandDatabasePath(dbpath);
+        path = ExpandDatabasePath(dbpath);
 	if (path == NULL)
 		elog(ERROR,
 			 "The database path '%s' is invalid. "
@@ -410,7 +410,10 @@ dropdb(const char *dbname)
 	/*
 	 * Check for active backends in the target database.
 	 */
-	if (DatabaseHasActiveBackends(db_id))
+        DropVacuumRequests(InvalidOid,db_id);
+        StopPoolsweepsForDB(db_id);
+        
+        if (DatabaseHasActiveBackends(db_id))
 	{
 		heap_close(pgdbrel, AccessExclusiveLock);
 		elog(ERROR, "DROP DATABASE: Database \"%s\" is being accessed by other users", dbname);
@@ -457,7 +460,6 @@ dropdb(const char *dbname)
 	 * write out a dirty buffer to the dead database later...
 	 */
 	DropBuffers(db_id);
-        DropVacuumRequests(InvalidOid,db_id);
 
 	/*
 	 * Remove the database's subdirectory and everything in it.
@@ -557,15 +559,18 @@ get_user_info(const char *name, int4 *use_sysid, bool *use_super, bool *use_crea
 							   PointerGetDatum(name),
 							   0, 0, 0);
 
-	if (!HeapTupleIsValid(utup))
-		return false;
-
-	if (use_sysid)
-		*use_sysid = ((Form_pg_shadow) GETSTRUCT(utup))->usesysid;
-	if (use_super)
-		*use_super = ((Form_pg_shadow) GETSTRUCT(utup))->usesuper;
-	if (use_createdb)
-		*use_createdb = ((Form_pg_shadow) GETSTRUCT(utup))->usecreatedb;
+	if (!HeapTupleIsValid(utup)) {
+            if ( use_sysid ) *use_sysid = 0;
+            if ( use_super ) *use_super = false;
+            if ( use_createdb ) *use_createdb = true;
+        } else {
+            if (use_sysid)
+                    *use_sysid = ((Form_pg_shadow) GETSTRUCT(utup))->usesysid;
+            if (use_super)
+                    *use_super = ((Form_pg_shadow) GETSTRUCT(utup))->usesuper;
+            if (use_createdb)
+                    *use_createdb = ((Form_pg_shadow) GETSTRUCT(utup))->usecreatedb;
+        }
 
 	return true;
 }

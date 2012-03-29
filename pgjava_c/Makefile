@@ -11,10 +11,10 @@
 SRCDIR=../mtpgsql/src
 include ${SRCDIR}/Makefile.global
 
-ifeq ($(JAVA_HOME),"") 
 ifeq ($(PORTNAME), macosx)
 JAVA_HOME=/Library/Java/Home
 else
+ifndef JAVA_HOME
 JAVA_HOME=/usr/jdk/latest
 endif
 endif
@@ -27,11 +27,11 @@ MACOSINC=\
 
 ifeq ($(PORTNAME),solaris)
 MYLIBS=\
--lpthread -lrt -lm -lsocket -lnsl -lc -lumem
+-lpthread -lrt -lm -lsocket -lnsl -lc -lumem 
 endif
 ifeq ($(PORTNAME),linux)
 MYLIBS=\
--lpthread -lrt -lm -lnsl -lc
+-lpthread -lrt -lm -lnsl -lc 
 endif
 
 MACOSLIBS=\
@@ -48,11 +48,11 @@ MACOSPATH=\
 -L${JAVA_HOME}/lib \
 
 ifneq ($(PORTNAME),macosx)
-all: libweaver.so weaver java_bits
+all: java_bits libweaver.so weaver 
 legacy: libmtpgjava.so pgjava 
 # think about using malloc mtmalloc as memory management libs
 java_bits:
-	${JAVA_HOME}/bin/javac driver/weaver/*.java
+	${JAVA_HOME}/bin/javac -g driver/weaver/*.java
 	# ${JAVA_HOME}/bin/javac driver/weaver/*.java driver/weaver/jdbc/*.java
 	${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class 
 	# ${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class driver/weaver/jdbc/*.class
@@ -65,7 +65,7 @@ weaver: libweaver.so
 ifeq ($(PORTNAME),linux)
 libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c $(SRCDIR)/backend/libmtpg.a 
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
-	-G --version-script=mapfile.txt \
+	-G \
 	${MYINC} ${MYPATH} ${MYLIBS} \
 	WeaverStmtManager.c \
 	BaseWeaverConnection.c \

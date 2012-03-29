@@ -420,6 +420,7 @@ CommentDatabase(char *database, char *comment)
 
 	/*** Now, fetch user information ***/
 
+#ifdef USEACL
 	username = GetPgUserName();
 	usertuple = SearchSysCacheTuple(SHADOWNAME, PointerGetDatum(username),
 									0, 0, 0);
@@ -430,7 +431,6 @@ CommentDatabase(char *database, char *comment)
 
 	/*** Allow if the userid matches the database dba or is a superuser ***/
 
-#ifdef USEACL
 	if (!(superuser || (userid == dba)))
 	{
 		elog(ERROR, "you are not permitted to comment on database '%s'",

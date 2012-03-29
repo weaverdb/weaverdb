@@ -25,6 +25,7 @@ typedef struct SnapshotData
 	TransactionId xmax;			/* XID >= xmax are invisible to me */
 	uint32		xcnt;			/* # of xact below */
 	bool		isUser;
+	bool		nowait;
 	TransactionId *xip;			/* array of xacts in progress */
 	ItemPointerData tid;		/* required for Dirty snapshot -:( */
 } SnapshotData;

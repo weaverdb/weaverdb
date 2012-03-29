@@ -280,7 +280,7 @@ hashbuild(Relation heap,
  *	to the caller.
  */
 InsertIndexResult
-hashinsert(Relation rel, Datum *datum, char *nulls, ItemPointer ht_ctid, Relation heapRel)
+hashinsert(Relation rel, Datum *datum, char *nulls, ItemPointer ht_ctid, Relation heapRel, bool is_put)
 {
 	HashItem	hitem;
 	IndexTuple	itup;

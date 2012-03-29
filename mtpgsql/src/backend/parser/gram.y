@@ -1,3 +1,4 @@
+%define api.pure
 %pure_parser
 %{
 
@@ -72,10 +73,12 @@
  * problem, yet.)
  */
 /*  #define __YYSCLASS  */
-/*
-extern List *parsetree;	
-*/
-extern int yylex();
+#define YYLEX_PARAM  yyscanner
+#define YYPARSE_PARAM  yyscanner
+
+extern void yylex_init(void* scanner);
+extern int yylex(void* stype,void* scanner);
+extern void yylex_destroy(void* scanner);
 
 static char *xlateSqlFunc(char *);
 static char *xlateSqlType(char *);
@@ -126,10 +129,6 @@ static void doNegateFloat(Value *v);
 	InsertStmt			*astmt;
 }
 
-%{
-static void myprinter(FILE* stream,int c,YYSTYPE len);
-%}
-
 %type <node>	stmt
 		AlterTableStmt ClosePortalStmt
 		CopyStmt CreateStmt CreateAsStmt CreateSeqStmt DefineStmt DropStmt
@@ -141,7 +140,7 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 		RemoveFuncStmt RemoveStmt
 		RenameStmt ReportStmt RuleStmt TransactionStmt ViewStmt LoadStmt
 		CreatedbStmt DropdbStmt VacuumStmt CursorStmt SubSelect
-		UpdateStmt InsertStmt select_clause SelectStmt NotifyStmt DeleteStmt 
+		UpdateStmt InsertStmt select_clause SelectStmt NotifyStmt DeleteStmt PutStmt
 		ClusterStmt ExplainStmt VariableSetStmt VariableShowStmt VariableResetStmt
 		CreateUserStmt AlterUserStmt DropUserStmt RuleActionStmt
 		RuleActionStmtOrEmpty ConstraintsSetStmt
@@ -161,7 +160,7 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 %type <ival>    createdb_opt_encoding
 
 %type <ival>	opt_lock lock_type
-%type <boolean>	opt_lmode opt_force
+%type <boolean>	opt_lmode opt_force opt_nowait
 
 %type <ival>    user_createdb_clause user_createuser_clause
 %type <str>		user_passwd_clause
@@ -340,7 +339,7 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 		MATCH MINUTE_P MONTH_P NAMES
 		NATIONAL NATURAL NCHAR NEXT NO NOT NULLIF NULL_P NUMERIC
 		OF ON ONLY OPTION OR ORDER OUTER_P OVERLAPS
-		PARTIAL POSITION PRECISION PRIMARY PRIOR PROCEDURE PUBLIC
+		PARTIAL POSITION PRECISION PRIMARY PRIOR PROCEDURE PUBLIC PUT
 		READ REFERENCES RELATIVE  RIGHT ROLLBACK
 		SCROLL SECOND_P SELECT SESSION_USER SET SOME SUBSTRING
 		TABLE TEMPORARY THEN TIME TIMESTAMP TIMEZONE_HOUR
@@ -388,7 +387,7 @@ static void myprinter(FILE* stream,int c,YYSTYPE len);
 		UNLISTEN UNTIL VACUUM VALID VERBOSE VERSION
 		
 /*  token added by Myron Scott  */
-%token	SCHEMA S_ARRAY S_PATTERN S_NIL
+%token	SCHEMA S_ARRAY S_PATTERN S_NIL NOWAIT
 
 /* Special keywords not in the query language - see the "lex" file */
 %token <str>	IDENT FCONST SCONST Op NAMEDPARAM JAVA_FUNC SYSTEM
@@ -2402,6 +2401,7 @@ RevokeStmt:  REVOKE privileges ON relation_name_list FROM grantee
 
 IndexStmt:	CREATE index_opt_unique INDEX index_name ON relation_name
 			access_method_clause '(' index_params ')' opt_with
+                        where_clause
 				{
 					/* should check that access_method is valid,
 					   etc ... but doesn't */
@@ -2412,7 +2412,7 @@ IndexStmt:	CREATE index_opt_unique INDEX index_name ON relation_name
 					n->accessMethod = $7;
 					n->indexParams = $9;
 					n->withClause = $11;
-					n->whereClause = NULL;
+					n->whereClause = $12;
 					$$ = (Node *)n;
 				}
 		;
@@ -2849,6 +2849,7 @@ RuleActionMulti:  RuleActionMulti ';' RuleActionStmtOrEmpty
 RuleActionStmt:	InsertStmt
 		| UpdateStmt
 		| DeleteStmt
+		| PutStmt
 		| NotifyStmt
 		;
 
@@ -2880,6 +2881,7 @@ event:	SELECT							{ $$ = CMD_SELECT; }
 		| UPDATE						{ $$ = CMD_UPDATE; }
 		| DELETE						{ $$ = CMD_DELETE; }
 		| INSERT						{ $$ = CMD_INSERT; }
+		| PUT						{ $$ = CMD_PUT; }
 		 ;
 
 opt_instead:  INSTEAD					{ $$ = TRUE; }
@@ -3248,6 +3250,7 @@ OptimizableStmt:  SelectStmt
 		| CursorStmt
 		| UpdateStmt
 		| InsertStmt
+		| PutStmt
 		| NotifyStmt
 		| DeleteStmt					/* by default all are $$=$1 */
 		;
@@ -3380,11 +3383,21 @@ columnElem:  ColId opt_indirection
 
 DeleteStmt:  DELETE FROM relation_name
 			 where_clause
+                         opt_nowait
 				{
 					DeleteStmt *n = makeNode(DeleteStmt);
 					n->relname = $3;
 					n->whereClause = $4;
+					n->nowait = $5;
 					$$ = (Node *)n;
+				}
+		;
+                
+PutStmt:  PUT INTO relation_name insert_rest
+				{
+ 					$4->relname = $3;
+					$$ = (Node *) $4;
+                                        $$->type = T_PutStmt;
 				}
 		;
 
@@ -3411,6 +3424,10 @@ lock_type:  SHARE ROW EXCLUSIVE	{ $$ = ShareRowExclusiveLock; }
 opt_lmode:	SHARE				{ $$ = TRUE; }
 		| EXCLUSIVE				{ $$ = FALSE; }
 		;
+                
+opt_nowait:	NOWAIT				{ $$ = TRUE; }
+		| /*EMPTY*/				{ $$ = FALSE; }
+		;
 
 
 /*****************************************************************************
@@ -3424,15 +3441,18 @@ UpdateStmt:  UPDATE relation_name
 			  SET update_target_list
 			  from_clause
 			  where_clause
+                          opt_nowait
 				{
 					UpdateStmt *n = makeNode(UpdateStmt);
 					n->relname = $2;
 					n->targetList = $4;
 					n->fromClause = $5;
 					n->whereClause = $6;
+					n->nowait = $7;
 					$$ = (Node *)n;
 				}
-		;
+
+                        ;
 
 
 /*****************************************************************************
@@ -3500,7 +3520,7 @@ SelectStmt:	  select_clause sort_clause for_update_clause opt_select_limit
 					n->limitOffset = nth(0, $4);
 					n->limitCount = nth(1, $4);
 					$$ = (Node *) n;
-                }
+                                }
 				else
 				{
 					/* There were set operations.  The root of the operator
@@ -6185,15 +6205,32 @@ xlateSqlType(char *name)
 } /* xlateSqlType() */
 
 
-void parser_init(Oid *typev, char** names, int nargs)
+void parser_init(char* str, Oid *typev, char** names, int nargs)
 {
     ParserInfo* pi = GetParserInfo();
-	pi->QueryIsRule = FALSE;
-	pi->saved_relname[0]= '\0';
 
-	param_type_init(typev, names, nargs);
+    pi->parseString = pstrdup(str);
+    pi->parsetree = NIL;	
+
+    pi->QueryIsRule = FALSE;
+    pi->saved_relname[0]= '\0';
+
+    param_type_init(typev, names, nargs);
+    yylex_init(&pi->yyscanner);
 }
 
+int parser_parse(List** parsetree) {
+    ParserInfo* pi = GetParserInfo();
+    int result = yyparse(pi->yyscanner);
+    *parsetree = pi->parsetree;
+    return result;
+}
+
+void parser_destroy() {
+    ParserInfo* pi = GetParserInfo();
+    yylex_destroy(pi->yyscanner);
+     pfree(pi->parseString);
+}
 
 /*
  * param_type_init()
@@ -6301,10 +6338,5 @@ doNegateFloat(Value *v)
 		strcpy(newval+1, oldval);
 		v->val.str = newval;
 	}
-}
-
-void myprinter(FILE* stream,int c,YYSTYPE len)
-{
-
 }
 

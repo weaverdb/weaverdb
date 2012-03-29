@@ -6,7 +6,7 @@
             Java_driver_weaver_BaseWeaverConnection_cancelTransaction;
             Java_driver_weaver_BaseWeaverConnection_commitTransaction;
             Java_driver_weaver_BaseWeaverConnection_connectSubConnection;
-            Java_driver_weaver_BaseWeaverConnection_disposeConnection;
+            Java_driver_weaver_BaseWeaverConnection_dispose;
             Java_driver_weaver_BaseWeaverConnection_endProcedure;
             Java_driver_weaver_BaseWeaverConnection_executeStatement;
             Java_driver_weaver_BaseWeaverConnection_fetchResults;
@@ -15,6 +15,7 @@
             Java_driver_weaver_BaseWeaverConnection_getTransactionId;
             Java_driver_weaver_BaseWeaverConnection_grabConnection;
             Java_driver_weaver_BaseWeaverConnection_parseStatement;
+            Java_driver_weaver_BaseWeaverConnection_prepareStatement;
             Java_driver_weaver_BaseWeaverConnection_prepareTransaction;
             Java_driver_weaver_BaseWeaverConnection_setInput;
             Java_driver_weaver_BaseWeaverConnection_streamExec;

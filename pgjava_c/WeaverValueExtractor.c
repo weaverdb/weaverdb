@@ -241,10 +241,8 @@ ExtractDoubleValue(JNIEnv* env,StmtMgr mgr, char* name, short type,jobject targe
             char    buffer[8];
             jdouble  val;
         }   convert;
-        
-        jdouble value = (*env)->CallDoubleMethod(env,target,Cache->doublevalue);
-        convert.val = (*env)->CallStaticLongMethod(env,Cache->doubletype,Cache->doubletolong,value);
-        
+
+        convert.val = (*env)->CallDoubleMethod(env,target,Cache->doublevalue);            
         SetInputValue(mgr,name,type,convert.buffer,8);
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Double");    
@@ -256,7 +254,7 @@ ExtractLongValue(JNIEnv* env,StmtMgr mgr, char* name, short type,jobject target)
     if ( (*env)->IsInstanceOf(env,target,Cache->longtype) ) {
         union {
             char    buffer[8];
-            jdouble  val;
+            jlong   val;
         }   convert;
         convert.val = (*env)->CallLongMethod(env,target,Cache->longvalue);
         SetInputValue(mgr,name,type,convert.buffer,8);
@@ -348,9 +346,11 @@ static jobject CreateBinaryField(char* var, int length, JNIEnv* env) {
     (*env)->SetByteArrayRegion(env,jb,0,length,(signed char*)var);
     return (jobject)jb;
 }
-static jobject CreateDoubleField(jlong* var, JNIEnv* env) {
+static jobject CreateDoubleField(jdouble* var, JNIEnv* env) {
+/*
     jdouble nval = (*env)->CallStaticDoubleMethod(env,Cache->doubletype,Cache->longtodouble,*var);
-    return (*env)->NewObject(env,Cache->doubletype,Cache->createdouble,nval);
+*/
+    return (*env)->NewObject(env,Cache->doubletype,Cache->createdouble,var);
 }
 
 static jobject CreateDateField(jdouble* var, JNIEnv* env) {
@@ -369,6 +369,7 @@ int PassOutValue(StmtMgr mgr, int type, void* value, int length, void* userspace
     jobject setval = NULL;
 
         if (target == NULL ) return 0;
+    if ( (*env)->IsSameObject(env,target,NULL)) return 0;
         if (type == STREAMTYPE ) return 0;
 
         if ( value == NULL ) {
@@ -424,7 +425,6 @@ int PassOutValue(StmtMgr mgr, int type, void* value, int length, void* userspace
 
 int PassResults(JNIEnv* env, StmtMgr mgr)
 {
-	short                   x;
         
         GetOutputs(mgr,env,PassOutValue);
         

@@ -133,7 +133,6 @@ static Query *
 transformStmt(ParseState *pstate, Node *parseTree)
 {
 	Query	   *result = NULL;
-	AnalyzeGlobals* env = GetAnalyzeInfo();
 
 	switch (nodeTag(parseTree))
 	{
@@ -239,14 +238,18 @@ transformStmt(ParseState *pstate, Node *parseTree)
 		case T_InsertStmt:
 			result = transformInsertStmt(pstate, (InsertStmt *) parseTree);
 			break;
-
+                        
+		case T_PutStmt:
+			result = transformInsertStmt(pstate, (InsertStmt *) parseTree);
+			break;
+                        
 		case T_DeleteStmt:
 			result = transformDeleteStmt(pstate, (DeleteStmt *) parseTree);
-			break;
+                        break;
 
 		case T_UpdateStmt:
 			result = transformUpdateStmt(pstate, (UpdateStmt *) parseTree);
-			break;
+                        break;
 
 		case T_SelectStmt:
 			if (!((SelectStmt *) parseTree)->portalname)
@@ -284,6 +287,8 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 	Query	   *qry = makeNode(Query);
 
 	qry->commandType = CMD_DELETE;
+        
+        qry->nowait = stmt->nowait;
 
 	/* set up a range table */
 	makeRangeTable(pstate, NULL);
@@ -320,7 +325,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	List	   *tl;
 	TupleDesc	rd_att;
 
-	qry->commandType = CMD_INSERT;
+	qry->commandType = ( stmt->type == T_PutStmt ) ? CMD_PUT : CMD_INSERT;
 	pstate->p_is_insert = true;
 
 	/*----------
@@ -1504,6 +1509,7 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 	qry->commandType = CMD_UPDATE;
 	pstate->p_is_update = true;
 
+        qry->nowait = stmt->nowait;
 	/*
 	 * the FROM clause is non-standard SQL syntax. We used to be able to
 	 * do this with REPLACE in POSTQUEL so we keep the feature.
@@ -2073,9 +2079,13 @@ transformFkeyGetPrimaryKey(FkConstraint *fkconstraint)
 	 * Check that we found it
 	 * ----------
 	 */
-	if (!HeapTupleIsValid(indexTup))
+	if (!HeapTupleIsValid(indexTup)) {
+            heap_endscan(indexSd);
+            heap_close(indexRd, AccessShareLock);
+            heap_close(pkrel, AccessShareLock);
 		elog(ERROR, "PRIMARY KEY for referenced table \"%s\" not found",
 			 fkconstraint->pktable_name);
+        }
 
 	/* ----------
 	 * Now build the list of PK attributes from the indkey definition

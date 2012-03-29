@@ -63,44 +63,46 @@
 #define FD_MINFREE 50
 #endif
 
+#ifndef NOFILE
+#define NOFILE 512
+#endif
+
 
 #define VFD_CLOSED (-1)
 
 #define FileIsValid(file) \
 	((file) > 0 && (file) < (int)VfdCache.size && GetVirtualFD(file)->fileName != NULL)
 
+typedef struct vfd {
+    int id;
+    signed int fd; /* current FD, or VFD_CLOSED if none */
+    unsigned short fdstate; /* bitflags for VFD's state */
 
-typedef struct vfd
-{
-        int         id;
-	signed int fd;			/* current FD, or VFD_CLOSED if none */
-	unsigned short fdstate;		/* bitflags for VFD's state */
-
-/* these are the assigned bits in fdstate: */
+    /* these are the assigned bits in fdstate: */
 #define FD_DIRTY	(1 << 0)/* written to, but not yet fsync'd */
 #define FD_TEMPORARY	(1 << 1)/* should be unlinked when closed */
 
-	File		nextFree;		/* link to next free VFD, if in freelist */
-        File            newerFile;
-        bool            sweep_valid;
-        bool            pooled;
-        bool            private;
-	long            usage_count;
-        time_t          access_time;
-        time_t          newer_access_time;
-	long		seekPos;		/* current logical file position */
-	char            fileName[512];		/* name of file, or NULL for unused VFD */
-	int		fileFlags;		/* open(2) flags for opening the file */
-	int		fileMode;		/* mode to pass to open(2) */
-	int		refCount;		/*  counting references  */
-        int             key;
-	pthread_mutex_t	pin;
-	pthread_t	owner;
+    File nextFree; /* link to next free VFD, if in freelist */
+    File newerFile;
+    bool sweep_valid;
+    bool pooled;
+    bool private;
+    long usage_count;
+    time_t access_time;
+    time_t newer_access_time;
+    long seekPos; /* current logical file position */
+    char fileName[512]; /* name of file, or NULL for unused VFD */
+    int fileFlags; /* open(2) flags for opening the file */
+    int fileMode; /* mode to pass to open(2) */
+    int refCount; /*  counting references  */
+    int key;
+    pthread_mutex_t pin;
+    pthread_t owner;
 } Vfd;
 
 typedef struct {
-    char   filename[512];
-    Vfd*    vfd;
+    char filename[512];
+    Vfd* vfd;
 } VfdEntry;
 
 /*
@@ -111,34 +113,35 @@ typedef struct {
 #ifndef MAX_FILE_SHARE
 #define MAX_FILE_SHARE 1
 #endif
- #ifndef GROWVFDMULTIPLE
- #define GROWVFDMULTIPLE 		32
- #endif
- #ifndef MAXVFDBLOCKS
- #define MAXVFDBLOCKS		32 * 1024
- #endif
- #define MAXVIRTUALFILES  	GROWVFDMULTIPLE * MAXVFDBLOCKS
- 
-static int vfdmultiple =        GROWVFDMULTIPLE;
-static int vfdsharemax =        MAX_FILE_SHARE;
-static int vfdblockcount =      MAXVFDBLOCKS;
-static int vfdmax = 		MAXVIRTUALFILES;
-static bool vfdoptimize =       true;
- 
+#ifndef GROWVFDMULTIPLE
+#define GROWVFDMULTIPLE 		32
+#endif
+#ifndef MAXVFDBLOCKS
+#define MAXVFDBLOCKS		32 * 1024
+#endif
+#define MAXVIRTUALFILES  	GROWVFDMULTIPLE * MAXVFDBLOCKS
+
+static int vfdmultiple = GROWVFDMULTIPLE;
+static int vfdsharemax = MAX_FILE_SHARE;
+static int vfdblockcount = MAXVFDBLOCKS;
+static int vfdmax = MAXVIRTUALFILES;
+static bool vfdoptimize = false;
+static bool vfdautotune = false;
+
 static struct {
-    Vfd **              pointers;
-    Size                size;
-    pthread_mutex_t     guard;
-    MemoryContext       cxt;
+    Vfd ** pointers;
+    Size size;
+    pthread_mutex_t guard;
+    MemoryContext cxt;
 } VfdCache;
 
 static struct {
-    HTAB*               hash;   
-    pthread_mutex_t     guard;
-    MemoryContext       cxt;
+    HTAB* hash;
+    pthread_mutex_t guard;
+    MemoryContext cxt;
 } VfdPool;
 
-static   pthread_mutexattr_t   pinattr;
+static pthread_mutexattr_t pinattr;
 
 /*
  * Number of file descriptors known to be in use by VFD entries.
@@ -155,12 +158,12 @@ static   pthread_mutexattr_t   pinattr;
 #define MAX_ALLOCATED_FILES  MAXBACKENDS * 2
 
 static struct {
-    int                 nfile;
-    int                 numAllocatedFiles;
-    int                 maxfiles;
-    int                 checks;
-    FILE *              allocatedFiles[MAX_ALLOCATED_FILES];
-    pthread_mutex_t     guard;
+    int nfile;
+    int numAllocatedFiles;
+    int maxfiles;
+    int checks;
+    FILE * allocatedFiles[MAX_ALLOCATED_FILES];
+    pthread_mutex_t guard;
 } RealFiles;
 
 
@@ -174,12 +177,12 @@ static long tempFileCounter = 0;
 
 static HTAB* CreateFDHash(MemoryContext cxt);
 
-static Vfd* HashScanFD(FileName  filename, int fileflags, int filemode, bool * allocated);
+static Vfd* HashScanFD(FileName filename, int fileflags, int filemode, bool * allocated);
 static bool HashDropFD(Vfd* target);
 
 static bool ActivateFile(Vfd* file);
-static void  RetireFile(Vfd* file);
-static void CheckFileAccess(Vfd* target);
+static void RetireFile(Vfd* file);
+static bool CheckFileAccess(Vfd* target);
 
 static bool ReleaseFileIfNeeded();
 
@@ -188,9 +191,7 @@ static void FreeVfd(Vfd* file);
 
 static Vfd* GetVirtualFD(int index);
 static Index InitializeBlock(int start);
-static int  GetVfdPoolSize();
-
-static File     FileOpen(FileName fileName, int fileFlags, int fileMode);
+static int GetVfdPoolSize();
 
 static char *filepath(char* buf, char *filename, int len);
 static long pg_nofile(void);
@@ -198,17 +199,15 @@ static bool CheckRealFileCount();
 
 static void closeAllVfds();
 
-
 /*
  * pg_fsync --- same as fsync except does nothing if -F switch was given
  */
 int
-pg_fsync(int fd)
-{
+pg_fsync(int fd) {
 #ifdef MACOSX
-	return  fsync(fd);
+    return fsync(fd);
 #else
-	return fdatasync(fd);
+    return fdatasync(fd);
 #endif
 }
 
@@ -216,140 +215,142 @@ pg_fsync(int fd)
  * pg_nofile: determine number of filedescriptors that fd.c is allowed to use
  */
 static long
-pg_nofile(void)
-{
-	long no_files = 0;
+pg_nofile(void) {
+    long no_files = 0;
 
-	if (no_files == 0)
-	{
-		/* need do this calculation only once */
+    if (no_files == 0) {
+        double fraction = GetFloatProperty("vfdallocation");
+        /* need do this calculation only once */
 #ifndef HAVE_SYSCONF
-		no_files = (long) NOFILE;
+        no_files = (long) NOFILE;
 #else
-		no_files = sysconf(_SC_OPEN_MAX);
-		if (no_files == -1)
-		{
-			elog(DEBUG, "pg_nofile: Unable to get _SC_OPEN_MAX using sysconf(); using %d", NOFILE);
-			no_files = (long) NOFILE;
-		} else {
-                    elog(DEBUG,"maximum number of open files %i",no_files);
-               }
-                
+        no_files = sysconf(_SC_OPEN_MAX);
+        if (no_files == -1) {
+            elog(DEBUG, "pg_nofile: Unable to get _SC_OPEN_MAX using sysconf(); using %d", NOFILE);
+            no_files = (long) NOFILE;
+        } else {
+            elog(DEBUG, "maximum number of open files %i", no_files);
+        }
+
 #endif
 
-		if ((no_files - RESERVE_FOR_LD) < FD_MINFREE)
-			elog(FATAL, "pg_nofile: insufficient File Descriptors in postmaster to start backend (%ld).\n"
-				 "                   O/S allows %ld, Postmaster reserves %d, We need %d (MIN) after that.",
-				 no_files - RESERVE_FOR_LD, no_files, RESERVE_FOR_LD, FD_MINFREE);
-		no_files /= 2;
-	}
+        if ((no_files - RESERVE_FOR_LD) < FD_MINFREE)
+            elog(FATAL, "pg_nofile: insufficient File Descriptors in postmaster to start backend (%ld).\n"
+                "                   O/S allows %ld, Postmaster reserves %d, We need %d (MIN) after that.",
+                no_files - RESERVE_FOR_LD, no_files, RESERVE_FOR_LD, FD_MINFREE);
+        if (fraction > 0) {
+            no_files *= fraction;
+        } else {
+            no_files /= 2;
+        }
+    }
 
-	return no_files;
+    return no_files;
 }
 
 static HTAB*
-CreateFDHash(MemoryContext cxt) 
-{
-    HASHCTL		ctl;
+CreateFDHash(MemoryContext cxt) {
+    HASHCTL ctl;
 
-    MemSet(&ctl, 0, (int) sizeof(ctl));
+    MemSet(&ctl, 0, (int) sizeof (ctl));
     ctl.hash = string_hash;
     ctl.hcxt = cxt;
     ctl.keysize = 512;
-    ctl.entrysize = sizeof(VfdEntry);
+    ctl.entrysize = sizeof (VfdEntry);
 
-    return hash_create("fd hash",VfdCache.size, &ctl,HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+    return hash_create("fd hash", VfdCache.size, &ctl, HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 }
 
 static void
-RetireFile(Vfd* vfdP)
-{
-	int			returnValue;
+RetireFile(Vfd* vfdP) {
+    int returnValue;
 
-	if ( vfdP->fd == VFD_CLOSED ) {
-		elog(DEBUG,"RetireFile closing closed file");
-		return;
-	}
+    if (vfdP->fd == VFD_CLOSED) {
+        elog(DEBUG, "RetireFile closing closed file");
+        return;
+    }
 
-	/* save the seek position */
-	vfdP->seekPos = (long) lseek(vfdP->fd, 0L, SEEK_CUR);
-        vfdP->usage_count = 0;
-        vfdP->sweep_valid = false;
-	Assert(vfdP->seekPos != -1);
+    /* save the seek position */
+    vfdP->seekPos = (long) lseek(vfdP->fd, 0L, SEEK_CUR);
+    vfdP->usage_count = 0;
+    vfdP->sweep_valid = false;
+    Assert(vfdP->seekPos != -1);
 
-	/* if we have written to the file, sync it before closing */
-	if (vfdP->fdstate & FD_DIRTY)
-	{
-		returnValue = pg_fsync(vfdP->fd);
-		Assert(returnValue != -1);
-		vfdP->fdstate &= ~FD_DIRTY;
-	}
-        
-        pthread_mutex_lock(&RealFiles.guard);
-	/* close the file */
-	returnValue = close(vfdP->fd);
+    /* if we have written to the file, sync it before closing */
+    if (vfdP->fdstate & FD_DIRTY) {
+        returnValue = pg_fsync(vfdP->fd);
+        Assert(returnValue != -1);
+        vfdP->fdstate &= ~FD_DIRTY;
+    }
 
-	if ( !returnValue ) {
-            RealFiles.nfile -= 1;
-            DTRACE_PROBE3(mtpg,file__retired,vfdP->id,vfdP->fileName,RealFiles.nfile);
-            vfdP->fd = VFD_CLOSED;
-	} else {
-            perror("RetireFile");
-	}
-        pthread_mutex_unlock(&RealFiles.guard);
+    pthread_mutex_lock(&RealFiles.guard);
+    /* close the file */
+    returnValue = close(vfdP->fd);
+
+    if (!returnValue) {
+        RealFiles.nfile -= 1;
+        DTRACE_PROBE3(mtpg, file__retired, vfdP->id, vfdP->fileName, RealFiles.nfile);
+        vfdP->fd = VFD_CLOSED;
+        vfdP->fileFlags &= ~(O_TRUNC | O_EXCL | O_CREAT);
+    } else {
+        perror("RetireFile");
+    }
+    pthread_mutex_unlock(&RealFiles.guard);
 }
 
-static Vfd* 
+static Vfd*
 HashScanFD(FileName filename, int fileflags, int filemode, bool * allocated) {
-    bool        found;
-    VfdEntry*    entry;
-    Vfd*        target = NULL;
+    bool found;
+    VfdEntry* entry;
+    Vfd* target = NULL;
 
     pthread_mutex_lock(&VfdPool.guard);
 
-    entry = hash_search(VfdPool.hash,filename,HASH_ENTER,&found);
+    entry = hash_search(VfdPool.hash, filename, HASH_ENTER, &found);
 
-    if ( found ) {
-        if ( entry->vfd->refCount >= vfdsharemax ) {
+    if (found) {
+        if (entry->vfd->refCount >= vfdsharemax ||
+            ( entry->vfd->fileMode != filemode || entry->vfd->fileFlags != fileflags ) ) {
             entry->vfd->pooled = false;
             entry->vfd = NULL;
         } else {
             target = entry->vfd;
-            Assert(strcmp(target->fileName,filename) == 0);
+            Assert(strcmp(target->fileName, filename) == 0);
             target->refCount++;
         }
     }
-        
-    if ( target == NULL ) {
-        target = AllocateVfd(filename,fileflags,filemode,false);
+
+    if (target == NULL) {
+        target = AllocateVfd(filename, fileflags, filemode, false);
         target->pooled = true;
         entry->vfd = target;
         *allocated = true;
-   } 
+    }
 
-   DTRACE_PROBE4(mtpg,file__search,target->id,filename,found,target->refCount);
+    DTRACE_PROBE4(mtpg, file__search, target->id, filename, found, target->refCount);
 
-   pthread_mutex_unlock(&VfdPool.guard);
+    pthread_mutex_unlock(&VfdPool.guard);
 
-   return target;
+    return target;
 }
 
 static bool
 HashDropFD(Vfd * target) {
     bool found = false;
-    VfdEntry*    entry;
+    VfdEntry* entry;
 
     pthread_mutex_lock(&VfdPool.guard);
 
     target->refCount--;
 
-    if ( target->refCount == 0 ) {
-        if ( target->pooled ) {
-            entry = hash_search(VfdPool.hash,(char*)target->fileName,HASH_REMOVE,&found);
-            if ( !found ) {
-                printf("not freed %s\n",target->fileName);
+    if (target->refCount == 0) {
+        if (target->pooled) {
+            entry = hash_search(VfdPool.hash, (char*) target->fileName, HASH_REMOVE, &found);
+            if (!found) {
+                printf("not freed %s\n", target->fileName);
             } else {
-                Assert(target==entry->vfd);
+                Assert(target == entry->vfd);
+                entry->vfd->pooled = false;
                 entry->vfd = NULL;
             }
         } else {
@@ -357,7 +358,7 @@ HashDropFD(Vfd * target) {
         }
     }
 
-    DTRACE_PROBE4(mtpg,file__drop,target->id, target->fileName,found,target->refCount);
+    DTRACE_PROBE4(mtpg, file__drop, target->id, target->fileName, found, target->refCount);
 
     pthread_mutex_unlock(&VfdPool.guard);
 
@@ -365,13 +366,13 @@ HashDropFD(Vfd * target) {
 }
 
 static bool
-ActivateFile(Vfd* vfdP)
-{
+ActivateFile(Vfd* vfdP) {
+
     Assert(vfdP->fd == VFD_CLOSED);
     errno = 0;
-    while (vfdP->fd == VFD_CLOSED && errno == 0)
-    {
-         ReleaseFileIfNeeded();
+
+    while (vfdP->fd == VFD_CLOSED && errno == 0) {
+        ReleaseFileIfNeeded();
         /*
          * The open could still fail for lack of file descriptors, eg due
          * to overall system file table being full.  So, be prepared to
@@ -379,34 +380,32 @@ ActivateFile(Vfd* vfdP)
          */
         pthread_mutex_lock(&RealFiles.guard);
         vfdP->fd = open(vfdP->fileName, vfdP->fileFlags, vfdP->fileMode);
-        if (vfdP->fd < 0 ) {
+        if (vfdP->fd < 0) {
             vfdP->fd = VFD_CLOSED;
-           if (errno == EMFILE || errno == ENFILE)
-            {
-/* try again */
-                 errno = 0;
+            if (errno == EMFILE || errno == ENFILE) {
+                /* try again */
+                errno = 0;
             } else {
                 /*  exit loop  */
             }
         } else {
-/*  freshly opened file, optimize */
-            if ( vfdoptimize ) {
+            /*  freshly opened file, optimize */
+            if (vfdoptimize) {
                 FileOptimize(vfdP->id);
             } else {
                 FileNormalize(vfdP->id);
             }
             RealFiles.nfile += 1;
-            DTRACE_PROBE3(mtpg,file__activated,vfdP->id,vfdP->fileName,RealFiles.nfile);
+            DTRACE_PROBE3(mtpg, file__activated, vfdP->id, vfdP->fileName, RealFiles.nfile);
         }
         pthread_mutex_unlock(&RealFiles.guard);
-   }
+    }
 
     /* seek to the right position */
-    if (vfdP->seekPos != 0L && errno == 0)
-    {
+    if (vfdP->seekPos != 0L) {
         off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
-        if ( check != vfdP->seekPos ) {
-            elog(NOTICE,"bad file activation during seek filename:%s, current: %d, seeked: %d",vfdP->fileName,vfdP->seekPos,check);
+        if (check != vfdP->seekPos) {
+            elog(NOTICE, "bad file activation during seek filename:%s, current: %d, seeked: %d", vfdP->fileName, vfdP->seekPos, check);
         }
     }
 
@@ -417,10 +416,9 @@ ActivateFile(Vfd* vfdP)
  * Force one kernel file descriptor to be released (temporarily).
  */
 bool
-ReleaseDataFile()
-{
-	ReleaseFileIfNeeded();
-	return (true);
+ReleaseDataFile() {
+    ReleaseFileIfNeeded();
+    return (true);
 }
 
 void
@@ -429,189 +427,182 @@ ShutdownVirtualFileSystem() {
 }
 
 void
-InitVirtualFileSystem()
-{
-	int counter;
-	
-	char* share = GetProperty("vfdsharemax");
-	char* opti = GetProperty("vfdoptimize");
+InitVirtualFileSystem() {
+    int counter;
 
-	if ( share != NULL ) vfdsharemax = atoi(share);
-        if ( opti != NULL ) vfdoptimize = (toupper(opti[0]) == 'T') ? true : false;
+    int share = GetIntProperty("vfdsharemax");
+    bool opti = GetBoolProperty("vfdoptimize");
+    bool autotune = GetBoolProperty("vfdautotune");
 
-	vfdmax = vfdmultiple * vfdblockcount;
+    if (share != 0) vfdsharemax = share;
+    vfdoptimize = opti;
+    vfdautotune = autotune;
 
-        /* initialize header entry first time through */
-        pthread_mutexattr_init(&pinattr);
+    vfdmax = vfdmultiple * vfdblockcount;
+
+    /* initialize header entry first time through */
+    pthread_mutexattr_init(&pinattr);
 #ifndef MACOSX
-        pthread_mutexattr_setpshared(&pinattr,PTHREAD_PROCESS_PRIVATE);
-        pthread_mutexattr_settype(&pinattr,PTHREAD_MUTEX_ERRORCHECK);
+    pthread_mutexattr_setpshared(&pinattr, PTHREAD_PROCESS_PRIVATE);
+    pthread_mutexattr_settype(&pinattr, PTHREAD_MUTEX_ERRORCHECK);
 #endif		
-/*  set the max number of user fd's  */
-        RealFiles.maxfiles = pg_nofile();
-        RealFiles.checks = RealFiles.maxfiles;
+    /*  set the max number of user fd's  */
+    RealFiles.maxfiles = pg_nofile();
+    RealFiles.checks = RealFiles.maxfiles;
 
-        VfdCache.cxt = GetEnvMemoryContext();
+    VfdCache.cxt = GetEnvMemoryContext();
 
-        VfdCache.pointers = MemoryContextAlloc(VfdCache.cxt,(sizeof(Vfd*) * vfdblockcount));
-        VfdCache.pointers[0] = (Vfd *) MemoryContextAlloc(VfdCache.cxt,sizeof(Vfd) * vfdmultiple);
-        if ( VfdCache.pointers == NULL || VfdCache.pointers[0] == NULL ) {
-                elog(FATAL,"Memory exhusted in File Manager");     
-        }
+    VfdCache.pointers = MemoryContextAlloc(VfdCache.cxt, (sizeof (Vfd*) * vfdblockcount));
+    VfdCache.pointers[0] = (Vfd *) MemoryContextAlloc(VfdCache.cxt, sizeof (Vfd) * vfdmultiple);
+    if (VfdCache.pointers == NULL || VfdCache.pointers[0] == NULL) {
+        elog(FATAL, "Memory exhusted in File Manager");
+    }
 
-        InitializeBlock(0);
+    InitializeBlock(0);
 
-/*  file pool cache */
-        VfdCache.size = vfdmultiple;
-        pthread_mutex_init(&VfdCache.guard,&pinattr);
+    /*  file pool cache */
+    VfdCache.size = vfdmultiple;
+    pthread_mutex_init(&VfdCache.guard, &pinattr);
 
-/*  file pool hash */
-        VfdPool.hash = CreateFDHash(GetEnvMemoryContext());
-        pthread_mutex_init(&VfdPool.guard,&pinattr);
+    /*  file pool hash */
+    VfdPool.hash = CreateFDHash(GetEnvMemoryContext());
+    pthread_mutex_init(&VfdPool.guard, &pinattr);
 
-/*  real file tracking */
-        RealFiles.nfile = 0;
-        RealFiles.numAllocatedFiles = 0;
-        for (counter=0;counter<MAX_ALLOCATED_FILES;counter++) {
-            RealFiles.allocatedFiles[counter] = NULL;
-        }
-        pthread_mutex_init(&RealFiles.guard,&pinattr);
+    /*  real file tracking */
+    RealFiles.nfile = 0;
+    RealFiles.numAllocatedFiles = 0;
+    for (counter = 0; counter < MAX_ALLOCATED_FILES; counter++) {
+        RealFiles.allocatedFiles[counter] = NULL;
+    }
+    pthread_mutex_init(&RealFiles.guard, &pinattr);
 
-/* set the start and the end of the free 
-        blocks to the right places 
-        MKS  12.12.2001 */	
-        GetVirtualFD(vfdmultiple - 1)->nextFree = 0;
-        GetVirtualFD(0)->nextFree = 1;        
+    /* set the start and the end of the free 
+            blocks to the right places 
+            MKS  12.12.2001 */
+    GetVirtualFD(vfdmultiple - 1)->nextFree = 0;
+    GetVirtualFD(0)->nextFree = 1;
 
 }
 
 static Vfd*
-GetVirtualFD(int index)
-{
-	int sect = index / vfdmultiple;
-	int pos = index % vfdmultiple;
-	return VfdCache.pointers[sect] + pos;
+GetVirtualFD(int index) {
+    int sect = index / vfdmultiple;
+    int pos = index % vfdmultiple;
+    return VfdCache.pointers[sect] + pos;
 }
 
-static Index 
-InitializeBlock(int start)
-{
-	int counter;
-				
-	for ( counter = start;counter < vfdmultiple + start;counter++) {
-            Vfd*  target = GetVirtualFD(counter);
-            MemSet((char*)target,0,sizeof(Vfd));
-            target->id = counter;
-            target->nextFree = counter + 1;
-            target->fd = VFD_CLOSED;
-            target->usage_count = 0;
-            target->sweep_valid = false;
-            target->newerFile = -1;
-            target->refCount = 0;
-            target->pooled = false;
-            pthread_mutex_init(&target->pin,&pinattr);
-	}
-	return start;
-}
+static Index
+InitializeBlock(int start) {
+    int counter;
 
-
-static Vfd*
-AllocateVfd(FileName name,int fileflags,int filemode, bool private)
-{
-	Index		i;
-	File		file;
-        Vfd*             target;
-        Vfd*            list = GetVirtualFD(0);
-        
-        pthread_mutex_lock(&list->pin);
-	if (list->nextFree == 0)
-	{
-
-		/*
-		 * The free list is empty so it is time to increase the size of
-		 * the array.  We choose to double it each time this happens.
-		 * However, there's not much point in starting *real* small.
-		 */
-
-		Size	newCacheSize;	
-		Vfd*    block;
-		int     position,section;
-
-		pthread_mutex_lock(&VfdCache.guard);
-                newCacheSize = VfdCache.size;
-                block = (Vfd*) MemoryContextAlloc(VfdCache.cxt,newCacheSize * sizeof(Vfd));
-
-                if ( block == NULL ) {
-			elog(FATAL, "Memory exhausted");       
-                }
-		if ( vfdmultiple + VfdCache.size > vfdmax ) {
-			elog(FATAL,"The maximum number of virtual files have been used");
-		}
-				
-		for (position = VfdCache.size;
-			position < (VfdCache.size + newCacheSize);
-			position+=vfdmultiple) 
-		{	
-			section = position / vfdmultiple;
-			VfdCache.pointers[section] = block + ( position - VfdCache.size );
-			InitializeBlock(position);
-		}
-	/* set the start and the end of the free 
-		blocks to the right places 
-		MKS  12.12.2001 */	
-
-		GetVirtualFD(position - 1)->nextFree = 0;
-		list->nextFree = VfdCache.size;
-                
-		VfdCache.size = position;
-		DTRACE_PROBE1(mtpg,file__poolsize,VfdCache.size);
-		pthread_mutex_unlock(&VfdCache.guard);
-
-	}
-	file = list->nextFree;
-
-        target = GetVirtualFD(file);
-
-	list->nextFree = target->nextFree;	
-
-        strncpy(target->fileName,name,strlen(name));
-/*  make sure that if this is file, if shared, 
-    does not have exclusive or create or trunc
-*/
-        if ( !private ) target->fileFlags = fileflags & ~(O_TRUNC | O_EXCL | O_CREAT);
-        else target->fileFlags = fileflags;
-
-        target->fileMode = filemode;
-        target->seekPos = 0;
-        target->fdstate = 0x0;
-/*  allocating so reference it  */
-        Assert(target->refCount == 0);
-        target->refCount = 1;
+    for (counter = start; counter < vfdmultiple + start; counter++) {
+        Vfd* target = GetVirtualFD(counter);
+        MemSet((char*) target, 0, sizeof (Vfd));
+        target->id = counter;
+        target->nextFree = counter + 1;
         target->fd = VFD_CLOSED;
-	target->nextFree = -1;
-        target->pooled =  false;
-        target->private = private;
-       
-        pthread_mutex_unlock(&list->pin);
-        
-	return target;
+        target->usage_count = 0;
+        target->sweep_valid = false;
+        target->newerFile = -1;
+        target->refCount = 0;
+        target->pooled = false;
+        pthread_mutex_init(&target->pin, &pinattr);
+    }
+    return start;
 }
 
+static Vfd*
+AllocateVfd(FileName name, int fileflags, int filemode, bool private) {
+    Index i;
+    File file;
+    Vfd* target;
+    Vfd* list = GetVirtualFD(0);
+
+    pthread_mutex_lock(&list->pin);
+    if (list->nextFree == 0) {
+
+        /*
+         * The free list is empty so it is time to increase the size of
+         * the array.  We choose to double it each time this happens.
+         * However, there's not much point in starting *real* small.
+         */
+
+        Size newCacheSize;
+        Vfd* block;
+        int position, section;
+
+        pthread_mutex_lock(&VfdCache.guard);
+        newCacheSize = VfdCache.size;
+        block = (Vfd*) MemoryContextAlloc(VfdCache.cxt, newCacheSize * sizeof (Vfd));
+
+        if (block == NULL) {
+            elog(FATAL, "Memory exhausted");
+        }
+        if (vfdmultiple + VfdCache.size > vfdmax) {
+            elog(FATAL, "The maximum number of virtual files have been used");
+        }
+
+        for (position = VfdCache.size;
+                position < (VfdCache.size + newCacheSize);
+                position += vfdmultiple) {
+            section = position / vfdmultiple;
+            VfdCache.pointers[section] = block + (position - VfdCache.size);
+            InitializeBlock(position);
+        }
+        /* set the start and the end of the free 
+                blocks to the right places 
+                MKS  12.12.2001 */
+
+        GetVirtualFD(position - 1)->nextFree = 0;
+        list->nextFree = VfdCache.size;
+
+        VfdCache.size = position;
+        DTRACE_PROBE1(mtpg, file__poolsize, VfdCache.size);
+        pthread_mutex_unlock(&VfdCache.guard);
+
+    }
+    file = list->nextFree;
+
+    target = GetVirtualFD(file);
+
+    list->nextFree = target->nextFree;
+
+    strncpy(target->fileName, name, strlen(name));
+    /*  make sure that if this is file, if shared, 
+        does not have exclusive or create or trunc
+     */
+    if (!private) target->fileFlags = fileflags & ~(O_TRUNC | O_EXCL | O_CREAT);
+    else target->fileFlags = fileflags;
+
+    target->fileMode = filemode;
+    target->seekPos = 0;
+    target->fdstate = 0x0;
+    /*  allocating so reference it  */
+    Assert(target->refCount == 0);
+    target->refCount = 1;
+    target->fd = VFD_CLOSED;
+    target->nextFree = -1;
+    target->pooled = false;
+    target->private = private;
+
+    pthread_mutex_unlock(&list->pin);
+
+    return target;
+}
 
 static void
-FreeVfd(Vfd* vfdP)
-{
-        Vfd     *list = GetVirtualFD(0);
-        pthread_mutex_lock(&list->pin);
-        Assert(vfdP->refCount == 0);
-        Assert(vfdP->fd == VFD_CLOSED);
-        Assert(vfdP->pooled == false);
-        memset(vfdP->fileName,0x00,512);
-        vfdP->sweep_valid = false;
-	vfdP->nextFree = list->nextFree;
-	list->nextFree = vfdP->id;
-        pthread_mutex_unlock(&list->pin);
-	
+FreeVfd(Vfd* vfdP) {
+    Vfd *list = GetVirtualFD(0);
+    pthread_mutex_lock(&list->pin);
+    Assert(vfdP->refCount == 0);
+    Assert(vfdP->fd == VFD_CLOSED);
+    Assert(vfdP->pooled == false);
+    memset(vfdP->fileName, 0x00, 512);
+    vfdP->sweep_valid = false;
+    vfdP->nextFree = list->nextFree;
+    list->nextFree = vfdP->id;
+    pthread_mutex_unlock(&list->pin);
+
 }
 
 /* filepath()
@@ -623,138 +614,140 @@ FreeVfd(Vfd* vfdP)
  * bootstrap mode to do the cd, and save a few cycles/bytes here.)
  */
 static char *
-filepath(char* buf, char *filename, int len)
-{
-	/* Not an absolute path name? Then fill in with database path... */
-	if (*filename != SEP_CHAR)
-	{
-            snprintf(buf,len, "%s%c%s", GetDatabasePath(), SEP_CHAR, filename);
-            if ( strlen(buf) == len ) {
-                elog(ERROR,"file path for file name: %s is too long",filename);
-            }
-	} else {
-            strncpy(buf, filename, len);
-	}
+filepath(char* buf, char *filename, int len) {
+    /* Not an absolute path name? Then fill in with database path... */
+    if (*filename != SEP_CHAR) {
+        snprintf(buf, len, "%s%c%s", GetDatabasePath(), SEP_CHAR, filename);
+        if (strlen(buf) == len) {
+            elog(ERROR, "file path for file name: %s is too long", filename);
+        }
+    } else {
+        strncpy(buf, filename, len);
+    }
 
-	return buf;
+    return buf;
 }
 
-static void
+static bool
 CheckFileAccess(Vfd* target) {
-    if ( target->owner == 0 ) {
-        target->owner = pthread_self();
+    int trys = 0;
+
+    errno = 0;
+
+    Assert(pthread_equal(target->owner, pthread_self()));
+
+    while (target->fd == VFD_CLOSED && trys++ < 5) {
+        if (!ActivateFile(target)) {
+            char* err = strerror(errno);
+            elog(NOTICE, "bad file activation: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            errno = 0;
+        }
     }
 
-    Assert(pthread_equal(target->owner,pthread_self()));
+    if (target->fd == VFD_CLOSED) return FALSE;
 
-    if ( target->fd == VFD_CLOSED ) {
-        ActivateFile(target);
-    }
-    
-    Assert(target->fd != VFD_CLOSED);
-
-    target->usage_count++;
+    target->usage_count += 1;
     time(&target->access_time);
     target->sweep_valid = false;
-}
 
+    return TRUE;
+}
 
 static File
 fileNameOpenFile(FileName fileName,
-				 int fileFlags,
-				 int fileMode)
-{
-	Vfd		   *vfdP = NULL;
-	errno = 0;
-        bool                allocated = false;
-        bool                private = ( IsDBWriter() || IsPoolsweep() || IsBootstrapProcessingMode()
-                        || (fileFlags & (O_CREAT | O_EXCL | O_TRUNC)) ) ? true : false;
+        int fileFlags,
+        int fileMode) {
+    Vfd *vfdP = NULL;
+    errno = 0;
+    bool private = (IsDBWriter() || IsPoolsweep() || IsBootstrapProcessingMode()
+            || (fileFlags & (O_CREAT | O_EXCL | O_TRUNC))) ? true : false;
 
 
-	if (fileName == NULL) {
-		elog(DEBUG, "fileNameOpenFile: NULL fname");
-		return VFD_CLOSED;
-	}
+    if (fileName == NULL) {
+        elog(DEBUG, "fileNameOpenFile: NULL fname");
+        return VFD_CLOSED;
+    }
 
-        if (strlen(fileName) > 511 && !private ) {
-            elog(DEBUG, "fileNameOpenFile: file path too long, going private");
-            private = true;
-        }
+    if (strlen(fileName) > 511 && !private) {
+        elog(DEBUG, "fileNameOpenFile: file path too long, going private");
+        private = true;
+    }
 
-        while ( vfdP == NULL ) {
-            if ( !private && vfdsharemax > 1 ) {
-                vfdP = HashScanFD(fileName,fileFlags,fileMode,&allocated);
-            } else {
-                vfdP = AllocateVfd(fileName,fileFlags,fileMode,private);
-                /* activate your file to make sure that it can be created, this is important in bootstrap mode 
-                 * because if the allocation fails, we try again with file creation 
-                 */
-                if ( ActivateFile(vfdP) ) {
-                    allocated = true;
-                } else {
-                    Assert(vfdP->refCount == 1);
-                    vfdP->refCount = 0;
-                    FreeVfd(vfdP);
-                    return VFD_CLOSED;
-                }
-           }
-                
-            if ( !private && !allocated && (vfdP->fileFlags != fileFlags ||
-                vfdP->fileMode != fileMode) ) { 
-            /* test failed, relase this Vfd and get a private Vfd */
-                private = true;
-                FileClose(vfdP->id);
+        if (!private && vfdsharemax > 1) {
+            bool allocated = false;
+            vfdP = HashScanFD(fileName, fileFlags, fileMode, &allocated);
+            Assert(vfdP != NULL);
+            pthread_mutex_lock(&vfdP->pin);
+            vfdP->owner = pthread_self();
+            allocated = CheckFileAccess(vfdP);
+            vfdP->owner = 0;
+            pthread_mutex_unlock(&vfdP->pin);
+            if ( !allocated ) {
+                HashDropFD(vfdP);
                 vfdP = NULL;
-            }  else {
-                DTRACE_PROBE2(mtpg,file__opened,vfdP->id,vfdP->fileName);
+            }
+        } else {
+            vfdP = AllocateVfd(fileName, fileFlags, fileMode, private);
+            /* activate your file to make sure that it can be created, this is important in bootstrap mode 
+             * because if the allocation fails, we try again with file creation 
+             */
+            Assert(vfdP != NULL);
+            if ( !ActivateFile(vfdP) ) {
+                vfdP->refCount = 0;
+                FreeVfd(vfdP);
+                vfdP = NULL;
             }
         }
+            
+        if (vfdP == NULL) {
+            return VFD_CLOSED;
+        }
+        
+        DTRACE_PROBE2(mtpg, file__opened, vfdP->id, vfdP->fileName);
 
-	return vfdP->id;
+    return vfdP->id;
 }
 
 /*
  * open a file in the database directory ($PGDATA/base/...)
  */
 File
-FileNameOpenFile(FileName fileName, int fileFlags, int fileMode)
-{
-	File		fd;
-	char*	   fname = palloc(512);
+FileNameOpenFile(FileName fileName, int fileFlags, int fileMode) {
+    File fd;
+    char* fname = palloc(512);
 
-        if ( strlen(fileName) > 512 ) {
-            elog(ERROR,"cannot open file -- %s, path too long",fileName);
-        }
-        memset(fname,0x00,512);
-	filepath(fname,fileName,512);
-	
-	fd = fileNameOpenFile(fname, fileFlags, fileMode);
-	
-        pfree(fname);
+    if (strlen(fileName) > 512) {
+        elog(ERROR, "cannot open file -- %s, path too long", fileName);
+    }
+    memset(fname, 0x00, 512);
+    filepath(fname, fileName, 512);
 
-	return fd;
+    fd = fileNameOpenFile(fname, fileFlags, fileMode);
+
+    pfree(fname);
+
+    return fd;
 }
 
 /*
  * open a file in an arbitrary directory
  */
 File
-PathNameOpenFile(FileName fileName, int fileFlags, int fileMode)
-{
-	File file = -1;	
-	char*	   fname = palloc(512);
+PathNameOpenFile(FileName fileName, int fileFlags, int fileMode) {
+    File file = -1;
+    char* fname = palloc(512);
 
-        if ( strlen(fileName) > 512 ) {
-            elog(ERROR,"cannot open file -- %s, path too long",fileName);
-        }
-        memset(fname,0x00,512);
-	strncpy(fname,fileName,strlen(fileName));
+    if (strlen(fileName) > 512) {
+        elog(ERROR, "cannot open file -- %s, path too long", fileName);
+    }
+    memset(fname, 0x00, 512);
+    strncpy(fname, fileName, strlen(fileName));
 
-	file = fileNameOpenFile(fname, fileFlags, fileMode);
-	
-        pfree(fname);
-	
-        return file;
+    file = fileNameOpenFile(fname, fileFlags, fileMode);
+
+    pfree(fname);
+
+    return file;
 }
 
 /*
@@ -765,235 +758,261 @@ PathNameOpenFile(FileName fileName, int fileFlags, int fileMode)
  * one setting makes any sense for a temp file.
  */
 File
-OpenTemporaryFile(void)
-{
-	char		tempfilename[64];
-	File		file;
-        Env*		env = GetEnv();
-        int		count = 0;
-	/*
-	 * Generate a tempfile name that's unique within the current
-	 * transaction
-	 */
-	snprintf(tempfilename, sizeof(tempfilename),
-			 "pg_sorttemp%d.%d.%ld", MyProcPid,(int)pthread_self(), tempFileCounter++);
+OpenTemporaryFile(void) {
+    char tempfilename[64];
+    File file;
+    Env* env = GetEnv();
+    int count = 0;
+    /*
+     * Generate a tempfile name that's unique within the current
+     * transaction
+     */
+    snprintf(tempfilename, sizeof (tempfilename),
+            "pg_sorttemp%d.%d.%ld", MyProcPid, (int) pthread_self(), tempFileCounter++);
 
-	/* Open the file */
+    /* Open the file */
 
 #ifndef __CYGWIN32__
-	file = FileNameOpenFile(tempfilename,
-							O_RDWR | O_CREAT | O_TRUNC, 0600);
+    file = FileNameOpenFile(tempfilename,
+            O_RDWR | O_CREAT | O_TRUNC, 0600);
 #else
-	file = FileNameOpenFile(tempfilename,
-							O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0600);
+    file = FileNameOpenFile(tempfilename,
+            O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0600);
 #endif
 
-	if (file <= 0) {
-		elog(DEBUG, "Failed to create temporary file %s", tempfilename);
-	}
-        pthread_mutex_lock(&GetVirtualFD(file)->pin);
-	/* Mark it for deletion at close or EOXact */
-	GetVirtualFD(file)->fdstate |= FD_TEMPORARY;
-        pthread_mutex_unlock(&GetVirtualFD(file)->pin);
+    if (file <= 0) {
+        elog(DEBUG, "Failed to create temporary file %s", tempfilename);
+    }
+    pthread_mutex_lock(&GetVirtualFD(file)->pin);
+    /* Mark it for deletion at close or EOXact */
+    GetVirtualFD(file)->fdstate |= FD_TEMPORARY;
+    pthread_mutex_unlock(&GetVirtualFD(file)->pin);
 
-        while ( env->temps[count] != 0 && count<MAX_PRIVATE_FILES ) count++;
-        
-        if ( count == MAX_PRIVATE_FILES ) {
-            FileClose(file);
-            elog(ERROR,"Too many temporary files requested");
-        }
-        
-        env->temps[count] = file;
-	return file;
+    while (env->temps[count] != 0 && count < MAX_PRIVATE_FILES) count++;
+
+    if (count == MAX_PRIVATE_FILES) {
+        FileClose(file);
+        elog(ERROR, "Too many temporary files requested");
+    }
+
+    env->temps[count] = file;
+    return file;
 }
 
 /*
  * close a file when done with it
  */
 void
-FileClose(File file)
-{
-	Vfd* target 	=	GetVirtualFD(file);
-        bool    free = false;
-       
-        if ( vfdsharemax <= 1 || target->private ) {
-            Assert(target->refCount == 1);
-            free = true;
-            target->refCount = 0;
-        } else {
-            free = HashDropFD(target);
+FileClose(File file) {
+    Vfd* target = GetVirtualFD(file);
+    bool free = false;
+
+    if (vfdsharemax <= 1 || target->private) {
+        Assert(target->refCount == 1);
+        free = true;
+        target->refCount = 0;
+    } else {
+        free = HashDropFD(target);
+    }
+
+    pthread_mutex_lock(&target->pin);
+
+    if (target->fdstate & FD_TEMPORARY) {
+        int track = 0;
+        Env* env = GetEnv();
+
+        for (track = 0; track < MAX_PRIVATE_FILES; track++) {
+            if (env->temps[track] == file) env->temps[track] = 0;
         }
+    }
 
-        pthread_mutex_lock(&target->pin);
+    DTRACE_PROBE2(mtpg, file__closed, file, target->fileName);
 
-        if (target->fdstate & FD_TEMPORARY) {
-            int track =  0;
-            Env* env = GetEnv();
-
-            for ( track=0;track<MAX_PRIVATE_FILES;track++) {
-                if ( env->temps[track] == file ) env->temps[track] = 0;
-            }
-	}
-	
-        DTRACE_PROBE2(mtpg,file__closed,file,target->fileName);
-      
-        if ( free ) {
-            if ( target->fd != VFD_CLOSED ) {
-                RetireFile(target);
-            }
-            /*
-             * Delete the file if it was temporary
-             */
-            if (target->fdstate & FD_TEMPORARY)
-                    unlink(target->fileName);
-      /*  put back to pool  */
-            FreeVfd(target);
+    if (free) {
+        if (target->fd != VFD_CLOSED) {
+            RetireFile(target);
         }
+        /*
+         * Delete the file if it was temporary
+         */
+        if (target->fdstate & FD_TEMPORARY)
+            unlink(target->fileName);
+        /*  put back to pool  */
+        FreeVfd(target);
+    }
 
-        pthread_mutex_unlock(&target->pin);
+    pthread_mutex_unlock(&target->pin);
 }
 
 char*
 FileGetName(File file) {
-    	Vfd* target 	=	GetVirtualFD(file);
+    Vfd* target = GetVirtualFD(file);
 
-	Assert(FileIsValid(file));
-        return target->fileName;
+    Assert(FileIsValid(file));
+    return target->fileName;
 }
 
 /*
  * close a file and forcibly delete the underlying Unix file
  */
 void
-FileUnlink(File file)
-{
-	Assert(FileIsValid(file));
+FileUnlink(File file) {
+    Assert(FileIsValid(file));
 
-	Vfd* virtf = GetVirtualFD(file);
-        pthread_mutex_lock(&virtf->pin);
-        if ( virtf->fd != VFD_CLOSED ) {
-            RetireFile(virtf);
-        }
-        unlink(virtf->fileName);
-        pthread_mutex_unlock(&virtf->pin);
+    Vfd* virtf = GetVirtualFD(file);
+    pthread_mutex_lock(&virtf->pin);
+    if (virtf->fd != VFD_CLOSED) {
+        RetireFile(virtf);
+    }
+    unlink(virtf->fileName);
+    pthread_mutex_unlock(&virtf->pin);
 
-	FileClose(file);
+    FileClose(file);
+}
+
+/*
+ * close a file and forcibly delete the underlying Unix file
+ */
+void
+FileRename(File file, char* newname) {
+    Assert(FileIsValid(file));
+
+    Vfd* virtf = GetVirtualFD(file);
+    pthread_mutex_lock(&virtf->pin);
+    if (virtf->fd != VFD_CLOSED) {
+        RetireFile(virtf);
+    }
+    rename(virtf->fileName, newname);
+    pthread_mutex_unlock(&virtf->pin);
+
+    FileClose(file);
 }
 
 int
-FileRead(File file, char *buffer, int amount)
-{
-	ssize_t			blit;
-        int                     request = amount;
-        Vfd*    target = GetVirtualFD(file);
-	Assert(FileIsValid(file));
+FileRead(File file, char *buffer, int amount) {
+    ssize_t blit;
+    int request = amount;
+    Vfd* target = GetVirtualFD(file);
+    Assert(FileIsValid(file));
 
-	CheckFileAccess(target);
+    errno = 0;
         
-	while ( amount > 0 ) {
-            blit = read(target->fd, buffer, amount);
-            if ( blit < 0 ) {
-                perror("FileRead");
-                return -1;
-            } else if ( blit == 0 ) {
-                /* EOF  */
-                target->seekPos += (request - amount);
+    if (!CheckFileAccess(target)) return -1;
+
+    while (amount > 0) {
+        blit = read(target->fd, buffer, amount);
+        if (blit < 0) {
+            char* err = strerror(errno);
+            errno = 0;
+            elog(NOTICE, "bad read file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            return -1;
+        } else if (blit == 0) {
+            /* EOF  */
+            blit = lseek(target->fd,0,SEEK_END);
+            if ( blit == target->seekPos ) {
+                target->seekPos += blit;
                 return (request - amount);
+            } else {
+                lseek(target->fd,target->seekPos + request - amount,SEEK_SET);
+                blit = 0;
             }
-            amount -= blit;
-            buffer += blit;
         }
-        
-	target->seekPos += request;
+        amount -= blit;
+        buffer += blit;
+    }
 
-	return request;
+    target->seekPos += request;
+
+    return request;
 }
 
 int
-FileWrite(File file, char *buffer, int amount)
-{
-	Vfd*  target = GetVirtualFD(file);
-        int request = amount;
+FileWrite(File file, char *buffer, int amount) {
+    Vfd* target = GetVirtualFD(file);
+    int request = amount;
+    
+    errno = 0;
 
-	CheckFileAccess(target);
+    if (!CheckFileAccess(target)) return -1;
 
-        while ( amount > 0 ) {
-            ssize_t blit = write(target->fd, buffer, amount);
-            if ( blit < 0 ) {
-                perror("FileWrite");
-                return -1;
-            } else if ( blit == 0 ) {
-                elog(NOTICE,"partial write %s",target->fileName);
-                return (request - amount);
-            }
-            buffer += blit;
-            amount -= blit;
+    while (amount > 0) {
+        
+        ssize_t blit = write(target->fd, buffer, amount);
+        if (blit < 0) {
+            char* err = strerror(errno);
+            elog(NOTICE, "bad write file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            return -1;
+        } else if (blit == 0) {
+            elog(NOTICE, "partial write %s", target->fileName);
+            return (request - amount);
         }
+        buffer += blit;
+        amount -= blit;
+    }
 
-	/* mark the file as needing fsync */
-	target->fdstate |= FD_DIRTY;
+    /* mark the file as needing fsync */
+    target->fdstate |= FD_DIRTY;
 
-	return request;
+    return request;
 }
 
 long
-FileSeek(File file, long offset, int whence)
-{
-	Vfd* target = GetVirtualFD(file);
-        off_t blit = 0;
+FileSeek(File file, long offset, int whence) {
+    Vfd* target = GetVirtualFD(file);
+    off_t blit = 0;
+    int fails = 0;
 
-        Assert(pthread_equal(target->owner,pthread_self()));
-	
-	if (target->fd == VFD_CLOSED)
-	{
-		switch (whence)
-		{
-			case SEEK_SET:
-				target->seekPos = offset;
-				break;
-			case SEEK_CUR:
-				target->seekPos += offset;
-				break;
-			case SEEK_END:
-                                CheckFileAccess(target);
-				blit = lseek(target->fd, offset, whence);
-                                if ( blit < 0 ) {
-                                    perror("FileSeek");
-                                    return -1;
-                                } else {
-                                    target->seekPos = blit;
-                                }
-				break;
-			default:
-				elog(DEBUG, "FileSeek: invalid whence: %d", whence);
-				break;
-		}
-	} else {
-		CheckFileAccess(target);
+    if (target->fd == VFD_CLOSED) {
+        switch (whence) {
+            case SEEK_SET:
+                target->seekPos = offset;
+                break;
+            case SEEK_CUR:
+                target->seekPos += offset;
+                break;
+            case SEEK_END:
+                if (!CheckFileAccess(target)) return -1;
                 blit = lseek(target->fd, offset, whence);
-                if ( blit < 0 ) {
+                if (blit < 0) {
                     perror("FileSeek");
                     return -1;
                 } else {
                     target->seekPos = blit;
                 }
+                break;
+            default:
+                elog(DEBUG, "FileSeek: invalid whence: %d", whence);
+                break;
         }
-	return target->seekPos;
+    } else {
+        if (!CheckFileAccess(target)) return -1;
+        blit = lseek(target->fd, offset, whence);
+        if (blit < 0) {
+            char* err = strerror(errno);
+            elog(NOTICE, "bad seek file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            if (fails++ > 5) {
+                return -1;
+            }
+        } else {
+            target->seekPos = blit;
+        }
+    }
+    return target->seekPos;
 }
 
 int
-FileTruncate(File file, long offset)
-{
-        int			returnCode;
-        Vfd*        target = GetVirtualFD(file);
+FileTruncate(File file, long offset) {
+    int returnCode;
+    Vfd* target = GetVirtualFD(file);
 
-        Assert(FileIsValid(file));
+    Assert(FileIsValid(file));
 
-	FileSync(file);
+    FileSync(file);
 
-	returnCode = ftruncate(target->fd, offset);
-        
-	return returnCode;
+    returnCode = ftruncate(target->fd, offset);
+    pg_fsync(target->fd);
+
+    return returnCode;
 }
 
 /*
@@ -1026,75 +1045,67 @@ FileTruncate(File file, long offset)
  * physically closed, but that is now WRONG; see comments for FileMarkDirty.
  */
 int
-FileSync(File file)
-{
-	int			returnCode;
-	Vfd* target = GetVirtualFD(file);
-	
-        if (!(target->fdstate & FD_DIRTY))
-	{
-		/* Need not sync if file is not dirty. */
-		returnCode = 0;
-	}
-	else if (disableFsync)
-	{
-		/* Don't force the file open if pg_fsync isn't gonna sync it. */
-		returnCode = 0;
-		target->fdstate &= ~FD_DIRTY;
-	}
-	else
-	{
+FileSync(File file) {
+    int returnCode;
+    Vfd* target = GetVirtualFD(file);
 
-		/*
-		 * We don't use FileAccess() because we don't want to force the
-		 * file to the front of the LRU ring; we aren't expecting to
-		 * access it again soon.
-		 */
-                CheckFileAccess(target);
-		returnCode = pg_fsync(target->fd);
-		if (returnCode == 0)
-                    target->fdstate &= ~FD_DIRTY;
-	}
-	return returnCode;
-}
+    if (!(target->fdstate & FD_DIRTY)) {
+        /* Need not sync if file is not dirty. */
+        returnCode = 0;
+    } else if (disableFsync) {
+        /* Don't force the file open if pg_fsync isn't gonna sync it. */
+        returnCode = 0;
+        target->fdstate &= ~FD_DIRTY;
+    } else {
 
-
-int
-FilePin(File file,int key)
-{
-	Vfd* target = GetVirtualFD(file);
-	
-        while ( pthread_mutex_lock(&target->pin) ) {
-                perror("FilePin");
-        }
-        
-        target->owner = pthread_self();
-        target->key = key;
-	
-	Assert( target->owner != 0 );
+        /*
+         * We don't use FileAccess() because we don't want to force the
+         * file to the front of the LRU ring; we aren't expecting to
+         * access it again soon.
+         */
+        if (!CheckFileAccess(target)) return -1;
+        returnCode = pg_fsync(target->fd);
+        if (returnCode == 0)
+            target->fdstate &= ~FD_DIRTY;
+    }
+    return returnCode;
 }
 
 int
-FileUnpin(File file,int key)
-{
-	Vfd* target = GetVirtualFD(file);
-        int err = 0;
-        
-        target->owner = 0;
-        target->key = 0;
-        err = pthread_mutex_unlock(&target->pin);
+FilePin(File file, int key) {
+    Vfd* target = GetVirtualFD(file);
 
-        switch (err) {
-            case 0:
-                    break;
-            case EPERM:
-                    elog(DEBUG,"no lock owner");
-                    break;
-            default:
-                    printf("error %i",err);
-        }
-            
-	return 0;
+    while (pthread_mutex_lock(&target->pin)) {
+        perror("FilePin");
+    }
+    Assert(target->owner == 0);
+ 
+    target->owner = pthread_self();
+    target->key = key;
+
+    Assert(target->owner != 0);
+}
+
+int
+FileUnpin(File file, int key) {
+    Vfd* target = GetVirtualFD(file);
+    int err = 0;
+
+    target->owner = 0;
+    target->key = 0;
+    err = pthread_mutex_unlock(&target->pin);
+
+    switch (err) {
+        case 0:
+            break;
+        case EPERM:
+            elog(DEBUG, "no lock owner");
+            break;
+        default:
+            printf("error %i", err);
+    }
+
+    return 0;
 }
 
 /*
@@ -1115,42 +1126,39 @@ FileUnpin(File file,int key)
  * we must fsync even if we have to re-open the file to do it.
  */
 void
-FileMarkDirty(File file)
-{
+FileMarkDirty(File file) {
     Vfd* target = GetVirtualFD(file);
     pthread_mutex_lock(&target->pin);
-	target->fdstate |= FD_DIRTY;
+    target->fdstate |= FD_DIRTY;
     pthread_mutex_unlock(&target->pin);
 }
 
 int
-FileOptimize(File file)
-{
-    Vfd                     *target = GetVirtualFD(file);
+FileOptimize(File file) {
+    Vfd *target = GetVirtualFD(file);
     int flag = 0;
 
-    if ( target->fd == VFD_CLOSED ) return 0;
+    if (target->fd == VFD_CLOSED) return 0;
 
 #ifdef SUNOS
     flag = DIRECTIO_ON;
 
-    directio(target->fd,flag);
+    directio(target->fd, flag);
 #endif
     return 1;
 }
 
 int
-FileNormalize(File file)
-{
-    Vfd                     *target = GetVirtualFD(file);
+FileNormalize(File file) {
+    Vfd *target = GetVirtualFD(file);
     int flag = 0;
 
-    if ( target->fd == VFD_CLOSED ) return 0;
+    if (target->fd == VFD_CLOSED) return 0;
 
 #ifdef SUNOS
     flag = DIRECTIO_OFF;
 
-    directio(target->fd,flag);
+    directio(target->fd, flag);
 #endif
     return 1;
 }
@@ -1172,106 +1180,95 @@ FileNormalize(File file)
  */
 
 FILE *
-AllocateFile(char *name, char *mode)
-{
-	FILE*	    file = NULL;
-	int         ind = 0;
-	Env*        env = GetEnv();
-        errno = 0;
-	while ( env->falloc[ind] != NULL && ind < MAX_PRIVATE_FILES ) ind++;
-	if ( ind == MAX_PRIVATE_FILES ) {
+AllocateFile(char *name, char *mode) {
+    FILE* file = NULL;
+    int ind = 0;
+    Env* env = GetEnv();
+    errno = 0;
+    while (env->falloc[ind] != NULL && ind < MAX_PRIVATE_FILES) ind++;
+    if (ind == MAX_PRIVATE_FILES) {
+        elog(ERROR, "AllocateFile: too many private FDs demanded");
+    }
+
+    while (file == NULL && errno == 0) {
+        ReleaseFileIfNeeded();
+        file = fopen(name, mode);
+        if (errno == EMFILE || errno == ENFILE) {
+            errno = 0;
+        }
+    }
+
+    if (file != NULL) {
+        pthread_mutex_lock(&RealFiles.guard);
+        if (RealFiles.numAllocatedFiles >= MAX_ALLOCATED_FILES) {
+            pthread_mutex_unlock(&RealFiles.guard);
+            fclose(file);
             elog(ERROR, "AllocateFile: too many private FDs demanded");
         }
+        RealFiles.allocatedFiles[RealFiles.numAllocatedFiles++] = file;
+        env->falloc[ind] = file;
+        pthread_mutex_unlock(&RealFiles.guard);
+    }
 
-        while ( file == NULL && errno == 0 ) {
-            ReleaseFileIfNeeded();
-            file = fopen(name, mode);
-            if (errno == EMFILE || errno == ENFILE)
-            {
-                    errno = 0;
-            }
-        }
-
-        if (file != NULL ) {
-            pthread_mutex_lock(&RealFiles.guard);
-            if (RealFiles.numAllocatedFiles >= MAX_ALLOCATED_FILES) {
-                pthread_mutex_unlock(&RealFiles.guard);
-                fclose(file);
-                elog(ERROR, "AllocateFile: too many private FDs demanded");
-            }
-            RealFiles.allocatedFiles[RealFiles.numAllocatedFiles++] = file;
-            env->falloc[ind] = file;
-            pthread_mutex_unlock(&RealFiles.guard);
-	}
-	
-	return file;
+    return file;
 }
 
 void
-FreeFile(FILE *file)
-{
-	int			i;
-	Env* env = GetEnv();
+FreeFile(FILE *file) {
+    int i;
+    Env* env = GetEnv();
 
-	/* Remove file from list of allocated files, if it's present */
-        pthread_mutex_lock(&RealFiles.guard);
-	for (i = RealFiles.numAllocatedFiles; --i >= 0;)
-	{
-		if (RealFiles.allocatedFiles[i] == file)
-		{
-			RealFiles.allocatedFiles[i] = RealFiles.allocatedFiles[--RealFiles.numAllocatedFiles];
-			break;
-		}
-	}
+    /* Remove file from list of allocated files, if it's present */
+    pthread_mutex_lock(&RealFiles.guard);
+    for (i = RealFiles.numAllocatedFiles; --i >= 0;) {
+        if (RealFiles.allocatedFiles[i] == file) {
+            RealFiles.allocatedFiles[i] = RealFiles.allocatedFiles[--RealFiles.numAllocatedFiles];
+            break;
+        }
+    }
 
 
-	if (i < 0)
-		elog(NOTICE, "FreeFile: file was not obtained from AllocateFile");
-	
-	for(i = 0;i<MAX_PRIVATE_FILES;i++ ) {
-		if ( env->falloc[i] == file ) env->falloc[i] = NULL;
-	}
+    if (i < 0)
+        elog(NOTICE, "FreeFile: file was not obtained from AllocateFile");
 
-	fclose(file);
-        pthread_mutex_unlock(&RealFiles.guard);
+    for (i = 0; i < MAX_PRIVATE_FILES; i++) {
+        if (env->falloc[i] == file) env->falloc[i] = NULL;
+    }
+
+    fclose(file);
+    pthread_mutex_unlock(&RealFiles.guard);
 }
-
 
 /*
  *  synchronize all the OS files to 
  *  a base change made in the DB
  */
 int
-FileBaseSync(File file, long pos)
-{
-int count = 0;
-	Index		i;
+FileBaseSync(File file, long pos) {
+    int count = 0;
+    Index i;
 
     pthread_mutex_lock(&VfdCache.guard);
 
     Vfd* base = GetVirtualFD(file);
-/*    elog(DEBUG,"basing %s",base->fileName);   */
-    for (i = 1; i < VfdCache.size; i++)
-    {
-            Vfd* target = GetVirtualFD(i);
+    for (i = 1; i < VfdCache.size; i++) {
+        Vfd* target = GetVirtualFD(i);
 
-            if ( target->id == base->id ) continue;
+        if (target->id == base->id) continue;
 
-            pthread_mutex_lock(&target->pin);
+        pthread_mutex_lock(&target->pin);
 
-            if ( target->refCount > 0 ) {
-/*                elog(DEBUG,"checking %s",target->fileName);   */
-                if ( strcmp(base->fileName,target->fileName) == 0 ) {
-                    if ( target->fd != VFD_CLOSED ) {
-                        RetireFile(target);
-                    }
-/*                    elog(DEBUG,"retiring %d",target->id); */
-                    if ( target->seekPos > pos ) target->seekPos = pos;
-                    count++;
+        if (target->refCount > 0) {
+            if (strcmp(base->fileName, target->fileName) == 0) {
+                if (target->fd != VFD_CLOSED) {
+                    RetireFile(target);
                 }
+                if (target->seekPos > pos) target->seekPos = pos;
+                count++;
             }
+        }
 
-            pthread_mutex_unlock(&target->pin);
+        pthread_mutex_unlock(&target->pin);
     }
 
     pthread_mutex_unlock(&VfdCache.guard);
@@ -1287,24 +1284,22 @@ int count = 0;
  * change in the logical state of the VFDs.
  */
 void
-closeAllVfds()
-{
-	Index		i;
+closeAllVfds() {
+    Index i;
 
     pthread_mutex_lock(&VfdCache.guard);
-        
-        for (i = 1; i < VfdCache.size; i++)
-        {
-                Vfd* target = GetVirtualFD(i);
-                pthread_mutex_lock(&target->pin);
-                if ( target->refCount > 0 ) {
-                    target->refCount = 1;
-                    pthread_mutex_unlock(&target->pin);
-                    FileClose(i);
-                } else {
-                    pthread_mutex_unlock(&target->pin);
-                }
+
+    for (i = 1; i < VfdCache.size; i++) {
+        Vfd* target = GetVirtualFD(i);
+        pthread_mutex_lock(&target->pin);
+        if (target->refCount > 0) {
+            target->refCount = 1;
+            pthread_mutex_unlock(&target->pin);
+            FileClose(i);
+        } else {
+            pthread_mutex_unlock(&target->pin);
         }
+    }
     pthread_mutex_unlock(&VfdCache.guard);
 }
 
@@ -1315,31 +1310,32 @@ ReleaseFileIfNeeded() {
     Vfd* target;
     File close = -1;
     time_t access;
-    
+
 
     while (CheckRealFileCount()) {
- /*  first try and use hints fro a previous scan */
-       close = GetVirtualFD(0)->newerFile;
-       if ( close > 0 ) {
+        /*  first try and use hints fro a previous scan */
+        close = GetVirtualFD(0)->newerFile;
+        if (close > 0) {
             target = GetVirtualFD(close);
             GetVirtualFD(0)->newerFile = target->newerFile;
-       } else {
-           int poolsize = GetVfdPoolSize();
-           
-           close = -1;
-           time(&access);
-           for (sweep=0;sweep < poolsize;sweep++) {
+        } else {
+            int poolsize = GetVfdPoolSize();
+
+            close = -1;
+            time(&access);
+            for (sweep = 0; sweep < poolsize; sweep++) {
                 target = GetVirtualFD(sweep);
 
-                if ( pthread_mutex_trylock(&target->pin) ) {
-    /* only trylock  */
+                if (pthread_mutex_trylock(&target->pin)) {
+                    /* only trylock  */
                     continue;
                 }
-                if ( target->fd == VFD_CLOSED ) {
+                if (target->fd == VFD_CLOSED) {
                     pthread_mutex_unlock(&target->pin);
                     continue;
                 }
-                if ( difftime(access,target->access_time) > 0 ) {
+                Assert(target->owner == 0);
+                if (difftime(access, target->access_time) > 0) {
                     target->newer_access_time = access;
                     access = target->access_time;
                     target->newerFile = close;
@@ -1349,8 +1345,8 @@ ReleaseFileIfNeeded() {
                 }
                 pthread_mutex_unlock(&target->pin);
             }
-            
-            if ( close > 0 ) {
+
+            if (close > 0) {
                 target = GetVirtualFD(close);
             }
             pthread_mutex_lock(&GetVirtualFD(0)->pin);
@@ -1359,18 +1355,18 @@ ReleaseFileIfNeeded() {
         }
 
 
-        if ( target != NULL ) {
+        if (target != NULL) {
             pthread_mutex_lock(&target->pin);
-            if ( target->sweep_valid && target->fd != VFD_CLOSED ) {
+            if (target->sweep_valid && target->fd != VFD_CLOSED) {
                 RetireFile(target);
             }
             pthread_mutex_unlock(&target->pin);
         }
-   }
+    }
     return success;
 }
 
-static int 
+static int
 GetVfdPoolSize() {
     int size = 0;
     pthread_mutex_lock(&VfdCache.guard);
@@ -1385,33 +1381,35 @@ CheckRealFileCount() {
 
     pthread_mutex_lock(&RealFiles.guard);
     size = RealFiles.nfile + RealFiles.numAllocatedFiles;
-    DTRACE_PROBE3(mtpg,file__maxcheck,vfdsharemax,size,RealFiles.maxfiles);
-    if ( (size >= RealFiles.maxfiles * 0.9) && vfdsharemax < 64) {
-        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
-            RealFiles.checks = 0;
-            vfdsharemax += 1;
-        }
-    } else if ( size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1 ) {
-        if ( RealFiles.checks++ >=  RealFiles.maxfiles ) {
-            RealFiles.checks == 0;
-            vfdsharemax -= 1;
+    DTRACE_PROBE3(mtpg, file__maxcheck, vfdsharemax, size, RealFiles.maxfiles);
+    if (vfdautotune == true) {
+        if ((size >= RealFiles.maxfiles * 0.9) && vfdsharemax < 64) {
+            if (RealFiles.checks++ >= RealFiles.maxfiles) {
+                RealFiles.checks = 0;
+                vfdsharemax += 1;
+            }
+        } else if (size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1) {
+            if (RealFiles.checks++ >= RealFiles.maxfiles) {
+                RealFiles.checks == 0;
+                vfdsharemax -= 1;
+            }
         }
     }
+
     pthread_mutex_unlock(&RealFiles.guard);
     return (size >= RealFiles.maxfiles);
 }
 
 void
-AtEOXact_Files(void)
-{
-	int count = 0;
-	Env* env = GetEnv();
-	for (count=0;count<MAX_PRIVATE_FILES;count++) {
-		if ( env->temps[count] != 0 ) FileClose(env->temps[count]);
-		env->temps[count] = 0;
-		if ( env->falloc[count] != NULL ) FreeFile(env->falloc[count]);
-		env->falloc[count] = NULL;
-	}
-	return;
+AtEOXact_Files(void) {
+    int count = 0;
+    Env* env = GetEnv();
+    for (count = 0; count < MAX_PRIVATE_FILES; count++) {
+        if (env->temps[count] != 0) FileClose(env->temps[count]);
+        env->temps[count] = 0;
+        if (env->falloc[count] != NULL) FreeFile(env->falloc[count]);
+        env->falloc[count] = NULL;
+    }
+    return;
 }
 

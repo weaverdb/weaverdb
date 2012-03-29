@@ -37,6 +37,7 @@ typedef enum ProcessingMode
 	BootstrapProcessing,		/* bootstrap creation of template database */
 	InitProcessing,				/* initializing system */
 	NormalProcessing,			/* normal processing */
+        ReadOnlyProcessing,
 	ShutdownProcessing			/* processing */
 } ProcessingMode;
 
@@ -47,6 +48,7 @@ typedef enum CommitType
 {
 	DEFAULT_COMMIT,
 	SOFT_COMMIT,
+        FAST_SOFT_COMMIT,
 	CAREFUL_COMMIT,
         FAST_CAREFUL_COMMIT,
         SYNCED_COMMIT,
@@ -106,13 +108,11 @@ typedef struct Environment {
 	char* 			DatabasePath;  
 	Oid			DatabaseId;
 	char* 			UserName;
-	Oid			UserId;
+	int			UserId;
 /*  processing mode */
 	ProcessingMode  	Mode;           
 /*  prepkeyset.c   */
 	int			TotalExpr;
-/*     SEGV  in cond handler    */
-        sigjmp_buf		errenv;
 	int			insleep;
 /*   masterlock status   */
 	int 			masterlock;
@@ -194,6 +194,7 @@ extern masterlock_t*		masterlock;
 
 
 #define IsBootstrapProcessingMode() ((bool)(GetProcessingMode() == BootstrapProcessing))
+#define IsReadOnlyProcessingMode() ((bool)(GetProcessingMode() == ReadOnlyProcessing))
 #define IsInitProcessingMode() ((bool)(GetProcessingMode() == InitProcessing))
 #define IsNormalProcessingMode() ((bool)(GetProcessingMode() == NormalProcessing))
 #define IsShutdownProcessingMode() ((bool)(GetProcessingMode() == ShutdownProcessing))
@@ -209,13 +210,13 @@ MKS  12-11-2000
 
 Env* CreateEnv(Env* parent);
 Env* GetEnv(void);
-void SetEnv(void* env);
+bool SetEnv(void* env);
 void DestroyEnv(void* env);
 
 void* AllocateEnvSpace(SectionId id,size_t size);
 void* GetEnvSpace(SectionId id);
 
-int InitSystem(bool  isPrivate);
+Env* InitSystem(bool  isPrivate);
 int DestroySystem(void);
 
 void DiscardAllInvalids(void);
@@ -252,6 +253,7 @@ void SetProcessingMode(ProcessingMode mode);
 
 long prandom(void);
 void sprandom(unsigned int seed);
+void ptimeout(struct timespec* ts,int to);
 
 void user_log(char* pattern, ...);
 

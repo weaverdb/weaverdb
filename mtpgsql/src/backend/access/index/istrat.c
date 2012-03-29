@@ -566,8 +566,14 @@ IndexSupportInitialize(IndexStrategy indexStrategy,
 		tuple = heap_getnext(scan);
 	}
 
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "IndexSupportInitialize: corrupted catalogs");
+	if (!HeapTupleIsValid(tuple)) {
+            if (!cachesearch)
+            {
+                    heap_endscan(scan);
+                    heap_close(relation, AccessShareLock);
+            }
+            elog(ERROR, "IndexSupportInitialize: corrupted catalogs");
+        }
 
 	maxStrategyNumber = AMStrategies(maxStrategyNumber);
 

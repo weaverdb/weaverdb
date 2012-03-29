@@ -496,7 +496,8 @@ pq_endcopyout(bool errorAbort)
 }
 
 extern void ConnectIO(void* args, commfunc infunc,commfunc outfunc) {
-    Env*     env;
+    Env*     env = GetEnv();
+    
     if ( env->pipein != NULL || env->pipeout != NULL ) {
         DisconnectIO();
     }
@@ -531,7 +532,7 @@ extern void* DisconnectIO() {
         args = comm->args;
     } 
     
-    if ( env->pipeout == NULL ) {
+    if ( env->pipeout != NULL ) {
         CommCursor* comm = (CommCursor*)env->pipeout;
         if (comm->ptr < comm->end) {
             if ( comm->datamove(comm->args, comm->buffer, comm->ptr, comm->end - comm->ptr) == COMM_ERROR ) {

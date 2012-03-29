@@ -76,9 +76,14 @@ static MemoryContextMethods SubSetMethods = {
  * maxBlockSize: maximum allocation block size
  */
 MemoryContext
-SubSetContextCreate(MemoryContext parent,
-					  const char *name)
+SubSetContextCreate(MemoryContext parent,const char *name)
 {
+#ifdef SUBSETISALLOC
+    return AllocSetContextCreate(parent,name,            
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
+#else
 	SubSetContext*	context;
         Assert( parent->type != T_SubSetContext );
 	/* Do the type-independent part of context creation */
@@ -92,6 +97,7 @@ SubSetContextCreate(MemoryContext parent,
 	context->map_size = 10;
 	context->highmark = 1;
 	return (MemoryContext) context;
+#endif
 }
 
 /*
@@ -128,7 +134,7 @@ SubSetInit(MemoryContext context)
 static void
 SubSetReset(MemoryContext context)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+    SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
 	for (x=0;x<sub->map_size;x++) {
@@ -156,7 +162,7 @@ SubSetReset(MemoryContext context)
 static void
 SubSetDelete(MemoryContext context)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+    SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
 	for (x=0;x<sub->map_size;x++) {
@@ -179,7 +185,7 @@ SubSetDelete(MemoryContext context)
 static void *
 SubSetAlloc(MemoryContext context, Size size)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+    SubSetContext*  sub = (SubSetContext*)context;
 	void* pointer = MemoryContextAlloc(sub->header.parent,size);
 	int x;
 	void** store = sub->alloced_pointers;
@@ -208,7 +214,7 @@ SubSetAlloc(MemoryContext context, Size size)
 static void
 SubSetFree(MemoryContext context, void *pointer)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+    SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;
 	void** store = sub->alloced_pointers;
 	for ( x=0;x<sub->map_size;x++ ) {

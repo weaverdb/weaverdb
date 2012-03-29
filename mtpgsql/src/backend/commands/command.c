@@ -868,7 +868,7 @@ RemoveColumnReferences(Oid reloid, int attnum, bool checkonly, HeapTuple reltup)
 				if (checkonly)
 				{
 					checkok = false;
-					elog(ERROR, "target column is used in an index");
+					elog(NOTICE, "target column is used in an index");
 				}
 				else
 				{

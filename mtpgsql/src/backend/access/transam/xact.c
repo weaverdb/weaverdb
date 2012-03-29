@@ -616,7 +616,6 @@ AtCommit_Cache()
 	 * Make catalog changes visible to all backend.
 	 * ----------------
 	 */
-        RelationCacheCommit();
 	RegisterInvalid(true);
         ResetCatalogCacheMemory();
 }
@@ -837,6 +836,7 @@ StartTransaction()
 	 *	initialize the various transaction subsystems
 	 * ----------------
 	 */
+        ResetTransactionCommitType();
 	AtStart_Locks();
 	AtStart_Cache();
 	AtStart_Memory();
@@ -863,44 +863,6 @@ StartTransaction()
 	s->state = TRANS_INPROGRESS;
         info->backupState = s->state;
 
-}
-
-void
-CycleTransactionId() {
-	Env* env = GetEnv();
-	TransactionId xid = GetCurrentTransactionId();
-	TransactionInfo*  info = GetTransactionInfo();
-	TransactionState s = info->CurrentTransactionState;
-
-	ThreadTransactionEnd();
-
-
-
-	RecordTransactionCommit();
-	ThreadReleaseLocks(true);
-	RegisterInvalid(true);
-/*    ResetCatalogCacheMemory();   */
-
-	ResetReindexProcessing();
-
-	xid = GetNewTransactionId();
-	s->transactionIdData = xid;
-
-	ThreadTransactionStart(xid);
-
-
-
-
-
-	XactLockTableInsert(xid);
-
-	s->commandId = FirstCommandId;
-	s->scanCommandId = FirstCommandId;
-	s->startTime = GetCurrentAbsoluteTime();
-
-	DiscardInvalid();  
-	FreeXactSnapshot();
-	SetQuerySnapshot();       
 }
 
 /* ---------------
@@ -962,6 +924,7 @@ CommitTransaction()
 
 	CloseSequences();
 	DropNoNameRels();
+        RelationCacheCommit();
 	
         ThreadTransactionEnd();
         
@@ -997,8 +960,6 @@ CommitTransaction()
 	 */
 	s->state = TRANS_DEFAULT;
 	info->SharedBufferChanged = false;/* safest place to do it */
-
-        ResetTransactionCommitType();
 }
 
 /* --------------------------------
@@ -1079,7 +1040,6 @@ AbortTransaction()
 	 */
 	s->state = TRANS_DEFAULT;
 	info->SharedBufferChanged = false;/* safest place to do it */
-        ResetTransactionCommitType();
 }
 
 /* --------------------------------
@@ -1089,8 +1049,6 @@ AbortTransaction()
 void
 StartTransactionCommand()
 {
-	Env* env = GetEnv();
-	
 	TransactionState s = GetTransactionInfo()->CurrentTransactionState;
 
 	switch (s->blockState)
@@ -1147,17 +1105,19 @@ CommitTransactionCommand()
 			break;
 
 		case TBLOCK_MANUAL:
-		case TBLOCK_ABORTONLY:
 			CommandCounterIncrement();
 			MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->TransactionCommandContext);
 			break;
-
+            
+                case TBLOCK_ABORTONLY:
+                        AbortTransaction();
+                        s->blockState = TBLOCK_DEFAULT;
+                        break;
 
 		case TBLOCK_COMMIT:
 			CommitTransaction();
 			s->blockState = TBLOCK_DEFAULT;
 			break;
-
 
 		case TBLOCK_ABORT:
 			AbortTransaction();
@@ -1236,6 +1196,7 @@ AbortTransactionBlock(void)
 	 *	default state.
 	 * ----------------
 	 */
+        s->blockState = TBLOCK_DEFAULT;
 	elog(NOTICE, "ABORT: no transaction in progress");
 }
 
@@ -1390,6 +1351,8 @@ SetAbortOnly()
         } else if ( s->blockState != TBLOCK_DEFAULT ) {
             s->blockState = TBLOCK_ABORTONLY;
         }
+        
+        TransactionUnlock();
 }
 
 

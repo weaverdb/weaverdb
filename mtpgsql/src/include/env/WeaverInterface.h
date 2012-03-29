@@ -11,7 +11,7 @@
 /*  leave some space for line item ids and header info try and squeeze two
     BLOBs per page  */
 
-#define BLOBSIZE  (1024 * 32)
+#define BLOBSIZE  (BLCKSZ)
 
 #define INT4TYPE	23
 #define VARCHARTYPE	1043
@@ -48,18 +48,20 @@ typedef int (*pipefunc)(void*,char*,int,int);
 
 
 typedef struct Connection* OpaqueWConn;
+typedef struct preparedplan* OpaquePreparedStatement;
 typedef struct commbuffer*   Pipe;
-
 
 LIB_EXTERN OpaqueWConn WCreateConnection(const char* name, const char * paslong, const char* connect);
 LIB_EXTERN OpaqueWConn WCreateSubConnection(OpaqueWConn  conn);
 LIB_EXTERN long WDestroyConnection(OpaqueWConn  conn);
 LIB_EXTERN long WBegin(OpaqueWConn conn,long trans);
-LIB_EXTERN long WParsingFunc(OpaqueWConn conn,const char* Statement);
-LIB_EXTERN long WBindWithIndicate(OpaqueWConn conn,const char* var, void* varAdd, int varSize, short* indAdd, int varType, int cType); 
-LIB_EXTERN long WOutputLinkInd(OpaqueWConn conn,short pos, void* varAdd,int varSize, int varType, short* ind, int* clength);
-LIB_EXTERN long WExec(OpaqueWConn conn );
-LIB_EXTERN long WFetch( OpaqueWConn conn );
+LIB_EXTERN OpaquePreparedStatement WPrepareStatement(OpaqueWConn conn,const char* Statement);
+LIB_EXTERN long WDestroyPreparedStatement(OpaquePreparedStatement stmt);
+LIB_EXTERN char* WStatement(OpaquePreparedStatement stmt);
+LIB_EXTERN long WBindLink(OpaquePreparedStatement stmt,const char* var, void* varAdd, int varSize, short* indAdd, int varType, int cType); 
+LIB_EXTERN long WOutputLink(OpaquePreparedStatement stmt, short pos, void *varAdd, int varSize, int varType, short *ind, int *clength);
+LIB_EXTERN long WExec(OpaquePreparedStatement conn );
+LIB_EXTERN long WFetch( OpaquePreparedStatement conn );
 LIB_EXTERN long WPrepare(OpaqueWConn conn );
 LIB_EXTERN long WCommit( OpaqueWConn conn );
 LIB_EXTERN long WRollback(OpaqueWConn conn );
@@ -72,8 +74,14 @@ LIB_EXTERN long WIsValidConnection(OpaqueWConn conn);
 LIB_EXTERN long WGetTransactionId(OpaqueWConn conn);
 LIB_EXTERN long WGetCommandId(OpaqueWConn conn);
 
-LIB_EXTERN long WExecCount(OpaqueWConn conn);
-LIB_EXTERN long WFetchIsComplete(OpaqueWConn conn);
+LIB_EXTERN void* WAllocConnectionMemory(OpaqueWConn conn, size_t size);
+LIB_EXTERN void* WAllocTransactionMemory(OpaqueWConn conn, size_t size);
+LIB_EXTERN void* WAllocStatementMemory(OpaquePreparedStatement conn, size_t size);
+LIB_EXTERN void WFreeMemory(OpaqueWConn conn, void* pointer);
+//LIB_EXTERN void WCheckClear(void* pointer,int size);
+
+LIB_EXTERN long WExecCount(OpaquePreparedStatement conn);
+LIB_EXTERN long WFetchIsComplete(OpaquePreparedStatement conn);
 LIB_EXTERN long WGetErrorCode(OpaqueWConn conn);
 LIB_EXTERN const char* WGetErrorText(OpaqueWConn conn);
 LIB_EXTERN const char* WGetErrorState(OpaqueWConn conn);

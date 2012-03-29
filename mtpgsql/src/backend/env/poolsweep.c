@@ -103,12 +103,12 @@ typedef struct waiter {
 
 static pthread_mutex_t list_guard;
 static pthread_attr_t sweeperprops;
-static bool     paused = false;
+static bool     paused = true;
 static bool     inited = false;
 static int     concurrent = 1;
 
 static Sweeps  *sweeplist;
-static MemoryContext sweep_cxt;
+static MemoryContext sweep_cxt = NULL;
 
 static Sweeps  *StartupPoolsweep(char *dbname, Oid dbid);
 static Sweeps  *ShutdownPoolsweep(Sweeps * job);
@@ -156,50 +156,81 @@ PoolsweepInit(int priority) {
             ALLOCSET_DEFAULT_MAXSIZE);
     
     inited = true;
+    paused = false;
 
 }
 
 void
-PoolsweepDestroy() {
-    int             count = 0;
+StopPoolsweepsForDB(Oid dbid) {
     Sweeps         *next = NULL;
-    
+    Sweeps         *last = NULL;
+        
     if (!inited)
         return;
+    
     pthread_mutex_lock(&list_guard);
-    next = sweeplist;
-    while (next != NULL) {
-        next = ShutdownPoolsweep(next);
+    if ( sweep_cxt != NULL ) {
+        next = sweeplist;
+        while (next != NULL) {
+            if ( next->dbid == dbid ) {
+                next = ShutdownPoolsweep(next);
+                if ( last == NULL ) sweeplist = next;
+                else last->next = next;
+            } else {
+                next = next->next;
+            }
+            last = next;
+        }
+    } 
+    pthread_mutex_unlock(&list_guard);
+}
+
+void
+PoolsweepDestroy() {
+    Sweeps         *next = NULL;
+    MemoryContext   cxt = sweep_cxt;
+        
+    if (!inited)
+        return;
+    
+    pthread_mutex_lock(&list_guard);
+    if ( sweep_cxt != NULL ) {
+        sweep_cxt = NULL;
+        next = sweeplist;
+        while (next != NULL) {
+            next = ShutdownPoolsweep(next);
+        }
+        MemoryContextDelete(cxt);
+    } else {
+        printf("no poolsweep context");
     }
-    MemoryContextDelete(sweep_cxt);
-    sweep_cxt = NULL;
+    inited = false;
     pthread_mutex_unlock(&list_guard);
 }
 
 Sweeps         *
 StartupPoolsweep(char *dbname, Oid dbid) {
-    int             prio;
-    Sweeps         *inst = (Sweeps *) MemoryContextAlloc(sweep_cxt, sizeof(Sweeps));
+    Sweeps         *inst = NULL;
     Sweeps         *next = NULL;
     char            name[256];
-    
+    /*  already holding listguard  */
     snprintf(name,256,"SweepInstanceCxt -- dbid: %d",dbid);
     
+    if ( sweep_cxt == NULL ) {
+        return NULL;
+    } 
+    
+    inst = (Sweeps *) MemoryContextAlloc(sweep_cxt, sizeof(Sweeps));
     inst->dbid = dbid;
     strncpy(inst->dbname, dbname, 255);
     inst->next = NULL;
     inst->requests = NULL;
     inst->activesweep = true;
-    
-    if ( sweep_cxt == NULL ) {
-        elog(ERROR, "Sweep is shutting down");
-    }
-    
     inst->context = AllocSetContextCreate(sweep_cxt,
-            name,
-            512,
-            512,
-            1024 * 1024);
+        name,
+        512,
+        512,
+        1024 * 1024);
     pthread_cond_init(&inst->gate, NULL);
     
     if (pthread_create(&inst->thread, &sweeperprops, Poolsweep, inst) != 0) {
@@ -230,6 +261,7 @@ ShutdownPoolsweep(Sweeps * job) {
     pthread_join(job->thread, &ret);
     
     pthread_mutex_lock(&list_guard);
+    next = job->next;
     MemoryContextDelete(job->context);
     pfree(job);
     
@@ -240,16 +272,11 @@ void           *
 Poolsweep(void *args) {
     
     Sweeps         *tool = (Sweeps *) args;
-    int             timerr;
-    char            dbuser[255];
-    int             i = 0;
-    bool            leak = false;
     bool            activated = true;
     bool            invalidate = false;
     Env*            env;
-    
-    env = CreateEnv(NULL);
 
+    env = CreateEnv(NULL);
     tool->env = env;
     
     SetEnv(env);
@@ -259,27 +286,31 @@ Poolsweep(void *args) {
     
     SetDatabaseName(tool->dbname);
     env->DatabaseId = tool->dbid;
-    
+        
     InitThread(POOLSWEEP_THREAD);
+    
+    if ( !CallableInitInvalidationState() ) {
+        DestroyThread();
+        SetEnv(NULL);
+        DestroyEnv(env);
+        return NULL;
+    }
     
     RelationInitialize();
 
     InitCatalogCache();
     
-    CallableInitInvalidationState();
     
     env->Mode = NormalProcessing;
     
     while (activated && !IsShutdownProcessingMode()) {
         JobList        *item = NULL;
-        int             err = 0;
         
-        err = setjmp(env->errorContext);
-        if (err) {
+        if (setjmp(env->errorContext)) {
             pthread_mutex_lock(&list_guard);
-            tool->requests = item->next;
+            tool->requests = ( item ) ? item->next : NULL;
             pthread_mutex_unlock(&list_guard);
-            pfree(item);
+            if ( item != NULL ) pfree(item);
             item = NULL;
             if (CurrentXactInProgress()) {
                 AbortTransaction();
@@ -310,7 +341,7 @@ Poolsweep(void *args) {
                  */
                 result = pthread_cond_timedwait(&tool->gate, &list_guard, &tv);
                 if (result == ETIMEDOUT) {
-                    if ( tool->idle_count++ == 5 ) {
+                    if ( tool->idle_count++== 5 ) {
                         tool->activesweep = false;
                         activated = false;
                     } else {
@@ -387,7 +418,7 @@ Poolsweep(void *args) {
                 Relation rel = RelationIdGetRelation(item->relid, DEFAULTDBOID);
                 poolsweep_log(item->relid, "starting space allocation job");
 /*
-                AllocateMoreSpace(rel);
+                AllocateMoreSpace(rel, NULL);
 */
                 RelationClose(rel);
             } else if ( item->jobtype == WAIT_JOB ) {
@@ -407,6 +438,9 @@ Poolsweep(void *args) {
             MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
             CommitTransaction();
             if (item != NULL) {
+                pthread_mutex_lock(&list_guard);
+                tool->requests = ( item ) ? item->next : NULL;
+                pthread_mutex_unlock(&list_guard);
                 pfree(item);
                 item = NULL;
             }
@@ -421,18 +455,19 @@ Poolsweep(void *args) {
         }
 #endif
     
-    CallableCleanupInvalidationState();
     
     RelationCacheShutdown();
     
     ThreadReleaseLocks(false);
     ThreadReleaseSpins(GetMyThread());
     DestroyThread();
-    
+     
+    CallableCleanupInvalidationState();
+   
      SetEnv(NULL);
      DestroyEnv(env);
-    
-    return env;
+         
+    return NULL;
 }
 
 static int
@@ -458,6 +493,7 @@ CheckSweepForJob(Sweeps* sweep, JobType type, Oid relid) {
 
 static int
 AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid relid, Oid dbid, PoolArgs* extra) {
+    
     JobList* item = (JobList *) MemoryContextAlloc(sweep->context, sizeof(JobList));
     
     strncpy(item->relname, relname, 255);
@@ -525,8 +561,10 @@ AddJobRequest(JobType type, char *relname, char *dbname, Oid relid, Oid dbid, Po
 
     pthread_mutex_lock(&list_guard);
     sweep = sweeplist;
-
-
+    if ( sweep_cxt == NULL ) {
+            pthread_mutex_unlock(&list_guard);
+            return -1;
+    }
     /* first member is now active or null, proceed with the
     rest of the list */
     while (sweep != NULL) {        
@@ -577,7 +615,7 @@ AddJobRequest(JobType type, char *relname, char *dbname, Oid relid, Oid dbid, Po
         add = StartupPoolsweep(dbname, dbid);
     }
     
-    sweepcount = AddJobToSweep(add, type, relname, dbname, relid, dbid, extra);
+    if ( add != NULL ) sweepcount = AddJobToSweep(add, type, relname, dbname, relid, dbid, extra);
     
     pthread_mutex_unlock(&list_guard);
     
@@ -725,12 +763,13 @@ AddWaitRequest(char* dbname, Oid dbid) {
     args.args = &w;
     
     result = AddJobRequest(WAIT_JOB, "", dbname, 0, dbid, &args);
-    
-    pthread_mutex_lock(&w.guard);
-    while ( !w.done ) {
-        pthread_cond_wait(&w.gate, &w.guard);
+    if ( result == 0 ) {
+        pthread_mutex_lock(&w.guard);
+        while ( !w.done ) {
+            pthread_cond_wait(&w.gate, &w.guard);
+        }
+        pthread_mutex_unlock(&w.guard);
     }
-    pthread_mutex_unlock(&w.guard);
     pthread_cond_destroy(&w.gate);
     pthread_mutex_destroy(&w.guard);
 }
@@ -761,7 +800,6 @@ IsPoolsweep() {
 void
 DropVacuumRequests(Oid relid, Oid dbid) {
     Sweeps         *job = NULL;
-    bool            valid = false;
     
     pthread_mutex_lock(&list_guard);
     
@@ -812,7 +850,7 @@ PausePoolsweep() {
 
 bool
 IsPoolsweepPaused() {
-    return paused;
+    return (!inited || paused);
 }
 
 void
@@ -823,11 +861,11 @@ ResumePoolsweep() {
 void PrintPoolsweepMemory( ) 
 {
 	pthread_mutex_lock(&list_guard);
-
-        size_t total = MemoryContextStats(sweep_cxt);
-        user_log("Total sweep memory: %d",total);
-                
-	pthread_mutex_unlock(&list_guard);
+        if ( sweep_cxt ) {
+            size_t total = MemoryContextStats(sweep_cxt);
+            user_log("Total sweep memory: %d",total);
+        }
+       	pthread_mutex_unlock(&list_guard);
 
 }
 

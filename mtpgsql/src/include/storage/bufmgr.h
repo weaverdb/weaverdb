@@ -41,6 +41,7 @@ typedef void* Block;
 
 typedef bits16 BufferLock;
 
+typedef bool (*buffer_check)(Relation rel, Buffer buf);
 
 /**********************************************************************
 
@@ -63,10 +64,19 @@ PG_EXTERN int	ShowPinTrace;
 #define BUFFER_LOCK_SHARE			1
 #define BUFFER_LOCK_EXCLUSIVE                   2
 #define BUFFER_LOCK_REF_EXCLUSIVE               4
+#define BUFFER_LOCK_READ_EXCLUSIVE               8
 
 /*  bit flag set if lock should fail instead of block  */
 #define BUFFER_LOCK_WRITEIO                     16   /*  blocks exclusive locks until write io is finished */
+#define BUFFER_LOCK_FLUSHIO                     32   /*  blocks exclusive locks until write io is finished */
+#define BUFFER_LOCK_NOTCRITICAL                 64   /*  blocks exclusive locks until write io is finished */
+#define BUFFER_LOCK_CRITICAL                    128   /*  blocks exclusive locks until write io is finished */
 
+typedef enum writemode {
+    WRITE_NORMAL,
+    WRITE_COMMIT,
+    WRITE_FLUSH
+} WriteMode;
 
 /*
  * BufferIsValid
@@ -127,11 +137,13 @@ PG_EXTERN Buffer ReleaseAndReadBuffer(Buffer buffer, Relation relation,
 					 BlockNumber blockNum);
 PG_EXTERN int	ReleaseBuffer(Relation reln, Buffer buffer);
 
-PG_EXTERN int	FlushBuffer(Relation reln,Buffer buffer, bool release);
+PG_EXTERN int	FlushBuffer(Relation reln,Buffer buffer);
 PG_EXTERN int	PrivateWriteBuffer(Relation rel, Buffer buffer, bool release);
 PG_EXTERN int	SyncRelation(Relation rel);
 
 PG_EXTERN void InitBufferPool(IPCKey key);
+PG_EXTERN int AddMoreBuffers(int count);
+PG_EXTERN int RetireBuffers(int start, int count);
 PG_EXTERN void InitThreadBuffer(void);
 
 PG_EXTERN void ResetBufferPool(bool isCommit);
@@ -146,7 +158,7 @@ PG_EXTERN void InvalidateRelationBuffers(Relation rel);
 
 PG_EXTERN void DropBuffers(Oid dbid);
 PG_EXTERN void PrintPinnedBufs(void);
-PG_EXTERN int	BufferShmemSize(void);
+PG_EXTERN size_t	BufferShmemSize(void);
 
 PG_EXTERN int BiasBuffer(Relation rel, Buffer buffer);
 
@@ -156,13 +168,16 @@ PG_EXTERN void UnlockBuffers(void);
 PG_EXTERN int LockBuffer(Relation rel, Buffer buffer, int mode);
 
 PG_EXTERN bool BufferHasError(Buffer buf);
+PG_EXTERN bool BufferIsCritical(Buffer buffer);
+PG_EXTERN bool BufferIsPrivate(Relation relation, Buffer buffer);
+PG_EXTERN bool BufferPrivateCheck(Relation relation, Buffer buffer,buffer_check check);
 
 PG_EXTERN void AbortBufferIO(void);
 PG_EXTERN void ErrorBufferIO(IOStatus locks, BufferDesc* buf);
 PG_EXTERN bool IsDirtyBufferIO(BufferDesc* buf);
         
 PG_EXTERN IOStatus ReadBufferIO(BufferDesc *buf);
-PG_EXTERN IOStatus WriteBufferIO(BufferDesc *buf, bool flush);
+PG_EXTERN IOStatus WriteBufferIO(BufferDesc *buf, WriteMode mode);
 PG_EXTERN IOStatus LogBufferIO(BufferDesc *buf);
 PG_EXTERN void TerminateBufferIO(IOStatus locks, BufferDesc *buf);
 

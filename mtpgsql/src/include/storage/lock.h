@@ -296,7 +296,7 @@ PG_EXTERN int LockResolveConflicts(LOCKMETHOD lockmethod, LOCKMODE lockmode,
 								LOCK *lock, HOLDER *holder, THREAD *proc,
 								int *myHolders);
 PG_EXTERN void GrantLock(LOCK *lock, HOLDER *holder, LOCKMODE lockmode);
-PG_EXTERN int	LockShmemSize(int maxBackends);
+PG_EXTERN size_t	LockShmemSize(int maxBackends);
 PG_EXTERN bool DeadLockCheck(THREAD *thisProc, LOCK *findlock);
 #ifdef LOCK_DEBUG
 PG_EXTERN void DumpLocks(void);

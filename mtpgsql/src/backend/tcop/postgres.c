@@ -117,7 +117,6 @@ extern char XLogDir[];
 extern char ControlFilePath[];
 
 extern int	lockingOff;
-extern int	NBuffers;
 
 int			dontExecute = 0;
 static int	ShowStats;
@@ -129,8 +128,6 @@ DLLIMPORT sigjmp_buf Warn_restart;
 bool		Warn_restart_ready = false;
 bool		InError = false;
 bool		ExitAfterAbort = false;
-
-PG_EXTERN int	NBuffers;
 
 static bool EchoQuery = false;	/* default don't echo */
 char		pg_pathname[MAXPGPATH];
@@ -852,7 +849,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 
 	int			firstchar;
 	StringInfo	parser_input;
-	char	   *userName;
+	char	   *userName = NULL;
 	
 	/* Used if verbose is set, must be initialized */
 	char	   *remote_info = "interactive";
@@ -1519,7 +1516,12 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 		if (Verbose)
 			TPRINTF(TRACE_VERBOSE, "AbortCurrentTransaction");
 
-                AbortTransactionBlock();
+                if ( IsTransactionBlock() ) {
+                    AbortTransactionBlock();
+                } else {
+                    SetAbortOnly();
+                }
+                CommitTransactionCommand();
 		InError = false;
 		if (ExitAfterAbort)
 		{

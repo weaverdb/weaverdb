@@ -93,6 +93,30 @@ tidout(ItemPointer itemPtr)
 	return str;
 }
 
+bytea* tidtobytes(ItemPointer itemPtr) {
+	bytea            *array = palloc(sizeof(ItemPointerData) + VARHDRSZ);
+            
+        memset(array,0x00,sizeof(ItemPointerData) + VARHDRSZ);
+        *(int32_t*)array = sizeof(ItemPointerData) + VARHDRSZ;
+
+	if (!itemPtr || !ItemPointerIsValid(itemPtr))
+	{
+            return array;
+	}
+
+        memcpy(VARDATA(array),itemPtr,sizeof(ItemPointerData));
+}
+
+
+ItemPointer bytestotid(bytea* itemPtr) {
+	ItemPointerData            *array = palloc(sizeof(ItemPointerData));
+            
+        memcpy(array,VARDATA(itemPtr),sizeof(ItemPointerData));
+        *(int32_t*)array = sizeof(ItemPointerData) + VARHDRSZ;
+
+        return array;
+}
+
 /*****************************************************************************
  *	 PUBLIC ROUTINES														 *
  *****************************************************************************/

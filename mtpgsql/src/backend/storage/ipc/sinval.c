@@ -294,8 +294,7 @@ GetSnapshotData(bool serializable)
 	int			count = 0;
 	MemoryContext		old;
 	TransactionId 		checkpoint;
-    MemoryContext       query = MemoryContextGetEnv()->TopTransactionContext;
-	Env*		env = GetEnv();
+        MemoryContext       query = MemoryContextGetEnv()->TopTransactionContext;
         
         THREAD*              my_thread = GetMyThread();
 	
@@ -392,12 +391,12 @@ GetSnapshotData(bool serializable)
 	}
 	/* Serializable snapshot must be computed before any other... */
 	Assert(GetMyThread()->xmin != InvalidTransactionId);
-	if ( GetCheckpointId() != checkpoint ) SetCheckpointId(checkpoint);
+	SetCheckpointId(checkpoint);
 	SpinRelease(SInvalLock);
-
 
 	snapshot->xcnt = count;
 	snapshot->isUser = false;
+	snapshot->nowait = false;
 
 	MemoryContextSwitchTo(old);
     

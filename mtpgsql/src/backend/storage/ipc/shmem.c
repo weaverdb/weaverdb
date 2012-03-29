@@ -66,9 +66,9 @@
 
 /* shared memory global variables */
 
-unsigned long ShmemBase = 0;	/* start and end address of shared memory */
-static unsigned long ShmemEnd = 0;
-static unsigned long ShmemSize = 0;		/* current size (and default) */
+size_t ShmemBase = 0;	/* start and end address of shared memory */
+static size_t ShmemEnd = 0;
+static size_t ShmemSize = 0;		/* current size (and default) */
 
 extern VariableCache ShmemVariableCache;		
 
@@ -116,7 +116,7 @@ ShmemIndexReset(void)
 static IpcMemoryId ShmemId;
 
 void
-ShmemCreate(unsigned int key, unsigned int size)
+ShmemCreate(unsigned int key, size_t size)
 {
 	if (size)
 		ShmemSize = size;
@@ -142,7 +142,7 @@ ShmemCreate(unsigned int key, unsigned int size)
  *
  */
 int
-InitShmem(unsigned int key, unsigned int size,int maxBackends)
+InitShmem(unsigned int key, size_t size,int maxBackends)
 {
 	Pointer		sharedRegion;
 	unsigned long currFreeSpace;
@@ -205,10 +205,10 @@ InitShmem(unsigned int key, unsigned int size,int maxBackends)
 		*ShmemFreeStart = currFreeSpace;
 		*(ShmemFreeStart + 1) = size;
 		memset(ShmemVariableCache, 0, sizeof(*ShmemVariableCache));
-		ShmemVariableCache->buffers = NBuffers;
+		ShmemVariableCache->buffers = MaxBuffers;
 		ShmemVariableCache->maxbackends = maxBackends;   
 	} else {
-		NBuffers = ShmemVariableCache->buffers;
+		MaxBuffers = ShmemVariableCache->buffers;
 		maxBackends = ShmemVariableCache->maxbackends;		
 		ShmemSize = *(unsigned long *)(ShmemFreeStart + 1);
 		ShmemEnd = (unsigned long) sharedRegion + ShmemSize;    
@@ -329,7 +329,7 @@ ShmemAlloc(Size size)
  * Returns TRUE if the pointer is valid.
  */
 int
-ShmemIsValid(unsigned long addr)
+ShmemIsValid(size_t addr)
 {
 	return (addr < ShmemEnd) && (addr >= ShmemBase);
 }

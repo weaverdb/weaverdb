@@ -31,7 +31,6 @@ public class WeaverInitializer {
         } catch ( UnsatisfiedLinkError us ) {
             System.loadLibrary(library);
             
-            
             init(vars.toString());
         }
         

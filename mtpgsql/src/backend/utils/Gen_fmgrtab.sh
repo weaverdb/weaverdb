@@ -107,11 +107,8 @@ typedef struct {
 
 typedef struct {
     func_ptr	fn_addr;
-    func_ptr	fn_plhandler;
     Oid		fn_oid;
-	char	fn_javaname[128];
-    char	fn_javasig[128];
-    Oid  	fn_javarettype;
+    void*       fn_data;
     int		fn_nargs;
 } FmgrInfo;
 
@@ -123,7 +120,7 @@ extern "C" {
 #endif
 
 extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
-extern void fmgr_info(Oid procedureId, FmgrInfo *finfo);
+extern Oid fmgr_info(Oid procedureId, FmgrInfo *finfo);
 extern char *fmgr(Oid procedureId,... );
 extern char *fmgr_ptr(FmgrInfo *finfo, ... );
 extern char *fmgr_array_args(Oid procedureId, int nargs, 

@@ -20,6 +20,9 @@
 #include "access/nbtree.h"
 #include "miscadmin.h"
 #include "utils/tqual.h"
+#include "utils/relcache.h"
+#include "catalog/index.h"
+#include "utils/tuplesort.h"
 
 typedef struct
 {
@@ -46,7 +49,7 @@ static OffsetNumber _bt_getoff(Page page, BlockNumber blkno);
 
 static Buffer _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf);
 
-static TransactionId _bt_check_unique(Relation rel, BTItem btitem,
+static TransactionId _bt_check_unique(Relation rel, ItemPointer other_ht,
 				 Relation heapRel, Buffer buf,
 				 ScanKey itup_scankey);
 static InsertIndexResult _bt_insertonpg(Relation rel, Buffer buf,
@@ -73,8 +76,59 @@ static void _bt_pgaddtup(Relation rel, Page page,
 			 OffsetNumber itup_off, const char *where);
 static bool _bt_isequal(TupleDesc itupdesc, Page page, OffsetNumber offnum,
 			int keysz, ScanKey scankey);
+static int _bt_processqueue(Relation rel, void* spool);
 
+InsertIndexResult
+_bt_queueinsert(Relation rel, BTItem btitem,
+			 bool index_is_unique, Relation heapRel) {
+    Tuplesortstate* spool = NULL;
+    InsertIndexResult res = NULL;
+        
+    if ( rel->readtrigger == NULL ) {
+        MemoryContext cxt = MemoryContextSwitchTo(MemoryContextGetEnv()->TopTransactionContext);
+        BufferTrigger* trigger = palloc(sizeof(BufferTrigger));
+        trigger->when = TRIGGER_COMMIT;
+        trigger->call = _bt_processqueue;
+        trigger->args = tuplesort_begin_index(rel,false,false);
+        rel->readtrigger = trigger;
+        MemoryContextSwitchTo(cxt);
+    }
+    
+    spool = rel->readtrigger->args;
+    tuplesort_puttuple(spool,&btitem->bti_itup);
+    res = palloc(sizeof(InsertIndexResultData));
+    res->result = INDEX_QUEUED;
+    ItemPointerCopy(&btitem->bti_itup.t_tid,&res->pointer);    
+    return res;
+}
 
+int
+_bt_processqueue(Relation rel, void* spool) {
+    Tuplesortstate*    state = spool;
+    bool should_free;
+    Relation heap = RelationIdGetRelation(IndexGetRelation(RelationGetRelid(rel)),DEFAULTDBOID);
+    IndexProp atts = IndexProperties(RelationGetRelid(rel));
+    IndexTuple it;
+    int processed = 0;
+    
+	tuplesort_performsort(state);
+	while (it = (IndexTuple) tuplesort_getindextuple(state, true, &should_free), it != (IndexTuple) NULL) {
+            BTItem bti = _bt_formitem(it);
+            InsertIndexResult result = _bt_doinsert(rel,bti,IndexPropIsUnique(atts),heap);
+            if (should_free)
+                    pfree((void *) it);
+            pfree(bti);
+            if ( result->result == INDEX_UNIQUE_VIOLATION ) {
+                GetEnv()->errorcode = 909;
+                elog(ERROR, "Cannot insert a duplicate key into unique index %s ",RelationGetRelationName(rel));
+            }
+            pfree(result);
+            processed += 1;
+	}    
+        tuplesort_end(state);
+        RelationClose(heap);
+        return processed;
+}
 /*
  *	_bt_doinsert() -- Handle insertion of a single btitem in the tree.
  *
@@ -90,12 +144,12 @@ _bt_doinsert(Relation rel, BTItem btitem,
 	ScanKey		itup_scankey;
 	BTStack		stack;
 	Buffer		buf;
-	InsertIndexResult res;
+	InsertIndexResult res = NULL,ir = NULL;
 
 	/* we need a scan key to do our search, so build one */
 	itup_scankey = _bt_mkscankey(rel, itup);
 
-top:
+top:;
 	/* find the page containing this key */
 	stack = _bt_search(rel, natts, itup_scankey, &buf, BT_WRITE);
 
@@ -141,22 +195,36 @@ top:
 	if (index_is_unique  && !IsPoolsweep() )
 	{
 		TransactionId xwait;
+                ItemPointerData  other_ht;
+                
+                ItemPointerSetInvalid(&other_ht);
 
-		xwait = _bt_check_unique(rel, btitem, heapRel, buf, itup_scankey);
+		xwait = _bt_check_unique(rel, &other_ht, heapRel, buf, itup_scankey);
 
 		if (TransactionIdIsValid(xwait))
 		{
+                        _bt_relbuf(rel, buf);
 			/* Have to wait for the other guy ... */
-			_bt_relbuf(rel, buf);
 			XactLockTableWait(xwait);
+
+                        _bt_freestack(stack);
 			/* start over... */
-			_bt_freestack(stack);
 			goto top;
-		}
+		} else if ( ItemPointerIsValid(&other_ht) ) {
+                    res = palloc(sizeof(InsertIndexResultData));
+                    res->result = INDEX_UNIQUE_VIOLATION;
+                    ItemPointerCopy(&other_ht,&res->pointer);
+                }
 	}
 
 	/* do the insertion */
-	res = _bt_insertonpg(rel, buf, stack, natts, itup_scankey, btitem, 0);
+        ir = _bt_insertonpg(rel, buf, stack, natts, itup_scankey, btitem, 0);
+        
+        if ( res != NULL ) {
+            pfree(ir);
+        } else {
+            res = ir;
+        }
 
 	/* be tidy */
 	_bt_freestack(stack);
@@ -173,13 +241,12 @@ top:
  * conflict is detected, no return --- just elog().
  */
 static TransactionId
-_bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
+_bt_check_unique(Relation rel, ItemPointer other_ht, Relation heapRel,
                                  Buffer buf, ScanKey itup_scankey)
 {
         TupleDesc        itupdesc = RelationGetDescr(rel);
         int                        natts = rel->rd_rel->relnatts;
-        OffsetNumber offset,
-                                maxoff;
+        OffsetNumber offset,maxoff;
         Page                page;
         BTPageOpaque opaque;
         Buffer                nbuf = InvalidBuffer;
@@ -226,7 +293,7 @@ _bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
 
                         cbti = (BTItem) PageGetItem(page, curitemid);
                         htup.t_self = cbti->bti_itup.t_tid;
-                        if ( heap_fetch(heapRel, Dirty, &htup, &hbuffer)) {
+                        if (heap_fetch(heapRel, Dirty, &htup, &hbuffer)) {
                                /* it is a duplicate */
                                 TransactionId xwait =
                                 (TransactionIdIsValid(Dirty->xmin)) ?
@@ -247,33 +314,25 @@ _bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
                                        return xwait;
                                 }
 
-                                /*
-                                 * Otherwise we have a definite conflict.  release the buffer we are erroring out
-                                 */
-                                
-                                if (buf != InvalidBuffer) {
-                                    _bt_relbuf(rel, buf);  
-                                }
-                                GetEnv()->errorcode = 909;
-                                elog(ERROR, "Cannot insert a duplicate key into unique index %s hxid %lld",
-                                                 RelationGetRelationName(rel),htup.t_data->t_xmin);
+                                *other_ht = htup.t_self;
+                                return InvalidTransactionId;
                             }
 		}
                 /*
                  * Advance to next tuple to continue checking.
                  */
-                if (offset < maxoff)
+                if (offset < maxoff) {
                         offset = OffsetNumberNext(offset);
+                }
                 else
                 {
-                        if (P_RIGHTMOST(opaque))
-									break;
+                        if (P_RIGHTMOST(opaque)) break;
                         /* If scankey == hikey we gotta check the next page too */
                         if (!_bt_isequal(itupdesc, page, P_HIKEY, natts, itup_scankey))
                                 break;
 
                         nblkno = opaque->btpo_next;
-                        if (nbuf != InvalidBuffer)
+                        if (BufferIsValid(nbuf))
                                 _bt_relbuf(rel, nbuf);
                         nbuf = _bt_getbuf(rel, nblkno, BT_READ);
 
@@ -283,7 +342,7 @@ _bt_check_unique(Relation rel, BTItem btitem, Relation heapRel,
                         offset = P_FIRSTDATAKEY(opaque);
                 }
        	 }
-        if (nbuf != InvalidBuffer)
+        if (BufferIsValid(nbuf))
                 _bt_relbuf(rel, nbuf);
 
         return InvalidTransactionId;
@@ -355,8 +414,7 @@ _bt_insertonpg(Relation rel,
 	page = BufferGetPage(buf);
 	lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
 
-	itemsz = IndexTupleDSize(btitem->bti_itup)
-		+ (sizeof(BTItemData) - sizeof(IndexTupleData));
+	itemsz = IndexTupleDSize(btitem->bti_itup) + (sizeof(BTItemData) - sizeof(IndexTupleData));
 
 	itemsz = MAXALIGN(itemsz);	/* be safe, PageAddItem will do this but
 								 * we need to be consistent */
@@ -399,7 +457,7 @@ _bt_insertonpg(Relation rel,
 		 */
 		bool		movedright = false;
 
-		while (  PageGetFreeSpace(page) < itemsz &&
+                while (  (lpageop->btpo_parent == InvalidBlockNumber || PageGetFreeSpace(page) < itemsz) &&
 			   !P_RIGHTMOST(lpageop) &&
 			   _bt_compare(rel, keysz, scankey, page, P_HIKEY) == 0 &&
 			   prandom() > (MAX_RANDOM_VALUE / 100))
@@ -415,13 +473,12 @@ _bt_insertonpg(Relation rel,
 			 */
 			rbuf = _bt_getbuf(rel, rblkno, BT_WRITE);
 
-			_bt_relbuf(rel, buf);
+                        _bt_relbuf(rel, buf);
 			buf = rbuf;
 			page = BufferGetPage(buf);
 			lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
 			movedright = true;
 		}
-
 		/*
 		 * Now we are on the right page, so find the insert position. If
 		 * we moved right at all, we know we should insert at the start of
@@ -549,7 +606,7 @@ _bt_insertonpg(Relation rel,
 			 */
 			ItemPointerSet(&(stack->bts_btitem.bti_itup.t_tid),
 						   bknum, P_HIKEY);
-
+                        
 			pbuf = _bt_getstackbuf(rel, stack, BT_WRITE);
 
 			/* Now we can write and unlock the children */
@@ -581,10 +638,10 @@ _bt_insertonpg(Relation rel,
 		_bt_wrtbuf(rel, buf);
 	}
 
-formres:;
 	/* by here, the new tuple is inserted at itup_blkno/itup_off */
 	res = (InsertIndexResult) palloc(sizeof(InsertIndexResultData));
-	ItemPointerSet(&(res->pointerData), itup_blkno, itup_off);
+	ItemPointerSet(&(res->pointer), itup_blkno, itup_off);
+        res->result = INDEX_INSERTED;
 
 	return res;
 }
@@ -594,9 +651,11 @@ _bt_insertuple(Relation rel, Buffer buf,
 			   Size itemsz, BTItem btitem, OffsetNumber newitemoff)
 {
 	Page		page = BufferGetPage(buf);
-	BTPageOpaque pageop = (BTPageOpaque) PageGetSpecialPointer(page);
-
+	BTPageOpaque lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
+        Assert(lpageop->btpo_parent != InvalidBlockNumber);
+        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
 	_bt_pgaddtup(rel, page, itemsz, btitem, newitemoff, "page");
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 }
 
 /*
@@ -618,13 +677,14 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 		  OffsetNumber *itup_off, BlockNumber *itup_blkno)
 {
 	Buffer		rbuf;
-	Page		origpage;
+	Page		orig_leftpage,
+                        orig_rightpage;
 	Page		leftpage,
-				rightpage;
+			rightpage;
 	BTPageOpaque ropaque,
 				lopaque,
 				oopaque;
-	Buffer		sbuf = 0;
+	Buffer		sbuf = InvalidBuffer;
 	Page		spage = 0;
 	Size		itemsz;
 	ItemId		itemid;
@@ -635,28 +695,39 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	OffsetNumber i;
 	BTItem		lhikey;
 
-	rbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
+	rbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
 
-	origpage = BufferGetPage(buf);
-	leftpage = PageGetTempPage(origpage, sizeof(BTPageOpaqueData));
-	rightpage = BufferGetPage(rbuf);
+	orig_leftpage = BufferGetPage(buf);
+	leftpage = PageGetTempPage(orig_leftpage, sizeof(BTPageOpaqueData));
+        
+	orig_rightpage = BufferGetPage(rbuf);
+        rightpage = PageGetTempPage(orig_rightpage, sizeof(BTPageOpaqueData));
+ 	/* init btree private data */
+	oopaque = (BTPageOpaque) PageGetSpecialPointer(orig_leftpage);
+	lopaque = (BTPageOpaque) PageGetSpecialPointer(leftpage);
+	ropaque = (BTPageOpaque) PageGetSpecialPointer(rightpage);
+        
+        lopaque->btpo_parent = InvalidBlockNumber; 
+        lopaque->btpo_flags |= BTP_SPLIT;
+        
+        memmove(orig_rightpage,leftpage,PageGetPageSize(orig_rightpage));
+        WriteNoReleaseBuffer(rel,rbuf);
+        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
 
 	_bt_pageinit(leftpage, BufferGetPageSize(buf));
 	_bt_pageinit(rightpage, BufferGetPageSize(rbuf));
 
-	/* init btree private data */
-	oopaque = (BTPageOpaque) PageGetSpecialPointer(origpage);
-	lopaque = (BTPageOpaque) PageGetSpecialPointer(leftpage);
-	ropaque = (BTPageOpaque) PageGetSpecialPointer(rightpage);
-
 	/* if we're splitting this page, it won't be the root when we're done */
 	lopaque->btpo_flags = oopaque->btpo_flags;
-	lopaque->btpo_flags &= ~BTP_ROOT;
+	lopaque->btpo_flags &= ~(BTP_ROOT);
 	ropaque->btpo_flags = lopaque->btpo_flags;
 	lopaque->btpo_prev = oopaque->btpo_prev;
 	lopaque->btpo_next = BufferGetBlockNumber(rbuf);
 	ropaque->btpo_prev = BufferGetBlockNumber(buf);
 	ropaque->btpo_next = oopaque->btpo_next;
+        Assert(lopaque->btpo_prev != BufferGetBlockNumber(buf));
+        Assert(ropaque->btpo_prev != BufferGetBlockNumber(rbuf));
 
 	/*
 	 * Must copy the original parent link into both new pages, even though
@@ -673,12 +744,16 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * will be user data.
 	 */
 	rightoff = P_HIKEY;
-
+        
 	if (!P_RIGHTMOST(oopaque))
 	{
-		itemid = PageGetItemId(origpage, P_HIKEY);
+		itemid = PageGetItemId(orig_leftpage, P_HIKEY);
 		itemsz = ItemIdGetLength(itemid);
-		item = (BTItem) PageGetItem(origpage, itemid);
+		item = (BTItem) PageGetItem(orig_leftpage, itemid);
+              /*  Assert(BufferIsCritical(rbuf));
+               * 
+               * this is a temporary copy page so buffer does not need to be critical  
+               */
 		if (PageAddItem(rightpage, (Item) item, itemsz, rightoff,
 						LP_USED) == InvalidOffsetNumber)
 			elog(FATAL, "btree: failed to add hikey to the right sibling");
@@ -700,11 +775,12 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	else
 	{
 		/* existing item at firstright will become first on right page */
-		itemid = PageGetItemId(origpage, firstright);
+		itemid = PageGetItemId(orig_leftpage, firstright);
 		itemsz = ItemIdGetLength(itemid);
-		item = (BTItem) PageGetItem(origpage, itemid);
+		item = (BTItem) PageGetItem(orig_leftpage, itemid);
 	}
 	lhikey = item;
+                       
 	if (PageAddItem(leftpage, (Item) item, itemsz, leftoff,
 					LP_USED) == InvalidOffsetNumber)
         elog(FATAL, "btree: failed to add hikey to the left sibling");
@@ -713,13 +789,13 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	/*
 	 * Now transfer all the data items to the appropriate page
 	 */
-	maxoff = PageGetMaxOffsetNumber(origpage);
+	maxoff = PageGetMaxOffsetNumber(orig_leftpage);
 
-	for (i = P_FIRSTDATAKEY(oopaque); i <= maxoff; i = OffsetNumberNext(i))
+        for (i = P_FIRSTDATAKEY(oopaque); i <= maxoff; i = OffsetNumberNext(i))
 	{
-		itemid = PageGetItemId(origpage, i);
+		itemid = PageGetItemId(orig_leftpage, i);
 		itemsz = ItemIdGetLength(itemid);
-		item = (BTItem) PageGetItem(origpage, itemid);
+		item = (BTItem) PageGetItem(orig_leftpage, itemid);
 
 		/* does new item belong before this one? */
 		if (i == newitemoff)
@@ -785,11 +861,13 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * and all readers release locks on a page before trying to fetch its
 	 * neighbors.
 	 */
-
 	if (!P_RIGHTMOST(ropaque))
 	{
-		sbuf = _bt_getbuf(rel, ropaque->btpo_next, BT_WRITE);	
+		sbuf = _bt_getbuf(rel, ropaque->btpo_next, BT_READYWRITE);	
 		spage = BufferGetPage(sbuf);
+                BTPageOpaque sopaque = (BTPageOpaque) PageGetSpecialPointer(spage);
+                sopaque->btpo_prev = BufferGetBlockNumber(rbuf);
+                Assert(sopaque->btpo_prev != ropaque->btpo_next);
 	}
 
 	/*
@@ -807,11 +885,15 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * page always be clean, and the most efficient way to guarantee this
 	 * is just to compact the data by reinserting it into a new left page.
 	 */
-
-	PageRestoreTempPage(leftpage, origpage);
-
-	/* write and release the old right sibling */
-	if (!P_RIGHTMOST(ropaque))
+        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
+	PageRestoreTempPage(leftpage, orig_leftpage);
+        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
+        
+        LockBuffer(rel,rbuf,BUFFER_LOCK_CRITICAL);
+	PageRestoreTempPage(rightpage, orig_rightpage);
+        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
+        /* write and release the old right sibling */
+	if (BufferIsValid(sbuf))
 		_bt_wrtbuf(rel, sbuf);
 
 	/* split's done */
@@ -1139,14 +1221,12 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	BTMetaPageData *metad;
 
 	/* get a new root page */
-	rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
- 
+        
+        rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
+        
 	rootpage = BufferGetPage(rootbuf);
 	rootblknum = BufferGetBlockNumber(rootbuf);
-	metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
-	
-	metapg = BufferGetPage(metabuf);
-	metad = BTPageGetMeta(metapg);
+	metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_READYWRITE);
 
 	/* NO ELOG(ERROR) from here till newroot op is logged */
 
@@ -1185,6 +1265,7 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	 * is the rightmost page on its level so there is no "high key" in it;
 	 * the two items will go into positions P_HIKEY and P_FIRSTKEY.
 	 */
+        LockBuffer(rel,rootbuf,BUFFER_LOCK_CRITICAL);
 	if (PageAddItem(rootpage, (Item) new_item, itemsz, P_HIKEY, LP_USED) == InvalidOffsetNumber)
 		elog(FATAL, "btree: failed to add leftkey to new root page");
 	pfree(new_item);
@@ -1205,10 +1286,12 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	if (PageAddItem(rootpage, (Item) new_item, itemsz, P_FIRSTKEY, LP_USED) == InvalidOffsetNumber)
 		elog(FATAL, "btree: failed to add rightkey to new root page");
 	pfree(new_item);
+        LockBuffer(rel,rootbuf,BUFFER_LOCK_NOTCRITICAL);
 
-	metad->btm_root = rootblknum;
+	metapg = BufferGetPage(metabuf);
+	metad = BTPageGetMeta(metapg);
+        metad->btm_root = rootblknum;
 	(metad->btm_level)++;
-
 
 	/* write and let go of metapage buffer */
 	_bt_wrtbuf(rel, metabuf);

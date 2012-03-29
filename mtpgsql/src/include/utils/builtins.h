@@ -463,6 +463,8 @@ PG_EXTERN text *tid_text(ItemPointer);
 PG_EXTERN ItemPointer text_tid(const text *);
 PG_EXTERN ItemPointer currtid_byreloid(Oid relOid, ItemPointer);
 PG_EXTERN ItemPointer currtid_byrelname(const text *relName, ItemPointer);
+PG_EXTERN bytea* tidtobytes(ItemPointer item);
+PG_EXTERN ItemPointer bytestotid(bytea* bytes);
 
 /* varchar.c */
 PG_EXTERN char *bpcharin(char *s, int dummy, int32 atttypmod);
@@ -488,6 +490,12 @@ PG_EXTERN char *varcharin(char *s, int dummy, int32 atttypmod);
 PG_EXTERN char *varcharout(char *s);
 PG_EXTERN char *varchar(char *s, int32 slen);
 PG_EXTERN ArrayType *_varchar(ArrayType *v, int32 slen);
+PG_EXTERN bool byteaeq(bytea *arg1, bytea *arg2);
+PG_EXTERN bool byteane(bytea *arg1, bytea *arg2);
+PG_EXTERN bool bytealt(bytea *arg1, bytea *arg2);
+PG_EXTERN bool byteale(bytea *arg1, bytea *arg2);
+PG_EXTERN bool byteagt(bytea *arg1, bytea *arg2);
+PG_EXTERN bool byteage(bytea *arg1, bytea *arg2);
 PG_EXTERN bool varchareq(char *arg1, char *arg2);
 PG_EXTERN bool varcharne(char *arg1, char *arg2);
 PG_EXTERN bool varcharlt(char *arg1, char *arg2);
@@ -498,6 +506,7 @@ PG_EXTERN int32 varcharcmp(char *arg1, char *arg2);
 PG_EXTERN int32 varcharlen(char *arg);
 PG_EXTERN int32 varcharoctetlen(char *arg);
 PG_EXTERN uint32 hashvarchar(struct varlena * key);
+PG_EXTERN bytea* md5(struct varlena* src);
 
 /* varlena.c */
 PG_EXTERN text *textin(char *inputText);

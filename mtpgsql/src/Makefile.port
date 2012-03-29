@@ -27,6 +27,10 @@ CPU=sparcv9
 ENDIAN=BIG_ENDIAN
 endif
 
+ifndef JAVA_HOME
+JAVA_HOME=/usr/latest/jdk
+endif
+
 #OS=LINUX
 #CPU=amd64
 #PORTNAME=linux
@@ -52,8 +56,8 @@ CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
 CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
 CFLAGS+= -DDEBUGLOGS
 # performance
-#CFLAGS+= -xO4 -xtarget=${CPU} -m64 -KPIC
-#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo
+#CFLAGS+= -xO4 -m64 -KPIC
+#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
 
 #for java
 ifeq ($(JAVA_HOME),"")
@@ -68,16 +72,16 @@ BKIOPTS+= -DNOARRAY -I../../include -I..
 #CFLAGS+= -DHEAPDEBUGALL
 #CFLAGS+= -DCLOBBER_FREED_MEMORY
 #CFLAGS+= -DMEMORY_CONTEXT_CHECKING
-#CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
+CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
 AROPT= crs
 CFLAGS_SL=
 ifeq ($(OS),SUNOS) 
-LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU}
-LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket
+LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU} 
+LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket 
 endif
 ifeq ($(OS),LINUX) 
-LDFLAGS= -L/usr/lib64 
-LIBS= -lnsl -lrt -lm -lcrypt
+LDFLAGS= -L/usr/lib64
+LIBS= -lnsl -lrt -lm -lcrypt -lmcheck 
 endif
 
 INSTALL= $(SRCDIR)/install-sh -c

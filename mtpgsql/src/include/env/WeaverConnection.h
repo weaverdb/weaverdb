@@ -16,6 +16,7 @@
 #define _WEAVER_CONNECTION_H_
 #define HAVE_UNION_SEMUN
 
+#define START_ARGS 4
 #define MAX_ARGS 32
 #define MAX_CHILDREN 4
 
@@ -31,31 +32,19 @@
 #include "utils/palloc.h"
 #include "utils/portal.h"
 
-typedef struct preparedplan {
-        List*		querytreelist;
-        List*		plantreelist;
-
-       MemoryContext   bindcontext;
-       MemoryContext   exec_cxt;
-       MemoryContext   fetch_cxt;
-
-        TupleDesc	tupdesc;
-        EState*		state;
-        QueryDesc*	qdesc;
-} PreparedPlan;
-
 typedef struct output {
-	short index;
-	void* target;
+	short   index;
+	void*   target;
 	int	 size;
 	Oid	 type;
+        void*    freeable;
 	short*  notnull;
 	int*	length;
 } Output;
 
 typedef struct input {
 	short 	index;
-	char	name[64];
+	char*	name;
 	int 	varSize;
 	Oid 	type;
 	int 	ctype;
@@ -65,17 +54,17 @@ typedef struct input {
 
 
 typedef enum stage {
-	STMT_NEW,
+	TRAN_BEGIN,
+        STMT_NEW,
 	STMT_PARSED,
 	STMT_EXEC,
-	STMT_BOUND,
-	STMT_LINKED,
-	STMT_SELECT,
 	STMT_FETCH,
         STMT_EOD,
-        STMT_COMMIT,
-        STMT_ABORT,
-	STMT_INVALID
+        STMT_EMPTY,
+        TRAN_COMMIT,
+        TRAN_ABORT,
+        TRAN_ABORTONLY,
+	TRAN_INVALID
 } Stage;
 
 typedef struct Connection {
@@ -83,45 +72,61 @@ typedef struct Connection {
     Error		CDA;	
     short		validFlag;
 
-    char		password[256];
-    char 		name[256];
-    char 		connect[256];
+    char*		password;
+    char* 		name;
+    char* 		connect;
 
-    char		statement[8192];
     Stage		stage;
 
-    Binder		input[MAX_ARGS];
-    char*		lineup[MAX_ARGS];
-    Oid                 targs[MAX_ARGS];
-    int                 nargs;
-
-    short		openCursor;
-    short		indie;
-
 /*   Query Stuff   */		
-    PreparedPlan*	plan;
-    Output		output[MAX_ARGS];
+    OpaquePreparedStatement	plan;
 /* private */
     Env*                            env;
+    MemoryContext                   memory;
     
     struct Connection*              parent;             
     int                             child_count;
     int                             child_trans;
-
-    int 		processed;
-    int                 abortonly;
     
     pthread_t                       transaction_owner;
     pthread_mutex_t                 child_lock;
 
 } * WConn;
 
+typedef struct preparedplan {
+    WConn               owner;
+    char*               statement;
+    Stage               stage;
+        List*		querytreelist;
+        List*		plantreelist;
+
+       MemoryContext   plan_cxt;
+       MemoryContext   node_cxt;
+
+       MemoryContext   exec_cxt;
+       MemoryContext   fetch_cxt;
+
+        TupleDesc	tupdesc;
+        EState*		state;
+        QueryDesc*	qdesc;
+        int             processed;
+
+        short            input_count;
+        short            input_slots;
+        short            output_slots;
+        
+    Binder*		input;
+    Output*		output;
+
+    OpaquePreparedStatement   next;
+} PreparedPlan;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 void WHandleError( WConn conn,int sqlError );
 void  WResetExecutor(PreparedPlan* plan);
-void WResetQuery(WConn conn);
+void WResetQuery(WConn conn,bool err);
 
 bool
 TransferValue(Output* output, Form_pg_attribute desc, Datum value);

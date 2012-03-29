@@ -195,7 +195,7 @@ vacuum(char *vacrel, bool verbose, bool analyze,bool exclusive, bool fix,List *v
 	/* clean up */
 	vc_shutdown(exclusive);
 	
-    MemoryContextDelete(portalmem);
+        MemoryContextDelete(portalmem);
 	
 	if ( VacRelName == NULL ) SetTransactionLowWaterMark(lowwater);
 }
@@ -456,7 +456,7 @@ vc_vacone(Oid relid, bool analyze,bool exclusive, List *va_cols, bool fix, int l
 #endif
 /* make sure there are no soft committed transactions in this 
 	relation so flush after the relation is exclusive locked  */
-	FlushAllDirtyBuffers();
+	FlushAllDirtyBuffers(true);
 	/*
 	 * Set up statistics-gathering machinery.
 	 */
@@ -1375,7 +1375,7 @@ failed to add item with len = %u to page %ld (free space %u, nusd %u, noff %u)",
 										   idatum,
 										   inulls,
 										   &newtup->t_self,
-										   onerel);
+										   onerel, false);
 					if (iresult)
 						pfree(iresult);
 				}
@@ -1503,7 +1503,7 @@ vc_vacheap(VRelStats *vacrelstats, Relation onerel, VPageList vacuum_pages)
 	if (i < 0)
 		elog(FATAL, "VACUUM (vc_vacheap): FlushRelationBuffers returned %d", i);
         */
-        FlushAllDirtyBuffers();
+        FlushAllDirtyBuffers(true);
 	/* truncate relation if there are some empty end-pages */
 	if (vacuum_pages->vpl_empty_end_pages > 0)
 	{

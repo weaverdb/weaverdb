@@ -80,12 +80,12 @@ LocalBufferSpecialAlloc(Relation reln, BlockNumber blockNum) {
 	 * lazy memory allocation. (see MAKE_PTR for why we need to do
 	 * MAKE_OFFSET.)
 	 */
-	if (bufHdr->data == (SHMEM_OFFSET) 0)
+	if (bufHdr->data == NULL)
 	{
 		MemoryContext oldcxt = MemoryContextSwitchTo(MemoryContextGetTopContext());
 		char	   *data = (char *) palloc(BLCKSZ);
 
-		bufHdr->data = MAKE_OFFSET(data);
+		bufHdr->data = data;
 		MemoryContextSwitchTo(oldcxt);
 	}
 
@@ -163,10 +163,10 @@ LocalBufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr)
 */
                 bufHdr->ioflags &= ~BM_DIRTY;
                 if ( bufrel->rd_rel->relkind != RELKIND_SPECIAL )  
-                    PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
+                    PageInsertChecksum((Page)(bufHdr->data));
 		/* flush this page */
 		smgrwrite(bufrel->rd_smgr, bufHdr->tag.blockNum,
-				  (char *) MAKE_PTR(bufHdr->data));
+				  (char *)(bufHdr->data));
 /*   NOT NEEDED, only one thread sees a local buffer MKS  5/15/08
 		pthread_mutex_unlock(&bufHdr->io_in_progress_lock.guard);
  */
@@ -190,12 +190,12 @@ LocalBufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr)
 	 * lazy memory allocation. (see MAKE_PTR for why we need to do
 	 * MAKE_OFFSET.)
 	 */
-	if (bufHdr->data == (SHMEM_OFFSET) 0)
+	if (bufHdr->data == NULL)
 	{
 		MemoryContext oldcxt = MemoryContextSwitchTo(MemoryContextGetTopContext());
 		char	   *data = (char *) palloc(BLCKSZ);
 
-		bufHdr->data = MAKE_OFFSET(data);
+		bufHdr->data = data;
 		MemoryContextSwitchTo(oldcxt);
 	}
 
@@ -240,7 +240,7 @@ WriteLocalBuffer(Buffer buffer, bool release)
  *	  flushes a local buffer
  */
 int
-FlushLocalBuffer(Buffer buffer, bool release)
+FlushLocalBuffer(Buffer buffer)
 {
 	int			bufid;
 	Relation	bufrel;
@@ -268,9 +268,9 @@ FlushLocalBuffer(Buffer buffer, bool release)
 
 	Assert(bufrel != NULL);
     if ( bufrel->rd_rel->relkind != RELKIND_SPECIAL )   
-            PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
+            PageInsertChecksum((Page)(bufHdr->data));
     smgrflush(bufrel->rd_smgr, bufHdr->tag.blockNum,
-			  (char *) MAKE_PTR(bufHdr->data));
+			  (char *)(bufHdr->data));
 /*
     pthread_mutex_unlock(&bufHdr->io_in_progress_lock.guard);
 */
@@ -279,11 +279,7 @@ FlushLocalBuffer(Buffer buffer, bool release)
 	/* drop relcache refcount incremented by RelationIdCacheGetRelation */
 	RelationDecrementReferenceCount(bufrel);
 
-	if (release)
-	{
-		Assert(env->LocalRefCount[bufid] > 0);
-		env->LocalRefCount[bufid]--;
-	}
+        env->LocalRefCount[bufid]--;
 
 	return true;
 }
@@ -382,9 +378,9 @@ LocalBufferSync(void)
             pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 */
             if ( bufrel->rd_rel->relkind != RELKIND_SPECIAL )  
-                    PageInsertChecksum((Page)MAKE_PTR(buf->data));
+                    PageInsertChecksum((Page)(buf->data));
 			smgrwrite(bufrel->rd_smgr, buf->tag.blockNum,
-					  (char *) MAKE_PTR(buf->data));
+					  (char *)(buf->data));
 			env->LocalBufferFlushCount++;
 
 			/* drop relcache refcount from RelationIdCacheGetRelation */

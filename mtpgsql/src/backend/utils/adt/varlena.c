@@ -14,8 +14,11 @@
  */
 #include <ctype.h>
 
+
 #include "postgres.h"
 
+#include "utils/md5.h"
+#include "utils/sha2.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
 #include "access/blobstorage.h"
@@ -867,3 +870,67 @@ int32
 pagesize() {
 	return (MaxAttrSize - VARHDRSZ - 128);
 }
+
+bytea*
+md5(struct varlena* src) {
+    bytea* output = palloc(VARHDRSZ + 16);
+    SETVARSIZE(output,VARHDRSZ + 16);
+    if ( src == NULL ) {
+	MD5_CTX cxt;
+	md5_init(&cxt);
+        md5_pad(&cxt);
+	md5_result((uint8*)VARDATA(output),&cxt);
+    } else if ( !ISINDIRECT(src) ) {
+	MD5_CTX cxt;
+	md5_init(&cxt);
+	md5_loop(&cxt,(uint8*)VARDATA(src),VARSIZE(src));
+        md5_pad(&cxt);
+	md5_result((uint8*)VARDATA(output),&cxt);
+    } else {
+        MD5_CTX  cxt;
+        Datum    pipe;
+        int     len = sizeof_max_tuple_blob();
+        char*    buffer = palloc(len);
+        md5_init(&cxt);
+        pipe = open_read_pipeline_blob(PointerGetDatum(src),true);
+        while ( read_pipeline_segment_blob(pipe,buffer,&len,sizeof_max_tuple_blob()) ) {
+                md5_loop(&cxt, (uint8*)buffer,len);
+        }
+        close_read_pipeline_blob(pipe);
+        md5_pad(&cxt);
+        md5_result((uint8*)VARDATA(output),&cxt);
+    }
+
+    return output;
+}
+
+bytea*
+sha2(struct varlena* src) {
+    bytea* output = palloc(VARHDRSZ + SHA256_DIGEST_LENGTH);
+    SETVARSIZE(output,VARHDRSZ + SHA256_DIGEST_LENGTH);
+    if ( src == NULL ) {
+	SHA256_CTX cxt;
+	SHA256_Init(&cxt);
+	SHA256_Final((uint8*)VARDATA(output),&cxt);
+    } else if ( !ISINDIRECT(src) ) {
+	SHA256_CTX cxt;
+	SHA256_Init(&cxt);
+	SHA256_Update(&cxt,(uint8*)VARDATA(src),VARSIZE(src));
+	SHA256_Final((uint8*)VARDATA(output),&cxt);
+    } else {
+	SHA256_CTX cxt;
+        Datum    pipe;
+        int     len = sizeof_max_tuple_blob();
+        char*    buffer = palloc(len);
+        SHA256_Init(&cxt);
+        pipe = open_read_pipeline_blob(PointerGetDatum(src),true);
+        while ( read_pipeline_segment_blob(pipe,buffer,&len,sizeof_max_tuple_blob()) ) {
+                SHA256_Update(&cxt, (uint8*)buffer,len);
+        }
+        close_read_pipeline_blob(pipe);
+        SHA256_Final((uint8*)VARDATA(output),&cxt);
+    }
+
+    return output;
+}
+

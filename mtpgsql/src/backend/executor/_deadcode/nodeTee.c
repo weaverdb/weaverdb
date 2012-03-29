@@ -30,7 +30,7 @@
 #include "executor/executor.h"
 #include "executor/nodeTee.h"
 #include "optimizer/internal.h"
-#include "storage/bufmgr.h"
+/*#include "storage/bufmgr.h"*/
 #include "storage/smgr.h"
 #include "tcop/pquery.h"
 #include "utils/relcache.h"

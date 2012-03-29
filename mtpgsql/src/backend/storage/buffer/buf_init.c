@@ -52,14 +52,14 @@ int			ShowPinTrace = 0;
 
 int                     NTables = 1;
 int			NBuffers = DEF_NBUFFERS;	/* default is set in config.h */
-int			Data_Descriptors;
-int			Free_List_Descriptor;
+int			SBuffers = DEF_NBUFFERS;	/* default is set in config.h */
+int                     MaxBuffers = DEF_NBUFFERS;
 int			Num_Descriptors;
 
 
 BufferDesc *BufferDescriptors;
-BufferBlock BufferBlocks;
-BufferBlock ShadowBlocks;
+static char* BufferBlocks;
+MemoryContext buffer_cxt;
 
 /*
  * Data Structures:
@@ -116,8 +116,6 @@ BufferBlock ShadowBlocks;
 SPINLOCK	HeapBufLock;
 SPINLOCK	IndexBufLock;
 SPINLOCK	FreeBufMgrLock;
-extern SLock*	SLockArray;
-extern int	lockowner;
 
 long int	ReadBufferCount;
 long int	ReadLocalBufferCount;
@@ -126,7 +124,7 @@ long int	LocalBufferHitCount;
 long int	BufferFlushCount;
 long int	LocalBufferFlushCount;
 
-
+static void InitializeBuffers(int start, int count, char* block);
 /*
  * Initialize module:
  *
@@ -136,87 +134,168 @@ long int	LocalBufferFlushCount;
 void
 InitBufferPool(IPCKey key)
 {
-	bool		foundBufs,foundDescs,foundMutex;
-	int			i;
+	bool		foundBufs = false,foundDescs = false;
 
-	Data_Descriptors = NBuffers;
-	Free_List_Descriptor = Data_Descriptors;
-        Num_Descriptors = Data_Descriptors + 1;
+        if ( MaxBuffers < NBuffers ) MaxBuffers = NBuffers;
+                
+        if ( key == PrivateIPCKey ) {
+            buffer_cxt = AllocSetContextCreate(NULL,"BufferMainMemory",
+                ALLOCSET_DEFAULT_MINSIZE,
+                ALLOCSET_DEFAULT_INITSIZE,
+                ALLOCSET_DEFAULT_MAXSIZE);
+            Num_Descriptors = MaxBuffers;
+            BufferDescriptors = os_malloc(Num_Descriptors * sizeof(BufferDesc));
+            BufferBlocks = NULL;
+       } else {
+            buffer_cxt = NULL;
+            MaxBuffers = NBuffers;
+            Num_Descriptors = NBuffers;
+            BufferDescriptors = (BufferDesc*)
+                    ShmemInitStruct("Buffer Descriptors",Num_Descriptors * sizeof(BufferDesc), &foundDescs);
+
+            BufferBlocks = (char*)
+                    ShmemInitStruct("Buffer Blocks",NBuffers * BLCKSZ, &foundBufs);
         
+            if ( !BufferDescriptors || !BufferBlocks ) elog(FATAL,"failed to create buffer in shared memory");
+
+        }
         
+        if (foundDescs || foundBufs)
+        {
+                /* both should be present or neither */
+                Assert(foundDescs && foundBufs);
+        } else {
+                InitializeBuffers(0,MaxBuffers,BufferBlocks);
+        }
         
-	BufferDescriptors = (BufferDesc *)
-		ShmemInitStruct("Buffer Descriptors",Num_Descriptors * sizeof(BufferDesc), &foundDescs);
-
-	BufferBlocks = (BufferBlock)
-		ShmemInitStruct("Buffer Blocks",NBuffers * BLCKSZ, &foundBufs);
-
-        if ( !BufferDescriptors || !BufferBlocks ) elog(FATAL,"failed to create buffer in shared memory");
-						
-	if (foundDescs || foundBufs)
-	{
-
-		/* both should be present or neither */
-		Assert(foundDescs && foundBufs);
-
-	}
-	else
-	{
-		BufferDesc *buf;
-		unsigned long block;
-		unsigned long shadow;
-
-		buf = BufferDescriptors;
-		block = (unsigned long) BufferBlocks;
-                shadow = (unsigned long) ShadowBlocks;
-
-		/*
-		 * link the buffers into a circular, doubly-linked list to
-		 * initialize free list.  Still don't know anything about
-		 * replacement strategy in this file.
-		 */
-		for (i = 0; i < Data_Descriptors; block += BLCKSZ, shadow += BLCKSZ, buf++, i++)
-		{
-                    Assert(ShmemIsValid((unsigned long) block));
-
-                    buf->freeNext = i + 1;
-
-                    CLEAR_BUFFERTAG(&(buf->tag));
-                    buf->data = MAKE_OFFSET(block);
-#ifdef USE_SHADOW_PAGES
-                    buf->shadow = MAKE_OFFSET(shadow);
-#endif
-                    buf->locflags = (BM_DELETED | BM_FREE);
-                    buf->ioflags = 0;
-                    buf->refCount = 0;
-                    buf->pageaccess = 0;
-                    buf->buf_id = i;
-
-                    pthread_mutex_init(&buf->io_in_progress_lock.guard,&process_mutex_attr);
-                    pthread_cond_init(&buf->io_in_progress_lock.gate,&process_cond_attr);
-                    pthread_mutex_init(&(buf->cntx_lock.guard),&process_mutex_attr);
-                    pthread_cond_init(&(buf->cntx_lock.gate),&process_cond_attr);
-
-                    buf->used = false;
-                    buf->r_locks = 0;		/* # of shared locks */
-                    buf->w_lock = false;			/* context exclusively locked */
-                    buf->e_lock = false;
-
-                    buf->e_waiting = 0;
-                    buf->w_waiting = 0;
-                    buf->r_waiting = 0;
-                    buf->p_waiting = 0;
-                    
-                    buf->bias = 0;
-		}
-
-		/* close the circular queue */
-		BufferDescriptors[Data_Descriptors - 1].freeNext = INVALID_DESCRIPTOR;
-	}
+        elog(DEBUG,"using %d buffers max buffers %d",NBuffers,MaxBuffers);
 
 	/* Init the rest of the module */
 	InitBufTable(NTables);
 	InitFreeList(!foundDescs);
+}
+
+int
+AddMoreBuffers(int count) {
+    if ( NBuffers == MaxBuffers ) {
+        int i;
+        BufferDesc *buf,*head,*tail;
+        int activate = 0;
+        
+        head = NULL;
+        tail = NULL;
+        
+        for (i = 0; i < MaxBuffers, activate < count; i++)
+        {
+            buf = &BufferDescriptors[i];
+            pthread_mutex_lock(&buf->cntx_lock.guard);
+            if ( buf->locflags & BM_RETIRED ) {
+                activate += 1;
+                buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+                buf->locflags &= ~(BM_RETIRED);
+                buf->freeNext = INVALID_DESCRIPTOR;
+                if ( head == NULL ) {
+                    head = buf;
+                    tail = buf;
+                } else {
+                    tail->freeNext = i;
+                    tail = buf;
+                }
+                Assert(buf->data != NULL);
+            }
+            pthread_mutex_unlock(&buf->cntx_lock.guard);
+        }
+        AddBuffersToTail(head);
+        return activate;
+    } else {
+        BufferDesc* buf = NULL;
+        int i=0;
+        if ( buffer_cxt == NULL ) return NULL;
+        if ( count > MaxBuffers - NBuffers ) count = MaxBuffers - NBuffers;
+        for (i=NBuffers;i<NBuffers+count;i++) {
+            buf = &BufferDescriptors[i];
+            pthread_mutex_lock(&buf->cntx_lock.guard);
+            buf->locflags &= ~(BM_RETIRED);
+            buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+            pthread_mutex_unlock(&buf->cntx_lock.guard);
+            Assert(buf->data != NULL);
+        }
+        buf->freeNext = INVALID_DESCRIPTOR;
+        AddBuffersToTail(&BufferDescriptors[NBuffers]);
+        NBuffers += count;
+        return count;
+    }
+}
+
+int
+RetireBuffers(int start, int count) {
+    int i;
+    if ( start >= NBuffers ) return 0;
+    if ( buffer_cxt == NULL ) return 0;
+    if ( start + count >= NBuffers ) count = NBuffers - start;
+    BufferDesc* buf = &BufferDescriptors[start];
+    
+    for (i = start; i < count; buf++, i++) {
+        pthread_mutex_lock(&buf->cntx_lock.guard);
+        Assert ( buf->locflags & BM_DELETED ) ;
+        Assert ( buf->refCount == 0 ) ;
+        buf->locflags |= ( BM_RETIRED ) ;
+        buf->locflags &= ~( BM_VALID ) ;
+        if ( buf->data < BufferBlocks || buf->data > BufferBlocks + ( BLCKSZ * SBuffers ) ) pfree(buf->data);
+        buf->data = NULL;
+        pthread_mutex_unlock(&buf->cntx_lock.guard);
+    }
+    
+    return count;
+}
+
+void
+InitializeBuffers(int start, int count, char* block) {
+    int i;
+    BufferDesc* buf = &BufferDescriptors[start];
+    
+    SBuffers = NBuffers;
+    
+        for (i = start; i < start + count; i++)
+        {
+            buf = &BufferDescriptors[i];
+            CLEAR_BUFFERTAG(&(buf->tag));
+            buf->locflags = (BM_DELETED | BM_FREE);
+            
+            if ( i >= NBuffers ) {
+                buf->locflags |= BM_RETIRED;
+            } else {
+                if ( block ) {
+                    buf->data = block;
+                    block += BLCKSZ;
+                } else {
+                    buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+                }
+                Assert(buf->data != NULL);
+            }
+
+            buf->ioflags = 0;
+            buf->refCount = 0;
+            buf->pageaccess = 0;
+            buf->freeNext = i+1;
+            buf->buf_id = i;
+
+            pthread_mutex_init(&buf->io_in_progress_lock.guard,&process_mutex_attr);
+            pthread_cond_init(&buf->io_in_progress_lock.gate,&process_cond_attr);
+            pthread_mutex_init(&(buf->cntx_lock.guard),&process_mutex_attr);
+            pthread_cond_init(&(buf->cntx_lock.gate),&process_cond_attr);
+
+            buf->r_locks = 0;		/* # of shared locks */
+
+            buf->e_waiting = 0;
+            buf->w_waiting = 0;
+            buf->r_waiting = 0;
+            buf->p_waiting = 0;
+
+            buf->bias = 0;
+        }
+    
+    buf->freeNext = INVALID_DESCRIPTOR;
 }
 
 /* -----------------------------------------------------
@@ -226,12 +305,11 @@ InitBufferPool(IPCKey key)
  * data pages, buffer descriptors, hash tables, etc.
  * ----------------------------------------------------
  */
-int
+size_t
 BufferShmemSize()
 {
-	int			size = 0;
+	size_t			size = 0;
         char*           table_count;
-        char*           buffers;
 
         table_count = GetProperty("buffer_tables");
         if ( table_count != NULL ) {
@@ -239,19 +317,12 @@ BufferShmemSize()
             if ( NTables < 0 || NTables > 9 ) {
                 NTables = 1;
             }
-        }
-        buffers = GetProperty("page_buffers");
-        if ( buffers != NULL ) {
-            NBuffers = atoi(buffers);
-            if ( NBuffers < 0 ) {
-                NBuffers = DEF_NBUFFERS;
-            }
-        }       
+        }   
 	/* size of shmem index hash table */
 	size += hash_estimate_size(SHMEM_INDEX_SIZE,SHMEM_INDEX_ENTRYSIZE);
 
 	/* size of buffer descriptors */
-	size += MAXALIGN((NBuffers + 1) * sizeof(BufferDesc));
+	size += MAXALIGN((MaxBuffers) * sizeof(BufferDesc));
 
 	/* size of data pages */
 	size += NBuffers * MAXALIGN(BLCKSZ);
@@ -259,7 +330,7 @@ BufferShmemSize()
         size += NTables * sizeof(BufferTable);
 	/* size of buffer hash table */
         /*  2x b/c we are using 2 tables one for index and one for everything else  */
-	size += hash_estimate_size(NBuffers,sizeof(BufferLookupEnt)) * NTables;
+	size += hash_estimate_size(MaxBuffers,sizeof(BufferLookupEnt)) * NTables;
 
 	return size;
 }

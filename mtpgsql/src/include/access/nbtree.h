@@ -50,6 +50,8 @@ typedef BTPageOpaqueData *BTPageOpaque;
 #define BTP_FREE		(1 << 2)	/* page not in use */
 #define BTP_META		(1 << 3)	/* meta-page */
 #define BTP_REORDER		(1 << 4)	/* items need reordering */
+#define BTP_SPLIT		(1 << 5)	/* page was split */
+#define BTP_REAPED		(1 << 6)	/* page was reaped */
 
 
 /*
@@ -61,7 +63,7 @@ typedef struct BTMetaPageData
 {
 	uint32		btm_magic;
 	uint32		btm_version;
-	BlockNumber btm_root;
+	BlockNumber     btm_root;
 	int32		btm_level;
 } BTMetaPageData;
 
@@ -183,7 +185,8 @@ typedef BTStackData *BTStack;
  */
 
 #define BT_READ			BUFFER_LOCK_SHARE
-#define BT_WRITE		BUFFER_LOCK_EXCLUSIVE
+#define BT_WRITE		BUFFER_LOCK_READ_EXCLUSIVE
+#define BT_READYWRITE		BUFFER_LOCK_EXCLUSIVE
 
 /*
  *	In general, the btree code tries to localize its knowledge about
@@ -203,6 +206,8 @@ typedef BTStackData *BTStack;
 #define P_RIGHTMOST(opaque)		((opaque)->btpo_next == P_NONE)
 #define P_ISLEAF(opaque)		((opaque)->btpo_flags & BTP_LEAF)
 #define P_ISROOT(opaque)		((opaque)->btpo_flags & BTP_ROOT)
+#define P_ISSPLIT(opaque)		((opaque)->btpo_flags & BTP_SPLIT)
+#define P_ISREAPED(opaque)		((opaque)->btpo_flags & BTP_REAPED)
 
 /*
  *	Lehman and Yao's algorithm requires a ``high key'' on every non-rightmost
@@ -273,6 +278,8 @@ PG_EXTERN Datum btbulkdelete(Relation rel,int delcount,ItemPointerData* del_heap
  */
 PG_EXTERN InsertIndexResult _bt_doinsert(Relation rel, BTItem btitem,
 			 bool index_is_unique, Relation heapRel);
+PG_EXTERN InsertIndexResult _bt_queueinsert(Relation rel, BTItem btitem,
+			 bool index_is_unique, Relation heapRel);
 PG_EXTERN Buffer _bt_fixroot(Relation rel, Buffer oldrootbuf, bool release);
 
 /*
@@ -285,6 +292,7 @@ PG_EXTERN void _bt_relbuf(Relation rel, Buffer buf);
 PG_EXTERN void _bt_wrtbuf(Relation rel, Buffer buf);
 PG_EXTERN void _bt_wrtnorelbuf(Relation rel, Buffer buf);
 PG_EXTERN void _bt_pageinit(Page page, Size size);
+PG_EXTERN bool _bt_empty(Page page);
 PG_EXTERN void _bt_metaproot(Relation rel, BlockNumber rootbknum, int level);
 PG_EXTERN void _bt_itemdel(Relation rel, Buffer buf, ItemPointer tid);
 

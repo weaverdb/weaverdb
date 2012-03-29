@@ -1230,6 +1230,7 @@ _SPI_pquery(QueryDesc *queryDesc, EState *state, int tcount)
 				queryDesc->dest = None; /* */
 			}
 			break;
+		case CMD_PUT:
 		case CMD_INSERT:
 			res = SPI_OK_INSERT;
 			break;

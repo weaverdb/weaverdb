@@ -56,7 +56,6 @@ ExceptionalCondition(char *conditionName,
 
 #ifdef ABORT_ON_ASSERT
 	abort();
-        while ( TRUE ) sleep(1000);
 #endif
 #ifdef SLEEP_ON_ASSERT
 	sleep(1000000);

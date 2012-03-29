@@ -104,7 +104,10 @@ CreateOperationTag(int operationType)
 		case CMD_SELECT:
 			tag = "SELECT";
 			break;
-		case CMD_INSERT:
+                case CMD_PUT:
+			tag = "PUT";
+			break;
+            case CMD_INSERT:
 			tag = "INSERT";
 			break;
 		case CMD_DELETE:

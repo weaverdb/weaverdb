@@ -199,8 +199,10 @@ static void
 _bt_blnewpage(Relation index, Buffer * buf, Page * page, int flags)
 {
 	BTPageOpaque    opaque;
-
-	*buf = _bt_getbuf(index, P_NEW, BT_WRITE);
+/*
+        if ( BufferIsValid(*buf) ) LockBuffer(index,*buf,BUFFER_LOCK_NOTCRITICAL);
+*/
+	*buf = _bt_getbuf(index, P_NEW, BT_READYWRITE);
 	*page = BufferGetPage(*buf);
 
 	/* Zero the page and set up standard page header info */
@@ -377,7 +379,8 @@ _bt_buildadd(Relation index, BTPageState * state, BTItem bti)
 		BTItem          obti;
 
 		/* Create new page */
-		_bt_blnewpage(index, &nbuf, &npage,
+                LockBuffer(index,obuf,BUFFER_LOCK_NOTCRITICAL);
+                _bt_blnewpage(index, &nbuf, &npage,
 			      (state->btps_level > 0) ? 0 : BTP_LEAF);
 
 		/*
@@ -511,6 +514,7 @@ _bt_uppershutdown(Relation index, BTPageState * state)
 		 */
 		if (s->btps_next == (BTPageState *) NULL) {
 			opaque->btpo_flags |= BTP_ROOT;
+			opaque->btpo_parent = BTREE_METAPAGE;
 			_bt_metaproot(index, blkno, s->btps_level + 1);
 		} else {
 			Assert(s->btps_minkey != NULL);
@@ -542,9 +546,6 @@ _bt_load(Relation index, BTSpool * btspool)
 	IndexTuple      it = NULL;
 	BTItem          bti = NULL;
 	bool            should_free;
-	TupleDesc       tupdes = RelationGetDescr(index);
-	int             i, keysz = RelationGetNumberOfAttributes(index);
-	ScanKey         indexScanKey = NULL;
 
 	while (it = (IndexTuple) tuplesort_getindextuple(btspool->sortstate, true, &should_free), it != (IndexTuple) NULL) {
 		/* When we see first tuple, create first index page */

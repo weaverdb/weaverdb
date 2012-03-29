@@ -86,6 +86,7 @@
 #include "postgres.h"
 
 #include "env/env.h"
+#include "env/connectionutil.h"
 #include "access/heapam.h"
 #include "access/blobstorage.h"
 #include "access/nbtree.h"
@@ -424,6 +425,7 @@ static SectionId   sort_section_id = SECTIONID("SORT");
 
 typedef struct tsg {
 	Tuplesortstate*		qsort_tuplesortstate;
+        int                     sortmem;
 } TupleSortGlobals;
 
 #ifdef TLS
@@ -453,7 +455,8 @@ static TupleSortGlobals*  TupleSortGetEnv(void);
 static Tuplesortstate *
 tuplesort_begin_common(bool randomAccess)
 {
-	Tuplesortstate *state;
+    TupleSortGlobals* global = TupleSortGetEnv();
+	Tuplesortstate *state;        
 
 	state = (Tuplesortstate *) palloc(sizeof(Tuplesortstate));
 	MemSet((char *) state, 0, sizeof(Tuplesortstate));
@@ -467,7 +470,7 @@ tuplesort_begin_common(bool randomAccess)
 
 	state->status = TSS_INITIAL;
 	state->randomAccess = randomAccess;
-	state->availMem = SortMem * 1024L;
+	state->availMem = global->sortmem;
 	state->tapeset = NULL;
 
 	state->memtupcount = 0;
@@ -567,15 +570,15 @@ tuplesort_end(Tuplesortstate *state)
 {
 	int			i;
 
-	if (state->tapeset)
-		LogicalTapeSetClose(state->tapeset);
-	else {
+	if (state->tapeset) {
+            LogicalTapeSetClose(state->tapeset);
+        } else {
             MemoryContextDelete(state->data_cxt);
-       }
-            if (state->memtuples)
-                pfree(state->memtuples);
-            if (state->memtupindex)
-                pfree(state->memtupindex);
+        }
+        if (state->memtuples)
+            pfree(state->memtuples);
+        if (state->memtupindex)
+            pfree(state->memtupindex);
 
 }
 
@@ -648,7 +651,7 @@ puttuple_common(Tuplesortstate *state, void *tuple)
 {
 	switch (state->status)
 	{
-			case TSS_INITIAL:
+		case TSS_INITIAL:
 
 			/*
 			 * Save the copied tuple into the unsorted array.
@@ -2078,6 +2081,7 @@ TupleSortGetEnv(void)
     TupleSortGlobals* tg = tuplesort_globals;
     if ( !tg ) {
     	tg = (TupleSortGlobals*)AllocateEnvSpace(sort_section_id,sizeof(TupleSortGlobals));
+        tg->sortmem = ( PropertyIsValid("sortmem") ) ? GetIntProperty("sortmem") * 1024 : SortMem * 1024;
         tuplesort_globals = tg;
     }
     return tg;

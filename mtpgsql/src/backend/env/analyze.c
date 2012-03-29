@@ -445,18 +445,6 @@ examine_attribute(Relation onerel, int attnum)
 }
 
 /*
-static int
-reasonable_read_check(void* args) {
-    ReasonableCount*  check = (ReasonableCount*)args;
-
-    if ( check->count++ > check->limit ) {
-        RelationClearReadTrigger(check->self);
-        elog(ERROR,"giving up on analyze, too many empty pages");
-    }
-    return 0;
-}
-*/
-/*
  * acquire_sample_rows -- acquire a random sample of rows from the table
  * 
  * Up to targrows rows are collected (if there are fewer than that many rows in
@@ -483,17 +471,6 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 	double          t;
 	double          rstate;
         int misses  = 0;
-/*
-        BufferTrigger   reasonable;
-        ReasonableCount rc;
-
-        rc.limit = (BlockNumber)(onerel->rd_nblocks / 100);
-        if ( rc.limit < 1000 ) rc.limit = 1000;
-        rc.self = onerel;
-        rc.count = 0;
-        reasonable.call = reasonable_read_check;
-        reasonable.args = &rc;
-*/
         
 	Assert(targrows > 0);
         if (IsShutdownProcessingMode()) {

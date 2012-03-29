@@ -34,6 +34,7 @@
 
 #include "postgres.h"
 #include "env/env.h"
+#include "env/connectionutil.h"
 
 #include "access/xact.h"
 #include "miscadmin.h"
@@ -582,12 +583,12 @@ LockAcquire(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 		{
 			if (holder->nHolding == 0)
 			{
-				SHMQueueLock(&holder->queue);
-				SHMQueueDelete(&holder->queue);
-				SHMQueueRelease(&holder->queue);
-				SearchHolderTable(lockmethod, &holder->tag,HASH_REMOVE);
+                            SHMQueueLock(&holder->queue);
+                            SHMQueueDelete(&holder->queue);
+                            SHMQueueRelease(&holder->queue);
+                            SearchHolderTable(lockmethod, &holder->tag,HASH_REMOVE);
 			} else {
-				HOLDER_PRINT("LockAcquire: NHOLDING", holder);
+                            HOLDER_PRINT("LockAcquire: NHOLDING", holder);
                         }
 			lock->nHolding--;
 			lock->holders[lockmode]--;
@@ -1316,10 +1317,10 @@ HOLDER* SearchHolderTable(LOCKMETHOD tid, HOLDERTAG* lid, HASHACTION action) {
         
 }
 
-int
+size_t
 LockShmemSize(int maxBackends)
 {
-	int			size = 0;
+	size_t			size = 0;
 
 	size += MAXALIGN(sizeof(PROC_HDR)); /* ProcGlobal */
 	size += MAXALIGN(maxBackends * sizeof(THREAD));		/* each GetEnv()->thread */
@@ -1499,7 +1500,7 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 			}
 
 			/* Recursively check this process's lockQueue. */
-			Assert(nprocs < MAXBACKENDS);
+			Assert(nprocs < GetMaxBackends());
 			checked_procs[nprocs++] = waitProc;
 
 			if (DeadLockCheck(waitProc, findlock))

@@ -64,6 +64,7 @@ PG_EXTERN void* MemoryContextRealloc(MemoryContext context,
 					 Pointer pointer,
 					 Size size);
 */
+PG_EXTERN MemoryContext MemoryContextSameContext(Pointer pointer);
 PG_EXTERN void MemoryContextFree(MemoryContext context, Pointer pointer);
 PG_EXTERN MemoryContext MemoryContextSwitchTo(MemoryContext context);
 PG_EXTERN MemoryContext MemoryContextGetCurrentContext(void);

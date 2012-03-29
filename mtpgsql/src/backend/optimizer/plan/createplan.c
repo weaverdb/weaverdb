@@ -360,7 +360,7 @@ create_indexscan_node(Query *root,
 		if (!HeapTupleIsValid(indexTuple))
 			elog(ERROR, "create_plan: index %u not found", lfirsti(ixid));
 		index = (Form_pg_index) GETSTRUCT(indexTuple);
-		if (index->indislossy)
+		if (IndexIsLossy(index))
 		{
 			lossy = true;
 			break;

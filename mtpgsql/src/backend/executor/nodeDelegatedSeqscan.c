@@ -33,7 +33,7 @@ typedef struct HeapScanArgs {
 static Oid InitScanRelation(SeqScan *node, EState *estate, CommonScanState* scanstate, Plan *outerPlan);
 static TupleTableSlot *DelegatedSeqNext(DelegatedSeqScan *node);
 static void* DolHeapDelegation(Delegate args);
-static int HeapPointerTranfer(void*  args);
+static int HeapPointerTranfer(Relation rel, void*  args);
 
 static TupleTableSlot *
 DelegatedSeqNext(DelegatedSeqScan *node)
@@ -387,9 +387,7 @@ ExecDelegatedSeqReScan(DelegatedSeqScan *dnode, ExprContext *exprCtxt)
 static void* 
 DolHeapDelegation(Delegate arg) {
     HeapTuple  htup;
-    int min = 8;
     BlockNumber blk = InvalidBlockNumber;
-    int buf_limit = NBuffers * DelegatedBufferMax;
     int TransferMax = DelegatedGetTransferMax();
     int buf_count = 0;
     int start_blk = 0;
@@ -402,6 +400,7 @@ DolHeapDelegation(Delegate arg) {
     scan_args->counter = 0;
     scan_args->done = false;
     
+    trigger.when = TRIGGER_READ;
     trigger.call = (trigger_func)HeapPointerTranfer;
     trigger.args = arg;
 
@@ -409,7 +408,7 @@ DolHeapDelegation(Delegate arg) {
 
     HeapScanDesc scan = heap_beginscan(rel, scan_args->snapshot, 0, NULL);
 
-    RelationSetReadTrigger(rel,&trigger);
+    RelationSetTrigger(rel,&trigger);
     
     while ( !scan_args->done ) {
         htup = heap_getnext(scan);
@@ -444,7 +443,7 @@ DolHeapDelegation(Delegate arg) {
         }
     }
 
-    RelationClearReadTrigger(rel);
+    RelationClearTrigger(rel);
    
     heap_endscan(scan);
     heap_close(rel,AccessShareLock);
@@ -458,7 +457,7 @@ DolHeapDelegation(Delegate arg) {
 }
 
 static int
-HeapPointerTranfer(void*  args) {
+HeapPointerTranfer(Relation rel,void*  args) {
     Delegate delegate = (Delegate)args;
     HeapScanArgs* scan_args = (HeapScanArgs*)DelegatedScanArgs(delegate);
     

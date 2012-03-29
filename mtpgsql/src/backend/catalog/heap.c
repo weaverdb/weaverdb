@@ -1221,8 +1221,10 @@ RelationTruncateIndexes(Relation heapRelation)
 			FIsetnArgs(funcInfo, numberOfAttributes);
 			procTuple = SearchSysCacheTuple(PROCOID, ObjectIdGetDatum(procId),
 											0, 0, 0);
-			if (!HeapTupleIsValid(procTuple))
-				elog(ERROR, "RelationTruncateIndexes: index procedure not found");
+			if (!HeapTupleIsValid(procTuple)) {
+				elog(NOTICE, "RelationTruncateIndexes: index procedure not found");
+                                continue;
+                        }
 			namecpy(&(funcInfo->funcName),
 					&(((Form_pg_proc) GETSTRUCT(procTuple))->proname));
 			FIsetProcOid(funcInfo, procTuple->t_data->t_oid);
@@ -1231,14 +1233,16 @@ RelationTruncateIndexes(Relation heapRelation)
 		/* Fetch the classTuple associated with this index */
 		classTuple = SearchSysCacheTupleCopy(RELOID, ObjectIdGetDatum(indexId),
 											 0, 0, 0);
-		if (!HeapTupleIsValid(classTuple))
-			elog(ERROR, "RelationTruncateIndexes: index access method not found");
+		if (!HeapTupleIsValid(classTuple)) {
+			elog(NOTICE, "RelationTruncateIndexes: index access method not found");
+                        continue;
+                }
 		accessMethodId = ((Form_pg_class) GETSTRUCT(classTuple))->relam;
 
 		/* Open our index relation */
 		currentIndex = index_open(indexId);
 		if (currentIndex == NULL)
-			elog(ERROR, "RelationTruncateIndexes: can't open index relation");
+			elog(NOTICE, "RelationTruncateIndexes: can't open index relation");
 
 		/* Obtain exclusive lock on it, just to be sure */
 		LockRelation(currentIndex, AccessExclusiveLock);
@@ -1249,7 +1253,7 @@ RelationTruncateIndexes(Relation heapRelation)
 		 */
                 
                 InvalidateRelationBuffers(currentIndex);
-               
+                ForgetFreespace(currentIndex, false);
 		/* Now truncate the actual data and set blocks to zero */
 		smgrtruncate(currentIndex->rd_smgr, 0);
 		currentIndex->rd_nblocks = 0;
@@ -1316,7 +1320,7 @@ heap_truncate(char *relname)
         
         DropVacuumRequests(rid,GetDatabaseId());   
         InvalidateRelationBuffers(rel);
-        ForgetFreespace(rel);
+        ForgetFreespace(rel,false);
 	/* Now truncate the actual data and set blocks to zero */
 	
         smgrtruncate(rel->rd_smgr, 0);
@@ -1624,7 +1628,7 @@ heap_drop_with_catalog(const char *relname)
 	 */
 
         DropVacuumRequests(rid,GetDatabaseId());
-        ForgetFreespace(rel);
+        ForgetFreespace(rel,true);
         ImmediateSharedRelationCacheInvalidate(rel);
 	RelationForgetRelation(rid,GetDatabaseId());
 
@@ -1653,7 +1657,7 @@ heap_drop(Relation rel)
 	heap_close(rel, NoLock);
 	RemoveFromNoNameRelList(rel);
         DropVacuumRequests(rid,GetDatabaseId());        
-        ForgetFreespace(rel);
+        ForgetFreespace(rel,true);
         ImmediateSharedRelationCacheInvalidate(rel);
 	RelationForgetRelation(rid,GetDatabaseId());
 }
@@ -2229,16 +2233,11 @@ RelationRemoveStorageDirectives(Relation rel)
 void
 AddRelationStorageDirectives(Relation rel, List *rawConstraints)
 {
-	char	   *relname = RelationGetRelationName(rel);
-	TupleDesc	tupleDesc;
-	TupleConstr *oldconstr;
 	List	   *listptr;
         
 	foreach(listptr, rawConstraints)
 	{
 		Constraint *cdef = (Constraint *) lfirst(listptr);
-		char	   *ccname;
-		Node	   *expr;
                 HeapTuple	reltup;
                 HeapTuple	atttup;
                 Relation    extstore;

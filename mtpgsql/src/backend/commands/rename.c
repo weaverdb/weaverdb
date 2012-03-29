@@ -250,7 +250,7 @@ renamerel(const char *oldrelname, const char *newrelname)
 	if (FlushRelationBuffers(targetrelation, (BlockNumber) 0) < 0)
 		elog(ERROR, "renamerel: unable to flush relation from buffer pool");
           */  
-        FlushAllDirtyBuffers();
+        FlushAllDirtyBuffers(true);
 	/*
 	 * Make sure smgr and lower levels close the relation's files. (Next
 	 * access to rel will reopen them.)

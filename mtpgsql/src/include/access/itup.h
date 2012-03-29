@@ -43,10 +43,16 @@ typedef struct IndexTupleData
 
 typedef IndexTupleData *IndexTuple;
 
+typedef enum InsertIndextype {
+    INDEX_INSERTED,
+    INDEX_UNIQUE_VIOLATION,     
+    INDEX_QUEUED      
+} InsertIndexType;
 
 typedef struct InsertIndexResultData
 {
-	ItemPointerData pointerData;
+        InsertIndexType         result;
+        ItemPointerData         pointer;
 } InsertIndexResultData;
 
 typedef InsertIndexResultData *InsertIndexResult;
@@ -83,7 +89,7 @@ typedef struct PredInfo
 #define INDEX_VAR_MASK	0x4000
 
 #define IndexTupleSize(itup)	((Size) (((IndexTuple) (itup))->t_info & 0x1FFF))
-#define IndexTupleDSize(itup)				  ((Size) ((itup).t_info & 0x1FFF))
+#define IndexTupleDSize(itup)	((Size) ((itup).t_info & 0x1FFF))
 #define IndexTupleNoNulls(itup)  (!(((IndexTuple) (itup))->t_info & 0x8000))
 #define IndexTupleAllFixed(itup) (!(((IndexTuple) (itup))->t_info & 0x4000))
 

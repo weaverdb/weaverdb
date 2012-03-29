@@ -25,33 +25,32 @@
 
 /*  made callable from elsewhere
 static void smgrshutdown(int dummy);
-*/
-typedef struct f_smgr
-{
-	int			(*smgr_init) (void);	/* may be NULL */
-	int			(*smgr_shutdown) (void);		/* may be NULL */
-	int			(*smgr_create) (SmgrInfo info);
-	int			(*smgr_unlink) (SmgrInfo info);
-	int			(*smgr_extend) (SmgrInfo info, char *buffer, int count);
-	int			(*smgr_open) (SmgrInfo info);
-	int			(*smgr_close) (SmgrInfo info);
-	int			(*smgr_read) (SmgrInfo info, BlockNumber blocknum,
-										  char *buffer);
-	int			(*smgr_write) (SmgrInfo info, BlockNumber blocknum,
-										   char *buffer);
-	int			(*smgr_flush) (SmgrInfo info, BlockNumber blocknum,
-										   char *buffer);
-	int			(*smgr_markdirty) (SmgrInfo info, BlockNumber blkno);
-	int			(*smgr_nblocks) (SmgrInfo info);
-	int			(*smgr_truncate) (SmgrInfo info, long nblocks);
-	int			(*smgr_sync) (SmgrInfo info);        
-	int			(*smgr_commit) (void);	/* may be NULL */
-	int			(*smgr_abort) (void);	/* may be NULL */
-        int                     (*smgr_beginlog) (void);
-        int                     (*smgr_log) (SmgrInfo info, BlockNumber block,char* buffer);
-        int                     (*smgr_commitlog) (void);
-        int                     (*smgr_expirelogs) (void);        
-        int                     (*smgr_replaylogs) (void);
+ */
+typedef struct f_smgr {
+    int (*smgr_init) (void); /* may be NULL */
+    int (*smgr_shutdown) (void); /* may be NULL */
+    int (*smgr_create) (SmgrInfo info);
+    int (*smgr_unlink) (SmgrInfo info);
+    int (*smgr_extend) (SmgrInfo info, char *buffer, int count);
+    int (*smgr_open) (SmgrInfo info);
+    int (*smgr_close) (SmgrInfo info);
+    int (*smgr_read) (SmgrInfo info, BlockNumber blocknum,
+            char *buffer);
+    int (*smgr_write) (SmgrInfo info, BlockNumber blocknum,
+            char *buffer);
+    int (*smgr_flush) (SmgrInfo info, BlockNumber blocknum,
+            char *buffer);
+    int (*smgr_markdirty) (SmgrInfo info, BlockNumber blkno);
+    int (*smgr_nblocks) (SmgrInfo info);
+    int (*smgr_truncate) (SmgrInfo info, long nblocks);
+    int (*smgr_sync) (SmgrInfo info);
+    int (*smgr_commit) (void); /* may be NULL */
+    int (*smgr_abort) (void); /* may be NULL */
+    int (*smgr_beginlog) (void);
+    int (*smgr_log) (SmgrInfo info, BlockNumber block, char* buffer);
+    int (*smgr_commitlog) (void);
+    int (*smgr_expirelogs) (void);
+    int (*smgr_replaylogs) (void);
 } f_smgr;
 
 /*
@@ -61,54 +60,53 @@ typedef struct f_smgr
 
 static f_smgr smgrsw[] = {
 #ifdef MMD
-	/* magnetic disk */
-	{mmdinit, mmdshutdown, mmdcreate, mmdunlink, mmdextend, mmdopen, mmdclose,
-		mmdread, mmdwrite, mmdflush, mmdmarkdirty,
-	mmdnblocks, mmdtruncate, mmdsync, mmdcommit, mmdabort},
+    /* magnetic disk */
+    {mmdinit, mmdshutdown, mmdcreate, mmdunlink, mmdextend, mmdopen, mmdclose,
+        mmdread, mmdwrite, mmdflush, mmdmarkdirty,
+        mmdnblocks, mmdtruncate, mmdsync, mmdcommit, mmdabort},
 #endif
-	/* direct magnetic disk */
-	{vfdinit, vfdshutdown, vfdcreate, vfdunlink,vfdextend, vfdopen, vfdclose,
-		vfdread, vfdwrite, vfdflush, vfdmarkdirty,
-	vfdnblocks, vfdtruncate, vfdsync, vfdcommit, vfdabort, vfdbeginlog, vfdlog, vfdcommitlog,
-        vfdexpirelogs,vfdreplaylogs},
+    /* direct magnetic disk */
+    {vfdinit, vfdshutdown, vfdcreate, vfdunlink, vfdextend, vfdopen, vfdclose,
+        vfdread, vfdwrite, vfdflush, vfdmarkdirty,
+        vfdnblocks, vfdtruncate, vfdsync, vfdcommit, vfdabort, vfdbeginlog, vfdlog, vfdcommitlog,
+        vfdexpirelogs, vfdreplaylogs},
 #ifdef ZFS
-	/* zfs dmu layer */
-	{zfsinit, zfsshutdown, zfscreate, zfsunlink,zfsextend, zfsopen, zfsclose,
-	zfsread, zfswrite, zfsflush, zfsmarkdirty,
-	zfsnblocks, zfstruncate, zfssync, zfscommit, zfsabort},
+    /* zfs dmu layer */
+    {zfsinit, zfsshutdown, zfscreate, zfsunlink, zfsextend, zfsopen, zfsclose,
+        zfsread, zfswrite, zfsflush, zfsmarkdirty,
+        zfsnblocks, zfstruncate, zfssync, zfscommit, zfsabort},
 #endif
 #ifdef STABLE_MEMORY_STORAGE
-	/* main memory */
-	{mminit, mmshutdown, mmcreate. mmunlink, mmextend, mmopen, mmclose,
-		mmread, mmwrite, mmflush, mmmarkdirty,
-	mmnblocks, NULL, mmsync, mmcommit, mmabort},
+    /* main memory */
+    {mminit, mmshutdown, mmcreate. mmunlink, mmextend, mmopen, mmclose,
+        mmread, mmwrite, mmflush, mmmarkdirty,
+        mmnblocks, NULL, mmsync, mmcommit, mmabort},
 
 #endif
 };
 
-
 typedef struct SmgrGlobals {
-    MemoryContext       smgr_cxt;
+    MemoryContext smgr_cxt;
 } SmgrGlobals;
 
 static SectionId thread_id = SECTIONID("SMGR");
 
 /*  Thread local storage for ThreadGlobals  */
 #ifdef TLS
-TLS SmgrGlobals*  smgr_globals = NULL;
+TLS SmgrGlobals* smgr_globals = NULL;
 #else
 #define smgr_globals  GetEnv()->smgr_globals
 #endif
 
 static SmgrGlobals* GetSmgrGlobals(void);
 
-static int	NSmgr = lengthof(smgrsw);
+static int NSmgr = lengthof(smgrsw);
 /*  this list is created at recovery time with memory from 
  *  the main thread's memory pool
  */
-static List*            recovered;
-static MemoryContext    recovery_cxt;
- 
+static List* recovered;
+static MemoryContext recovery_cxt;
+
 static void smgrbeginrecovery();
 
 /*
@@ -117,64 +115,56 @@ static void smgrbeginrecovery();
  *
  */
 int
-smgrinit()
-{
-	int			i;
+smgrinit() {
+    int i;
 
-	for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_init)
-		{
-			if ((*(smgrsw[i].smgr_init)) () == SM_FAIL)
-				elog(FATAL, "initialization failed on %s", smgrout(i));
-		}
-	}
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_init) {
+            if ((*(smgrsw[i].smgr_init)) () == SM_FAIL)
+                elog(FATAL, "initialization failed on %s", smgrout(i));
+        }
+    }
 
-	/* register the shutdown proc */
-/*	on_proc_exit(smgrshutdown, NULL);   */
+    /* register the shutdown proc */
+    /*	on_proc_exit(smgrshutdown, NULL);   */
 
-	return SM_SUCCESS;
+    return SM_SUCCESS;
 }
 
 int
-smgrshutdown(void)
-{
-	int			i;
+smgrshutdown(void) {
+    int i;
 
-	for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_shutdown)
-		{
-			if ((*(smgrsw[i].smgr_shutdown)) () == SM_FAIL)
-				elog(FATAL, "shutdown failed on %s", smgrout(i));
-		}
-	}
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_shutdown) {
+            if ((*(smgrsw[i].smgr_shutdown)) () == SM_FAIL)
+                elog(FATAL, "shutdown failed on %s", smgrout(i));
+        }
+    }
 }
 
-
 SmgrInfo
-smgrcreate(int16 which, char* dbname,char* relname, Oid dbid, Oid relid)
-{
-	int			fd;
-        SmgrInfo                info;
-        
-        info = MemoryContextAlloc(GetSmgrGlobals()->smgr_cxt,sizeof(SmgrData));
-        
-        info->which = which;
-        namestrcpy(&info->relname,relname);
-        namestrcpy(&info->dbname,dbname);
-        info->relid = relid;
-        info->dbid = dbid;        
-        
-	if ((fd = (*(smgrsw[which].smgr_create)) (info)) < 0) {
-		elog(NOTICE, "cannot create %s-%s", relname, dbname);
-                pfree(info);
-                info = NULL;
-        } else {
-            info->fd = fd;
-        }
-        
-        return info;
+smgrcreate(int16 which, char* dbname, char* relname, Oid dbid, Oid relid) {
+    int fd;
+    SmgrInfo info;
+
+    info = MemoryContextAlloc(GetSmgrGlobals()->smgr_cxt, sizeof (SmgrData));
+
+    info->which = which;
+    namestrcpy(&info->relname, relname);
+    namestrcpy(&info->dbname, dbname);
+    info->relid = relid;
+    info->dbid = dbid;
+
+    if ((fd = (*(smgrsw[which].smgr_create)) (info)) < 0) {
+        elog(NOTICE, "cannot create %s-%s", relname, dbname);
+        pfree(info);
+        info = NULL;
+    } else {
+        info->fd = fd;
+    }
+
+    return info;
 }
 
 /*
@@ -183,16 +173,15 @@ smgrcreate(int16 which, char* dbname,char* relname, Oid dbid, Oid relid)
  *		The relation is removed from the store.
  */
 int
-smgrunlink(SmgrInfo info)
-{
-	int			status;
+smgrunlink(SmgrInfo info) {
+    int status;
 
-	if ((status = (*(smgrsw[info->which].smgr_unlink)) (info)) == SM_FAIL)
-		elog(NOTICE, "cannot unlink %s-%s", NameStr(info->relname),NameStr(info->dbname));
-        
-        pfree(info);
+    if ((status = (*(smgrsw[info->which].smgr_unlink)) (info)) == SM_FAIL)
+        elog(NOTICE, "cannot unlink %s-%s", NameStr(info->relname), NameStr(info->dbname));
 
-	return status;
+    pfree(info);
+
+    return status;
 }
 
 /*
@@ -202,17 +191,16 @@ smgrunlink(SmgrInfo info)
  *		failure.
  */
 long
-smgrextend(SmgrInfo info, char *buffer, int count)
-{
-	int status = (*(smgrsw[info->which].smgr_extend)) (info, buffer, count);
+smgrextend(SmgrInfo info, char *buffer, int count) {
+    int status = (*(smgrsw[info->which].smgr_extend)) (info, buffer, count);
 
-	if (status == SM_FAIL) {
-		elog(NOTICE, "%s-%s: cannot extend.  Check free disk space.",
-			 NameStr(info->relname),NameStr(info->dbname));
-            return -1;
-        }
+    if (status == SM_FAIL) {
+        elog(NOTICE, "%s-%s: cannot extend.  Check free disk space.",
+                NameStr(info->relname), NameStr(info->dbname));
+        return -1;
+    }
 
-	return info->nblocks;
+    return info->nblocks;
 }
 
 /*
@@ -224,8 +212,8 @@ smgrextend(SmgrInfo info, char *buffer, int count)
 SmgrInfo
 smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
 {
-	int			fd;
         SmgrInfo                info;
+        int count               =0;
         
         info = MemoryContextAlloc(GetSmgrGlobals()->smgr_cxt,sizeof(SmgrData));
         
@@ -235,13 +223,15 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
         info->relid = relid;
         info->dbid = dbid;        
         
-	if ((fd = (*(smgrsw[which].smgr_open)) (info)) < 0) {
+	while ((*(smgrsw[which].smgr_open)) (info) == SM_FAIL) {
 		elog(NOTICE, "cannot open %s-%s", relname, dbname);
-                pfree(info);
-                info = NULL;
-        } else {
-
-        }
+                perror("SMGR open:");
+                if ( count ++ > 3 ) {
+                        pfree(info);
+                        info = NULL;
+        		elog(FATAL, "cannot open %s-%s", relname, dbname);
+                }
+        } 
         
         return info;
 }
@@ -258,14 +248,13 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
  *		Returns SM_SUCCESS on success, aborts on failure.
  */
 int
-smgrclose(SmgrInfo info)
-{
-	if ((*(smgrsw[info->which].smgr_close)) (info) == SM_FAIL)
-		elog(NOTICE, "cannot close %s-%s", NameStr(info->relname),NameStr(info->dbname));
-        
-        pfree(info);
-	
-	return SM_SUCCESS;
+smgrclose(SmgrInfo info) {
+    if ((*(smgrsw[info->which].smgr_close)) (info) == SM_FAIL)
+        elog(NOTICE, "cannot close %s-%s", NameStr(info->relname), NameStr(info->dbname));
+
+    pfree(info);
+
+    return SM_SUCCESS;
 }
 
 /*
@@ -279,19 +268,18 @@ smgrclose(SmgrInfo info)
  *		the current transaction is aborted.
  */
 int
-smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer)
-{
-	int			status;
+smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer) {
+    int status;
 
-	status = (*(smgrsw[info->which].smgr_read)) (info, blocknum, buffer);
+    status = (*(smgrsw[info->which].smgr_read)) (info, blocknum, buffer);
 
-	if (status != SM_SUCCESS) {
-		elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
-			 blocknum, NameStr(info->relname), NameStr(info->dbname),status);
-                status = SM_FAIL;
-        }
+    if (status != SM_SUCCESS) {
+        elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
+                blocknum, NameStr(info->relname), NameStr(info->dbname), status);
+        status = SM_FAIL;
+    }
 
-	return status;
+    return status;
 }
 
 /*
@@ -303,34 +291,32 @@ smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer)
  *		the current transaction.
  */
 int
-smgrwrite(SmgrInfo info, BlockNumber blocknum, char *buffer)
-{
-	int			status;
+smgrwrite(SmgrInfo info, BlockNumber blocknum, char *buffer) {
+    int status;
 
-	status = (*(smgrsw[info->which].smgr_write)) (info, blocknum, buffer);
+    status = (*(smgrsw[info->which].smgr_write)) (info, blocknum, buffer);
 
-	if (status == SM_FAIL)
-		elog(NOTICE, "cannot write block %ld of %s-%s",
-			 blocknum, NameStr(info->relname), NameStr(info->dbname));
+    if (status == SM_FAIL)
+        elog(NOTICE, "cannot write block %ld of %s-%s",
+            blocknum, NameStr(info->relname), NameStr(info->dbname));
 
-	return status;
+    return status;
 }
 
 /*
  *	smgrflush() -- A synchronous smgrwrite().
  */
 int
-smgrflush(SmgrInfo info, BlockNumber blocknum, char *buffer)
-{
-	int			status;
+smgrflush(SmgrInfo info, BlockNumber blocknum, char *buffer) {
+    int status;
 
-	status = (*(smgrsw[info->which].smgr_flush)) (info, blocknum, buffer);
+    status = (*(smgrsw[info->which].smgr_flush)) (info, blocknum, buffer);
 
-	if (status == SM_FAIL)
-		elog(NOTICE, "cannot flush block %ld of %s-%s to stable store",
-			 blocknum, NameStr(info->relname), NameStr(info->dbname));
+    if (status == SM_FAIL)
+        elog(NOTICE, "cannot flush block %ld of %s-%s to stable store",
+            blocknum, NameStr(info->relname), NameStr(info->dbname));
 
-	return status;
+    return status;
 }
 
 /*
@@ -344,17 +330,16 @@ smgrflush(SmgrInfo info, BlockNumber blocknum, char *buffer)
  *		sure the page is down to disk before we commit.
  */
 int
-smgrmarkdirty(SmgrInfo info, BlockNumber blkno)
-{
-	int			status;
+smgrmarkdirty(SmgrInfo info, BlockNumber blkno) {
+    int status;
 
-	status = (*(smgrsw[info->which].smgr_markdirty)) (info, blkno);
+    status = (*(smgrsw[info->which].smgr_markdirty)) (info, blkno);
 
-	if (status == SM_FAIL)
-		elog(NOTICE, "cannot mark block %ld of %s",
-			 blkno, NameStr(info->relname), NameStr(info->dbname));
+    if (status == SM_FAIL)
+        elog(NOTICE, "cannot mark block %ld of %s",
+            blkno, NameStr(info->relname), NameStr(info->dbname));
 
-	return status;
+    return status;
 }
 
 /*
@@ -365,14 +350,13 @@ smgrmarkdirty(SmgrInfo info, BlockNumber blkno)
  *		transaction on failure.
  */
 long
-smgrnblocks(SmgrInfo info)
-{
-	if (((*(smgrsw[info->which].smgr_nblocks)) (info)) < 0)
-		elog(NOTICE, "cannot count blocks for %s-%s",
-			 NameStr(info->relname), NameStr(info->dbname));
+smgrnblocks(SmgrInfo info) {
+    if (((*(smgrsw[info->which].smgr_nblocks)) (info)) < 0)
+        elog(NOTICE, "cannot count blocks for %s-%s",
+            NameStr(info->relname), NameStr(info->dbname));
 
-        
-	return info->nblocks;
+
+    return info->nblocks;
 }
 
 /*
@@ -383,19 +367,17 @@ smgrnblocks(SmgrInfo info)
  *		transaction on failure.
  */
 long
-smgrtruncate(SmgrInfo info, long nblocks)
-{
-	long			newblks;
+smgrtruncate(SmgrInfo info, long nblocks) {
+    long newblks;
 
-	newblks = nblocks;
-	if (smgrsw[info->which].smgr_truncate)
-	{
-		if ((newblks = (*(smgrsw[info->which].smgr_truncate)) (info, nblocks)) < 0)
-			elog(NOTICE, "cannot truncate %s-%s to %ld blocks",
-				 NameStr(info->relname), NameStr(info->dbname), nblocks);
-	}
+    newblks = nblocks;
+    if (smgrsw[info->which].smgr_truncate) {
+        if ((newblks = (*(smgrsw[info->which].smgr_truncate)) (info, nblocks)) < 0)
+            elog(NOTICE, "cannot truncate %s-%s to %ld blocks",
+                NameStr(info->relname), NameStr(info->dbname), nblocks);
+    }
 
-	return info->nblocks;
+    return info->nblocks;
 }
 
 /*
@@ -403,185 +385,162 @@ smgrtruncate(SmgrInfo info, long nblocks)
  *								 current transaction.
  */
 int
-smgrcommit()
-{
-	int			i;
+smgrcommit() {
+    int i;
 
-	for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_commit)
-		{
-			if ((*(smgrsw[i].smgr_commit)) () == SM_FAIL)
-				elog(FATAL, "transaction commit failed on %s", smgrout(i));
-		}
-	}
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_commit) {
+            if ((*(smgrsw[i].smgr_commit)) () == SM_FAIL)
+                elog(FATAL, "transaction commit failed on %s", smgrout(i));
+        }
+    }
 
-	return SM_SUCCESS;
+    return SM_SUCCESS;
 }
 
 int
-smgrabort()
-{
-	int			i;
+smgrabort() {
+    int i;
 
-	for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_abort)
-		{
-			if ((*(smgrsw[i].smgr_abort)) () == SM_FAIL)
-				elog(FATAL, "transaction abort failed on %s", smgrout(i));
-		}
-	}
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_abort) {
+            if ((*(smgrsw[i].smgr_abort)) () == SM_FAIL)
+                elog(FATAL, "transaction abort failed on %s", smgrout(i));
+        }
+    }
 
-	return SM_SUCCESS;
+    return SM_SUCCESS;
 }
 
-int 
-smgrsync(SmgrInfo info)
-{
-	if (smgrsw[info->which].smgr_sync)
-	{
-		if (((*(smgrsw[info->which].smgr_sync)) (info)) < 0)
-			elog(NOTICE, "cannot sync %s-%s",
-				 NameStr(info->relname), NameStr(info->dbname));
-	}
+int
+smgrsync(SmgrInfo info) {
+    if (smgrsw[info->which].smgr_sync) {
+        if (((*(smgrsw[info->which].smgr_sync)) (info)) < 0)
+            elog(NOTICE, "cannot sync %s-%s",
+                NameStr(info->relname), NameStr(info->dbname));
+    }
 
 }
 
-int 
-smgrbeginlog()
-{
-	int			i;
+int
+smgrbeginlog() {
+    int i;
 
-	for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_beginlog)
-		{
-			if ((*(smgrsw[i].smgr_beginlog)) () == SM_FAIL)
-				elog(FATAL, "begin log failed on %s", smgrout(i));
-		}
-	}
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_beginlog) {
+            if ((*(smgrsw[i].smgr_beginlog)) () == SM_FAIL)
+                elog(FATAL, "begin log failed on %s", smgrout(i));
+        }
+    }
 
-	return SM_SUCCESS;
+    return SM_SUCCESS;
 }
 
-int 
-smgrlog(int which,char *dbname, char *relname,
-			  Oid dbid, Oid relid, BlockNumber number, char relkind, char* buffer)
-{
+int
+smgrlog(int which, char *dbname, char *relname,
+        Oid dbid, Oid relid, BlockNumber number, char relkind, char* buffer) {
     SmgrData data;
-    
+
     data.which = which;
-    namestrcpy(&data.dbname,dbname);
-    namestrcpy(&data.relname,relname); 
+    namestrcpy(&data.dbname, dbname);
+    namestrcpy(&data.relname, relname);
     data.dbid = dbid;
     data.relid = relid;
     data.relkind = relkind;
-    
-        if (smgrsw[which].smgr_log)
-        {
-                if ((*(smgrsw[which].smgr_log)) (&data,number,buffer) == SM_FAIL)
-                        elog(FATAL, "log failed on %s for %s-%s block number: %d", smgrout(which), NameStr(data.relname),
-                            NameStr(data.dbname),number);
+
+    if (smgrsw[which].smgr_log) {
+        if ((*(smgrsw[which].smgr_log)) (&data, number, buffer) == SM_FAIL)
+            elog(FATAL, "log failed on %s for %s-%s block number: %d", smgrout(which), NameStr(data.relname),
+                NameStr(data.dbname), number);
+    }
+
+    return SM_SUCCESS;
+}
+
+int
+smgrcommitlog() {
+    int i;
+
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_commitlog) {
+            if ((*(smgrsw[i].smgr_commitlog)) () == SM_FAIL)
+                elog(FATAL, "commit log failed on %s", smgrout(i));
         }
+    }
 
-	return SM_SUCCESS;
+    return SM_SUCCESS;
 }
 
-int 
-smgrcommitlog()
-{
-	int			i;
+int
+smgrreplaylogs() {
+    int i;
 
-	for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_commitlog)
-		{
-			if ((*(smgrsw[i].smgr_commitlog)) () == SM_FAIL)
-				elog(FATAL, "commit log failed on %s", smgrout(i));
-		}
-	}
+    smgrbeginrecovery();
 
-	return SM_SUCCESS;
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_replaylogs) {
+            if ((*(smgrsw[i].smgr_replaylogs)) () == SM_FAIL)
+                elog(FATAL, "replay logs failed on %s", smgrout(i));
+        }
+    }
+
+    return SM_SUCCESS;
 }
 
-int 
-smgrreplaylogs()
-{
-	int			i;
+int
+smgrexpirelogs() {
+    int i;
 
-        smgrbeginrecovery();
-        
-        for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_replaylogs)
-		{
-			if ((*(smgrsw[i].smgr_replaylogs)) () == SM_FAIL)
-				elog(FATAL, "replay logs failed on %s", smgrout(i));
-		}
-	}
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_expirelogs) {
+            if ((*(smgrsw[i].smgr_expirelogs)) () == SM_FAIL)
+                elog(FATAL, "expire logs failed on %s", smgrout(i));
+        }
+    }
 
-	return SM_SUCCESS;
-}
-
-
-int 
-smgrexpirelogs()
-{
-	int			i;
-
-	for (i = 0; i < NSmgr; i++)
-	{
-		if (smgrsw[i].smgr_expirelogs)
-		{
-			if ((*(smgrsw[i].smgr_expirelogs)) () == SM_FAIL)
-				elog(FATAL, "expire logs failed on %s", smgrout(i));
-		}
-	}
-
-	return SM_SUCCESS;
+    return SM_SUCCESS;
 }
 
 int smgraddrecoveredpage(char* dbname, Oid dbid, Oid relid, BlockNumber block) {
     MemoryContext old = MemoryContextSwitchTo(recovery_cxt);
-    RecoveredPage* page = palloc(sizeof(RecoveredPage));
+    RecoveredPage* page = palloc(sizeof (RecoveredPage));
     page->dbid = dbid;
     page->relid = relid;
     page->block = block;
-    strncpy(page->dbname,dbname,64);
-    recovered = lappend(recovered,page);
+    strncpy(page->dbname, dbname, 64);
+    recovered = lappend(recovered, page);
     MemoryContextSwitchTo(old);
     return 0;
 }
 
 List* smgrgetrecoveredlist(Oid dbid) {
-    RecoveredPage*      page = NULL;
-    List*               item;
-    List*               specific = NULL;
-    
-/*
-    elog(NOTICE,"generating recovery list");
-*/
-    if ( recovered == NULL ) return NULL;
- 
+    RecoveredPage* page = NULL;
+    List* item;
+    List* specific = NULL;
+
+    /*
+        elog(NOTICE,"generating recovery list");
+     */
+    if (recovered == NULL) return NULL;
+
     foreach(item, recovered) {
         RecoveredPage* page = lfirst(item);
-        if ( page->dbid == dbid ) {
-            specific = lappend(specific,page);
+        if (page->dbid == dbid) {
+            specific = lappend(specific, page);
         }
     }
-/*
-    elog(NOTICE,"done generating recovery list");
-*/
+    /*
+        elog(NOTICE,"done generating recovery list");
+     */
     return specific;
 }
 
 void smgrbeginrecovery() {
     recovery_cxt = AllocSetContextCreate(GetSmgrMemoryContext(),
-                                                 "SmgrMemoryContext",
-                                                ALLOCSET_DEFAULT_MINSIZE,
-                                                ALLOCSET_DEFAULT_INITSIZE,
-                                                ALLOCSET_DEFAULT_MAXSIZE);
+            "SmgrMemoryContext",
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
 }
 
 void smgrcompleterecovery() {
@@ -591,62 +550,60 @@ void smgrcompleterecovery() {
 }
 
 List* smgrdbrecoverylist() {
-    RecoveredPage*      page = NULL;
-    List*               item;
-    List*               specific = NULL;
-    
-/*
-    elog(NOTICE,"evaluating recovery list");
-*/
-    if ( recovered == NULL ) return NULL;
+    RecoveredPage* page = NULL;
+    List* item;
+    List* specific = NULL;
+
+    /*
+        elog(NOTICE,"evaluating recovery list");
+     */
+    if (recovered == NULL) return NULL;
 
     MemoryContext old = MemoryContextSwitchTo(recovery_cxt);
-    
+
     foreach(item, recovered) {
         RecoveredPage* page = lfirst(item);
-        if ( !intMember(page->dbid,specific) ) {
-            specific = lappendi(specific,page->dbid);
+        if (!intMember(page->dbid, specific)) {
+            specific = lappendi(specific, page->dbid);
         }
     }
-/*
-    elog(NOTICE,"done evaluating recovery list");
-*/
-    MemoryContextSwitchTo(old); 
+    /*
+        elog(NOTICE,"done evaluating recovery list");
+     */
+    MemoryContextSwitchTo(old);
     return specific;
 }
 
-
 char* smgrdbrecoveryname(Oid dbid) {
-    RecoveredPage*      page = NULL;
-    List*               item;
-    List*               specific = NULL;
-    
-    if ( recovered == NULL ) return NULL;
+    RecoveredPage* page = NULL;
+    List* item;
+    List* specific = NULL;
 
-    SmgrGlobals*  global = GetSmgrGlobals();
-    
+    if (recovered == NULL) return NULL;
+
+    SmgrGlobals* global = GetSmgrGlobals();
+
     foreach(item, recovered) {
         RecoveredPage* page = lfirst(item);
-        if ( page->dbid == dbid ) {
+        if (page->dbid == dbid) {
             return page->dbname;
         }
     }
 
     return NULL;
 }
- 
+
 SmgrGlobals*
-GetSmgrGlobals(void)
-{
+GetSmgrGlobals(void) {
     SmgrGlobals* globals = smgr_globals;
-    if ( globals == NULL ) {
-        globals = AllocateEnvSpace(thread_id,sizeof(SmgrGlobals)); 
-        memset(globals,0x00,sizeof(SmgrGlobals));
+    if (globals == NULL) {
+        globals = AllocateEnvSpace(thread_id, sizeof (SmgrGlobals));
+        memset(globals, 0x00, sizeof (SmgrGlobals));
         globals->smgr_cxt = AllocSetContextCreate(GetEnvMemoryContext(),
-                                                 "SmgrMemoryContext",
-                                                ALLOCSET_DEFAULT_MINSIZE,
-                                                ALLOCSET_DEFAULT_INITSIZE,
-                                                ALLOCSET_DEFAULT_MAXSIZE);
+                "SmgrMemoryContext",
+                ALLOCSET_DEFAULT_MINSIZE,
+                ALLOCSET_DEFAULT_INITSIZE,
+                ALLOCSET_DEFAULT_MAXSIZE);
         smgr_globals = globals;
     }
     return globals;

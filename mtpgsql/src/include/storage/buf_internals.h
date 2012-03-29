@@ -20,19 +20,29 @@
 /* Buf Mgr constants */
 /* in bufmgr.c */
 extern int	NBuffers;
-extern int	Data_Descriptors;
-extern int	Free_List_Descriptor;
-extern int	Lookup_List_Descriptor;
-extern int	Num_Descriptors;
+extern int	MaxBuffers;
 
 /*
  * Flags for buffer descriptors
  */
+/* Location and Locking Flags */
+#define BM_USED 				(1 << 0)/* 1 */
+#define BM_VALID				(1 << 1)/* 2 */
+#define BM_DELETED				(1 << 2)/* 4 */
+#define BM_FREE					(1 << 3)/* 8 */
+#define BM_WRITELOCK				(1 << 4)/* 16 */
+#define BM_EXCLUSIVE				(1 << 5)/* 32 */
+#define BM_CRITICAL                             (1 << 6)/*64*/
+#define BM_WRITEIO                             (1 << 7)/*128*/
+#define BM_RETIRED                             (1 << 8)/*256*/
+#define BM_CRITICALMASK                          (BM_WRITELOCK | BM_CRITICAL)
+#define BM_EXCLUSIVEMASK                          (BM_WRITELOCK | BM_EXCLUSIVE | BM_CRITICAL)
+#define BM_REMOVEWRITEMASK                          ~(BM_WRITELOCK | BM_EXCLUSIVE | BM_CRITICAL)
+
+/* IO Flags */
 #define BM_DIRTY				(1 << 0) /* 1 */
 #define BM_LOGGED                               (1 << 1)/* 2 */
-#define BM_VALID				(1 << 2)/* 4 */
-#define BM_DELETED				(1 << 3)/* 8 */
-#define BM_FREE					(1 << 4)/* 16 */
+
 #define BM_IO_ERROR				(1 << 5)/* 32 */
 #define BM_INBOUND				(1 << 6)/* 64 */
 #define BM_READONLY                             (1 << 7) /*  128  */
@@ -90,7 +100,7 @@ typedef struct bufblindid
 	char		relname[NAMEDATALEN];	/* name of reln */
 }			BufferBlindId;
 
-#define BAD_BUFFER_ID(bid) ((bid) < 1 || (bid) > NBuffers)
+#define BAD_BUFFER_ID(bid) ((bid) < 1 || (bid) > MaxBuffers)
 #define INVALID_DESCRIPTOR (-3)
 #define DETACHED_DESCRIPTOR (-4)
 
@@ -115,8 +125,7 @@ typedef struct iogate {
 typedef struct sbufdesc
 {
 	Buffer		freeNext;		/* links for freelist chain */
-	SHMEM_OFFSET 	data;			/* pointer to data in buf pool */
-	SHMEM_OFFSET 	shadow;			/* pointer to data in buf pool */
+	char*           data;			/* pointer to data in buf pool */
 
 	/* tag and id must be together for table lookup to work */
 	BufferTag	tag;			/* file/block identifier */
@@ -131,10 +140,6 @@ typedef struct sbufdesc
 	IOGate		io_in_progress_lock;
 	IOGate		cntx_lock;		/* to lock access to page context */
 
-	bool            used;
-        bool		w_lock;			/* context exclusively locked */
-        bool		e_lock;
-        bool            wio_lock;                /* only set when DBWriter takes a writeio lock which is the same as a share lock */
         unsigned        w_owner;
 	unsigned	r_locks;		/* # of shared locks */
         unsigned	e_waiting;              /*  waiting for exclusive lock   */
@@ -158,6 +163,7 @@ typedef struct sbufdesc
 #define BL_RI_LOCK			(1 << 2)
 #define BL_W_LOCK			(1 << 3)
 #define BL_NOLOCK               (1 << 4)
+#define BL_CRITICAL               (1 << 5)
 
 typedef         bits8          IOStatus;
 /*
@@ -194,6 +200,7 @@ typedef struct _bmtrace
 
 /*freelist.c*/
 
+PG_EXTERN void AddBuffersToTail(BufferDesc* buf);
 
 PG_EXTERN int ManualPin(BufferDesc* buf, bool pageaccess);
 PG_EXTERN int ManualUnpin(BufferDesc* buf, bool pageaccess);
@@ -213,22 +220,17 @@ PG_EXTERN bool BufTableDelete(BufferDesc *buf);
 PG_EXTERN bool  BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block);
 /* bufmgr.c */
 PG_EXTERN BufferDesc *BufferDescriptors;
-PG_EXTERN BufferBlock BufferBlocks;
 
 PG_EXTERN SPINLOCK HeapBufLock;
 PG_EXTERN SPINLOCK IndexBufLock;
 PG_EXTERN SPINLOCK FreeBufMgrLock;
 
 /* localbuf.c */
-/*
-PG_EXTERN long *LocalRefCount;
-PG_EXTERN BufferDesc *LocalBufferDescriptors;
-*/
 PG_EXTERN const int	NLocBuffer;
 
 PG_EXTERN BufferDesc *LocalBufferAlloc(Relation reln, BlockNumber blockNum,bool *foundPtr);
 PG_EXTERN int	WriteLocalBuffer(Buffer buffer, bool release);
-PG_EXTERN int	FlushLocalBuffer(Buffer buffer, bool release);
+PG_EXTERN int	FlushLocalBuffer(Buffer buffer);
 
 PG_EXTERN void LocalBufferSync(void);
 PG_EXTERN void ResetLocalBufferPool(void);

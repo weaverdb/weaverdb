@@ -124,7 +124,7 @@ endif
 ifeq ($(LEAK_DETECT),1)
 libmtpg.a: ${OBJS} mtpg.o
 	${LD} -r ${LDFLAGS} -\
-	${OBJS} ${SRCDIR}/../../gc/.libs/libgc.a ${VERSIONOBJ} \
+	${OBJS} ${GCOBJ} ${VERSIONOBJ} \
 	-o libclearmtpg.a
 	${LD} -r -M$(SRCDIR)/backend/mapfile.txt mtpg.o libclearmtpg.a -o libmtpg.a
 else

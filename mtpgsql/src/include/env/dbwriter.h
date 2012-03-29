@@ -10,21 +10,24 @@
 
 #include "c.h"
 
-
 #include "storage/buf_internals.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef enum mode {
+    SYNC_MODE,
+    LOG_MODE
+} DBMode;
 
-void DBWriterInit(int maxcount,int timeout,int hgc_threshold,int hgc_updatewt,int hgc_factor);
+void DBWriterInit();
 
-void DBCreateWriterThread(void);
+void DBCreateWriterThread(DBMode mode);
 
 void CommitDBBufferWrites(TransactionId xid,int state);
 
-void FlushAllDirtyBuffers(void);
+bool FlushAllDirtyBuffers(bool wait);
 void RegisterBufferWrite(BufferDesc * bufHdr,bool release);
 
 void ClearAllDBWrites(BufferDesc* bufHdr);
@@ -34,6 +37,8 @@ bool IsDBWriter(void);
 void ResetAccessCounts(Oid relid,Oid dbid);
 
 char* RequestSnapshot(char* cmd);
+
+long GetFlushTime();
 
 #ifdef __cplusplus
 }

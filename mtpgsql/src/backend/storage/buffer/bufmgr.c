@@ -72,7 +72,6 @@
 pthread_t lockowner;
 
 extern SPINLOCK BufMgrLock;
-extern SLock *SLockArray;
 
 static BufferDesc *BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr);
 static bool SyncShadowPage(BufferDesc* bufHdr);
@@ -87,7 +86,7 @@ static void BufferReplaceMiss(Oid relid, Oid dbid, char* name);
 static void BufferPinInvalid(Buffer buf, Oid relid, Oid dbid, char* name);
 static void BufferPinMiss(Buffer buf, Oid relid, Oid dbid, char* name);
 
-static int DirectWriteBuffer(Relation rel, Buffer buffer, bool release);
+static int DirectWriteBuffer(Relation rel, Buffer buffer);
 static bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc* buffer);
 
 static bool InboundBufferIO(BufferDesc* header);
@@ -190,7 +189,9 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     
     if ( reln->readtrigger != NULL ) {
         BufferTrigger*  trigger = reln->readtrigger;
-        trigger->call(trigger->args);
+        if ( trigger->when == TRIGGER_READ ) {
+                trigger->call(reln,trigger->args);
+        }
     }
     
     if ( !isLocalBuf ) {
@@ -207,28 +208,28 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
         }
     }
     
-    status = smgrread(reln->rd_smgr, blockNum, (char *) MAKE_PTR(bufHdr->data));
+    status = smgrread(reln->rd_smgr, blockNum, (char *) (bufHdr->data));
     
     if ( !isLocalBuf && status == SM_SUCCESS ) {
         if ( reln->rd_rel->relkind == RELKIND_INDEX ) {
-            if ( !PageIsNew((Page)MAKE_PTR(bufHdr->data)) && !PageConfirmChecksum((Page)MAKE_PTR(bufHdr->data)) ) {
+            if ( !PageIsNew((Page)bufHdr->data) && !PageConfirmChecksum((Page)bufHdr->data) ) {
                 char* index = GetProperty("index_corruption");
                 if ( index == NULL || (strcasecmp(index,"IGNORE") != 0)  ) {
                     AddReindexRequest(RelationGetRelationName(reln),GetDatabaseName(),bufHdr->tag.relId.relId,bufHdr->tag.relId.dbId);
                     status = SM_FAIL;
                 }
                 elog(NOTICE, "Index Page is corrupted name:%s page:%d check:%d\n", reln->rd_rel->relname, blockNum,check);
-                elog(NOTICE, "checksum=%lld\n", ((PageHeader)MAKE_PTR(bufHdr->data))->checksum);
+                elog(NOTICE, "checksum=%lld\n", ((PageHeader)bufHdr->data)->checksum);
             }
         } else if ( reln->rd_rel->relkind == RELKIND_RELATION ) {
-            if ( !PageIsNew((Page)MAKE_PTR(bufHdr->data)) && !PageConfirmChecksum((Page)MAKE_PTR(bufHdr->data)) ) {
+            if ( !PageIsNew((Page)(bufHdr->data)) && !PageConfirmChecksum((Page)(bufHdr->data)) ) {
                 char* heap = GetProperty("heap_corruption");
 
                 if ( heap != NULL && (strcasecmp(heap,"IGNORE") == 0)  ) {
-                    PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
+                    PageInsertChecksum((Page)(bufHdr->data));
                     SetBufferCommitInfoNeedsSave(BufferDescriptorGetBuffer(bufHdr));
                 } else {
-                    PageInit((Page)MAKE_PTR(bufHdr->data),BLCKSZ,0);
+                    PageInit((Page)(bufHdr->data),BLCKSZ,0);
                     status = SM_FAIL;
                 }
                 elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", reln->rd_rel->relname, blockNum);
@@ -340,6 +341,41 @@ BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr) {
     return buf;
 }
 
+bool BufferIsPrivate(Relation relation, Buffer buffer) {
+    BufferDesc*  buf;
+    BufferEnv* cxt = RelationGetBufferCxt(relation);
+    bool priv = false;
+    
+    if (BufferIsLocal(buffer))
+        return true;
+
+    buf = &(BufferDescriptors[buffer - 1]);
+
+    pthread_mutex_lock(&(buf->cntx_lock.guard));
+    priv = (buf->pageaccess == 1 && cxt->PrivateRefCount[buf->buf_id] == 1);
+    pthread_mutex_unlock(&(buf->cntx_lock.guard));
+    return priv;
+}
+
+bool BufferPrivateCheck(Relation relation, Buffer buffer,buffer_check check) {
+    BufferDesc*  buf;
+    BufferEnv* cxt = RelationGetBufferCxt(relation);
+    bool priv = false;
+    
+    if (BufferIsLocal(buffer))
+        return true;
+
+    buf = &(BufferDescriptors[buffer - 1]);
+
+    pthread_mutex_lock(&(buf->cntx_lock.guard));
+    priv = (buf->pageaccess == 1 && cxt->PrivateRefCount[buf->buf_id] == 1);
+    if ( priv ) {
+        priv = check(relation,buffer);
+    }
+    pthread_mutex_unlock(&(buf->cntx_lock.guard));
+    return priv;    
+}
+
 static void BufferMiss(Oid relid, Oid dbid, char* name) {
     DTRACE_PROBE3(mtpg, buffer__miss, relid, dbid, name);
 }
@@ -425,22 +461,19 @@ SyncRelation(Relation rel) {
 }
 
 int
-FlushBuffer(Relation rel, Buffer buffer, bool release) {
-    BufferDesc *bufHdr;
-   
+FlushBuffer(Relation rel, Buffer buffer) {
+
     if (BufferIsLocal(buffer))
-        return FlushLocalBuffer(buffer, release) ? STATUS_OK : STATUS_ERROR;
-    else 
-        bufHdr = &BufferDescriptors[buffer - 1];
+        return FlushLocalBuffer(buffer) ? STATUS_OK : STATUS_ERROR;
     
     if (BAD_BUFFER_ID(buffer))
         return STATUS_ERROR;
 
-    return DirectWriteBuffer(rel, buffer, release);
+    return DirectWriteBuffer(rel, buffer);
 }
 
 int
-DirectWriteBuffer(Relation rel, Buffer buffer, bool release) {
+DirectWriteBuffer(Relation rel, Buffer buffer) {
     BufferDesc *bufHdr;
     Oid			bufdb;
     Oid			relId;
@@ -448,7 +481,11 @@ DirectWriteBuffer(Relation rel, Buffer buffer, bool release) {
     int			status = STATUS_OK;
     IOStatus            iostatus;
         
-        bufenv->DidWrite = true;
+        if ( bufenv != NULL ) {
+            bufenv->DidWrite = true;
+        } else {
+            Assert(IsDBWriter());
+        }
         
         bufHdr = &BufferDescriptors[buffer - 1];
         /*  rely on the fact that the buffer is already pinned so
@@ -459,22 +496,22 @@ we don't have to lock  */
         
         Assert ( relId == RelationGetRelid(rel) );
         
-        bufenv->DidWrite = true;
-        GetTransactionInfo()->SharedBufferChanged = true;
+        if ( bufenv != NULL ) {
+            GetTransactionInfo()->SharedBufferChanged = true;
+        }
         
         /*
          * Grab a read lock on the buffer to ensure that no
          * other backend changes its contents while we write it;
          * see comments in BufferSync().
          */
-        iostatus = WriteBufferIO(bufHdr,true);
+        iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus ) {
             if ( rel->rd_rel->relkind != RELKIND_SPECIAL )  {
-                PageInsertChecksum((Page)MAKE_PTR(bufHdr->data));
+                PageInsertChecksum((Page)(bufHdr->data));
             }
 
-            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum,
-            (char *) MAKE_PTR(bufHdr->data));
+            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, (char *)(bufHdr->data));
 
             if (status == SM_FAIL) {
                 ErrorBufferIO(iostatus,bufHdr);
@@ -487,9 +524,7 @@ we don't have to lock  */
             }
         }
         
-        if (release) {
-            UnpinBuffer(bufenv,bufHdr);
-        }
+        UnpinBuffer(bufenv,bufHdr);
         
         return ( status == SM_FAIL ) ? STATUS_ERROR : STATUS_OK;
 }
@@ -583,7 +618,7 @@ ResetBufferPool(bool isCommit) {
     BufferEnv* env = GetBufferCxt();
     
     /*	printf("reseting buffer pool\n");   */
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (env->PrivateRefCount[i] != 0) {
             BufferDesc *buf;
             buf = &BufferDescriptors[i];
@@ -613,7 +648,7 @@ BufferPoolCheckLeak() {
     int			result = 0;
     BufferEnv* env = GetBufferCxt();
     
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (env->PrivateRefCount[i] != 0) {
             BufferDesc *buf = &(BufferDescriptors[i]);
             
@@ -635,7 +670,7 @@ BufferPoolCountHolds() {
     int			result = 0;
     BufferEnv* env = GetBufferCxt();
     
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (env->PrivateRefCount[i] != 0) {
                result++;
         }
@@ -650,14 +685,6 @@ BufferPoolCountHolds() {
  *
  * ------------------------------------------------
  */
-#ifdef NOTUSED
-void
-FlushBufferPool(void) {
-    /*
-        FlushAllDirtyBuffers();
-     */
-}
-#endif
 /*
  * BufferGetBlockNumber
  *		Returns the block number associated with a buffer.
@@ -709,10 +736,8 @@ InvalidateRelationBuffers(Relation rel) {
         }
         return;
     }
-    
-    FlushAllDirtyBuffers();
-    
-    for (i = 1; i <= NBuffers; i++) {
+        
+    for (i = 1; i <= MaxBuffers; i++) {
         buf = &BufferDescriptors[i - 1];
         
         if ( PinBuffer(bufcxt, buf) ) {
@@ -743,8 +768,8 @@ DropBuffers(Oid dbid) {
     BufferDesc *buf;
     BufferCxt    bufcxt = GetBufferCxt();
     
-    FlushAllDirtyBuffers();
-    for (i = 1; i <= NBuffers; i++) {
+    FlushAllDirtyBuffers(true);
+    for (i = 1; i <= MaxBuffers; i++) {
         buf = &BufferDescriptors[i - 1];
         
         if ( PinBuffer(bufcxt, buf) ) {
@@ -772,7 +797,7 @@ PrintBufferDescs() {
     
     if (IsMultiuser()) {
         lockowner = pthread_self();
-        for (i = 0; i < NBuffers; ++i, ++buf) {
+        for (i = 0; i < MaxBuffers; ++i, ++buf) {
             elog(DEBUG, "[%02d] (freeNext=%ld, relname=%s, \
             blockNum=%d, flags=0x%x, refCount=%d %ld)",
             i, buf->freeNext,
@@ -781,7 +806,7 @@ PrintBufferDescs() {
         }
     } else {
         /* interactive backend */
-        for (i = 0; i < NBuffers; ++i, ++buf) {
+        for (i = 0; i < MaxBuffers; ++i, ++buf) {
             printf("[%-2d] (%s, %d) flags=0x%x, refcnt=%d %ld)\n",
             i, buf->blind.relname, buf->tag.blockNum,
             buf->ioflags, buf->refCount, env->PrivateRefCount[i]);
@@ -796,7 +821,7 @@ PrintPinnedBufs() {
     BufferEnv* env = GetBufferCxt();
     
     lockowner = pthread_self();
-    for (i = 0; i < NBuffers; ++i, ++buf) {
+    for (i = 0; i < MaxBuffers; ++i, ++buf) {
         if (env->PrivateRefCount[i] > 0)
             elog(NOTICE, "[%02d] (freeNext=%ld, relname=%s, \
             blockNum=%d, flags=0x%x, refCount=%d %ld)\n",
@@ -892,11 +917,10 @@ SetBufferCommitInfoNeedsSave(Buffer buffer) {
 void
 UnlockBuffers(void) {
     BufferDesc *buf;
-    bits8	   *buflock;
     int			i;
     BufferEnv* bufenv = GetBufferCxt();
     
-    for (i = 0; i < NBuffers; i++) {
+    for (i = 0; i < MaxBuffers; i++) {
         if (bufenv->BufferLocks[i] == 0)
             continue;
         
@@ -910,6 +934,22 @@ UnlockBuffers(void) {
         pthread_mutex_unlock(&(buf->cntx_lock.guard));
         bufenv->BufferLocks[i] = 0;
     }
+}
+
+bool
+BufferIsCritical(Buffer buffer) {
+    BufferDesc*  buf;
+    bool crit = false;
+    
+    if (BufferIsLocal(buffer))
+        return true;
+
+    buf = &(BufferDescriptors[buffer - 1]);
+
+    pthread_mutex_lock(&(buf->cntx_lock.guard));
+    crit = buf->locflags & (BM_CRITICAL);
+    pthread_mutex_unlock(&(buf->cntx_lock.guard));
+    return crit;
 }
 
 int
@@ -935,6 +975,8 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
         case BUFFER_LOCK_UNLOCK:
             if ( rel == NULL ) {
                 buflock |= BL_R_LOCK;
+                buf->locflags &= ~(BM_WRITEIO);
+                if ( buf->r_waiting ) pthread_cond_broadcast(&buf->cntx_lock.gate);
             }
             buflock = UnlockIndividualBuffer(buflock, buf);
             break;
@@ -952,54 +994,83 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
                 pthread_cond_wait(&buf->cntx_lock.gate, &(buf->cntx_lock.guard));
                 buf->e_waiting--;
             }
-            buf->w_lock = true;
-            buf->e_lock = true;
-            buflock |= BL_W_LOCK;
+            buf->locflags |= BM_EXCLUSIVEMASK;
+            buflock |= (BL_W_LOCK);
             break;
+        case BUFFER_LOCK_FLUSHIO:
+/*  if the owner of this write lock is blocked and waiting for a
+ *  write so buffers can be freed then there is no danger of changing the 
+ *  buffer during a write.  if that is not the case just do what SHARE lock does
+ */
+            Assert((rel == NULL));
+            if ( (buf->locflags & BM_CRITICALMASK) == BM_CRITICALMASK )  {
+               locking_error = BL_NOLOCK;
+            } else {
+                (buf->r_locks)++;
+                buflock |= BL_R_LOCK;
+            }
+            break;            
         case BUFFER_LOCK_WRITEIO:
 /*  if the owner of this write lock is blocked and waiting for a
  *  write so buffers can be freed then there is no danger of changing the 
  *  buffer during a write.  if that is not the case just do what SHARE lock does
  */
             Assert((rel == NULL));
-            if ( buf->w_lock && IsWaitingForFlush(buf->w_owner) ) {
-               locking_error = BL_NOLOCK;
-            } else {
                 /* only wait for a write lock to finish, anything else would be problematic due to the test above  */
-                while( buf->w_lock ) {
-                    buf->r_waiting++;
-                    pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
-                    buf->r_waiting--;
-                }
-                (buf->r_locks)++;
-                buflock |= BL_R_LOCK;
+            while( (buf->locflags & BM_CRITICALMASK) == BM_CRITICALMASK )  {
+                buf->r_waiting++;
+                pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
+                buf->r_waiting--;
             }
+            (buf->r_locks)++;
+            buf->locflags |= BM_WRITEIO;
+            buflock |= BL_R_LOCK;
             break;
         case BUFFER_LOCK_SHARE:
             /*  don't wait for e_waiting b/c it is useless unless pins wait for buf->e-waiting  */
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
-            while( buf->w_lock || buf->w_waiting > 0 ) {
+            while( (buf->locflags & BM_WRITELOCK) || buf->w_waiting > 0 ) {
                 buf->r_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->r_waiting--;
-                if ( !buf->w_lock ) break;
+                if ( !(buf->locflags & BM_WRITELOCK) ) break;
             }
             (buf->r_locks)++;
             buflock |= BL_R_LOCK;
             break;
         case BUFFER_LOCK_EXCLUSIVE:
+        case BUFFER_LOCK_READ_EXCLUSIVE:
             Assert(!(BL_R_LOCK & buflock));
             Assert(!(BL_W_LOCK & buflock));
-            while ( (buf->r_locks > 0) || buf->w_lock ) {
+            while ( (buf->r_locks > 0) || (buf->locflags & BM_WRITELOCK) ) {
                 buf->w_waiting++;
                 pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
                 buf->w_waiting--;
             }
             buf->w_owner = GetEnv()->eid;
-            buf->w_lock = true;
-            buflock |= BL_W_LOCK;
+            if ( mode == BUFFER_LOCK_EXCLUSIVE ) buf->locflags |= BM_CRITICALMASK;
+            else buf->locflags |= (BM_WRITELOCK);
+            buflock |= (BL_W_LOCK);
             break;
+        case BUFFER_LOCK_NOTCRITICAL:
+            Assert((BL_W_LOCK & buflock));
+            Assert((buf->w_owner == GetEnv()->eid));
+            buf->locflags &= ~(BM_CRITICAL);
+            if ( buf->r_waiting ) {
+                pthread_cond_broadcast(&buf->cntx_lock.gate);
+            }
+            break;
+        case BUFFER_LOCK_CRITICAL:
+            Assert((BL_W_LOCK & buflock));
+            Assert((buf->w_owner == GetEnv()->eid));
+            while ( buf->locflags & BM_WRITEIO ) {
+                buf->r_waiting++;
+                pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
+                buf->r_waiting--;
+            }
+            buf->locflags |= (BM_CRITICAL);
+            break;                  
         default:
             elog(ERROR, "LockBuffer: unknown lock mode %d", mode);
     }
@@ -1024,15 +1095,14 @@ bits8 UnlockIndividualBuffer(bits8 buflock, BufferDesc * buf) {
             signal = true;
         }
     } else if (buflock & BL_W_LOCK) {
-        Assert(buf->w_lock);
-        if (buf->e_lock ) {
+        Assert(buf->locflags & BM_WRITELOCK);
+        if (buf->locflags & BM_EXCLUSIVE) {
             Assert(buf->pageaccess <= buf->e_waiting + 1);
         }
         signal = true;
-        buf->e_lock = false;
-        buf->w_lock = false;
         buf->w_owner = 0;
         buflock &= ~BL_W_LOCK;
+        buf->locflags &= BM_REMOVEWRITEMASK;
     }
 
     if ( signal ) {
@@ -1151,7 +1221,7 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
         pthread_cond_wait(&buf->io_in_progress_lock.gate, &buf->io_in_progress_lock.guard);
     }
 
-    if ( (buf->ioflags & BM_IO_ERROR) ) {
+    if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         if ( iostatus & BL_R_LOCK ) {
             LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
@@ -1182,13 +1252,17 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 }
 
 IOStatus
-WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
+WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  */
     int dirty = 0;
     IOStatus  iostatus = BL_NOLOCK;
     
-    if ( 0 == LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_WRITEIO) ) {
-        iostatus = BL_R_LOCK;
-    } 
+    iostatus = LockBuffer(NULL,BufferDescriptorGetBuffer(buf),( mode == WRITE_COMMIT ) ?  BUFFER_LOCK_WRITEIO : BUFFER_LOCK_FLUSHIO);
+
+    if ( iostatus == BL_NOLOCK ) {
+        return iostatus;
+    }
+
+    iostatus = BL_R_LOCK;
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1196,7 +1270,7 @@ WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
         pthread_cond_wait(&buf->io_in_progress_lock.gate, &buf->io_in_progress_lock.guard);
     }
 
-    if ( (buf->ioflags & BM_IO_ERROR) ) {
+    if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         if ( iostatus == BL_R_LOCK) {
             LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
@@ -1206,21 +1280,25 @@ WriteBufferIO(BufferDesc *buf, bool flush) {  /*  clears the inbound flag  */
     }
 
 /*  flushes are always dirty  */
-    if ( flush ) {
-        dirty = 1;
-/*  file will be flushed  */
-        buf->ioflags &= ~(BM_LOGGED);
-    } else {
-        if ( !IsMultiuser() ) {
-    /*  in single user mode, no logging is done  
-        check for dirty */
-            dirty = (buf->ioflags & BM_DIRTY);  
-            buf->ioflags &= ~(BM_DIRTY);
-        } else {
-            dirty = (buf->ioflags & BM_LOGGED);  
+    switch ( mode ) {
+        case WRITE_FLUSH:
+            dirty = 1;
+    /*  file will be flushed  */
+    /* can remove both flags b/c flushes only occur on Var and Log relations */
+            Assert(buf->kind == RELKIND_SPECIAL);
+            buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
+            break;
+        case WRITE_COMMIT:
+            dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
+            buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
+            break;
+        case WRITE_NORMAL:
+        default:
+            /* a write is warranted logged or dirty but only remove the logged flag 
+             * as we still need to log it if we are not in commit mode*/
+            dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
             buf->ioflags &= ~(BM_LOGGED);
         }
-    }
     
     if ( dirty ) {
  /*  logging is skipped in single user mode  */
@@ -1246,10 +1324,8 @@ DirtyBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     bool dirty = false;
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
     
-    if ( !(buf->ioflags & BM_IO_ERROR) ) {
-        buf->ioflags |= (BM_DIRTY); 
-        dirty = true;
-    }
+    buf->ioflags |= (BM_DIRTY); 
+    dirty = true;
     
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
     
@@ -1275,8 +1351,7 @@ ErrorBufferIO(IOStatus iostatus, BufferDesc *buf) {
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
-    buf->ioflags |= BM_IO_ERROR;
-    buf->ioflags &= ~(BM_IOOP_MASK);
+    buf->ioflags = BM_IO_ERROR;
 
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
 
@@ -1301,7 +1376,7 @@ ClearBufferIO(BufferDesc *buf) {
         pthread_cond_wait(&buf->io_in_progress_lock.gate, &buf->io_in_progress_lock.guard);
     }
 
-    buf->ioflags |= BM_IO_ERROR;
+    buf->ioflags = BM_IO_ERROR;
 
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);    
 
@@ -1383,7 +1458,6 @@ bool
 SyncShadowPage(BufferDesc* bufHdr) {
     /*  copy into shadow */
 #ifdef USE_SHADOW_PAGES
-    memcpy((char*)MAKE_PTR(bufHdr->data), (char*)MAKE_PTR(bufHdr->shadow), BLCKSZ);
 #endif
 }
 
@@ -1397,9 +1471,9 @@ SyncShadowPage(BufferDesc* bufHdr) {
 Block BufferGetBlock(Buffer buffer) {
     Assert(BufferIsValid(buffer));
     if ( BufferIsLocal(buffer) ) {
-        return (Block) MAKE_PTR(GetLocalBufferDescriptor((-buffer) - 1)->data);
+        return (Block) (GetLocalBufferDescriptor((-buffer) - 1)->data);
     } else {
-        return (Block) MAKE_PTR(BufferDescriptors[(buffer) - 1].data);
+        return (Block) (BufferDescriptors[(buffer) - 1].data);
     }
 }
 
@@ -1476,18 +1550,18 @@ GetBufferCxt() {
         
         env->guard = 0xCAFEBABECAFEBABEL;
         
-        env->PrivateRefCount = (long *)palloc(NBuffers*sizeof(long));
-        memset(env->PrivateRefCount, 0, NBuffers*sizeof(long));
+        env->PrivateRefCount = (long *)palloc(MaxBuffers*sizeof(long));
+        memset(env->PrivateRefCount, 0, MaxBuffers*sizeof(long));
         env->total_pins = 0;
         
-        env->BufferLocks = (bits8 *) palloc(NBuffers*sizeof(bits8));
-        memset(env->BufferLocks, 0, NBuffers* sizeof(bits8));
+        env->BufferLocks = (bits8 *) palloc(MaxBuffers*sizeof(bits8));
+        memset(env->BufferLocks, 0, MaxBuffers* sizeof(bits8));
         
-        env->BufferTagLastDirtied = (BufferTag *) palloc(NBuffers*sizeof(BufferTag));
-        memset(env->BufferTagLastDirtied, 0, NBuffers*sizeof(BufferTag));
+        env->BufferTagLastDirtied = (BufferTag *) palloc(MaxBuffers*sizeof(BufferTag));
+        memset(env->BufferTagLastDirtied, 0, MaxBuffers*sizeof(BufferTag));
         
-        env->BufferBlindLastDirtied = (BufferBlindId *) palloc(NBuffers*sizeof(BufferBlindId));
-        memset(env->BufferBlindLastDirtied , 0, NBuffers*sizeof(BufferBlindId));
+        env->BufferBlindLastDirtied = (BufferBlindId *) palloc(MaxBuffers*sizeof(BufferBlindId));
+        memset(env->BufferBlindLastDirtied , 0, MaxBuffers*sizeof(BufferBlindId));
         
         env->DidWrite    = false;
         

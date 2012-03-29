@@ -403,7 +403,7 @@ TransRecover(Relation logrelation)
 		ReleaseBuffer(logrelation,buffer);
 	}
         
-        FlushAllDirtyBuffers();
+        FlushAllDirtyBuffers(true);
         MasterUnLock();
 	SetTransactionRecoveryCheckpoint(ctid);
 	elog(DEBUG,"Recovery checking finished");
@@ -447,7 +447,6 @@ InitializeTransactionLog(void)
 	Relation	logRelation;
 	Relation	variablerelation;
 	MemoryContext oldContext;
-	MemoryContextGlobals*	memenv = MemoryContextGetEnv();
     TransactionInfo*	info = GetTransactionInfo();
 
 	/* ----------------
@@ -663,9 +662,11 @@ TransactionIdDidCrash(TransactionId transactionId)
 		return false;
 
 	if (TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST)) {
-	    if ( TransactionIdBeforeCheckpoint(transactionId) ) return true;
-            else return !(TransactionIdIsInProgress(transactionId));
-        } else {
-            return false;
-        }
+	    if (TransactionIdBeforeCheckpoint(transactionId) || !TransactionIdIsInProgress(transactionId)) {
+                bool crashed = TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST);
+                return crashed;
+            } 
+        } 
+        
+        return false;
 }

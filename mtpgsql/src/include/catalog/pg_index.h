@@ -46,14 +46,14 @@ CATALOG(pg_index)
 	Oid			indrelid;
 	Oid			indproc;		/* registered procedure for functional
 								 * index */
-	int2vector	indkey;
-	oidvector	indclass;
-	bool		indisclustered;
-	bool		indislossy;		/* do we fetch false tuples (lossy
+	int2vector              indkey;
+	oidvector               indclass;
+	bool                    indisclustered;
+	char                    indattributes;		/* do we fetch false tuples (lossy
 								 * compression)? */
-	bool		indhaskeytype;	/* does key type != attribute type? */
-	bool		indisunique;	/* is this a unique index? */
-	bool		indisprimary;	/* is this index for primary key */
+	bool                    indhaskeytype;	/* does key type != attribute type? */
+	bool                    indisunique;	/* is this a unique index? */
+	bool                    indisprimary;	/* is this index for primary key */
 	Oid			indreference;	/* oid of index of referenced relation (ie
 								 * - this index for foreign key */
 	text		indpred;		/* query plan for partial index predicate */
@@ -65,6 +65,18 @@ CATALOG(pg_index)
  * ----------------
  */
 typedef FormData_pg_index *Form_pg_index;
+
+typedef char              IndexProp;
+
+#define INDEX_LOSSY 1
+#define INDEX_DEFERRED 2
+#define INDEX_UNIQUE   4
+#define INDEX_PRIMARY   8
+#define IndexIsLossy(value) (value->indattributes & 1)
+#define IndexIsDeferred(value) (value->indattributes & 2)
+#define IndexPropIsUnique(value) (value & 4)
+#define IndexPropIsPrimary(value) (value & 8)
+#define IndexPropIsDeferred(value) (value & 2)
 
 /* ----------------
  *		compiler constants for pg_index

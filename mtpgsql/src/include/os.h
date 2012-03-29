@@ -30,6 +30,10 @@ extern char*	tzname[2];
 #define			PDP_ENDIAN		3412
 #endif
 
+#if BYTE_ORDER == BIG_ENDIAN
+#define WORDS_BIGENDIAN
+#endif
+
 #ifndef SUNOS
 #define DTRACE_PROBE1(mod,name,one) 
 #define DTRACE_PROBE2(mod,name,one,two) 

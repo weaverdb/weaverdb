@@ -32,9 +32,10 @@
 #include "parser/parserinfo.h"
 #include "utils/builtins.h"
 
-
-#define YY_DECL int yylex(sval) YYSTYPE* sval;
-
+/*
+#define YY_DECL int yylex(YYSTYPE* yylval_param, yyscan_t yyscanner)
+int yylex(YYSTYPE* yylval_param, yyscan_t yyscanner);
+*/
 /* some versions of lex define this as a macro */
 #if defined(yywrap)
 #undef yywrap
@@ -61,28 +62,15 @@ void unput(char);
 
 #endif /* FLEX_SCANNER */
 
-
-/*
- * GetParserInfo()->literalbuf is used to accumulate literal values when multiple rules
- * are needed to parse a single literal.  Call startlit to reset buffer
- * to empty, addlit to add text.  Note that the buffer is palloc'd and
- * starts life afresh on every parse cycle.
- */
- /*
-static char	   *GetParserInfo()->literalbuf;		
-static int		GetParserInfo()->literallen;		
-static int		GetParserInfo()->literalalloc;	
-
-static int		GetParserInfo()->xcdepth = 0;
-*/
-#define malloc palloc
-#define realloc repalloc
-#define free	pfree
-
 #define startlit(env)  (env->literalbuf[0] = '\0', env->literallen = 0)
 static void addlit(char *ytext, int yleng);
 
 %}
+
+%option bison-bridge
+%option noyyalloc noyyrealloc noyyfree
+%option reentrant
+
 /*
  * OK, here is a short description of lex/flex rules behavior.
  * The longest pattern which matches an input string is always chosen.
@@ -295,7 +283,7 @@ other			.
 
 					BEGIN(INITIAL);
 					errno = 0;
-					sval->ival = strtol(env->literalbuf, &endptr, 2);
+					yylval_param->ival = strtol(env->literalbuf, &endptr, 2);
 					if (*endptr != '\0' || errno == ERANGE)
 						elog(ERROR, "Bad binary integer input '%s'",
 							 env->literalbuf);
@@ -304,7 +292,7 @@ other			.
 <xh>{xhinside}	|
 <xb>{xbinside}	{
 					ParserInfo* env = GetParserInfo();
-					addlit(env->yytext, env->yyleng);
+					addlit(yytext, yyleng);
 				}
 <xh>{xhcat}		|
 <xb>{xbcat}		{
@@ -322,7 +310,7 @@ other			.
 
 					BEGIN(INITIAL);
 					errno = 0;
-					sval->ival = strtol(env->literalbuf, &endptr, 16);
+					yylval_param->ival = strtol(env->literalbuf, &endptr, 16);
 					if (*endptr != '\0' || errno == ERANGE)
 						elog(ERROR, "Bad hexadecimal integer input '%s'",
 							 env->literalbuf);
@@ -336,14 +324,14 @@ other			.
 				}
 <xq>{xqstop}	{
 					BEGIN(INITIAL);
-					sval->str = scanstr(GetParserInfo()->literalbuf);
+					yylval_param->str = scanstr(GetParserInfo()->literalbuf);
 					return SCONST;
 				}
 <xq>{xqdouble}	|
 <xq>{xqinside}	|
 <xq>{xqliteral} {
 					ParserInfo* env = GetParserInfo();
-					addlit(env->yytext, env->yyleng);
+					addlit(yytext, yyleng);
 				}
 <xq>{xqcat}		{
 					/* ignore */
@@ -363,22 +351,22 @@ other			.
 							 GetParserInfo()->literalbuf, NAMEDATALEN-1, GetParserInfo()->literalbuf);
 						GetParserInfo()->literalbuf[NAMEDATALEN-1] = '\0';
 					}
-					sval->str = pstrdup(GetParserInfo()->literalbuf);
+					yylval_param->str = pstrdup(GetParserInfo()->literalbuf);
 					return IDENT;
 				}
 <xd>{xddouble} {
 					ParserInfo* env = GetParserInfo();
-					addlit(env->yytext, env->yyleng-1);
+					addlit(yytext, yyleng-1);
 				}
 <xd>{xdinside}	{
 					ParserInfo* env = GetParserInfo();
-					addlit(env->yytext, env->yyleng);
+					addlit(yytext, yyleng);
 				}
 <xd><<EOF>>		{ elog(ERROR, "Unterminated quoted identifier"); }
 
 {typecast}		{ return TYPECAST; }
 
-{self}			{ return GetParserInfo()->yytext[0]; }
+{self}			{ return yytext[0]; }
 
 {operator}		{
 					/*
@@ -388,9 +376,9 @@ other			.
 					 * character will match a prior rule, not this one.
 					 */
 					ParserInfo* 		env = GetParserInfo();
-					int		nchars = env->yyleng;
-					char   *slashstar = strstr((char*)env->yytext, "/*");
-					char   *dashdash = strstr((char*)env->yytext, "--");
+					int		nchars = yyleng;
+					char   *slashstar = strstr((char*)yytext, "/*");
+					char   *dashdash = strstr((char*)yytext, "--");
 
 					if (slashstar && dashdash)
 					{
@@ -401,7 +389,7 @@ other			.
 					else if (!slashstar)
 						slashstar = dashdash;
 					if (slashstar)
-						nchars = slashstar - ((char*)env->yytext);
+						nchars = slashstar - ((char*)yytext);
 
 					/*
 					 * For SQL92 compatibility, '+' and '-' cannot be the
@@ -412,14 +400,14 @@ other			.
 					 * sequences of SQL92 operators.
 					 */
 					while (nchars > 1 &&
-						   (env->yytext[nchars-1] == '+' ||
-							env->yytext[nchars-1] == '-'))
+						   (yytext[nchars-1] == '+' ||
+							yytext[nchars-1] == '-'))
 					{
 						int		ic;
 
 						for (ic = nchars-2; ic >= 0; ic--)
 						{
-							if (strchr("~!@#&`:%^|", env->yytext[ic]))
+							if (strchr("~!@#&`:%^|", yytext[ic]))
 								break;
 						}
 						if (ic >= 0)
@@ -427,7 +415,7 @@ other			.
 						nchars--; /* else remove the +/-, and check again */
 					}
 
-					if (nchars < env->yyleng)
+					if (nchars < yyleng)
 					{
 						/* Strip the unwanted chars from the token */
 						yyless(nchars);
@@ -438,20 +426,20 @@ other			.
 						 * that the "self" rule would have.
 						 */
 						if (nchars == 1 &&
-							strchr(",()[].;:+-*/%^<>=|", env->yytext[0]))
-							return env->yytext[0];
+							strchr(",()[].;:+-*/%^<>=|", yytext[0]))
+							return yytext[0];
 					}
 
 					/* Convert "!=" operator to "<>" for compatibility */
-					if (strcmp((char*)env->yytext, "!=") == 0)
-						sval->str = pstrdup("<>");
+					if (strcmp((char*)yytext, "!=") == 0)
+						yylval_param->str = pstrdup("<>");
 					else
-						sval->str = pstrdup((char*)env->yytext);
+						yylval_param->str = pstrdup((char*)yytext);
 					return Op;
 				}
 
 {param}			{
-					sval->ival = atol((char*)&GetParserInfo()->yytext[1]);
+					yylval_param->ival = atol((char*)&yytext[1]);
 					return PARAM;
 				}
 
@@ -459,31 +447,31 @@ other			.
 					char* endptr;
 
 					errno = 0;
-					sval->ival = strtol((char *)GetParserInfo()->yytext, &endptr, 10);
+					yylval_param->ival = strtol((char *)yytext, &endptr, 10);
 					if (*endptr != '\0' || errno == ERANGE)
 					{
 						/* integer too large, treat it as a float */
-						sval->str = pstrdup((char*)GetParserInfo()->yytext);
+						yylval_param->str = pstrdup((char*)yytext);
 						return FCONST;
 					}
 					return ICONST;
 				}
 {decimal}		{
-					sval->str = pstrdup((char*)GetParserInfo()->yytext);
+					yylval_param->str = pstrdup((char*)yytext);
 					return FCONST;
 				}
 {real}			{
-					sval->str = pstrdup((char*)GetParserInfo()->yytext);
+					yylval_param->str = pstrdup((char*)yytext);
 					return FCONST;
 				}
 {java_func}	{
 					ParserInfo* env = GetParserInfo();
 					int i;
 					ScanKeyword		*keyword;
-					int len = strlen(env->yytext);
-					sval->str = palloc(len-1);
-					memmove(sval->str,(char*)env->yytext + 1,len-2);
-					*(sval->str+(len-2)) = 0x00;
+					int len = strlen(yytext);
+					yylval_param->str = palloc(len-1);
+					memmove(yylval_param->str,(char*)yytext + 1,len-2);
+					*(yylval_param->str+(len-2)) = 0x00;
 
 					return JAVA_FUNC;
 				}
@@ -492,29 +480,29 @@ other			.
                     int i;
                     ScanKeyword		*keyword;
 
-                    for(i = 0; env->yytext[i]; i++)
-                            if (isascii((int) env->yytext[i]) &&
-                                    isupper((int) env->yytext[i]))
-                                    env->yytext[i] = tolower(env->yytext[i]);
+                    for(i = 0; yytext[i]; i++)
+                            if (isascii((int) yytext[i]) &&
+                                    isupper((int) yytext[i]))
+                                    yytext[i] = tolower(yytext[i]);
                     if (i >= NAMEDATALEN)
                     {
                         elog(NOTICE, "identifier \"%s\" will be truncated to \"%.*s\"",
-                        env->yytext, NAMEDATALEN-1, env->yytext);
-                        env->yytext[NAMEDATALEN-1] = '\0';
+                        yytext, NAMEDATALEN-1, yytext);
+                        yytext[NAMEDATALEN-1] = '\0';
                     }
-                    keyword = ScanKeywordLookup((char*)env->yytext);
+                    keyword = ScanKeywordLookup((char*)yytext);
                     if (keyword != NULL) {
                             return keyword->value;
                     }
                     else
                     {
-                            sval->str = pstrdup((char*)env->yytext);
+                            yylval_param->str = pstrdup((char*)yytext);
                             return IDENT;
                     }
 		}
 
 {namedparam}	{
-                    char*  name = (char*)GetParserInfo()->yytext;
+                    char*  name = (char*)yytext;
 /*  remove the marker flag of the named parameter  */
                     switch (*name) {
                         case '$':
@@ -522,20 +510,34 @@ other			.
                         case ':':
                             name++;
                     }
-                    sval->str = pstrdup(name);
+                    yylval_param->str = pstrdup(name);
                     return NAMEDPARAM;
                 }
 
-{other}			{ return GetParserInfo()->yytext[0]; }
+{other}			{ return yytext[0]; }
 
 %%
 
-void yyerror(const char * message)
-{
-	elog(ERROR, "parser: %s at or near \"%s\"", message, GetParserInfo()->yytext);
+ /* Provide our own implementations. */
+ void * yyalloc (size_t bytes, void* yyscanner) {
+     return palloc(bytes);
+ }
+
+ void * yyrealloc (void * ptr, size_t bytes, void* yyscanner) {
+     if ( ptr == NULL ) return palloc(bytes);
+     return repalloc (ptr,bytes);
+ }
+
+ void yyfree (void * ptr, void * yyscanner) {  
+     if ( ptr == NULL ) return;
+     pfree(ptr);  
+ }
+
+void yyerror(const char * message) {  
+	elog(ERROR, "parser: %s at or near \"%s\"", message, yyget_text(GetParserInfo()->yyscanner));
 }
 
-int yywrap()
+int yywrap(void* yyscanner) 
 {
 	return(1);
 }
@@ -550,20 +552,16 @@ init_io()
 	/* it's important to set this to NULL
 	   because input()/myinput() checks the non-nullness of GetParserInfo()->parseCh
 	   to know when to pass the string to lex/flex */
-	   ParserInfo* env = GetParserInfo();
+	ParserInfo* env = GetParserInfo();
 	env->parseCh = NULL;
 
 	/* initialize literal buffer to a reasonable but expansible size */
 	env->literalalloc = 128;
 	env->literalbuf = (char *) palloc(env->literalalloc);
 	startlit(env);
-
-#if defined(FLEX_SCANNER)
-/*	if (YY_CURRENT_BUFFER)
-		yy_flush_buffer(YY_CURRENT_BUFFER);
-*/
-#endif /* FLEX_SCANNER */
+/*
 	BEGIN INITIAL;
+*/
 }
 
 static void
@@ -635,10 +633,6 @@ myinput(char* buf, int max)
 	env->parseCh += len;
 	return len;
 }
-
-#undef malloc 
-#undef realloc
-#undef free
 
 
 #endif /* FLEX_SCANNER */

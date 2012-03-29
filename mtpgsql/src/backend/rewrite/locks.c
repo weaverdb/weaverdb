@@ -214,6 +214,7 @@ checkLockPerms(List *locks, Query *parsetree, int rt_index)
 				if (i + 1 == query->resultRelation)
 					switch (query->resultRelation)
 					{
+                                                case CMD_PUT:
 						case CMD_INSERT:
 							reqperm = ACL_AP;
 							break;

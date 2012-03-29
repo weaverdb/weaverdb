@@ -32,6 +32,7 @@
 #include "env/freespace.h"
 
 static Buffer _bt_tryroot(Relation rel,bool create);
+static bool _bt_buffer_reaped_check(Relation rel, Buffer buf);
 
 /*
  *	We use high-concurrency locking on btrees.	There are two cases in
@@ -68,7 +69,7 @@ _bt_metapinit(Relation rel)
 		elog(ERROR, "Cannot initialize non-empty btree %s",
 			 RelationGetRelationName(rel));
 
-	buf = ReadBuffer(rel, P_NEW);
+	buf = _bt_getbuf(rel,BTREE_METAPAGE,BT_READYWRITE);
         if (!BufferIsValid(buf) ) 
                     elog(ERROR,"bad buffer read while scanning btree %s",RelationGetRelationName(rel));
 	pg = BufferGetPage(buf);
@@ -82,8 +83,9 @@ _bt_metapinit(Relation rel)
 
 	op = (BTPageOpaque) PageGetSpecialPointer(pg);
 	op->btpo_flags = BTP_META;
+        op->btpo_parent = 0;
 
-	WriteBuffer(rel, buf);
+	_bt_wrtbuf(rel, buf);
 
 	/* all done */
 	if (USELOCKING)
@@ -103,7 +105,6 @@ _bt_getroot(Relation rel, int access)
             Page rootpage = BufferGetPage(root);
             BTPageOpaque rootopaque = (BTPageOpaque) PageGetSpecialPointer(rootpage);
             if (!P_ISROOT(rootopaque)) {
-                elog(DEBUG,"moved btree root page %ld %ld %d",BufferGetBlockNumber(root),rootopaque->btpo_parent,rootopaque->btpo_flags);
                 rootparent = rootopaque->btpo_parent;
                 _bt_relbuf(rel,root);
                 root = InvalidBuffer;
@@ -114,6 +115,11 @@ _bt_getroot(Relation rel, int access)
             /*  no root page and don't create one  */
             if ( !create ) break;
         }
+    }
+    if ( create ) {
+/*
+        BiasBuffer(rel,root);
+*/
     }
     return root;
 }
@@ -178,17 +184,18 @@ _bt_tryroot(Relation rel, bool create)
 			 * type on the new root page.  Since this is the first page in
 			 * the tree, it's a leaf as well as the root.
 			 */
-			Buffer rootbuf = _bt_getbuf(rel, P_NEW, BT_WRITE);
+			Buffer rootbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
 			Page rootpage = BufferGetPage(rootbuf);
                         root = BufferGetBlockNumber(rootbuf);
 
 			/* NO ELOG(ERROR) till meta is updated */
-
+                        LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
 			metad->btm_root = root;
 			metad->btm_level = 1;
 
 			_bt_pageinit(rootpage, BufferGetPageSize(rootbuf));
 			((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_flags |= (BTP_LEAF | BTP_ROOT);
+                        ((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_parent = BTREE_METAPAGE;
 
 			_bt_wrtbuf(rel, rootbuf);
 
@@ -224,6 +231,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	if (blkno != P_NEW)
 	{
 		/* Read an existing block of the relation */
+            Assert(blkno == BTREE_METAPAGE || blkno < RelationGetNumberOfBlocks(rel));
 		buf = ReadBuffer(rel, blkno);
                 if ( !BufferIsValid(buf) ) {
 /*  ok this is will undoubtly cause buffer leaks and 
@@ -235,29 +243,59 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	}
 	else
 	{
-		Page		page;
-
-		/*
+		Page		page;     
+                BTPageOpaque opaque;
+                BTPageOpaqueData init = {
+                    BTP_REAPED,
+                    0,
+                    InvalidBlockNumber,
+                    0
+                };
+                 /*
 		 * Extend the relation by one page.
 		 *
 		 * Extend bufmgr code is unclean and so we have to use extra locking
 		 * here.
 		 */
-		LockPage(rel, 0, ExclusiveLock);
-		buf = ReadBuffer(rel, P_NEW);
-                if ( !BufferIsValid(buf) ) {
-                    elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
-                }	
-                LockBuffer((rel),  buf, access);
-		UnlockPage(rel, 0, ExclusiveLock);
+                while ( !BufferIsValid(buf) ) {
+                    BlockNumber blk = BTREE_METAPAGE;
+                    while( blk == BTREE_METAPAGE ) {
+                        blk = AllocateMoreSpace(rel,(char*)&init,sizeof(BTPageOpaqueData));
+                    }
+                    buf = ReadBuffer(rel,blk);
+                    
+                    if ( !BufferIsValid(buf) ) {
+                        elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
+                    }                    
+                    
+                    page = BufferGetPage(buf);
+                    opaque = (BTPageOpaque)PageGetSpecialPointer(page);
 
-		/* Initialize the new page before returning it */
-		page = BufferGetPage(buf);
-		_bt_pageinit(page, BufferGetPageSize(buf));
+                    /* Initialize the new page before returning it */
+                    if ( !BufferPrivateCheck(rel, buf, _bt_buffer_reaped_check) ) {
+                        ReleaseBuffer(rel,buf);
+                        buf = InvalidBuffer;
+                    }
+                }
+
+                Assert(access == BT_WRITE || access == BT_READYWRITE);
+                LockBuffer((rel),  buf, access);
+
 	}
 
 	/* ref count and lock type are correct */
 	return buf;
+}
+
+bool
+_bt_buffer_reaped_check(Relation rel, Buffer buf) {
+    Page page = BufferGetPage(buf);
+        if ( BufferGetBlockNumber(buf) == 0 ) return false;
+        if ( PageIsNew(page) || PageChecksumIsInit(page) || P_ISREAPED((BTPageOpaque)PageGetSpecialPointer(page)) )  {
+            _bt_pageinit(page,BufferGetPageSize(buf));
+            return true;
+        }
+        return false;
 }
 
 /*
@@ -315,9 +353,24 @@ _bt_wrtnorelbuf(Relation rel, Buffer buf)
 void
 _bt_pageinit(Page page, Size size)
 {
-	PageInit(page, size, sizeof(BTPageOpaqueData));
+        PageInit(page, size, sizeof(BTPageOpaqueData));
+        PageInsertInvalidChecksum(page);
 	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_parent =
 		InvalidBlockNumber;
+	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_next =
+		0;       
+	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_prev =
+		0;        
+	((BTPageOpaque) PageGetSpecialPointer(page))->btpo_flags =
+		0;                
+}
+
+bool 
+_bt_empty(Page page) {
+    BTPageOpaque opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+    OffsetNumber first = P_FIRSTDATAKEY(opaque);
+    OffsetNumber max = PageGetMaxOffsetNumber(page);
+    return (first > max);
 }
 
 /*

@@ -528,10 +528,10 @@ mmabort()
  *		This routine declares how much space the main memory storage
  *		manager will use.
  */
-int
+size_t
 MMShmemSize()
 {
-	int			size = 0;
+	size_t			size = 0;
 
 	/*
 	 * first compute space occupied by the (dbid,relid,blkno) hash table

@@ -70,6 +70,6 @@ SetXLogDir(char* path);
 extern XLogRecPtr XLogInsert(RmgrId rmid, char *hdr, uint32 hdrlen,
 		   char *buf, uint32 buflen);
 extern void XLogFlush(XLogRecPtr RecPtr);
-extern int XLOGShmemSize(void);
+extern size_t XLOGShmemSize(void);
 extern void XLOGShmemInit(void);
 #endif	 /* XLOG_H */

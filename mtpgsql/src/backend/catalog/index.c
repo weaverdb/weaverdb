@@ -80,7 +80,7 @@ static void AppendAttributeTuples(Relation indexRelation, int numatts);
 static void UpdateIndexRelation(Oid indexoid, Oid heapoid,
 					FuncIndexInfo *funcInfo, int natts,
 					AttrNumber *attNums, Oid *classOids, Node *predicate,
-		   List *attributeList, bool islossy, bool unique, bool primary);
+		   List *attributeList, bool isdeferred, bool islossy, bool unique, bool primary);
 static void DefaultBuild(Relation heapRelation, Relation indexRelation,
 			 int numberOfAttributes, AttrNumber *attributeNumber,
 			 IndexStrategy indexStrategy, uint16 parameterCount,
@@ -680,6 +680,7 @@ UpdateIndexRelation(Oid indexoid,
 					Oid *classOids,
 					Node *predicate,
 					List *attributeList,
+                                        bool isdeferred,
 					bool islossy,
 					bool unique,
 					bool primary)
@@ -694,6 +695,10 @@ UpdateIndexRelation(Oid indexoid,
 	HeapTuple	tuple;
 	int			i;
 	Relation	idescs[Num_pg_index_indices];
+        char attributes  = 0;
+        
+        if ( islossy ) attributes |= INDEX_LOSSY;
+        if ( isdeferred ) attributes |= INDEX_DEFERRED;
 
 	/* ----------------
 	 *	allocate an Form_pg_index big enough to hold the
@@ -724,7 +729,7 @@ UpdateIndexRelation(Oid indexoid,
 	indexForm->indexrelid = indexoid;
 	indexForm->indproc = (PointerIsValid(funcInfo)) ?
 		FIgetProcOid(funcInfo) : InvalidOid;
-	indexForm->indislossy = islossy;
+	indexForm->indattributes = attributes;
 	indexForm->indisprimary = primary;
 	indexForm->indisunique = unique;
 
@@ -958,6 +963,7 @@ index_create(char *heapRelationName,
 			 uint16 parameterCount,
 			 Datum *parameter,
 			 Node *predicate,
+			 bool isdeferred,
 			 bool islossy,
 			 bool unique,
 			 bool primary)
@@ -1064,7 +1070,7 @@ index_create(char *heapRelationName,
 	 */
 	UpdateIndexRelation(indexoid, heapoid, funcInfo,
 						numatts, attNums, classObjectId, predicate,
-						attributeList, islossy, unique, primary);
+						attributeList, isdeferred, islossy, unique, primary);
 
 	predInfo = (PredInfo *) palloc(sizeof(PredInfo));
 	predInfo->pred = predicate;
@@ -1215,7 +1221,7 @@ index_drop(Oid indexId)
 	 */
 	InvalidateRelationBuffers(userIndexRelation);
         DropVacuumRequests(indexId,GetDatabaseId());        
-        ForgetFreespace(userIndexRelation);
+        ForgetFreespace(userIndexRelation,true);
 	
         if (smgrunlink(userIndexRelation->rd_smgr) != SM_SUCCESS) {
               elog(ERROR, "index_drop: unlink: %m");
@@ -1350,6 +1356,7 @@ IndexesAreActive(Oid relid, bool confirmCommitted)
 
 	if (isactive)
 		return isactive;
+        
 	indexRelation = heap_openr(IndexRelationName, AccessShareLock);
 
 	ScanKeyEntryInitialize(&entry, 0, Anum_pg_index_indrelid,
@@ -1858,7 +1865,7 @@ DefaultBuild(Relation heapRelation,
 		indexTuple->t_tid = heapTuple->t_self;
 
 		insertResult = index_insert(indexRelation, datum, nullv,
-									&(heapTuple->t_self), heapRelation);
+									&(heapTuple->t_self), heapRelation,false);
 
 		if (insertResult)
 			pfree(insertResult);
@@ -1982,18 +1989,19 @@ IndexGetRelation(Oid indexId)
 	index = (Form_pg_index) GETSTRUCT(tuple);
 	Assert(index->indexrelid == indexId);
 
-	return index->indrelid;
+	return index->indrelid ;
 }
 
 /*
  * IndexIsUnique: given an index's relation OID, see if it
  * is unique using the system cache.
  */
-bool
-IndexIsUnique(Oid indexId)
+char
+IndexProperties(Oid indexId)
 {
 	HeapTuple	tuple;
 	Form_pg_index index;
+        IndexProp          result;
 
 	tuple = SearchSysCacheTuple(INDEXRELID,
 								ObjectIdGetDatum(indexId),
@@ -2005,8 +2013,16 @@ IndexIsUnique(Oid indexId)
 	}
 	index = (Form_pg_index) GETSTRUCT(tuple);
 	Assert(index->indexrelid == indexId);
-
-	return index->indisunique;
+        
+        result = index->indattributes;
+        
+        if ( index->indisunique ) {
+            result |= INDEX_UNIQUE;
+        }
+        if ( index->indisprimary ) {
+            result |= INDEX_PRIMARY;
+        }
+	return result;
 }
 
 /*
@@ -2042,8 +2058,11 @@ IndexIsUniqueNoCache(Oid indexId)
 
 	/* NO CACHE */
 	tuple = heap_getnext(scandesc);
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "IndexIsUniqueNoCache: can't find index id %u", indexId);
+	if (!HeapTupleIsValid(tuple)) {
+            heap_endscan(scandesc);
+            heap_close(pg_index, AccessShareLock);
+            elog(ERROR, "IndexIsUniqueNoCache: can't find index id %u", indexId);
+        }
 
 	index = (Form_pg_index) GETSTRUCT(tuple);
 	Assert(index->indexrelid == indexId);
@@ -2178,6 +2197,7 @@ reindex_index(Oid indexId, bool force)
 	 */
 	InvalidateRelationBuffers(iRel);
 	/* Now truncate the actual data and set blocks to zero */
+        ForgetFreespace(iRel,false);
 	smgrtruncate(iRel->rd_smgr, 0);
 	iRel->rd_nblocks = 0;
 
@@ -2258,8 +2278,7 @@ reindex_relation(Oid relid, bool force)
 	indexRelation = heap_openr(IndexRelationName, AccessShareLock);
 	ScanKeyEntryInitialize(&entry, 0, Anum_pg_index_indrelid,
 						   F_OIDEQ, ObjectIdGetDatum(relid));
-	scan = heap_beginscan(indexRelation, SnapshotNow,
-						  1, &entry);
+	scan = heap_beginscan(indexRelation, SnapshotNow, 1, &entry);
 	reindexed = false;
 	while (HeapTupleIsValid(indexTuple = heap_getnext(scan)))
 	{

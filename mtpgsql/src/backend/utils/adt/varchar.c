@@ -760,6 +760,107 @@ varcharge(char *arg1, char *arg2)
 
 }
 
+bool
+byteaeq(bytea *arg1, bytea *arg2)
+{
+	int			i,
+                                len1,
+				len2;
+
+	if (arg1 == NULL || arg2 == NULL)
+		return (bool) 0;
+
+	len1 = VARSIZE(arg1) - VARHDRSZ;
+	len2 = VARSIZE(arg2) - VARHDRSZ;
+
+	if (len1 != len2)
+		return 0;
+
+        for (i=0;i<len1;i++) {
+            if ( VARDATA(arg1)[i] != VARDATA(arg2)[i] ) return 0;
+        }
+        return 1;
+}
+
+bool
+byteane(bytea *arg1, bytea *arg2)
+{
+    return !byteaeq(arg1,arg2);
+}
+
+bool
+bytealt(bytea *arg1, bytea *arg2)
+{
+	int			len0,
+                                len1,
+				len2;
+	int			i;
+
+	if (arg1 == NULL && arg2 == NULL)
+		return (bool) 0;
+	len1 = VARSIZE(arg1) - VARHDRSZ;
+	len2 = VARSIZE(arg2) - VARHDRSZ;
+        len0 = ( len1 < len2 ) ? len1 : len2;
+        for (i=0;i<len0;i++) {
+            if ( VARDATA(arg1)[i] < VARDATA(arg2)[i] ) return 1;
+        }
+        if ( len1 < len2 ) return 1;
+        return 0;
+}
+
+bool
+byteale(bytea *arg1, bytea *arg2)
+{
+	int			len0,
+                                len1,
+				len2;
+	int			i;
+
+	if (arg1 == NULL || arg2 == NULL)
+		return (bool) 0;
+	len1 = VARSIZE(arg1) - VARHDRSZ;
+	len2 = VARSIZE(arg2) - VARHDRSZ;
+        len0 = ( len1 < len2 ) ? len1 : len2;
+        
+        for (i=0;i<len0;i++) {
+            if ( VARDATA(arg1)[i] > VARDATA(arg2)[i] ) return 0;
+        }
+        if ( len1 > len2 ) return 0;
+        return 1;
+}
+
+bool
+byteagt(bytea *arg1, bytea *arg2)
+{
+    return !byteale(arg1,arg2);
+}
+
+bool
+byteage(bytea *arg1, bytea *arg2)
+{
+	return !bytealt(arg1,arg2);
+
+}
+
+int32
+byteacmp(bytea *arg1, bytea *arg2)
+{
+	int			len0,
+                                len1,
+				len2;
+	int			cmp;
+
+	len1 = VARSIZE(arg1) - VARHDRSZ;
+	len2 = VARSIZE(arg2) - VARHDRSZ;
+        len0 = ( len1 < len2 ) ? len1 : len2;
+        
+	cmp = memcmp(VARDATA(arg1), VARDATA(arg2), len0);
+	if ((0 == cmp) && (len1 != len2))
+		return (int32) (len1 < len2 ? -1 : 1);
+	else
+		return (int32) (cmp);
+}
+
 int32
 varcharcmp(char *arg1, char *arg2)
 {

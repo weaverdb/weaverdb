@@ -357,9 +357,9 @@ DelegateWait(Delegate delegate, CollectionState state) {
         default:
             elog(FATAL,"unknown delegate state");
     }
-
-        waittime.tv_sec = time(NULL) + (timeout / 1000);
-        waittime.tv_nsec = (timeout % 1000) * 1000000;
+     
+     ptimeout(&waittime,timeout);
+                
         while ( pthread_cond_timedwait(&delegate->gate,&delegate->guard, &waittime) == ETIMEDOUT ) {
             if ( CheckForCancel() ) {
                 DelegateUnlock(delegate);

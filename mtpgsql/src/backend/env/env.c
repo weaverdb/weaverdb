@@ -10,6 +10,9 @@
 #ifdef SUNOS
 #include <umem.h>
 #endif
+#ifdef _GNU_SOURCE
+#include <mcheck.h>
+#endif
 
 #include "postgres.h"
 #include "env/env.h"
@@ -35,7 +38,7 @@ static int                      envid = 0;
 static pthread_key_t		envkey;
 static CommitType               default_type = SOFT_COMMIT;
 
-static Env*                     envmap[MAXBACKENDS];
+static Env*                     *envmap;
 
 
 pthread_condattr_t		process_cond_attr;
@@ -65,26 +68,28 @@ static HTAB* CreateHash(MemoryContext context);
 static int DestroyHash(HTAB* hash);
 static long sectionid_hash(void* key, int size);
 static int memory_fail(void);
+#ifdef _GNU_SOURCE
+static void glibc_memory_fail(enum mcheck_status err);
+#endif
 static void  env_log(Env* env, char* pattern, ...);
 
 #ifdef ENV_TLS
 static __thread Env* env_cache = NULL;
 #endif
 
-int InitSystem(bool  isPrivate) {
+Env* InitSystem(bool  isPrivate) {
 	int counter = 0;
-	
+
         MyProcPid = getpid();
 #ifdef SUNOS
-#ifndef GC_DEBUG
         umem_nofail_callback(memory_fail);
-#endif
 #endif
 	pthread_mutex_init(&envlock,NULL);
 	
+        envmap = os_malloc(sizeof(Env*) * GetMaxBackends());
 	
 	envcount = 0;
-    	for (counter=0;counter<MAXBACKENDS;counter++) {
+    	for (counter=0;counter<GetMaxBackends();counter++) {
      	   envmap[counter] = NULL;
     	}
         
@@ -108,7 +113,7 @@ int InitSystem(bool  isPrivate) {
         SetEnv(CreateEnv(NULL));
 	InitVirtualFileSystem();  
         
-        return counter;
+        return GetEnv();
 }
 
 int DestroySystem(void) {
@@ -122,21 +127,9 @@ int DestroySystem(void) {
 	
 	pthread_mutex_destroy(&envlock);
 
-	
-#ifdef MACOSX
-#ifdef NOTUSED
-        sem_close(pipeline);
-#endif
-#else	
-#ifdef NOTUSED
-	sem_destroy(pipeline);
-#endif
         pthread_condattr_destroy(&process_cond_attr);
         pthread_mutexattr_destroy(&process_mutex_attr);
-#endif	
-#ifdef NOTUSED
-        os_free(pipeline);
-#endif
+
 	return 0;
 }
 
@@ -157,7 +150,7 @@ extern Env* GetEnv(void) {
 
 }
 
-extern void SetEnv(void* envp)
+extern bool SetEnv(void* envp)
 {
 #ifdef ENV_TLS
         if ( envp != NULL ) {
@@ -167,16 +160,20 @@ extern void SetEnv(void* envp)
             Assert(env_cache != NULL);
             env_cache = envp;
         }
+        return TRUE;
 #else
 	EnvPointer env = envp;
         EnvPointer current = GetEnv();
         if ( env != NULL ) {
             Assert(current == NULL || current == env);
             pthread_mutex_lock(env->env_guard);
-            if ( env->owner != 0 ) {
+            if ( env->owner != 0 && env->owner != pthread_self() ) {
                 pthread_mutex_unlock(env->env_guard);
+                return FALSE;
+/*
                 printf("Environment already owned, make sure the connection is owned by a single thread\n");
                 abort();
+*/
             } else {
                 pthread_setspecific(envkey,&envmap[env->eid]);
                 env->owner = pthread_self();
@@ -188,7 +185,7 @@ extern void SetEnv(void* envp)
                 pthread_mutex_unlock(env->env_guard);
             }
         } else {
-           Assert(current != NULL);
+            if ( current == NULL ) return FALSE;
            if ( current->parent != NULL ) {
 /* sub-connections cannot jump threads b/c we need to be able to join */
                 
@@ -204,6 +201,7 @@ extern void SetEnv(void* envp)
                 pthread_mutex_unlock(current->env_guard);
             }
         }
+        return TRUE;
 #endif
 }
 
@@ -211,7 +209,7 @@ pthread_t FindChildThread(Env* env) {
     pthread_t   child = 0;
     int counter =0;
     pthread_mutex_lock(&envlock);
-    for (counter=0;counter<MAXBACKENDS;counter++) {
+    for (counter=0;counter<GetMaxBackends();counter++) {
         if ( envmap[counter] == env ) {
             child = env->owner;
             break;
@@ -237,8 +235,6 @@ CancelEnvAndJoin(Env* env) {
 }
 
 Env* CreateEnv(Env* parent) {
-        int counter = 0;
-                
 	MemoryContext top = ( parent == NULL ) ? NULL : parent->global_context;
 
 	Env* env = ( top == NULL ) ? os_malloc(sizeof(Env)) : MemoryContextAlloc(top,sizeof(Env));
@@ -254,7 +250,7 @@ Env* CreateEnv(Env* parent) {
 /*    lock.c  */
 	env->holdLock = 0;
     	
-	env->UserId = InvalidOid;
+	env->UserId = 0;
 	
 	env->UserName = NULL;
 	env->UserId = InvalidOid;
@@ -282,17 +278,23 @@ Env* CreateEnv(Env* parent) {
 	{
             int counter = 0;
             pthread_mutex_lock(&envlock);
-            for (counter=0;counter<MAXBACKENDS;counter++) {
+            for (counter=0;counter<GetMaxBackends();counter++) {
                 if ( envmap[counter] == NULL ) break;
             }
 		
-            if ( counter != MAXBACKENDS ) {
+            if ( counter != GetMaxBackends() ) {
 		envmap[counter] = env;
 		env->eid = counter;
 		envcount++;
 	    } else {
 		printf("too many connections\n");
-		os_free(env);
+                pthread_mutex_destroy(env->env_guard);
+                MemoryContextDelete(env->global_context);    
+                if ( top ) {
+                    pfree(env);
+                } else {
+                    os_free(env);
+                }
 		env = NULL;
             }
             pthread_mutex_unlock(&envlock);
@@ -304,10 +306,10 @@ void DiscardAllInvalids()
 {
     int counter = 0;
     Env* home = GetEnv();
-    
+    SetEnv(NULL);
     elog(DEBUG,"discarding invalids for all backends, message queue close to capacity");
     pthread_mutex_lock(&envlock);
-    for (counter = 0;counter <MAXBACKENDS;counter++) {
+    for (counter = 0;counter <GetMaxBackends();counter++) {
         if ( envmap[counter] != NULL ) {
             pthread_mutex_lock(envmap[counter]->env_guard);
             if ( !envmap[counter]->in_transaction ) {
@@ -495,9 +497,7 @@ int TransactionLock()
 	{
 		elog(ERROR,"System is shutting down",998);
 	}
-#ifdef NOTUSED
-		sem_wait(pipeline);
-#endif
+
 /*  do nothing if we already have the a transaction lock  */
 	if ( !(env->masterlock & TRANSACTIONLOCK_MASK) ) {
 		pthread_mutex_lock(&masterlock->guard);
@@ -512,7 +512,6 @@ int TransactionLock()
 			masterlock->waitcount++;
 			pthread_cond_wait(&masterlock->gate,&masterlock->guard);
 			masterlock->waitcount--;
-
 		}
 		masterlock->transcount++;
 		pthread_mutex_unlock(&masterlock->guard);
@@ -529,9 +528,7 @@ int TransactionLock()
 int TransactionUnlock()
 {
 	Env* env = GetEnv();
-#ifdef NOTUSED
-	sem_post(pipeline);
-#endif
+
         pthread_mutex_lock(env->env_guard);
         env->in_transaction = false;
         pthread_mutex_unlock(env->env_guard);
@@ -691,6 +688,7 @@ bool IsTransactionCareful() {
 
         switch ( check ) {
                 case CAREFUL_COMMIT:
+                case SYNCED_COMMIT:
                 case FAST_CAREFUL_COMMIT:
                         return true;
         }
@@ -715,11 +713,13 @@ bool IsLoggable(void) {
         }
 
         switch ( check ) {
-                case SYNCED_COMMIT:
-                        return false;
-        }
-        return true;
+            case SYNCED_COMMIT:
+                return false;
+            default: 
+                return true;
+        }        
 }
+
 bool IsTransactionFriendly() {
 	Env* env = GetEnv();
         CommitType check = DEFAULT_COMMIT;
@@ -735,6 +735,7 @@ bool IsTransactionFriendly() {
         }
 
         switch ( check ) {
+                case FAST_SOFT_COMMIT:
                 case FAST_CAREFUL_COMMIT:
                         return false;
         }
@@ -756,6 +757,9 @@ CommitType GetTransactionCommitType() {
 void SetTransactionCommitType(CommitType trans) {
         Env*  env = GetEnv();
 	switch ( trans ) {
+                case DEFAULT_COMMIT: 
+                    env->user_type = DEFAULT_COMMIT;
+                    break;
 		case USER_SOFT_COMMIT:
 			env->user_type = SOFT_COMMIT;
 			break;
@@ -787,12 +791,18 @@ void SetTransactionCommitType(CommitType trans) {
 		case SOFT_COMMIT:
 			default_type = SOFT_COMMIT;
 			break;
-		case FAST_CAREFUL_COMMIT:
+		case FAST_SOFT_COMMIT:
+			default_type = FAST_SOFT_COMMIT;
+			break;
+                case FAST_CAREFUL_COMMIT:
 			default_type = FAST_CAREFUL_COMMIT;
                         break;
 		case SYNCED_COMMIT:
 			default_type = SYNCED_COMMIT;                        
 			break;
+            default: 
+                default_type = trans;
+                
 	}
 }
 
@@ -810,7 +820,7 @@ void SetProcessingMode(ProcessingMode mode ) {
         CurrentMode = mode;
     } else {
         GetEnv()->Mode = mode;
-        CurrentMode = mode;
+        if ( mode == NormalProcessing ) CurrentMode = mode;
     }
 }
 
@@ -832,6 +842,13 @@ void sprandom(unsigned int seed) {
 	srand48(seed);
 }
 
+void ptimeout(struct timespec* timeval,int to) {
+    clock_gettime(WHICH_CLOCK,timeval);
+    timeval->tv_nsec += ((to % 1000) * 1000000);
+    timeval->tv_sec += ((to / 1000) + (timeval->tv_nsec/1000000000));
+    timeval->tv_nsec = timeval->tv_nsec % 1000000000;    
+}
+
 CommBuffer* ConnectCommBuffer(void* args,commfunc mover) {
     CommBuffer* comm = palloc(sizeof(CommBuffer));
     comm->args = args;
@@ -851,9 +868,9 @@ void
 PrintEnvMemory( void ) {
     int counter = 0;
     Env* home = GetEnv();
-    
+    SetEnv(NULL);
     pthread_mutex_lock(&envlock);
-    for (counter = 0;counter <MAXBACKENDS;counter++) {
+    for (counter = 0;counter <GetMaxBackends();counter++) {
         if ( envmap[counter] != NULL ) {
             pthread_mutex_lock(envmap[counter]->env_guard);
             if ( !envmap[counter]->owner == 0 ) {
@@ -877,7 +894,13 @@ PrintUserMemory( void ) {
         size_t amt = MemoryContextStats(GetEnv()->global_context);
         env_log(GetEnv(),"Total env memory: %ld",amt);     
 }
-
+#ifdef _GNU_SOURCE
+void 
+glibc_memory_fail(enum mcheck_status err) {
+    printf("memory allocation failed");
+    abort();
+}
+#endif
 int 
 memory_fail(void) {
     printf("memory allocation failed");
@@ -888,7 +911,7 @@ void*
 base_mem_alloc(size_t size) {
 #ifdef SUNOS
     size_t* pointer = umem_alloc(size + sizeof(size_t), UMEM_NOFAIL);
-#else
+#else 
     size_t* pointer = malloc(size + sizeof(size_t));
 #endif
     *pointer = size;
@@ -902,7 +925,21 @@ base_mem_free(void * pointer) {
 #ifdef SUNOS
     umem_free(mark, *mark + sizeof(size_t));
 #else
+#ifdef _GNU_SOURCE
+    enum mcheck_status status = mprobe(mark);
+    switch (status) {
+        case MCHECK_DISABLED:
+        case MCHECK_OK:
+            free(mark);
+            break;
+        case MCHECK_HEAD:
+        case MCHECK_TAIL:
+        case MCHECK_FREE:
+            abort();
+    }
+#else
     free(mark);
+#endif
 #endif
 }
 

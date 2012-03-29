@@ -445,58 +445,55 @@ hash_destroy(HTAB *hashp)
 {
 	if (hashp != NULL)
 	{
-        void*          		entry;
-        HASHSEGMENT*		segp;
-        HASHELEMENT*		dellist = NULL;
-        HASHHDR*			hctl = hashp->hctl;
-        int 				nsegs = 0;
+            void*          		entry;
+            HASHSEGMENT*		segp;
+            HASHELEMENT*		dellist = NULL;
+            HASHHDR*			hctl = hashp->hctl;
+            int 				nsegs = 0;
 
-		hash_stats("destroy", hashp);
+                    hash_stats("destroy", hashp);
 
 
-/*  free segments  */
-        for (segp = hashp->dir;nsegs < hctl->nsegs;nsegs++,segp++)
-        {
-            HASHSEGMENT segment = *segp;
-            HASHBUCKET  bucket = *segment;
-            while ( bucket != NULL ) {
-                HASHELEMENT*  element = bucket;
-                bucket = element->link;
-                if ( element->freeable ) {
-                    element->link = dellist;
-                    dellist = element;
-                }
-            }
-            hashp->free(segment,hashp->hcxt);
-        }
-/* free freelist  */
-        if ( hctl != NULL ) {
-                HASHELEMENT*  element;
-                HASHELEMENT*  delement;
-                element = delement = hctl->freeList;
-                while (element != NULL) {
-                    delement = element;
-                    element = element->link;
-                    if ( delement->freeable ) {
-                    	delement->link = dellist;
-                        dellist = delement;
+    /*  free segments  */
+            for (segp = hashp->dir;nsegs < hctl->nsegs;nsegs++,segp++)
+            {
+                HASHSEGMENT segment = *segp;
+                HASHBUCKET  bucket = *segment;
+                while ( bucket != NULL ) {
+                    HASHELEMENT*  element = bucket;
+                    bucket = element->link;
+                    if ( element->freeable ) {
+                        element->link = dellist;
+                        dellist = element;
                     }
                 }
-        }
-        
-        while ( dellist != NULL ) {
-            HASHELEMENT* hit = dellist;
-            dellist = hit->link;
-            hashp->free(hit,hashp->hcxt);
-        }
-        
-        hashp->free(hashp->dir,hashp->hcxt);
-        hashp->free(hashp->hctl,hashp->hcxt);
-        hashp->free(hashp->tabname,hashp->hcxt);
-        hashp->free(hashp,hashp->hcxt);
-#ifdef FUTURE
-		if ( hashp->hcxt != NULL ) MemoryContextDelete(hashp->hcxt);
-#endif
+                hashp->free(segment,hashp->hcxt);
+            }
+    /* free freelist  */
+            if ( hctl != NULL ) {
+                    HASHELEMENT*  element;
+                    HASHELEMENT*  delement;
+                    element = delement = hctl->freeList;
+                    while (element != NULL) {
+                        delement = element;
+                        element = element->link;
+                        if ( delement->freeable ) {
+                            delement->link = dellist;
+                            dellist = delement;
+                        }
+                    }
+            }
+
+            while ( dellist != NULL ) {
+                HASHELEMENT* hit = dellist;
+                dellist = hit->link;
+                hashp->free(hit,hashp->hcxt);
+            }
+
+            hashp->free(hashp->dir,hashp->hcxt);
+            hashp->free(hashp->hctl,hashp->hcxt);
+            hashp->free(hashp->tabname,hashp->hcxt);
+            hashp->free(hashp,hashp->hcxt);
 	}
 }
 
@@ -911,30 +908,29 @@ element_alloc(HTAB *hashp)
 {
 	HASHHDR    *hctl = hashp->hctl;
 	Size		elementSize;
-	HASHELEMENT *tmpElement;
-	int			i;
+	HASHELEMENT *tmpElement,*head;
 
 	/* Each element has a HASHELEMENT header plus user data. */
 	elementSize = MAXALIGN(sizeof(HASHELEMENT)) + MAXALIGN(hctl->entrysize);
 
-	tmpElement = (HASHELEMENT *)
+	head = (HASHELEMENT *)
 		hashp->alloc(HASHELEMENT_ALLOC_INCR * elementSize,hashp->hcxt);
 
-	if (!tmpElement)
+	if (!head)
 		return false;
         
-    tmpElement->freeable = true;
-
+        tmpElement = head;
 	/* link all the new entries into the freelist */
-	for (i = 0; i < HASHELEMENT_ALLOC_INCR; i++)
+        
+	for (tmpElement = head; tmpElement < (HASHELEMENT *)(((char*)head) + (HASHELEMENT_ALLOC_INCR * elementSize)); tmpElement = (HASHELEMENT *)(((char*)tmpElement) + elementSize))
 	{
 		tmpElement->link = hctl->freeList;
+                tmpElement->freeable = false;
 		hctl->freeList = tmpElement;
-		tmpElement = (HASHELEMENT *) (((char *) tmpElement) + elementSize);
 /*  these aren't freeable b/c they were part of original allocation  */
-        tmpElement->freeable = false;
 	}
 
+        head->freeable = true;
 	return true;
 }
 

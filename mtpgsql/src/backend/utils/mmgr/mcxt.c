@@ -30,7 +30,7 @@
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
  *****************************************************************************/
-static SectionId   mem_section_id = SECTIONID("MCXT");
+static SectionId mem_section_id = SECTIONID("MCXT");
 
 #ifdef TLS
 TLS MemoryContextGlobals* memory_globals = NULL;
@@ -43,7 +43,7 @@ TLS MemoryContextGlobals* memory_globals = NULL;
  *****************************************************************************/
 /*
 static void MemoryContextReset(MemoryContext context);
-*/
+ */
 
 /*
  * MemoryContextInit
@@ -61,86 +61,63 @@ static void MemoryContextReset(MemoryContext context);
  * In a standalone backend this must be called during backend startup.
  */
 void
-MemoryContextInit(void)
-{
+MemoryContextInit(void) {
     MemoryContext TopContext = MemoryContextGetTopContext();
-        MemoryContextGlobals*    mem_env;
+    MemoryContextGlobals* mem_env;
 
-        MemoryContextInitEnv();
-        mem_env = MemoryContextGetEnv();
+    MemoryContextInitEnv();
+    mem_env = MemoryContextGetEnv();
 
-	/*
-	 * Not having any other place to point CurrentMemoryContext, make it
-	 * point to TopMemoryContext.  Caller should change this soon!
-	 */
-	GetEnv()->current_context = TopContext;
+    /*
+     * Not having any other place to point CurrentMemoryContext, make it
+     * point to TopMemoryContext.  Caller should change this soon!
+     */
+    GetEnv()->current_context = TopContext;
 
-	/*
-	 * Initialize ErrorContext as an AllocSetContext with slow growth rate
-	 * --- we don't really expect much to be allocated in it. More to the
-	 * point, require it to contain at least 8K at all times. This is the
-	 * only case where retained memory in a context is *essential* --- we
-	 * want to be sure ErrorContext still has some memory even if we've
-	 * run out elsewhere!
-	 */
-	mem_env->ErrorContext = AllocSetContextCreate(TopContext,
-			"ErrorContext",
-			ALLOCSET_DEFAULT_MINSIZE,
-			ALLOCSET_DEFAULT_INITSIZE,
-			ALLOCSET_DEFAULT_MAXSIZE); 
-                                         
-/*  go ahead and create a cache context  */
+    /*
+     * Initialize ErrorContext as an AllocSetContext with slow growth rate
+     * --- we don't really expect much to be allocated in it. More to the
+     * point, require it to contain at least 8K at all times. This is the
+     * only case where retained memory in a context is *essential* --- we
+     * want to be sure ErrorContext still has some memory even if we've
+     * run out elsewhere!
+     */
+    mem_env->ErrorContext = AllocSetContextCreate(TopContext,
+            "ErrorContext",
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
+
+    /*  go ahead and create a cache context  */
     mem_env->CacheMemoryContext = AllocSetContextCreate(TopContext,
-                        "CacheMemoryContext",
-			ALLOCSET_DEFAULT_MINSIZE,
-			ALLOCSET_DEFAULT_INITSIZE,
-			ALLOCSET_DEFAULT_MAXSIZE);                                         
+            "CacheMemoryContext",
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
     mem_env->QueryContext = AllocSetContextCreate(TopContext,
-			"QueryMemoryContext",
-			ALLOCSET_DEFAULT_MINSIZE,
-			ALLOCSET_DEFAULT_INITSIZE,
-			ALLOCSET_DEFAULT_MAXSIZE);                                         
+            "QueryMemoryContext",
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
 
 }
 
-void 
-MemoryContextInitEnv(void) 
-{
-    void* mem = (MemoryContextGlobals*)AllocateEnvSpace(mem_section_id,sizeof(MemoryContextGlobals));
-    memset(mem,0x00,sizeof(MemoryContextGlobals));
+void
+MemoryContextInitEnv(void) {
+    void* mem = (MemoryContextGlobals*) AllocateEnvSpace(mem_section_id, sizeof (MemoryContextGlobals));
+    memset(mem, 0x00, sizeof (MemoryContextGlobals));
     memory_globals = mem;
 }
 
-void 
-MemoryContextDestroyEnv(void)
-{
+void
+MemoryContextDestroyEnv(void) {
     memory_globals = NULL;
 }
 
-MemoryContextGlobals* 
-MemoryContextGetEnv(void)
-{
-        return memory_globals;
+MemoryContextGlobals*
+MemoryContextGetEnv(void) {
+    return memory_globals;
 }
-
-/*
- * MemoryContextReset
- *		Release all space allocated within a context and its descendants,
- *		but don't delete the contexts themselves.
- *
- * The type-specific reset routine handles the context itself, but we
- * have to do the recursion for the children.
- */
- /*
-void
-MemoryContextReset(MemoryContext context)
-{
-	AssertArg(MemoryContextIsValid(context));
-
-	MemoryContextResetChildren(context);
-	(*context->methods->reset) (context);
-}
-*/
 
 /*
  * MemoryContextResetChildren
@@ -149,14 +126,13 @@ MemoryContextReset(MemoryContext context)
  *		itself is not touched.
  */
 void
-MemoryContextResetChildren(MemoryContext context)
-{
-	MemoryContext child;
+MemoryContextResetChildren(MemoryContext context) {
+    MemoryContext child;
 
-	AssertArg(MemoryContextIsValid(context));
+    AssertArg(MemoryContextIsValid(context));
 
-	for (child = context->firstchild; child != NULL; child = child->nextchild)
-		MemoryContextResetAndDeleteChildren(child);
+    for (child = context->firstchild; child != NULL; child = child->nextchild)
+        MemoryContextResetAndDeleteChildren(child);
 }
 
 /*
@@ -170,38 +146,32 @@ MemoryContextResetChildren(MemoryContext context)
  * node from its parent, if it has one.
  */
 void
-MemoryContextDelete(MemoryContext context)
-{
-	MemoryContextDeleteChildren(context);
+MemoryContextDelete(MemoryContext context) {
+    MemoryContext parent = context->parent;
+    MemoryContextDeleteChildren(context);
 
-	/*
-	 * We delink the context from its parent before deleting it, so that
-	 * if there's an error we won't have deleted/busted contexts still
-	 * attached to the context tree.  Better a leak than a crash.
-	 */
-	if (context->parent)
-	{
-		MemoryContext parent = context->parent;
+    /*
+     * We delink the context from its parent before deleting it, so that
+     * if there's an error we won't have deleted/busted contexts still
+     * attached to the context tree.  Better a leak than a crash.
+     */
+    if (parent) {
+        if (context == parent->firstchild)
+            parent->firstchild = context->nextchild;
+        else {
+            MemoryContext child;
 
-		if (context == parent->firstchild)
-			parent->firstchild = context->nextchild;
-		else
-		{
-			MemoryContext child;
-
-			for (child = parent->firstchild; child; child = child->nextchild)
-			{
-				if (context == child->nextchild)
-				{
-					child->nextchild = context->nextchild;
-					break;
-				}
-			}
-		}
-	}
-	(*context->methods->delete) (context);
-	if ( context->parent == NULL ) os_free(context);
-        else pfree(context);   
+            for (child = parent->firstchild; child; child = child->nextchild) {
+                if (context == child->nextchild) {
+                    child->nextchild = context->nextchild;
+                    break;
+                }
+            }
+        }
+    }
+    (*context->methods->delete) (context);
+    if (parent == NULL) os_free(context);
+    else (*parent->methods->free_p) (parent, context);
 }
 
 /*
@@ -210,16 +180,15 @@ MemoryContextDelete(MemoryContext context)
  *		space allocated therein.  The named context itself is not touched.
  */
 void
-MemoryContextDeleteChildren(MemoryContext context)
-{
-	AssertArg(MemoryContextIsValid(context));
+MemoryContextDeleteChildren(MemoryContext context) {
+    AssertArg(MemoryContextIsValid(context));
 
-	/*
-	 * MemoryContextDelete will delink the child from me, so just iterate
-	 * as long as there is a child.
-	 */
-	while (context->firstchild != NULL)
-		MemoryContextDelete(context->firstchild);
+    /*
+     * MemoryContextDelete will delink the child from me, so just iterate
+     * as long as there is a child.
+     */
+    while (context->firstchild != NULL)
+        MemoryContextDelete(context->firstchild);
 }
 
 /*
@@ -231,12 +200,11 @@ MemoryContextDeleteChildren(MemoryContext context)
  * specific context but get rid of absolutely everything under it.
  */
 void
-MemoryContextResetAndDeleteChildren(MemoryContext context)
-{
-	AssertArg(MemoryContextIsValid(context));
+MemoryContextResetAndDeleteChildren(MemoryContext context) {
+    AssertArg(MemoryContextIsValid(context));
 
-	MemoryContextDeleteChildren(context);
-	(*context->methods->reset) (context);
+    MemoryContextDeleteChildren(context);
+    (*context->methods->reset) (context);
 }
 
 /*
@@ -247,17 +215,16 @@ MemoryContextResetAndDeleteChildren(MemoryContext context)
  * are merely sent to stderr.
  */
 size_t
-MemoryContextStats(MemoryContext context)
-{
-	MemoryContext child;
-    size_t		used;
+MemoryContextStats(MemoryContext context) {
+    MemoryContext child;
+    size_t used;
 
-	AssertArg(MemoryContextIsValid(context));
+    AssertArg(MemoryContextIsValid(context));
 
-	used = (*context->methods->stats) (context);
-	for (child = context->firstchild; child != NULL; child = child->nextchild)
-		used += MemoryContextStats(child);
-        
+    used = (*context->methods->stats) (context);
+    for (child = context->firstchild; child != NULL; child = child->nextchild)
+        used += MemoryContextStats(child);
+
     return used;
 }
 
@@ -269,16 +236,16 @@ MemoryContextStats(MemoryContext context)
  * This is just a debugging utility, so it's not fancy.
  */
 #ifdef MEMORY_CONTEXT_CHECKING
+
 void
-MemoryContextCheck(MemoryContext context)
-{
-	MemoryContext child;
+MemoryContextCheck(MemoryContext context) {
+    MemoryContext child;
 
-	AssertArg(MemoryContextIsValid(context));
+    AssertArg(MemoryContextIsValid(context));
 
-	(*context->methods->check) (context);
-	for (child = context->firstchild; child != NULL; child = child->nextchild)
-		MemoryContextCheck(child);
+    (*context->methods->check) (context);
+    for (child = context->firstchild; child != NULL; child = child->nextchild)
+        MemoryContextCheck(child);
 }
 #endif
 
@@ -294,32 +261,31 @@ MemoryContextCheck(MemoryContext context)
  * a valid chunk header by chance.
  */
 bool
-MemoryContextContains(MemoryContext context, void *pointer)
-{
-	StandardChunkHeader *header;
+MemoryContextContains(MemoryContext context, void *pointer) {
+    StandardChunkHeader *header;
 
-	/*
-	 * Try to detect bogus pointers handed to us, poorly though we can.
-	 * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
-	 * allocated chunk.
-	 */
-	if (pointer == NULL || pointer != (void *) MAXALIGN(pointer))
-		return false;
+    /*
+     * Try to detect bogus pointers handed to us, poorly though we can.
+     * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
+     * allocated chunk.
+     */
+    if (pointer == NULL || pointer != (void *) MAXALIGN(pointer))
+        return false;
 
-	/*
-	 * OK, it's probably safe to look at the chunk header.
-	 */
-	header = (StandardChunkHeader *)
-		((char *) pointer - STANDARDCHUNKHEADERSIZE);
+    /*
+     * OK, it's probably safe to look at the chunk header.
+     */
+    header = (StandardChunkHeader *)
+            ((char *) pointer - STANDARDCHUNKHEADERSIZE);
 
-	/*
-	 * If the context link doesn't match then we certainly have a
-	 * non-member chunk.  Also check for a reasonable-looking size as
-	 * extra guard against being fooled by bogus pointers.
-	 */
-	if (header->context == context && AllocSizeIsValid(header->size))
-		return true;
-	return false;
+    /*
+     * If the context link doesn't match then we certainly have a
+     * non-member chunk.  Also check for a reasonable-looking size as
+     * extra guard against being fooled by bogus pointers.
+     */
+    if (header->context == context && AllocSizeIsValid(header->size))
+        return true;
+    return false;
 }
 
 /*--------------------
@@ -372,50 +338,45 @@ MemoryContextContains(MemoryContext context, void *pointer)
  */
 MemoryContext
 MemoryContextCreate(NodeTag tag, Size size,
-					MemoryContextMethods *methods,
-					MemoryContext parent,
-					const char *name)
-{
-	MemoryContext node;
-	Size		needed = size + strlen(name) + 1;
+        MemoryContextMethods *methods,
+        MemoryContext parent,
+        const char *name) {
+    MemoryContext node;
+    Size needed = size + strlen(name) + 1;
 
-	/* Get space for node and name */
-	if (parent != NULL)
-	{
-		/* Normal case: allocate the node in TopMemoryContext */
-		node = (MemoryContext) MemoryContextAlloc(parent,needed);
-	}
-	else
-	{
-		/* Special case for startup: use good ol' malloc */
-		node = (MemoryContext) os_malloc(needed);
-                if ( node == NULL ) elog(FATAL,"cannot create memory context",747);
-		Assert(node != NULL);
-	}
+    /* Get space for node and name */
+    if (parent != NULL) {
+        /* Normal case: allocate the node in TopMemoryContext */
+        node = (MemoryContext) MemoryContextAlloc(parent, needed);
+    } else {
+        /* Special case for startup: use good ol' malloc */
+        node = (MemoryContext) os_malloc(needed);
+        if (node == NULL) elog(FATAL, "cannot create memory context", 747);
+        Assert(node != NULL);
+    }
 
-	/* Initialize the node as best we can */
-	MemSet(node, 0, size);
-	node->type = tag;
-	node->methods = methods;
-	node->parent = NULL;		/* for the moment */
-	node->firstchild = NULL;
-	node->nextchild = NULL;
-	node->name = ((char *) node) + size;
-	strcpy(node->name, name);
+    /* Initialize the node as best we can */
+    MemSet(node, 0, size);
+    node->type = tag;
+    node->methods = methods;
+    node->parent = NULL; /* for the moment */
+    node->firstchild = NULL;
+    node->nextchild = NULL;
+    node->name = ((char *) node) + size;
+    strcpy(node->name, name);
 
-	/* Type-specific routine finishes any other essential initialization */
-	(*node->methods->init) (node);
+    /* Type-specific routine finishes any other essential initialization */
+    (*node->methods->init) (node);
 
-	/* OK to link node to parent (if any) */
-	if (parent)
-	{
-		node->parent = parent;
-		node->nextchild = parent->firstchild;
-		parent->firstchild = node;
-	}
+    /* OK to link node to parent (if any) */
+    if (parent) {
+        node->parent = parent;
+        node->nextchild = parent->firstchild;
+        parent->firstchild = node;
+    }
 
-	/* Return to type-specific creation routine to finish up */
-	return node;
+    /* Return to type-specific creation routine to finish up */
+    return node;
 }
 
 /*
@@ -426,67 +387,92 @@ MemoryContextCreate(NodeTag tag, Size size,
  * nodes/memnodes.h into postgres.h which seems a bad idea.
  */
 void*
-MemoryContextAlloc(MemoryContext context, Size size)
-{
-	if (!AllocSizeIsValid(size))
-		elog(ERROR, "MemoryContextAlloc:%s invalid request size %lu",context->name,
-			 (unsigned long) size);
-        return (*context->methods->alloc) (context, size);
+MemoryContextAlloc(MemoryContext context, Size size) {
+    void* pointer = NULL;
+    if (!AllocSizeIsValid(size))
+        elog(ERROR, "MemoryContextAlloc:%s invalid request size %lu", context->name,
+            (unsigned long) size);
+    pointer = (*context->methods->alloc) (context, size);
+    if ( pointer == NULL ) {
+        elog(FATAL, "MemoryContextAlloc:%s failed to allocate request size %lu", context->name,
+            (unsigned long) size);
+    }
+    return pointer;
 }
 
 void*
-pmerge(void* first,int fl,void* second,int sl) {
+pmerge(void* first, int fl, void* second, int sl) {
     char* n = palloc(fl + sl);
-    memmove(n,first,fl);
-    memmove(n+fl,second,sl);
+    memmove(n, first, fl);
+    memmove(n + fl, second, sl);
     return n;
 }
 
 void
-pclear(void *pointer)
-{
-	StandardChunkHeader *header;
+pclear(void *pointer) {
+    StandardChunkHeader *header;
 
-	/*
-	 * Try to detect bogus pointers handed to us, poorly though we can.
-	 * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
-	 * allocated chunk.
-	 */
-	Assert(pointer != NULL);
-	Assert(pointer == (void *) MAXALIGN(pointer));
+    /*
+     * Try to detect bogus pointers handed to us, poorly though we can.
+     * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
+     * allocated chunk.
+     */
+    Assert(pointer != NULL);
+    Assert(pointer == (void *) MAXALIGN(pointer));
 
-	/*
-	 * OK, it's probably safe to look at the chunk header.
-	 */
-	header = (StandardChunkHeader *)
-		((char *) pointer - STANDARDCHUNKHEADERSIZE);
+    /*
+     * OK, it's probably safe to look at the chunk header.
+     */
+    header = (StandardChunkHeader *)
+            ((char *) pointer - STANDARDCHUNKHEADERSIZE);
 
-        memset(pointer,0x00,header->size);
+    memset(pointer, 0x00, header->size);
 }
+
 /*
  * pfree
  *		Release an allocated chunk.
  */
 void
-pfree(void *pointer)
-{
-	StandardChunkHeader *header;
+pfree(void *pointer) {
+    StandardChunkHeader *header;
 
-	/*
-	 * Try to detect bogus pointers handed to us, poorly though we can.
-	 * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
-	 * allocated chunk.
-	 */
-	Assert(pointer != NULL);
-	Assert(pointer == (void *) MAXALIGN(pointer));
+    /*
+     * Try to detect bogus pointers handed to us, poorly though we can.
+     * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
+     * allocated chunk.
+     */
+    Assert(pointer != NULL);
+    Assert(pointer == (void *) MAXALIGN(pointer));
 
-	/*
-	 * OK, it's probably safe to look at the chunk header.
-	 */
-	header = (StandardChunkHeader *)
-		((char *) pointer - STANDARDCHUNKHEADERSIZE);
+    /*
+     * OK, it's probably safe to look at the chunk header.
+     */
+    header = (StandardChunkHeader *)
+            ((char *) pointer - STANDARDCHUNKHEADERSIZE);
 
-	(*header->context->methods->free_p) (header->context, pointer);
+    (*header->context->methods->free_p) (header->context, pointer);
+}
+
+MemoryContext MemoryContextSameContext(Pointer pointer) {
+
+    StandardChunkHeader *header;
+
+    /*
+     * Try to detect bogus pointers handed to us, poorly though we can.
+     * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
+     * allocated chunk.
+     */
+    Assert(pointer != NULL);
+    Assert(pointer == (void *) MAXALIGN(pointer));
+
+    /*
+     * OK, it's probably safe to look at the chunk header.
+     */
+    header = (StandardChunkHeader *)
+            ((char *) pointer - STANDARDCHUNKHEADERSIZE);
+
+    return MemoryContextSwitchTo(header->context);
 }
 
 /*
@@ -494,32 +480,31 @@ pfree(void *pointer)
  *
  */
 void *
-repalloc(void *pointer, Size size)
-{
-	StandardChunkHeader *header;
+repalloc(void *pointer, Size size) {
+    StandardChunkHeader *header;
 
-	/*
-	 * Try to detect bogus pointers handed to us, poorly though we can.
-	 * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
-	 * allocated chunk.
-	 */
-        if ( pointer == NULL ) return palloc(size);
-        
-	Assert(pointer == (void *) MAXALIGN(pointer));
+    /*
+     * Try to detect bogus pointers handed to us, poorly though we can.
+     * Presumably, a pointer that isn't MAXALIGNED isn't pointing at an
+     * allocated chunk.
+     */
+    if (pointer == NULL) return palloc(size);
 
-	/*
-	 * OK, it's probably safe to look at the chunk header.
-	 */
-	header = (StandardChunkHeader *)
-		((char *) pointer - STANDARDCHUNKHEADERSIZE);
+    Assert(pointer == (void *) MAXALIGN(pointer));
 
-	AssertArg(MemoryContextIsValid(header->context));
+    /*
+     * OK, it's probably safe to look at the chunk header.
+     */
+    header = (StandardChunkHeader *)
+            ((char *) pointer - STANDARDCHUNKHEADERSIZE);
 
-	if (!AllocSizeIsValid(size))
-		elog(ERROR, "repalloc:%s invalid request size %lu",header->context->name,
-			 (unsigned long) size);
+    AssertArg(MemoryContextIsValid(header->context));
 
-	return (*header->context->methods->realloc) (header->context, pointer, size);
+    if (!AllocSizeIsValid(size))
+        elog(ERROR, "repalloc:%s invalid request size %lu", header->context->name,
+            (unsigned long) size);
+
+    return (*header->context->methods->realloc) (header->context, pointer, size);
 }
 
 /*
@@ -527,15 +512,14 @@ repalloc(void *pointer, Size size)
  *		Returns the current context; installs the given context.
  */
 MemoryContext
-MemoryContextSwitchTo(MemoryContext context)
-{
-	MemoryContext old;
-        Env*        env = GetEnv();
+MemoryContextSwitchTo(MemoryContext context) {
+    MemoryContext old;
+    Env* env = GetEnv();
 
-	old = env->current_context;
-	env->current_context = context;
+    old = env->current_context;
+    env->current_context = context;
 
-	return old;
+    return old;
 }
 
 /*
@@ -543,27 +527,24 @@ MemoryContextSwitchTo(MemoryContext context)
  *		Like strdup(), but allocate from the specified context
  */
 char *
-MemoryContextStrdup(MemoryContext context, const char *string)
-{
-	char	   *nstr;
-	Size		len = strlen(string) + 1;
+MemoryContextStrdup(MemoryContext context, const char *string) {
+    char *nstr;
+    Size len = strlen(string) + 1;
 
-	nstr = (char *) MemoryContextAlloc(context, len);
-	if ( nstr != NULL ) {
-		memcpy(nstr, string, len);
-	}
-	return nstr;
+    nstr = (char *) MemoryContextAlloc(context, len);
+    if (nstr != NULL) {
+        memcpy(nstr, string, len);
+    }
+    return nstr;
 }
 
 MemoryContext
-MemoryContextGetTopContext(void)
-{
+MemoryContextGetTopContext(void) {
     return GetEnvMemoryContext();
 }
 
 MemoryContext
-MemoryContextGetCurrentContext(void)
-{
-        Env*  env = GetEnv();
-        return env->current_context;
+MemoryContextGetCurrentContext(void) {
+    Env* env = GetEnv();
+    return env->current_context;
 }

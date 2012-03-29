@@ -52,6 +52,7 @@ ConvertValueToText(Output* output,Oid type,int4 typmod, Datum val) {
                         typelem;
         char           *texto;
         int             textlen;
+        char*           target = output->target;
 
         if (!getTypeOutAndElem(type, &foutoid, &typelem)) {
             coded_elog(ERROR,108,"type conversion error");
@@ -60,42 +61,48 @@ ConvertValueToText(Output* output,Oid type,int4 typmod, Datum val) {
 
         textlen = strlen(texto);
         if (textlen > output->size) {
-            textlen = output->size;
-            coded_elog(ERROR,109,"binary truncation");
-        }
+            output->freeable = palloc(textlen);
+            *(void**)output->target = output->freeable;
+            target = output->freeable;
+        } 
         *output->length = textlen;
-        memcpy(output->target, texto, textlen);
+        memcpy(target, texto, textlen);
 }
 
 static void
 BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
+    char* target = output->target;
+    
     if (desc->attlen > 0) {
         if (desc->attlen > output->size) {
-                coded_elog(ERROR,109,"binary truncation");
+            output->freeable = palloc(desc->attlen);
+            *(void**)output->target = output->freeable;
+            target = output->freeable;
         }
         if (desc->attbyval) {
                 *output->length = desc->attlen;
-                memcpy(output->target, (void *)&(value), desc->attlen);
+                memcpy(target, (void *)&(value), desc->attlen);
         } else {
                 *output->length = desc->attlen;
-                memcpy(output->target, (void *)DatumGetPointer(value), desc->attlen);
+                memcpy(target, (void *)DatumGetPointer(value), desc->attlen);
         }
     } else {
         if ( ISINDIRECT(value) ) {
             int size = sizeof_indirect_blob(value);
             int length = 0;
             int moved = 0;
-            char*  travel = output->target;
 
             if (size > output->size ) {
-                    coded_elog(ERROR,102,"binary truncation for position %d", output->index);
-            }
+                output->freeable = palloc(size);
+                *(void**)output->target = output->freeable;
+                target = output->freeable;
+            } 
 
             Datum pointer = open_read_pipeline_blob(value,false);
-            while (read_pipeline_segment_blob(pointer,travel,&length,output->size - moved) ) {
+            while (read_pipeline_segment_blob(pointer,target,&length,output->size - moved) ) {
                 Assert(length > 0);
                 moved += length;
-                travel += length;
+                target += length;
             }
 
             close_read_pipeline_blob(pointer);
@@ -103,10 +110,12 @@ BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
             *output->length = moved + length;
         } else {
             if (VARSIZE(value) - 4 > output->size) {
-                coded_elog(ERROR,109,"binary truncation");
+                output->freeable = palloc(VARSIZE(value) - 4);
+                *(void**)output->target = output->freeable;
+                target = output->freeable;
             }
             *output->length = VARSIZE(value) - 4;
-            memcpy(output->target, VARDATA(value), VARSIZE(value) - 4);
+            memcpy(target, VARDATA(value), VARSIZE(value) - 4);
         }
     }
 }
@@ -132,6 +141,12 @@ DirectCharCopyValue(Output* output, Datum value) {
 static void
 IndirectLongCopyValue(Output* output, Datum value) {
     *(int64_t *) output->target = *(int64_t *)DatumGetPointer(value);
+    *output->length = 8;
+}
+
+static void
+DirectLongCopyValue(Output* output,long value) {
+    *(int64_t*) output->target = value;
     *output->length = 8;
 }
 
@@ -169,7 +184,11 @@ TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
                 break;
             case INT4OID:
                 if (desc->atttypid == CONNECTOROID ) DirectIntCopyValue(output,value);
-                else if (desc->atttypid == BOOLOID) DirectIntCopyValue(output,(value) ? 1 : 0);
+                else if (desc->atttypid == BOOLOID) DirectIntCopyValue(output,Int32GetDatum((value) ? 1 : 0));
+                else if ( desc->atttypid == INT8OID ) {
+                    if ( DatumGetInt64(value) > 0x7fffffff ) return false;
+                    else DirectIntCopyValue(output,value);
+                }
                 else return false;
                 break;
             case BOOLOID:
@@ -179,6 +198,8 @@ TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
             case INT8OID:
                 if (desc->atttypid == XIDOID) IndirectLongCopyValue(output,value);
                 else if (desc->atttypid == OIDOID) IndirectLongCopyValue(output,value);
+                else if (desc->atttypid == INT4OID) DirectLongCopyValue(output,DatumGetInt32(value));
+                else return false;
                 break;
             case FLOAT8OID:
                 if (desc->atttypid == FLOAT4OID) DirectDoubleCopyValue(output,(double)*(float*)DatumGetPointer(value));

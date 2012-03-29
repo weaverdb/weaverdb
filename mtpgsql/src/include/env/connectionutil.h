@@ -18,13 +18,14 @@
 extern "C" {
 #endif
 
-extern void initweaverbackend(char* dbname);
+extern bool initweaverbackend(char* dbname);
 extern bool isinitialized();
-extern void prepareforshutdown(void);
+extern bool prepareforshutdown(void);
 extern void wrapupweaverbackend(void);
 extern void singleusershutdown(int code);
 
 extern char* GetProperty(char* key);
+extern bool GetBoolProperty(char* key);
 extern int GetIntProperty(char* key);
 extern double GetFloatProperty(char* key);
 extern bool PropertyIsValid(char* key);

@@ -21,7 +21,7 @@
 SRCDIR= ../..
 include ../../Makefile.global
 
-CFLAGS += -I.. -I../../mflex
+CFLAGS += -I..
 
 ifeq ($(CC), gcc)
 CFLAGS+= -Wno-error
@@ -61,13 +61,14 @@ bootstrap_tokens.h bootparse.c: bootparse.y
 bootscanner.c: bootscanner.l
 	$(LEX) $<
 	grep -v "^#" boot.sed > sedfile
+	mv lex.Int_yy.c lex.yy.c
 	sed -f sedfile < lex.yy.c > bootscanner.c
 	rm -f lex.yy.c sedfile
 
 clean:
 	rm -f SUBSYS.o $(OBJS)
 # And the garbage that might have been left behind by partial build:
-	rm -f y.tab.h y.tab.c y.output lex.yy.c
+	rm -f y.tab.h y.tab.c y.output lex.yy.c bootparse.c bootscanner.c bootstrap_tokens.h
 
 # This is unusual:  We actually have to build some of the parts before
 # we know what the header file dependencies are.  

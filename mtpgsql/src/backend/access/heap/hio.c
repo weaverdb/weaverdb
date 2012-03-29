@@ -59,7 +59,9 @@ RelationPutHeapTuple(Relation relation,
 #endif
         pageHeader = (Page) BufferGetPage(buffer);
 	len = MAXALIGN(tuple->t_len);		/* be conservative */
-	Assert(len <= PageGetFreeSpace(pageHeader));
+	
+        Assert(len <= PageGetFreeSpace(pageHeader));
+        Assert(BufferIsCritical(buffer));
         
 	offnum = PageAddItem((Page) pageHeader, (Item) tuple->t_data,
 						 tuple->t_len, InvalidOffsetNumber, LP_USED);
@@ -72,7 +74,7 @@ RelationPutHeapTuple(Relation relation,
 
 	/* return an accurate tuple */
 	ItemPointerSet(&tuple->t_self, BufferGetBlockNumber(buffer), offnum);
-        DeactivateFreespace(relation,BufferGetBlockNumber(buffer),PageGetFreeSpace(pageHeader));
+	ItemPointerSet(&tuple->t_data->t_ctid, BufferGetBlockNumber(buffer), offnum);
 
 }
 
@@ -93,9 +95,9 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
 	 * If we're gonna fail for oversize tuple, do it right away... this
 	 * code should go away eventually.
 	*/ 
-	 if ( tuple->t_info & TUPLE_HASBUFFERED ) {
-                limit =  span_buffered_blob(relation,tuple);
-	 }
+	if ( tuple->t_info & TUPLE_HASBUFFERED ) {
+            limit =  span_buffered_blob(relation,tuple);
+	}
 	len = MAXALIGN(tuple->t_len);		/* be conservative */
 	if (len > MaxTupleSize) {
             if ( relation->rd_att->blobatt > 0 ) {
@@ -151,6 +153,7 @@ manager may be old and incorrect.   MKS 12.31.2001
                 satisfied = true;
             }
             if ( satisfied ) {
+                Assert(BufferIsCritical(buffer));
                 offnum = PageAddItem( pageHeader, (Item) tuple->t_data,
                                  tuple->t_len, InvalidOffsetNumber, LP_USED);
 
@@ -163,7 +166,7 @@ manager may be old and incorrect.   MKS 12.31.2001
         
                 ItemPointerSet(&((HeapTupleHeader)item)->t_ctid, lastblock, offnum);
                 ItemPointerSet(&tuple->t_self, lastblock, offnum);	
-
+                ItemPointerSet(&tuple->t_data->t_ctid, lastblock, offnum);	
             }
             
             LockBuffer(relation, buffer, BUFFER_LOCK_UNLOCK);
@@ -185,10 +188,10 @@ RelationGetTupleData(Relation rel, HeapTuple tuple, bool readonly, Buffer buffer
             BufferDesc* desc = LocalBufferSpecialAlloc(rel,ItemPointerGetBlockNumber(pointer));
             
             if ( desc != NULL ) {
-                int status = smgrread(rel->rd_smgr, ItemPointerGetBlockNumber(pointer), (char *) MAKE_PTR(desc->data));
+                int status = smgrread(rel->rd_smgr, ItemPointerGetBlockNumber(pointer), (char *)(desc->data));
                 desc->ioflags &= BM_READONLY;
                 if ( status == SM_SUCCESS ) {
-                    if ( !PageConfirmChecksum((Page)MAKE_PTR(desc->data) ) ) {
+                    if ( !PageConfirmChecksum((Page)(desc->data) ) ) {
                         elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", rel->rd_rel->relname, ItemPointerGetBlockNumber(pointer));
                     }
                 }
@@ -257,6 +260,12 @@ int
 LockHeapTupleForUpdate(Relation relation, Buffer * buf, HeapTuple tuple, Snapshot snapshot) {
     int                 result = -1;     
         SnapshotHolder*     holder = RelationGetSnapshotCxt(relation);
+        bool nowait = false;
+        if ( !IsSnapshotNow(snapshot) &&
+                !IsSnapshotAny(snapshot) &&
+                !IsSnapshotSelf(snapshot)) {
+            nowait = snapshot->nowait;
+        }
 
      while ( result != HeapTupleMayBeUpdated ) {
         *buf = RelationGetHeapTuple(relation, tuple);
@@ -278,6 +287,7 @@ LockHeapTupleForUpdate(Relation relation, Buffer * buf, HeapTuple tuple, Snapsho
                 break;
         } else if (result == HeapTupleBeingUpdated) {
                 TransactionId xwait = tuple->t_data->t_xmax;
+                if ( nowait ) return result;
                 LockHeapTuple(relation,*buf,tuple,TUPLE_LOCK_UNLOCK);
                 ReleaseBuffer((relation), *buf);
                 XactLockTableWait(xwait);

@@ -241,7 +241,7 @@ BootstrapMain(int argc, char *argv[])
 	extern int	optind;
 	extern char *optarg;
       
-	InitSystem(true);   /*    always private */
+	env = InitSystem(true);   /*    always private */
 	
 	/* --------------------
 	 *	initialize globals

@@ -819,6 +819,26 @@ DATA(insert OID =  408 (  bpchar		   PGUID 11 f t t 1 f 1042 "19" 100 0 0 100 na
 DESCR("convert name to char()");
 DATA(insert OID =  409 (  name			   PGUID 11 f t t 1 f	19 "1042" 100 0 0 100	bpchar_name - ));
 DESCR("convert char() to name");
+DATA(insert OID =  402 (  md5			   PGUID 11 f t t 1 f	17 "0" 100 0 0 100	md5 - ));
+DESCR("md5 on unknown type");
+DATA(insert OID =  1515 (  md5			   PGUID 11 f t t 1 f	17 "1803" 100 0 0 100	md5 - ));
+DESCR("md5 on blob");
+DATA(insert OID =  1516 (  md5			   PGUID 11 f t t 1 f	17 "25" 100 0 0 100	md5 - ));
+DESCR("md5 on text");
+DATA(insert OID =  1517 (  md5			   PGUID 11 f t t 1 f	17 "1403" 100 0 0 100	md5 - ));
+DESCR("md5 on varchar");
+DATA(insert OID =  1518 (  md5			   PGUID 11 f t t 1 f	17 "17" 100 0 0 100	md5 - ));
+DESCR("md5 on bytea");
+DATA(insert OID =  1519 (  sha2			   PGUID 11 f t t 1 f	17 "0" 100 0 0 100	sha2 - ));
+DESCR("sha2 on unknown type");
+DATA(insert OID =  1520 (  sha2			   PGUID 11 f t t 1 f	17 "1803" 100 0 0 100	sha2 - ));
+DESCR("sha2 on blob");
+DATA(insert OID =  1521 (  sha2			   PGUID 11 f t t 1 f	17 "25" 100 0 0 100	sha2 - ));
+DESCR("sha2 on text");
+DATA(insert OID =  1522 (  sha2			   PGUID 11 f t t 1 f	17 "1403" 100 0 0 100	sha2 - ));
+DESCR("sha2 on varchar");
+DATA(insert OID =  1523 (  sha2			   PGUID 11 f t t 1 f	17 "17" 100 0 0 100	sha2 - ));
+DESCR("sha2 on bytea");
 
 DATA(insert OID =  438 (  hashcostestimate PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  hashcostestimate - ));
 DESCR("hash index cost estimator");
@@ -1337,7 +1357,19 @@ DATA(insert OID = 1052 (  bpcharge		   PGUID 11 f t t 2 f 16 "1042 1042" 100 0 0
 DESCR("greater-than-or-equal");
 DATA(insert OID = 1053 (  bpcharne		   PGUID 11 f t t 2 f 16 "1042 1042" 100 0 0 100  bpcharne - ));
 DESCR("not equal");
-DATA(insert OID = 1070 (  varchareq		   PGUID 11 f t t 2 f 16 "1043 1043" 100 0 0 100  varchareq - ));
+DATA(insert OID = 1506 (  byteaeq		   PGUID 11 f t t 2 f 16 "17 17" 100 0 0 100  byteaeq - ));
+DESCR("equal");
+DATA(insert OID = 1507 (  bytealt		   PGUID 11 f t t 2 f 16 "17 17" 100 0 0 100  bytealt - ));
+DESCR("less-than");
+DATA(insert OID = 1508 (  byteale		   PGUID 11 f t t 2 f 16 "17 17" 100 0 0 100  byteale - ));
+DESCR("less-than-or-equal");
+DATA(insert OID = 1509 (  byteagt		   PGUID 11 f t t 2 f 16 "17 17" 100 0 0 100  byteagt - ));
+DESCR("greater-than");
+DATA(insert OID = 1510 (  byteage		   PGUID 11 f t t 2 f 16 "17 17" 100 0 0 100  byteage - ));
+DESCR("greater-than-or-equal");
+DATA(insert OID = 1511 (  byteane		   PGUID 11 f t t 2 f 16 "17 17" 100 0 0 100  byteane - ));
+DESCR("not equal");
+DATA(insert OID = 1070 (  varchareq		   PGUID 11 f t t 2 f 16 "17 17" 100 0 0 100  varchareq - ));
 DESCR("equal");
 DATA(insert OID = 1071 (  varcharlt		   PGUID 11 f t t 2 f 16 "1043 1043" 100 0 0 100  varcharlt - ));
 DESCR("less-than");
@@ -1350,6 +1382,8 @@ DESCR("greater-than-or-equal");
 DATA(insert OID = 1075 (  varcharne		   PGUID 11 f t t 2 f 16 "1043 1043" 100 0 0 100  varcharne - ));
 DESCR("not equal");
 DATA(insert OID = 1078 (  bpcharcmp		   PGUID 11 f t t 2 f 23 "1042 1042" 100 0 0 100  bpcharcmp - ));
+DESCR("less-equal-greater");
+DATA(insert OID = 1512 (  byteacmp	   PGUID 11 f t t 2 f 23 "17 17" 100 0 0 100  byteacmp - ));
 DESCR("less-equal-greater");
 DATA(insert OID = 1079 (  varcharcmp	   PGUID 11 f t t 2 f 23 "1043 1043" 100 0 0 100  varcharcmp - ));
 DESCR("less-equal-greater");
@@ -1576,6 +1610,10 @@ DATA(insert OID = 1293 ( currtid		   PGUID 11 f t f 2 f 27 "26 27" 100 0 0 100  
 DESCR("latest tid of a tuple");
 DATA(insert OID = 1294 ( currtid2		   PGUID 11 f t f 2 f 27 "25 27" 100 0 0 100  currtid_byrelname - ));
 DESCR("latest tid of a tuple");
+DATA(insert OID = 1513 ( tid		   PGUID 11 f t t 1 f 27 "17" 100 0 0 100  tidtobytes - ));
+DESCR("tid to bytea");
+DATA(insert OID = 1514 ( bytea		   PGUID 11 f t t 1 f 17 "27" 100 0 0 100  bytestotid - ));
+DESCR("bytea to tid");
 
 DATA(insert OID = 1296 (  timedate_pl	   PGUID 14 f t f 2 f 1184 "1083 1082" 100 0 0 100	"select datetime_pl($2, $1)" - ));
 DESCR("convert time and date to timestamp");
@@ -2500,6 +2538,12 @@ DATA(insert OID = 2018 ( java_noteq	PGUID 11 f t f 2 f 16 "1830 1830" 100 0 0 10
 
 DATA(insert OID = 2016 ( javatextin	PGUID 11 f t f 1 f 1830 "0" 100 0 0 100	javatextin - ));
 DATA(insert OID = 2017 ( javatextout	PGUID 11 f t f 1 f 25 "0" 100 0 0 100	javatextout - ));
+
+#ifdef NOT_USED
+DATA(insert OID = 2007 ( blobsegout	PGUID 11 f t f 1 f 1843 "0" 100 0 0 100	blobsegout - ));
+DATA(insert OID = 2008 ( blobsegtextout	PGUID 11 f t f 1 f 25 "0" 100 0 0 100	blobsegtextout - ));
+DATA(insert OID = 2009 ( blobsegtotext	PGUID 11 f t f 1 f 25 "1843" 100 0 0 100	blobsegtotext - ));
+#endif
 
 DATA(insert OID =  1831 (  javain		   PGUID 11 f t t 1 f 1830 "17" 100 0 0 100  javain - ));
 #define JAVAINOID 1831

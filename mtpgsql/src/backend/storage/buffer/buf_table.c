@@ -65,7 +65,7 @@ InitBufTable(int count)
         for (idx=0;idx<table_count;idx++) {
             pthread_mutex_init(&tables[idx].lock,&process_mutex_attr);
             snprintf(name,255,"Buffer Lookup Table #%d",idx);
-            tables[idx].table = (HTAB *) ShmemInitHash(name,NBuffers, NBuffers,
+            tables[idx].table = (HTAB *) ShmemInitHash(name,NBuffers, MaxBuffers,
 						&info, (HASH_ELEM | HASH_FUNCTION));
             if ( tables[idx].table == NULL ) {
 		elog(FATAL, "couldn't initialize shared buffer pool Hash Tbl");
@@ -78,7 +78,6 @@ BufTableLookup(char kind, BufferTag *tagPtr)
 {
         BufferLookupEnt  *result;
         bool		found = false;
-        BufferDesc* 	buf;
 
         if (tagPtr->blockNum == P_NEW)
                 return NULL;
@@ -137,6 +136,7 @@ BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block) {
 	 * buffer not initialized or has been removed from table already.
 	 * BM_DELETED keeps us from removing buffer twice.
 	 */
+        DTRACE_PROBE5(mtpg,buffer__replace,buf->blind.dbname,buf->blind.relname,buf->tag.blockNum,RelationGetRelationName(rel),block);
         pthread_mutex_lock(&(buf->cntx_lock.guard));
         
         Assert(!(buf->locflags & BM_VALID));

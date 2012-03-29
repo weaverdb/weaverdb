@@ -620,7 +620,7 @@ heap_get_latest_tid(Relation relation,
 	Buffer		buffer;
 	HeapTupleData tp;
         ItemPointerData     checkid;
-	bool		valid,invalidBlock,
+	bool		valid,
 				linkend;
 
  	tp.t_datamcxt = NULL;
@@ -676,7 +676,7 @@ Oid
 heap_insert(Relation relation, HeapTuple tup)
 {
 	TransactionId   xid;
-	
+        BlockNumber   last = relation->last_insert;
 	/* ----------------
 	 *	increment access statistics
 	 * ----------------
@@ -718,7 +718,7 @@ heap_insert(Relation relation, HeapTuple tup)
 	tup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
 	tup->t_data->t_infomask |= HEAP_XMAX_INVALID;
 
-	RelationPutHeapTupleAtFreespace(relation, tup, 0);
+	relation->last_insert = RelationPutHeapTupleAtFreespace(relation, tup, 0);
 
 	if (IsSystemRelationName(RelationGetRelationName(relation)))
 		RelationMark4RollbackHeapTuple(relation, tup);
@@ -745,7 +745,12 @@ heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snaps
         tp.t_self = *tid;
             
         updateable = LockHeapTupleForUpdate(relation, &buffer, &tp, snapshot);
-
+        if ( updateable == HeapTupleBeingUpdated ) {
+            UnlockHeapTuple(relation,buffer,&tp);
+            ReleaseBuffer(relation, buffer);
+            return updateable;
+        }
+        
 	if (updateable != HeapTupleMayBeUpdated)
 	{
 		if (ctid != NULL) {
@@ -767,7 +772,11 @@ heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snaps
 	tp.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
 	tp.t_data->t_infomask &= 
                 ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
-	tp.t_data->t_ctid = tp.t_self;
+	if ( ctid != NULL ) {
+            tp.t_data->t_ctid = *ctid;
+        } else {
+            tp.t_data->t_ctid = tp.t_self;
+        }
         UnlockHeapTuple(relation,buffer,&tp);
     
 	if ( HeapTupleHasBlob(&tp) ) {
@@ -790,7 +799,6 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
 {
 	HeapTupleData       oldtup;
 	Buffer              buffer;
-	int                 result = -1;
 	TransactionId       xid;
         Size                pageSize;
         int                updateable;
@@ -800,15 +808,20 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
         oldtup.t_info = 0;
 
         updateable = LockHeapTupleForUpdate(relation, &buffer, &oldtup, snapshot);
+        if ( updateable == HeapTupleBeingUpdated ) {
+            UnlockHeapTuple(relation,buffer,&oldtup);
+            ReleaseBuffer(relation, buffer);
+            return updateable;
+        }
         
         if (updateable != HeapTupleMayBeUpdated) {
             Assert(updateable == HeapTupleSelfUpdated || updateable == HeapTupleUpdated);
             if (ctid != NULL) {
-                    *ctid = oldtup.t_data->t_ctid;
+                *ctid = oldtup.t_data->t_ctid;
             }
             UnlockHeapTuple(relation,buffer,&oldtup);
             ReleaseBuffer(relation, buffer);
-            return result;
+            return updateable;
 	} 
         
 	/* XXX order problems if not atomic assignment ??? */
@@ -827,15 +840,18 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
                 oldtup.t_data->t_xmin = oldtup.t_data->progress.t_vtran;
                 oldtup.t_data->progress.cmd.t_cmin = FirstCommandId;
         }
+/*
+        if (!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid)) {
+            elog(NOTICE,"make sure aborted in heap_update self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
+                    oldtup.t_self,oldtup.t_data->t_ctid,oldtup.t_data->t_xmax,xid,
+                    TransactionIdDidCommit(oldtup.t_data->t_xmax)?"yes":"no",
+                    TransactionIdDidCrash(oldtup.t_data->t_xmax)?"yes":"no",
+                    TransactionIdDidAbort(oldtup.t_data->t_xmax)?"yes":"no");
+        }
+*/
         oldtup.t_data->t_xmax = xid;
         oldtup.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
-        oldtup.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED |
-                          HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN );
-        oldtup.t_data->t_ctid = newtup->t_self;
-
-        /* test to see if putting at freespace is more
-        efficient by commenting out first option
-          MKS  8.9.2002  */
+        oldtup.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
         
 /* insert new item */
         pageSize = PageGetFreeSpace(BufferGetPage(buffer));
@@ -874,12 +890,16 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
 int
 heap_mark4update(Relation relation, Buffer *buffer, HeapTuple tuple,  Snapshot snapshot)
 {
-	ItemPointer tid = &(tuple->t_self);
 	int			result;
 	TransactionId		xid;
 
         result = LockHeapTupleForUpdate(relation, buffer, tuple, snapshot);
-
+        if ( result == HeapTupleBeingUpdated ) {
+            UnlockHeapTuple(relation,*buffer,tuple);
+            ReleaseBuffer(relation, *buffer);
+            return result;
+        }
+        
 	if ( result != HeapTupleMayBeUpdated )
 	{
 		Assert(result == HeapTupleSelfUpdated || result == HeapTupleUpdated);
@@ -1026,6 +1046,8 @@ NextGenGetTup(Relation relation,
             tuple->t_info = 0;
             tuple->t_data = NULL;
             tuple->t_len = 0;
+            if ( BufferIsValid(target) ) 
+                ReleaseBuffer(relation,target);
             return InvalidBuffer;
 	}
         

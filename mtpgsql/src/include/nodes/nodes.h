@@ -148,6 +148,7 @@ typedef enum NodeTag
 	T_InsertStmt,
 	T_DeleteStmt,
 	T_UpdateStmt,
+	T_PutStmt,
 	T_SelectStmt,
 	T_AlterTableStmt,
 	T_AggregateStmt,
@@ -323,6 +324,7 @@ typedef enum CmdType
 	CMD_SELECT,					/* select stmt (formerly retrieve) */
 	CMD_UPDATE,					/* update stmt (formerly replace) */
 	CMD_INSERT,					/* insert stmt (formerly append) */
+	CMD_PUT,					/* put stmt (formerly nothing) */
 	CMD_DELETE,
 	CMD_UTILITY,				/* cmds like create, destroy, copy,
 								 * vacuum, etc. */

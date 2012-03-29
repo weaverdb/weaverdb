@@ -14,7 +14,7 @@
 #ifndef ITEMID_H
 #define ITEMID_H
 
-typedef uint32 ItemOffset;
+typedef uint16 ItemOffset;
 typedef uint16 ItemLength;
 
 typedef bits16 ItemIdFlags;
@@ -23,7 +23,14 @@ typedef bits16 ItemIdFlags;
 
 typedef struct ItemIdData
 {								/* line pointers */
-	uint32	lp_off;		/* offset to find tup */
+#if BYTE_ORDER == BIG_ENDIAN
+	uint16	lp_pad;		/* padding for future use */
+	uint16	lp_off;		/* offset to find tup */
+#elif BYTE_ORDER == LITTLE_ENDIAN
+	uint16	lp_off;		/* offset to find tup */        
+	uint16	lp_pad;		/* padding for future use */
+#endif
+        
 	/* can be reduced by 2 if necc. */
 	uint16	lp_len;		/* length of tuple */
 	unsigned char	lp_flags;		/* flags on tuple */

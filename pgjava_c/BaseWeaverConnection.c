@@ -31,7 +31,7 @@
 #include "driver_weaver_WeaverInitializer.h"
 #include "driver_weaver_BaseWeaverConnection.h"
 
-#define BINDNULL	driver_weaver_BaseWeaverConnection_bindNull
+#define BINDNULL  driver_weaver_BaseWeaverConnection_bindNull
 #define BINDINTEGER  driver_weaver_BaseWeaverConnection_bindInteger
 #define BINDSTRING  driver_weaver_BaseWeaverConnection_bindString
 #define BINDDOUBLE  driver_weaver_BaseWeaverConnection_bindDouble
@@ -46,13 +46,13 @@
 #define BINDSLOT driver_weaver_BaseWeaverConnection_bindSlot
 #define BINDJAVA  driver_weaver_BaseWeaverConnection_bindJava
 #define BINDTEXT  driver_weaver_BaseWeaverConnection_bindText
-#define BINDSTREAM driver_weaver_BaseWeaverConnection_bindStream
-#define BINDDIRECT driver_weaver_BaseWeaverConnection_bindDirect
+#define BINDSTREAM  driver_weaver_BaseWeaverConnection_bindStream
+#define BINDDIRECT  driver_weaver_BaseWeaverConnection_bindDirect
 
 JavaVM*   jvm;
 
-jobject 		javaSideLog[MAXBACKENDS];
-StmtMgr                 theManagers[MAXBACKENDS];
+jobject 		*javaSideLog;
+StmtMgr                 *theManagers;
 static          javacache*      Cache;
 
 static pthread_mutex_t		allocator;
@@ -77,8 +77,10 @@ static int clean_output(StmtMgr mgr, int type, void* arg);
 static int clean_input(StmtMgr mgr,int type, void* arg);
 
 static jint getProperAgent(JNIEnv* env,jobject talker);
-static jint  clearError(JNIEnv* env,jobject talker,jint link);
-static jint  reportError(JNIEnv* env,jobject talker,jint link);
+static StmtMgr getStmtMgr(JNIEnv* env,jobject id);
+static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt);
+static jint  clearError(JNIEnv* env,jobject talker,StmtMgr link);
+static jint  reportError(JNIEnv* env,jobject talker,StmtMgr link);
 static int   translateType(jint type);
 
 static StmtMgr  allocateWeaver(JNIEnv* env,jstring username,jstring password,jstring database);
@@ -90,9 +92,6 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
 	char		datapass[2048];
 	memset(datapass,0,2048);
 	
-	memset(javaSideLog,0,sizeof(javaSideLog));
-	memset(theManagers,0,sizeof(theManagers));
-	
 	pthread_mutexattr_init(&allocatt);
 	pthread_mutex_init(&allocator,&allocatt);
 	
@@ -101,7 +100,16 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
             (*env)->GetStringUTFRegion(env,jd,0,len,datapass);
         }
 
-	initweaverbackend(datapass);
+	if ( !initweaverbackend(datapass) ) {
+            (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment not valid, see db log");
+            return;
+        }
+        
+        javaSideLog = malloc(GetMaxBackends() * sizeof(jobject));
+        theManagers = malloc(GetMaxBackends() * sizeof(StmtMgr));
+	memset(javaSideLog,0,GetMaxBackends() * sizeof(jobject));
+	memset(theManagers,0,GetMaxBackends() * sizeof(StmtMgr));
+        
         Cache = CreateCache(env);
 		
 	(*env)->GetJavaVM(env,&jvm);
@@ -112,23 +120,27 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
 JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_close(JNIEnv *env,jobject talkerObject)
 {
 /*  shutdown any threads resources still hanging around */
-	prepareforshutdown();
-        
-        shuttingdown = true;
-        
-	for (int x = 0;x<GetMaxBackends();x++) {
-		if (theManagers[x] != NULL ) {
-			Init(theManagers[x],clean_input,clean_output);
-			DestroyWeaverStmtManager(theManagers[x]);
-			theManagers[x] = NULL;
-		}
-		if ( javaSideLog[x] != NULL ) {
-			(*env)->DeleteGlobalRef(env,javaSideLog[x]);
-			javaSideLog[x] = NULL;    
-		}
-	}
+	if ( prepareforshutdown() ) {
+            shuttingdown = true;
+                
+            pthread_mutex_lock(&allocator);
 
-	wrapupweaverbackend();
+            for (int x = 0;x<GetMaxBackends();x++) {
+                    if (theManagers[x] != NULL ) {
+                            Init(theManagers[x],clean_input,clean_output);
+                            DestroyWeaverConnection(theManagers[x]);
+                            theManagers[x] = NULL;
+                    }
+                    if ( javaSideLog[x] != NULL ) {
+                            (*env)->DeleteGlobalRef(env,javaSideLog[x]);
+                            javaSideLog[x] = NULL;    
+                    }
+            }
+                
+            pthread_mutex_unlock(&allocator);
+
+            wrapupweaverbackend();
+        }
         DropCache(env);
         
 	pthread_mutex_destroy(&allocator);
@@ -139,7 +151,8 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnectio
  {
 	int			x;
 
-        if ( shuttingdown ) {            (*env)->ThrowNew(env,Cache->exception,"shutting down");
+        if ( shuttingdown ) {            
+            (*env)->ThrowNew(env,Cache->exception,"shutting down");
             return JNI_FALSE;
         }
         
@@ -159,7 +172,7 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnectio
                 if ( IsValid(theManagers[x]) ) {
                     javaSideLog[x] = (*env)->NewGlobalRef(env,talkerObject);
                 } else {
-                    DestroyWeaverStmtManager(theManagers[x]);
+                    DestroyWeaverConnection(theManagers[x]);
                     theManagers[x] = NULL;
                 }
             } 
@@ -212,7 +225,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnect
                 if ( IsValid(theManagers[x]) ) {
                     javaSideLog[x] = (*env)->NewGlobalRef(env,talkerObject);
                 } else {
-                    DestroyWeaverStmtManager(theManagers[x]);
+                    DestroyWeaverConnection(theManagers[x]);
                     theManagers[x] = NULL;
                 }
             }
@@ -229,100 +242,141 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnect
 	pthread_mutex_unlock(&allocator);
 }
 
+JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
+  (JNIEnv *env, jobject talkerObject, jobject linkid)
+{
+	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
+        
+        if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
+    //	get proper agent	
+            jint link = getProperAgent(env,talkerObject);
+            if ( link < 0 ) return;
+        
+        //  free all resources associated with this connection
+            pthread_mutex_lock(&allocator);
+
+            if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link]))
+            {
+                if ( theManagers[link] != NULL ) {
+                    Init(theManagers[link],clean_input,clean_output);
+                    DestroyWeaverConnection(theManagers[link]);
+                    theManagers[link] = NULL;
+                }
+                (*env)->DeleteGlobalRef(env,javaSideLog[link]);
+                javaSideLog[link] = NULL;
+            }
+            else
+            {
+                long count = 0;
+                for(count=0;count<GetMaxBackends();count++)
+                {
+                    if ( (*env)->IsSameObject(env,talkerObject, javaSideLog[count]) )
+                    {
+                        Init(theManagers[link],clean_input,clean_output);
+                        (*env)->DeleteGlobalRef(env,javaSideLog[count]);
+                        javaSideLog[count] = NULL;
+                        DestroyWeaverConnection(theManagers[count]);
+                        theManagers[count] = NULL;
+                    }
+                }
+            }
+            pthread_mutex_unlock(&allocator);
+                
+        } else {
+            StmtMgr ref = getStmtMgr(env,linkid);
+            if ( ref == NULL ) {
+                if ( (*env)->ExceptionOccurred(env) ) {
+                    (*env)->ExceptionClear(env);
+                }
+                return;
+            }
+            Init(ref,clean_input,clean_output);
+            DestroyWeaverStmtManager(ref); 
+        }
+
+}
+
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_beginTransaction(JNIEnv *env, jobject talkerObject)
 {
-    jint link = getProperAgent(env,talkerObject);
-    if ( link < 0 ) return 0;
+    StmtMgr ref = getStmtMgr(env,talkerObject);
 //	mark the beginning of the transaction
-    if ( Begin(theManagers[link]) ) {
-        reportError(env,talkerObject,link);
+    if ( ref == NULL ) return 0;
+    if ( Begin(ref) ) {
+        reportError(env,talkerObject,ref);
         return 0;
     } else {
-        clearError(env,talkerObject,link);
-        return GetTransactionId(theManagers[link]);
+        clearError(env,talkerObject,ref);
+        return GetTransactionId(ref);
     }
 }
 
-JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_parseStatement(JNIEnv *env, jobject talkerObject, jstring thePassword)
+JNIEXPORT jobject JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement(JNIEnv *env, jobject talkerObject, jstring statement)
 {
-	const char* 	thePass;
-	long	passLen;        
-	jsize  statementlen;
-	char  statement[8092];
-        
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return 0;
+	const char* 	pass_stmt;
+	jsize           statementlen;
+        int x;	
 
-        if ( thePassword == NULL ) {
+        StmtMgr base = getStmtMgr(env,talkerObject);
+
+    if ( base == NULL ) return NULL;
+
+        if ( statement == NULL ) {
+            (*env)->ThrowNew(env,Cache->exception,"no statement");
+            return 0;
+        }
+        
+        base = CreateWeaverStmtManager(GetWeaverConnection(base));
+        pass_stmt = (*env)->GetStringUTFChars(env,statement,NULL);
+        ParseStatement(base,pass_stmt);
+        (*env)->ReleaseStringUTFChars(env,statement,pass_stmt);
+        
+        jbyteArray ref = (*env)->NewByteArray(env,sizeof(StmtMgr));
+        (*env)->SetByteArrayRegion(env,ref,0,sizeof(StmtMgr),(jbyte*)&base);
+	
+        return ref;
+}
+
+JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_parseStatement(JNIEnv *env, jobject talkerObject, jstring statement)
+{
+	const char* 	pass_stmt;
+	jsize           statementlen;
+        
+        StmtMgr base = getStmtMgr(env,talkerObject);
+
+    if ( base == NULL ) return 0;
+
+        if ( statement == NULL ) {
             (*env)->ThrowNew(env,Cache->exception,"no statement");
             return 0;
         }
 
-        statementlen = (*env)->GetStringLength(env,thePassword);
-
-	if ( statementlen > 8091 ) {
-            (*env)->ThrowNew(env,Cache->exception,"statment too long");
-            return 0;
-	}
-
-	statement[statementlen] = 0;
+        pass_stmt = (*env)->GetStringUTFChars(env,statement,NULL);
 	
 // found reference and initing a statement space
-        Init(theManagers[link],clean_input,clean_output);
-	(*env)->GetStringUTFRegion(env,thePassword,0,statementlen,statement);	
-	short code = ParseStatement(theManagers[link], statement, statementlen);
-
+        Init(base,clean_input,clean_output);
+	short code = ParseStatement(base, pass_stmt);
+        (*env)->ReleaseStringUTFChars(env,statement,pass_stmt);
+        
 	if ( code == -2 ) {
             if (!(*env)->ExceptionOccurred(env) ) 
                 (*env)->ThrowNew(env,Cache->exception,"out of memory");
             return 0;
 	}
         
-        reportError(env,talkerObject,link);
-        return GetCommandId(theManagers[link]);
+        reportError(env,talkerObject,base);
+        return GetCommandId(base);
 }
-/*
-JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_bind(JNIEnv *env, jobject talkerObject, jstring theVar, jint theType)
-{
-	jsize size = (*env)->GetStringLength(env,theVar);
-	char transfer[64];
-        Input bound = NULL;
 
-
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;
-        
-	if ( size > 63 ) {
-            (*env)->ThrowNew(env,Cache->exception,"bind name too long");
-            return;
-	}
-
-	transfer[size] = 0;
-//	Add Bind
-	(*env)->GetStringUTFRegion(env,theVar,0, size, transfer); 
-
-	bound = AddBind(theManagers[link],transfer,translateType(theType));
-        
-        if ( bound == NULL ) {
-            reportError(env,talkerObject,link);
-	} else {
-            void* userspace = SetUserspace(theManagers[link],InputToBound(bound),NULL);
-            if ( userspace != NULL ) {
-                clean_input(theManagers[link],translateType(theType),userspace);
-            }
-        }
-}
-*/
-
-JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_setInput(JNIEnv *env, jobject talkerObject, jstring theVar, jint javaType, jobject bindPass)
+JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_setInput(JNIEnv *env, jobject talkerObject, jobject linkid, jstring theVar, jint javaType, jobject bindPass)
 {
  	char        var[64];
         jsize       varsize = 0;
         Input        bound;
         short       type = translateType(javaType);
 
-        jint        link = getProperAgent(env,talkerObject);
-        if ( link < 0 )  return;
+        StmtMgr        base = getStmtMgr(env,linkid);
+        
+        if ( base == NULL ) return;
     
 	varsize = (*env)->GetStringLength(env,theVar);	
 	if ( varsize > 63 ) {
@@ -333,155 +387,119 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_setInput(JNIEnv *
 	(*env)->GetStringUTFRegion(env,theVar,0, varsize, var); 		
 	var[varsize] = 0;
         
-        if ( (*env)->IsSameObject(env,NULL,bindPass) ) {
-            bound = SetInputValue(theManagers[link],var,type,NULL,0);
+        if ( (*env)->IsSameObject(env,bindPass,NULL) ) {
+            bound = SetInputValue(base,var,type,NULL,0);
         } else if ( type == STREAMTYPE ) {
-            Pipe pipe = PipeConnect(theManagers[link],(*env)->NewGlobalRef(env,bindPass),direct_pipein);
-            bound = SetInputValue(theManagers[link],var,type,pipe, -1); /*  -1 length means use the maxlength for the type */
-            pipe = SetUserspace(theManagers[link],InputToBound(bound),pipe);
+            Pipe pipe = PipeConnect(base,(*env)->NewWeakGlobalRef(env,bindPass),direct_pipein);
+            bound = SetInputValue(base,var,type,pipe, -1); /*  -1 length means use the maxlength for the type */
+            pipe = SetUserspace(base,InputToBound(bound),pipe);
             if ( pipe != NULL ) {
-                jobject ref = PipeDisconnect(theManagers[link],pipe);
-                (*env)->DeleteGlobalRef(env,ref);
+                jobject ref = PipeDisconnect(base,pipe);
+                (*env)->DeleteWeakGlobalRef(env,ref);
             }
         } else {
-            PassInValue(env,theManagers[link],var,type,bindPass);
+            PassInValue(env,base,var,type,bindPass);
         }
 //  report errors
-	reportError(env,talkerObject,link);
+	reportError(env,talkerObject,base);
 }
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_getOutput
-  (JNIEnv *env, jobject talkerObject, jint index, jint javaType, jobject target)
+  (JNIEnv *env, jobject talkerObject, jobject linkid, jint index, jint javaType, jobject target)
 {
     Output bound = NULL;
     short type = translateType(javaType);
     //	get proper agent
 
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;
+    StmtMgr base = getStmtMgr(env,linkid);
+    
+    if ( base == NULL ) return;
+
 
 // check for valid link
         if ( type == STREAMTYPE ) {
-            Pipe pipe = PipeConnect(theManagers[link],(*env)->NewGlobalRef(env,target),direct_pipeout);
-            bound = SetOutputValue(theManagers[link],index,type,pipe,-1);
-            pipe = SetUserspace(theManagers[link],OutputToBound(bound),pipe);
+            Pipe pipe = PipeConnect(base,(*env)->NewWeakGlobalRef(env,target),direct_pipeout);
+            bound = SetOutputValue(base,index,type,pipe,-1);
+            pipe = SetUserspace(base,OutputToBound(bound),pipe);
             if ( pipe != NULL ) {
-                jobject ref = PipeDisconnect(theManagers[link],pipe);
-                (*env)->DeleteGlobalRef(env,ref);
+                jobject ref = PipeDisconnect(base,pipe);
+                (*env)->DeleteWeakGlobalRef(env,ref);
             }
         } else {
-            bound = OutputLink(theManagers[link],index,type);
-            (*env)->DeleteGlobalRef(env,SetUserspace(theManagers[link],OutputToBound(bound),(*env)->NewGlobalRef(env,target)));
+            bound = OutputLink(base,index,type);
+            (*env)->DeleteWeakGlobalRef(env,SetUserspace(base,OutputToBound(bound),(*env)->NewWeakGlobalRef(env,target)));
         }
 //  report errors
-	reportError(env,talkerObject,link);
+	reportError(env,talkerObject,base);
 }
 
 
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_executeStatement
-  (JNIEnv *env, jobject talkerObject)
+  (JNIEnv *env, jobject talkerObject, jobject linkid)
 {
 	jclass classID = (*env)->GetObjectClass(env,talkerObject);
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return 0;
+        StmtMgr ref = getStmtMgr(env,linkid);
+        
+     if ( ref == NULL ) return 0;
+       
 // exec
-        if ( Exec(theManagers[link]) ) {
+        if ( Exec(ref) ) {
 // report errors
-            reportError(env,talkerObject,link);
+            reportError(env,talkerObject,ref);
             return 0;
         } else {
-            clearError(env,talkerObject,link);
-            return Count(theManagers[link]);
+            clearError(env,talkerObject,ref);
+            return Count(ref);
         }
 }
 
 JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
-  (JNIEnv *env, jobject talkerObject)
+  (JNIEnv *env, jobject talkerObject,jobject linkid)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return FALSE;
-//	fetch
-	if ( theManagers[link] == NULL ) return FALSE;
+	StmtMgr ref = getStmtMgr(env,linkid);
         
+    if ( ref == NULL ) return JNI_FALSE;
+        
+//	fetch        
 //  pass results to java if there are no errors
-	if ( !Fetch(theManagers[link]) ) {
-            PassResults(env, theManagers[link]);
+	if ( !Fetch(ref) ) {
+            PassResults(env, ref);
             return JNI_TRUE;
         } else {
 // report errors
-            if ( GetErrorCode(theManagers[link]) == 0 ) return JNI_FALSE;
+            if ( GetErrorCode(ref) == 0 ) return JNI_FALSE;
 
-            if ( GetErrorCode(theManagers[link]) == 102 ) {
-                (*env)->ThrowNew(env,Cache->truncation,GetErrorText(theManagers[link]));
+            if ( GetErrorCode(ref) == 102 ) {
+                (*env)->ThrowNew(env,Cache->truncation,GetErrorText(ref));
             } else {
-                reportError(env,talkerObject,link);
+                reportError(env,talkerObject,ref);
             }
             return JNI_FALSE;
         }
-}
-
-
-JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_disposeConnection
-  (JNIEnv *env, jobject talkerObject)
-{
-	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
-    //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;
-        
-	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
-
-//  free all resoures associated with this connection
-       if ( theManagers[link] != NULL ) {
-            Init(theManagers[link],clean_input,clean_output);
-            DestroyWeaverStmtManager(theManagers[link]);
-            theManagers[link] = NULL;
-        }
-
-	if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link]))
-	{
-            (*env)->DeleteGlobalRef(env,javaSideLog[link]);
-            javaSideLog[link] = NULL;
-	}
-	else
-	{
-            long count = 0;
-            for(count=0;count<MAXBACKENDS;count++)
-            {
-                if ( (*env)->IsSameObject(env,talkerObject, javaSideLog[count]) )
-                {
-                    Init(theManagers[link],clean_input,clean_output);
-                    (*env)->DeleteGlobalRef(env,javaSideLog[count]);
-                    javaSideLog[count] = NULL;
-                    DestroyWeaverStmtManager(theManagers[count]);
-                    theManagers[count] = NULL;
-                }
-            }
-	}
 }
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_cancelTransaction
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;	
+	StmtMgr ref = getStmtMgr(env,talkerObject);
+    if ( ref == NULL ) return;
 
-	Cancel(theManagers[link]);
+	Cancel(ref);
 }
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_prepareTransaction(JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;	
+        StmtMgr base = getStmtMgr(env,talkerObject);
+	
 // prepase statement for commit
-	if ( theManagers[link] == NULL ) return;
-	if ( Prepare(theManagers[link]) ) {
+	if ( base == NULL ) return;
+	if ( Prepare(base) ) {
 // report errors
-	    reportError(env,talkerObject,link);
+	    reportError(env,talkerObject,base);
 	}
 }
 
@@ -490,15 +508,15 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_commitTransaction
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;	
+        StmtMgr base = getStmtMgr(env,talkerObject);
+
         
-	if ( theManagers[link] == NULL ) return;
+	if ( base == NULL ) return;
 //  initialize to statement area for a new statement and free bound globals
-        Init(theManagers[link],clean_input,clean_output);
+        Init(base,clean_input,clean_output);
 //  commit the previous statement
-	if ( Commit(theManagers[link]) ) {
-            reportError(env,talkerObject,link);
+	if ( Commit(base) ) {
+            reportError(env,talkerObject,base);
 	}
 }
 
@@ -506,15 +524,15 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_abortTransaction
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;	
+        StmtMgr base = getStmtMgr(env,talkerObject);
+
         
-	if ( theManagers[link] == NULL ) return;
+	if ( base == NULL ) return;
 //  initialize to statement area for a new statement and free bound globals
-        Init(theManagers[link],clean_input,clean_output);
+        Init(base,clean_input,clean_output);
 //  commit the previous statement
-	if ( Rollback(theManagers[link]) ) {
-		reportError(env,talkerObject,link);
+	if ( Rollback(base) ) {
+		reportError(env,talkerObject,base);
 	}
 }
 
@@ -523,15 +541,15 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_beginProcedure
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;	
+        StmtMgr base = getStmtMgr(env,talkerObject);
+	
         
-	if ( theManagers[link] == NULL ) return;
+	if ( base == NULL ) return;
 
 //  commit the previous statement
-	if ( BeginProcedure(theManagers[link]) ) {
+	if ( BeginProcedure(base) ) {
 // report errors
-		reportError(env,talkerObject,link);
+		reportError(env,talkerObject,base);
 	}
 }
 
@@ -540,14 +558,14 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_endProcedure
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;	
+        StmtMgr base = getStmtMgr(env,talkerObject);
+	
         
-	if ( theManagers[link] == NULL ) return;
+	if ( base== NULL ) return;
 //  commit the previous statement
-	if ( EndProcedure(theManagers[link]) ) {
+	if ( EndProcedure(base) ) {
 // report errors
-		reportError(env,talkerObject,link);
+		reportError(env,talkerObject,base);
 	}
 }
 
@@ -555,24 +573,24 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_getCommandId
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return -1;	
-        
-	if ( theManagers[link] == NULL ) return -1;
+        StmtMgr base = getStmtMgr(env,talkerObject);
 
-	return GetCommandId(theManagers[link]);
+        
+	if ( base == NULL ) return -1;
+
+	return GetCommandId(base);
 }
 
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_getTransactionId
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return -1;	
+        StmtMgr base = getStmtMgr(env,talkerObject);
+	
         
-	if ( theManagers[link] == NULL ) return -1;
+	if ( base == NULL ) return -1;
 
-	return GetTransactionId(theManagers[link]);
+	return GetTransactionId(base);
 }
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_userLock
@@ -582,9 +600,9 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_userLock
 	int		sqlerror = 0;
 	
     //	get proper agent	
-	jint link = getProperAgent(env,talkerObject);
-        if ( link < 0 ) return;	
-        
+        StmtMgr base = getStmtMgr(env,talkerObject);
+
+    if ( base == NULL ) return;
 	jsize namelen = (*env)->GetStringLength(env,group);
 	char  name[64];
 
@@ -598,9 +616,9 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_userLock
 
 	(*env)->GetStringUTFRegion(env,group,0,namelen,name);
 
-        if ( UserLock(theManagers[link],name,(uint32_t)val,lockswitch) ) {
+        if ( UserLock(base,name,(uint32_t)val,lockswitch) ) {
 // report errors
-		reportError(env,talkerObject,link);
+		reportError(env,talkerObject,base);
 	}
 }
 
@@ -614,20 +632,21 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_streamExec
     commenv.env = env;
     commenv.target = talkerObject;
     //	get proper agent	
-    jint link = getProperAgent(env,talkerObject);
-    if ( link < 0 ) return;	
+        StmtMgr base = getStmtMgr(env,talkerObject);
+	
+    if ( base == NULL ) return;
 
     state = (*env)->GetStringUTFChars(env,statement,&copy);
                 
-    ConnectStdIO(theManagers[link],&commenv,pipein,pipeout);
+    ConnectStdIO(base,&commenv,pipein,pipeout);
 
-    if ( StreamExec(theManagers[link],(char*)state ) ) {
-        reportError(env,talkerObject,link);
+    if ( StreamExec(base,(char*)state ) ) {
+        reportError(env,talkerObject,base);
     } else {
        (*env)->ReleaseStringUTFChars(env,statement,state);
     }
 
-    DisconnectStdIO(theManagers[link]);
+    DisconnectStdIO(base);
 }
 
 static jchar* convertStringBytes(char* target,char* source,int limit)
@@ -636,8 +655,29 @@ static jchar* convertStringBytes(char* target,char* source,int limit)
 	return NULL;
 }
 
+static StmtMgr getStmtMgr(JNIEnv* env, jobject linkid) {
+    StmtMgr ref = NULL;
+    if ( shuttingdown ) {
+        ref = NULL;
+    }else if ( (*env)->IsInstanceOf(env,linkid,Cache->talker) ) {
+        ref = theManagers[getProperAgent(env,linkid)];
+    } else if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
+        ref = theManagers[getProperAgent(env,linkid)];
+    } else {
+        jbyte* pointer = (*env)->GetByteArrayElements(env,linkid,NULL);
+        ref = *(StmtMgr*)pointer;
+        (*env)->ReleaseByteArrayElements(env,linkid,pointer,NULL);
+    }
+    if ( !IsValid(ref) ) {
+        if (!(*env)->ExceptionOccurred(env) ) {
+            (*env)->ThrowNew(env,Cache->exception,"agent not valid");   
+        }
+        ref = NULL;
+    }
+    return ref;
+}
 
-static jint clearError(JNIEnv* env,jobject talkerObject,jint link)
+static jint clearError(JNIEnv* env,jobject talkerObject,StmtMgr base)
 {
         if ( (*env)->ExceptionOccurred(env) ) return 2;
         
@@ -646,9 +686,9 @@ static jint clearError(JNIEnv* env,jobject talkerObject,jint link)
 	return 0;
 }
 
-static jint reportError(JNIEnv* env,jobject talkerObject,jint link)
+static jint reportError(JNIEnv* env,jobject talkerObject,StmtMgr base)
 {
-        jint code = (jint)GetErrorCode(theManagers[link]);
+        jint code = (jint)GetErrorCode(base);
         
         if ( (*env)->ExceptionOccurred(env) ) {
             (*env)->ExceptionDescribe(env);
@@ -658,8 +698,8 @@ static jint reportError(JNIEnv* env,jobject talkerObject,jint link)
 	(*env)->SetIntField(env,talkerObject,Cache->result,code);
         
         if (code != 0 ) {
-            const char* errtxt = GetErrorText(theManagers[link]);
-            const char* statetxt = GetErrorState(theManagers[link]);
+            const char* errtxt = GetErrorText(base);
+            const char* statetxt = GetErrorState(base);
             char combo[255];
 
             if ( !errtxt ) errtxt = "no error text";
@@ -690,10 +730,17 @@ static jint getProperAgent(JNIEnv * env,jobject talker)
             return -1;
         }
         
-        jobject 	tracker =  (*env)->GetObjectField(env,talker,Cache->idfield);
+        jobject tracker = NULL;
+        
+        if ( (*env)->IsInstanceOf(env,talker,Cache->talker) ) {
+            tracker =  (*env)->GetObjectField(env,talker,Cache->idfield);
+        } else if ( (*env)->IsInstanceOf(env,talker,Cache->linkid) ) {
+            tracker = talker;
+        }
+        
 	jint 	        link =  (*env)->GetIntField(env,tracker,Cache->tracker);
 
-        if ( link >= MAXBACKENDS || link < 0 ) {
+        if ( link >= GetMaxBackends() || link < 0 ) {
             link = -1;
         }
 
@@ -705,12 +752,24 @@ static jint getProperAgent(JNIEnv * env,jobject talker)
         return link;
 }
 
+static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
+    jint link = getProperAgent(env,talker);
+    
+    if ( !(*env)->IsSameObject(env,talker,javaSideLog[link]) ) return false;
+    if ( theManagers[link] == NULL || !IsValid(theManagers[link]) ) return false;
+    if ( stmt == NULL || IsValid(stmt) ) return false;
+    return true;
+}
+
+
 static int direct_pipeout(void* arg,char* buff,int start,int run)
 {
     JNIEnv*  env = NULL;
     jobject target = arg;
     
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
+
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
 
     jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
     
@@ -733,9 +792,11 @@ static int direct_pipein(void* arg,char* buff,int start,int run)
 {
     JNIEnv*  env = NULL;
     jobject target = arg;
-    
+        
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
     
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+
     jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
 
     if ( jb != NULL ) {
@@ -760,6 +821,8 @@ static int pipeout(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+    
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
     if ( jb != NULL ) {
@@ -784,6 +847,8 @@ static int pipein(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
+    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+    
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
     if ( jb != NULL ) {
@@ -811,7 +876,7 @@ int clean_output(StmtMgr mgr, int type, void* arg) {
         arg = PipeDisconnect(mgr,arg);
     }
 
-    (*env)->DeleteGlobalRef(env,arg);
+    (*env)->DeleteWeakGlobalRef(env,arg);
 
     return 0;
 }
@@ -824,7 +889,7 @@ int clean_input(StmtMgr mgr,int type, void* arg) {
         arg = PipeDisconnect(mgr,arg);
     }
 
-    (*env)->DeleteGlobalRef(env,arg);
+    (*env)->DeleteWeakGlobalRef(env,arg);
     
     return 0;
 }
@@ -835,7 +900,7 @@ static StmtMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
 	jsize connlen = (*env)->GetStringUTFLength(env,connection);
 
 	if (( passlen > 63 || namelen > 63 || connlen > 63 ) ||
-        ( passlen == 0 || namelen == 0 || connlen == 0 ) )
+        ( passlen < 0 || namelen < 0 || connlen <= 0 ) )
         {
             if (!(*env)->ExceptionOccurred(env) ) 
                 (*env)->ThrowNew(env,Cache->exception,"User not valid");
@@ -854,7 +919,8 @@ static StmtMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
 	(*env)->GetStringUTFRegion(env,username,0,namelen,name);
 	(*env)->GetStringUTFRegion(env,connection,0,connlen,conn);
 
-	return CreateWeaverStmtManager(name, pass, conn);
+	return CreateWeaverStmtManager(CreateWeaverConnection(name, pass, conn));
+         
 }
 
 static int translateType(jint type) {

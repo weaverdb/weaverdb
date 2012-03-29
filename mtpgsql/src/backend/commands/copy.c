@@ -950,7 +950,7 @@ CopyFrom(StringInfo attribute_buf,Relation rel, bool binary, bool oids, FILE *fp
 								   index_nulls,
 								   finfoP[i]);
 					indexRes = index_insert(index_rels[i], idatum, index_nulls,
-											&(tuple->t_self), rel);
+											&(tuple->t_self), rel, false);
 					if (indexRes)
 						pfree(indexRes);
 				}

@@ -182,6 +182,7 @@ typedef struct IndexOptInfo
 	Oid			indproc;		/* if a functional index */
 	List	   *indpred;		/* if a partial index */
 	bool		lossy;			/* if a lossy index */
+	bool		deferred;			/* if a lossy index */
 } IndexOptInfo;
 
 /*

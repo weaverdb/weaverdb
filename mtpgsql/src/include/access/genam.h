@@ -40,6 +40,7 @@ IndexGlobals* GetIndexGlobals( void );
  * ----------------
  */
 void index_recoverpages(List* pages);
+BlockNumber index_recoverpage(Relation rel,BlockNumber page);
 
 /* extern */  Relation index_open(Oid relationId);
 /* extern */  Relation index_openr(char *relationName);
@@ -47,7 +48,7 @@ void index_recoverpages(List* pages);
 /* extern */  InsertIndexResult index_insert(Relation relation,
 			 Datum *datum, char *nulls,
 			 ItemPointer heap_t_ctid,
-			 Relation heapRel);
+			 Relation heapRel, bool is_put);
 /* extern */  void index_delete(Relation relation, ItemPointer indexItem);
 /* extern */  TupleCount index_bulkdelete(Relation relation,int delcount, ItemPointerData* del_heappointers);
 /* extern */  IndexScanDesc index_beginscan(Relation relation, bool scanFromEnd,

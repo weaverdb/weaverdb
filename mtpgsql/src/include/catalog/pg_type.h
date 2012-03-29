@@ -201,15 +201,20 @@ DESCR("variable-length string, no limit specified");
 
 DATA(insert OID = 1803 (	blob	   PGUID -1  -1 f b t \x2C 0  0 textin textout textin textout i _null_ ));
 DESCR("binary data that can span pages");
-#define BLOBOID			1803
+#define BLOBOID		1803
+
 DATA(insert OID = 1834 (	streaming	   PGUID -1  -1 f b t \x2C 0  0 textin textout textin textout i _null_ ));
 DESCR("streaming psuedo type data for the streaming of blobs");
 #define STREAMINGOID   1834   /*  streaming psuedotype for BLOBS  */
 
 DATA(insert OID = 1830 (	java	   PGUID -1  -1 f b t \x2C 0  0 javatextin javatextout - - i _null_ ));
 DESCR("java data that can span pages");
-#define JAVAOID			1830
-
+#define JAVAOID	 1830
+#ifdef NOT_USED
+DATA(insert OID = 1843 (	blobseg	   PGUID -1  -1 f b t \x2C 0  0 - blobsegout - blobsegtextout i _null_ ));
+DESCR("streaming psuedo type data for the streaming of blobs");
+#define BLOBSEGOID   1843   /*  streaming psuedotype for BLOBS  */
+#endif
 DATA(insert OID = 1837 (	wrapped	   PGUID -1  -1 f b t \x2C 0  0 - wrappedtotext - - l _null_ ));
 DESCR("wrapped data");
 #define WRAPPEDOID			1837

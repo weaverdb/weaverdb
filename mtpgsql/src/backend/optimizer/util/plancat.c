@@ -137,7 +137,8 @@ find_secondary_indexes(Query *root, Index relid)
 		}
 		else
 			info->indpred = NIL;
-		info->lossy = index->indislossy;
+		info->lossy = IndexIsLossy(index);
+		info->deferred = IndexIsDeferred(index);
 
 		for (i = 0; i < INDEX_MAX_KEYS; i++)
 			info->indexkeys[i] = index->indkey[i];

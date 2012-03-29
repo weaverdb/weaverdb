@@ -97,6 +97,7 @@ DefineIndex(char *heapRelationName,
 	FuncIndexInfo fInfo;
 	List	   *cnfPred = NULL;
 	bool		lossy = FALSE;
+	bool		deferred = FALSE;
 	List	   *pl;
 
 	/*
@@ -151,7 +152,9 @@ DefineIndex(char *heapRelationName,
 
 		if (!strcasecmp(param->defname, "islossy"))
 			lossy = TRUE;
-		else
+		if (!strcasecmp(param->defname, "deferred"))
+			deferred = TRUE;
+                else
 			elog(NOTICE, "Unrecognized index attribute \"%s\" ignored",
 				 param->defname);
 	}
@@ -201,7 +204,7 @@ DefineIndex(char *heapRelationName,
 					 &fInfo, NULL,
 					 accessMethodId, numberOfAttributes, attributeNumberA,
 					 classObjectId, parameterCount, parameterA,
-					 (Node *) cnfPred,
+					 (Node *) cnfPred,deferred,
 					 lossy, unique, primary);
 	}
 	else
@@ -219,7 +222,7 @@ DefineIndex(char *heapRelationName,
 					 NULL, attributeList,
 					 accessMethodId, numberOfAttributes, attributeNumberA,
 					 classObjectId, parameterCount, parameterA,
-					 (Node *) cnfPred,
+					 (Node *) cnfPred,deferred,
 					 lossy, unique, primary);
 	}
 

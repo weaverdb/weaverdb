@@ -52,7 +52,7 @@ PageInit(Page page, Size pageSize, Size specialSize)
 	p->pd_lower = ((unsigned long)&p->pd_linp) - ((unsigned long)p);
 	p->pd_upper = pageSize - specialSize;
 	p->pd_special = pageSize - specialSize;
-    p->checksum = InvalidCRC64;
+        p->checksum = InitCRC64;
 	PageSetPageSize(page, pageSize);
 }
 
@@ -396,6 +396,12 @@ PageManagerModeSet(PageManagerMode mode)
 		PageManagerShuffle = false;
 }
 
+bool
+DisableCRC(bool enable) {
+    
+    disable_crc = !enable;
+}
+
 /*
  *----------------------------------------------------------------
  * PageIndexTupleDelete
@@ -557,11 +563,21 @@ bool PageConfirmChecksum(Page page)
     
     if ( disable_crc ) return true;
 
-    if ( ph->checksum == InvalidCRC64 ) return true;
+    if ( ph->checksum == InvalidCRC64 || ph->checksum == InitCRC64 ) return true;
 
     int len = BLCKSZ;
     len = len - ((unsigned long)&ph->pd_linp - (unsigned long)page);
     checksum = ph->checksum;
     confirm = (crc64)checksum_block((unsigned char*)&ph->pd_linp,len); 
     return eq_crc64(checksum,confirm);
+}
+
+bool PageChecksumIsInvalid(Page page) {
+    PageHeader ph = (PageHeader)page;
+    return ph->checksum == InvalidCRC64;    
+}
+
+bool PageChecksumIsInit(Page page) {
+    PageHeader ph = (PageHeader)page;
+    return ph->checksum == InitCRC64;
 }

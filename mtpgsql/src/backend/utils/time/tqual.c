@@ -176,7 +176,6 @@ bool
 HeapTupleSatisfiesNow(void* e ,HeapTupleHeader tuple)
 {
 	SnapshotHolder* env = (SnapshotHolder*)e;
-	Snapshot snapshot = env->QuerySnapshot;
 
 	if (AMI_OVERRIDE)
 		return true;
@@ -277,9 +276,6 @@ HeapTupleSatisfiesUpdate(void* env,HeapTuple tuple, Snapshot snapshot)
 	if (!(th->t_infomask & HEAP_XMIN_COMMITTED))
 	{
 		if ((th->t_infomask & HEAP_XMIN_INVALID)){ /* xid invalid or aborted */
-/*
-                    elog(DEBUG,"flagged invisible ");	
-*/
                     return HeapTupleInvisible;
 		}
 		else if (TransactionIdIsCurrentTransactionId(th->t_xmin))
@@ -309,7 +305,6 @@ HeapTupleSatisfiesUpdate(void* env,HeapTuple tuple, Snapshot snapshot)
 				th->t_infomask |= HEAP_XMIN_INVALID;	/* aborted */
 			else if (TransactionIdDidCrash(th->t_xmin)) {
 				th->t_infomask |= HEAP_XMIN_INVALID;	/* aborted */
-				/*elog(DEBUG,"5. tuple xmin %lld crashed",th->t_xmin);*/
 			}
 			return HeapTupleInvisible;
 		}
@@ -340,8 +335,7 @@ HeapTupleSatisfiesUpdate(void* env,HeapTuple tuple, Snapshot snapshot)
 		if (th->t_infomask & HEAP_MARKED_FOR_UPDATE)
 			return HeapTupleMayBeUpdated;
 		if (CommandIdGEScanCommandId(th->progress.cmd.t_cmax))
-			return HeapTupleSelfUpdated;		/* updated after scan
-												 * started */
+			return HeapTupleSelfUpdated;		/* updated after scan started */
 		else
 			return HeapTupleInvisible;	/* updated before scan started */
 	}
@@ -352,7 +346,6 @@ HeapTupleSatisfiesUpdate(void* env,HeapTuple tuple, Snapshot snapshot)
 			th->t_infomask |= HEAP_XMAX_INVALID;		/* aborted */
 			return HeapTupleMayBeUpdated;
 		} else if (TransactionIdDidCrash(th->t_xmax)) {
-			/*elog(DEBUG,"6. tuple xmax %lld crashed",th->t_xmax);*/
 			th->t_infomask |= HEAP_XMAX_INVALID;		/* aborted */
 			return HeapTupleMayBeUpdated;
 		}

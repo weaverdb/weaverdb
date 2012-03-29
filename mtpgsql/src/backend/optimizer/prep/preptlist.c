@@ -52,7 +52,7 @@ preprocess_targetlist(List *tlist,
 	 * order of the attributes. We also need to fill in any missing
 	 * attributes.							-ay 10/94
 	 */
-	if (command_type == CMD_INSERT || command_type == CMD_UPDATE)
+	if (command_type == CMD_PUT || command_type == CMD_INSERT || command_type == CMD_UPDATE)
 		tlist = expand_targetlist(tlist, command_type,
 								  result_relation, range_table);
 
@@ -190,6 +190,7 @@ expand_targetlist(List *tlist, int command_type,
 
 			switch (command_type)
 			{
+				case CMD_PUT:
 				case CMD_INSERT:
 					{
 #ifdef	_DROP_COLUMN_HACK__

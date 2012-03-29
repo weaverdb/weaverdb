@@ -24,6 +24,7 @@
 #define USE_ASSERT_CHECKING 1
 #define ABORT_ON_ASSERT 1
 #define NO_PS_STATUS 1
+#define SUBSETISALLOC 1
 /*  #define MULTITHREAD_DEBUG  */
 /*  #define SHOW_MEMORY_STATS   */
 /*  #define SPI_EXECUTOR_STATS  */
@@ -54,8 +55,6 @@
 #define TLS  static __thread
 #endif
 
-#define PIPELINE_SIZE 128
-#define COMMBUFFER_SIZE  8192
 /*  DBWriter will wait yield for other threads to catch as many commits as possible  */
 #define FRIENDLY_DBWRITER     
 /*
@@ -78,13 +77,13 @@
  * NOTE: default setting corresponds to the minimum number of buffers
  * that postmaster.c will allow for the default MaxBackends value.
  */
-#define DEF_NBUFFERS (DEF_MAXBACKENDS > 8 ? DEF_MAXBACKENDS * 2 : 16)
+#define DEF_NBUFFERS (DEF_MAXBACKENDS > 8 ? DEF_MAXBACKENDS * 2 : 512)
 
 /*
  * Size of a disk block --- currently, this limits the size of a tuple.
  * You can set it bigger if you need bigger tuples.
  */
-/* currently must be <= 32k bjm */
+/* currently must be <= 64k bjm */
 /* must also be a multiple of 8 for proper alignment */
 #define BLCKSZ	(1024*8)
 
@@ -106,7 +105,7 @@
  */
 #ifdef _LP64
 /*  this is the limit of the block number field of an item pointer  */
-#define RELSEG_SIZE	(0x400000000000)    
+#define RELSEG_SIZE	(0x800000000000)    
 #define LET_OS_MANAGE_FILESIZE
 #else
 #define RELSEG_SIZE	(0x40000000 / BLCKSZ)
@@ -596,6 +595,13 @@ extern char *strdup(char const *);
 #ifndef       SIGNAL_ARGS
 #  define SIGNAL_ARGS int postgres_signal_arg
 #endif
+
+#ifdef SUNOS
+#define WHICH_CLOCK CLOCK_HIGHRES
+#elif LINUX
+#define WHICH_CLOCK CLOCK_REALTIME
+#endif
+
 
 
 #endif /* CONFIG_H */

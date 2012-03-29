@@ -25,6 +25,9 @@
 #include "mb/pg_wchar.h"
 #endif
 
+#define UNCOMPRESSED(length) ((length | 0x80000000))
+#define ISCOMPRESSED(lz) (!(lz->vl_len_ & 0x80000000))
+
 /* ----------
  * lztextin -
  *
@@ -38,6 +41,7 @@ lztextin(char *str)
 	int32		rawsize;
 	lztext	   *tmp;
 	int			tmp_size;
+        int     clen;
 
 	/* ----------
 	 * Handle NULL
@@ -58,7 +62,7 @@ lztextin(char *str)
 	 * ----------
 	 */
 	tmp = (lztext *) palloc(tmp_size);
-	pglz_compress(str, rawsize, tmp, NULL);
+	clen = pglz_compress(str, rawsize, tmp, NULL);
 
 	/* ----------
 	 * If we miss less than 25% bytes at the end of the temp value,
@@ -66,16 +70,24 @@ lztextin(char *str)
 	 * sequence.
 	 * ----------
 	 */
-	if (tmp_size - tmp->varsize < 256 ||
-		tmp_size - tmp->varsize < tmp_size / 4)
+        if ( clen == 0 ) {
+            memmove(VARDATA(tmp),str,rawsize);
+            SETVARSIZE(tmp,UNCOMPRESSED(rawsize + VARHDRSZ));
+            return tmp;
+        } 
+        
+        
+        if (tmp_size - clen < 256 ||
+		tmp_size -  clen < tmp_size / 4)
 		result = tmp;
 	else
 	{
-		result = (lztext *) palloc(tmp->varsize);
-		memcpy(result, tmp, tmp->varsize);
+		result = (lztext *) palloc(clen);
+		memcpy(result, tmp, clen);
 		pfree(tmp);
 	}
 
+        SETVARSIZE(result,clen);
 	return result;
 }
 
@@ -109,14 +121,24 @@ lztextout(lztext *lz)
 	 * have to diddle with realloc's.
 	 * ----------
 	 */
-	result = (char *) palloc(PGLZ_RAW_SIZE(lz) + 1);
 
 	/* ----------
 	 * Decompress and add terminating ZERO
 	 * ----------
 	 */
-	pglz_decompress(lz, result);
-	result[lz->rawsize] = '\0';
+        if ( !ISCOMPRESSED(lz) )  {
+                result = (char *) palloc(VARSIZE(lz) - VARHDRSZ + 1);
+                memmove(result,VARDATA(lz),VARSIZE(lz) - VARHDRSZ);
+                result[VARSIZE(lz) - VARHDRSZ] = '\0';
+        } else if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
+                result = (char *) palloc(PGLZ_RAW_SIZE(lz) + 1);
+                memmove(result,((char*)lz) + sizeof(lztext),PGLZ_RAW_SIZE(lz));
+                result[PGLZ_RAW_SIZE(lz)] = '\0';
+        } else {
+                result = (char *) palloc(PGLZ_RAW_SIZE(lz) + 1);
+                pglz_decompress(lz, result);
+        	result[lz->rawsize] = '\0';
+        }
 
 	/* ----------
 	 * Return the result
@@ -136,11 +158,11 @@ lztextout(lztext *lz)
 int32
 lztextlen(lztext *lz)
 {
+	int			l;
 #ifdef MULTIBYTE
 	unsigned char *s1,
 			   *s2;
 	int			len;
-	int			l;
 	int			wl;
 
 #endif
@@ -151,10 +173,12 @@ lztextlen(lztext *lz)
 	if (lz == NULL)
 		return 0;
 
+        if ( !ISCOMPRESSED(lz) ) l = VARSIZE(lz) - VARHDRSZ;
+        else l = PGLZ_RAW_SIZE(lz);
+
 #ifdef MULTIBYTE
 	len = 0;
 	s1 = s2 = (unsigned char *) lztextout(lz);
-	l = PGLZ_RAW_SIZE(lz);
 	while (l > 0)
 	{
 		wl = pg_mblen(s1);
@@ -169,7 +193,7 @@ lztextlen(lztext *lz)
 	 * without multibyte support, it's the remembered rawsize
 	 * ----------
 	 */
-	return PGLZ_RAW_SIZE(lz);
+        return l;
 #endif
 }
 
@@ -213,6 +237,7 @@ text_lztext(text *txt)
 	lztext	   *tmp;
 	int			tmp_size;
 	char	   *str;
+        int        clen;
 
 	/* ----------
 	 * Handle NULL
@@ -234,7 +259,7 @@ text_lztext(text *txt)
 	 * ----------
 	 */
 	tmp = (lztext *) palloc(tmp_size);
-	pglz_compress(str, rawsize, tmp, NULL);
+	clen = pglz_compress(str, rawsize, tmp, NULL);
 
 	/* ----------
 	 * If we miss less than 25% bytes at the end of the temp value,
@@ -242,16 +267,23 @@ text_lztext(text *txt)
 	 * sequence.
 	 * ----------
 	 */
-	if (tmp_size - tmp->varsize < 256 ||
-		tmp_size - tmp->varsize < tmp_size / 4)
+        if ( clen == 0 ) {
+            memmove(VARDATA(tmp),str,rawsize);
+            SETVARSIZE(tmp,UNCOMPRESSED(rawsize + VARHDRSZ));
+            return tmp;
+        }
+        
+        if (tmp_size - clen < 256 ||
+		tmp_size - clen < tmp_size / 4)
 		result = tmp;
 	else
 	{
-		result = (lztext *) palloc(tmp->varsize);
-		memcpy(result, tmp, tmp->varsize);
+		result = (lztext *) palloc(clen);
+		memcpy(result, tmp, clen);
 		pfree(tmp);
 	}
 
+        SETVARSIZE(result,clen);
 	return result;
 }
 
@@ -275,18 +307,22 @@ lztext_text(lztext *lz)
 		return NULL;
 
 	/* ----------
-	 * Allocate and initialize the text result
-	 * ----------
-	 */
-	result = (text *) palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ + 1);
-	SETVARSIZE(result,lz->rawsize + VARHDRSZ);
-
-	/* ----------
 	 * Decompress directly into the text data area.
 	 * ----------
 	 */
-	VARDATA(result)[lz->rawsize] = 0;
-	pglz_decompress(lz, VARDATA(result));
+        if ( !ISCOMPRESSED(lz) ) {
+            result = palloc(VARSIZE(lz));
+            memmove(VARDATA(result),VARDATA(lz),VARSIZE(lz) - VARHDRSZ);
+            SETVARSIZE(result,VARSIZE(lz));
+        } else if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
+            result = (char *) palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ);
+            memmove(VARDATA(result),((char*)lz) + sizeof(lztext),PGLZ_RAW_SIZE(lz));
+            SETVARSIZE(result,PGLZ_RAW_SIZE(lz) + VARHDRSZ);
+        } else {
+            result = palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ);
+            pglz_decompress(lz, VARDATA(result));
+            SETVARSIZE(result,PGLZ_RAW_SIZE(lz) + VARHDRSZ);
+        }
 
 	return result;
 }
@@ -303,7 +339,6 @@ lztext_text(lztext *lz)
 int32
 lztext_cmp(lztext *lz1, lztext *lz2)
 {
-#ifdef USE_LOCALE
 
 	char	   *cp1;
 	char	   *cp2;
@@ -321,50 +356,6 @@ lztext_cmp(lztext *lz1, lztext *lz2)
 	pfree(cp2);
 
 	return result;
-
-#else							/* !USE_LOCALE */
-
-	PGLZ_DecompState ds1;
-	PGLZ_DecompState ds2;
-	int			c1;
-	int			c2;
-	int32		result = (int32) 0;
-
-	if (lz1 == NULL || lz2 == NULL)
-		return (int32) 0;
-
-	pglz_decomp_init(&ds1, lz1);
-	pglz_decomp_init(&ds2, lz2);
-
-	for (;;)
-	{
-		c1 = pglz_decomp_getchar(&ds1);
-		c2 = pglz_decomp_getchar(&ds2);
-
-		if (c1 == EOF)
-		{
-			if (c2 != EOF)
-				result = (int32) -1;
-			break;
-		}
-		else
-		{
-			if (c2 == EOF)
-				result = (int32) 1;
-		}
-		if (c1 != c2)
-		{
-			result = (int32) (c1 - c2);
-			break;
-		}
-	}
-
-	pglz_decomp_end(&ds1);
-	pglz_decomp_end(&ds2);
-
-	return result;
-
-#endif	 /* USE_LOCALE */
 }
 
 

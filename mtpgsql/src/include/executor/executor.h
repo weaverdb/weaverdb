@@ -68,6 +68,8 @@ PG_EXTERN void ExecConstraints(char *caller, Relation rel, HeapTuple tuple,
 
 PG_EXTERN void ExecAppend(TupleTableSlot *slot, ItemPointer tupleid,
 		   EState *estate);
+PG_EXTERN int ExecPut(TupleTableSlot *slot, ItemPointer tupleid,
+		   EState *estate);
 PG_EXTERN void ExecDelete(TupleTableSlot *slot, ItemPointer tupleid,
 		   EState *estate);
 PG_EXTERN void ExecReplace(TupleTableSlot *slot, ItemPointer tupleid,
@@ -152,7 +154,7 @@ PG_EXTERN void ExecOpenIndices(Oid resultRelationOid,
 				RelationInfo *resultRelationInfo);
 PG_EXTERN void ExecCloseIndices(RelationInfo *resultRelationInfo);
 PG_EXTERN void ExecInsertIndexTuples(TupleTableSlot *slot, ItemPointer tupleid,
-					  EState *estate, bool is_update);
+					  EState *estate, bool is_put);
  #ifdef __cplusplus
 }
  #endif

@@ -1,3 +1,5 @@
+%option prefix="Int_yy"
+%option bison-bridge
 %{
 /*-------------------------------------------------------------------------
  *
@@ -47,15 +49,11 @@
 
 #define			YY_NO_UNPUT
 
-#define YY_DECL int Int_yylex(sval) YYSTYPE* sval;
-
 /* some versions of lex define this as a macro */
 #if defined(yywrap)
 #undef yywrap
 #endif /* yywrap */
 
-/* YYSTYPE yylval;  */
-/*  int		GetParserInfo()->Int_yyline;  *//* keep track of the line number for error reporting */
 
 %}
 
@@ -85,7 +83,7 @@ insert			{ return(INSERT_TUPLE); }
 "("				{ return(LPAREN); }
 ")"				{ return(RPAREN); }
 
-[\n]			{ GetParserInfo()->Int_yyline++; }
+[\n]			{ GetParserInfo()->yyline++; }
 [\t]			;
 " "				;
 
@@ -100,36 +98,34 @@ insert			{ return(INSERT_TUPLE); }
 "on"			{ return(ON); }
 "using"			{ return(USING); }
 {arrayid}		{
-					sval->ival = EnterString(MapArrayTypeName((char*)GetParserInfo()->Int_yytext));
+					yylval_param->ival = EnterString(MapArrayTypeName((char*)Int_yytext));
 					return(ID);
 				}
 {id}			{
-                    ParserInfo*  pinfo = GetParserInfo();
-					char   *newid = scanstr((char*)pinfo->Int_yytext);
-					sval->ival = EnterString(newid);
+					char   *newid = scanstr((char*)Int_yytext);
+					yylval_param->ival = EnterString(newid);
 					pfree(newid);
 					return(ID);
 				}
 {sid}			{
 					char   *newid;
-                    ParserInfo*  pinfo = GetParserInfo();
-					pinfo->Int_yytext[strlen(pinfo->Int_yytext)-1] = '\0'; /* strip off quotes */
-					newid = scanstr((char*)pinfo->Int_yytext+1);
-					sval->ival = EnterString(newid);
+					Int_yytext[strlen(Int_yytext)-1] = '\0'; /* strip off quotes */
+					newid = scanstr((char*)Int_yytext+1);
+					yylval_param->ival = EnterString(newid);
 					pfree(newid);
-					pinfo->Int_yytext[strlen(pinfo->Int_yytext)] = '"'; /* restore quotes */
+					Int_yytext[strlen(Int_yytext)] = '"'; /* restore quotes */
 					return(ID);
 				}
 
 (-)?{D}+"."{D}*({Exp})? |
 (-)?{D}*"."{D}+({Exp})? |
 (-)?{D}+{Exp}			{
-							sval->ival = EnterString((char*)GetParserInfo()->Int_yytext);
+							yylval_param->ival = EnterString((char*)Int_yytext);
 							return(CONST);
 						}
 
 .				{
-					printf("syntax error %d : -> %s\n", GetParserInfo()->Int_yyline, GetParserInfo()->Int_yytext);
+					printf("syntax error %d : -> %s\n", GetParserInfo()->yyline, Int_yytext);
 				}
 
 
@@ -143,7 +139,7 @@ yywrap(void)
 }
 
 void
-yyerror(const char *str)
+Int_yyerror(const char *str)
 {
-	fprintf(stderr,"\tsyntax error %d : %s",GetParserInfo()->Int_yyline, str);
+	fprintf(stderr,"\tsyntax error %d : %s",GetParserInfo()->yyline, str);
 }

@@ -66,20 +66,16 @@ static const char* 			progname  = "mtpg";
 static IpcMemoryKey 		ipc_key;
 static 	void*				ipc_addr;
 static 	bool				master;
-static  bool				isPrivate;
+static  bool				isPrivate = true;
 
 extern void					StartupXLOG(void);
 extern void					ShutdownXLOG(void);
 
-extern int 					NBuffers;
-extern int 					IndexBufferReserve;
 extern int 					DebugLvl;
 static int 					MaxBackends = MAXBACKENDS;
 
-extern bool             disable_crc;
 extern bool             DelegatedIndexBuild;
 extern bool             FastIndexBuild;
-extern bool             lingeringbuffers;
 
 static int					exclusive_lock = -1;
 static char					lock_name[255];
@@ -95,11 +91,11 @@ static int checklockfile();
 
 pthread_mutex_t    init_lock;
 
-extern void initweaverbackend(char* vars)
-{
+extern bool initweaverbackend(char* vars)
+{    
         char*       dbname = NULL;
 	char	   *reason;
-	char	   *fullpath,datpath[MAXPGPATH],control[MAXPGPATH],xlogdir[MAXPGPATH];
+	char	   datpath[MAXPGPATH],control[MAXPGPATH],xlogdir[MAXPGPATH];
         char*       lasts;
 
         char*       key = strtok_r(vars,"=",&lasts);
@@ -108,23 +104,11 @@ extern void initweaverbackend(char* vars)
         pthread_mutex_init(&init_lock, NULL);
         pthread_mutex_lock(&init_lock);
             
-        char* nbuff = getenv("PG_BUFFERCOUNT");
-	char* ibufreserve = getenv("PG_INDEXBUFFERRESERVE");
 	char* dbug = getenv("PG_DEBUGLEVEL");
-	char* back = getenv("PG_MAXBACKENDS");
 	char*  output = getenv("PG_LOGFILE");
 	char*  nofsync = getenv("PG_NOFSYNC");
 	char*  stdlog = getenv("PG_STDLOG");
-	char*  transc = getenv("PG_TRANSCAREFUL");
 	char*  servertype = getenv("PG_SERVERTYPE");
-	char*  maxtrans = getenv("PG_MAXGROUPTRANS");
-	char*  wtime = getenv("PG_WAITTIME");
-	char*  hgc = getenv("PG_GCTHRESHOLD");
-	char*  gcfactor = getenv("PG_GCSIZEFACTOR");
-	char*  gcupdate = getenv("PG_GCUPDATEFACTOR");
-	char*  force = getenv("PG_FORCE");
-	char*  usegc = getenv("PG_USEGC");
-	char*  loader = getenv("PG_OBJECTLOADER");
 	DataDir = getenv("PGDATA");
 
 	struct timeval     timer;	
@@ -133,67 +117,33 @@ extern void initweaverbackend(char* vars)
 	long 	seed 		= 0;	
 	int64_t 	sptime 		= 0;
 
-        int maxxactgroup = -1;
-	int timeout = 400;
-	int hgci = -1;
-	int gcfi = -1;
-	int gcui = -1;
         int start_delay = 0;
-
-        struct  varlena           align;
-
+        
         CreateProperties();
         
         while ( key != NULL ) {
-/*
-            printf("%s=%s\n",key,val);
-*/
-            if ( strcmp(key,"buffercount") == 0 ) {
-                nbuff = val;
-            } else if ( strcmp(key,"indexbuffers") == 0 ) {
-                ibufreserve = val;
-            } else if ( strcmp(key,"debuglevel") == 0 ) {
+            if ( strcmp(key,"debuglevel") == 0 ) {
                 dbug = val;
-            } else if ( strcmp(key,"maxbackends") == 0 ) {
-                back = val;
             } else if ( strcmp(key,"logfile") == 0 ) {
                 output = val;
             } else if ( strcmp(key,"nofsync") == 0 ) {
                 nofsync = val;
             } else if ( strcmp(key,"stdlog") == 0 ) {
                 stdlog = val;
-            } else if ( strcmp(key,"transcareful") == 0 ) {
-                transc = val;
             } else if ( strcmp(key,"servertype") == 0 ) {
                 servertype = val;
-            } else if ( strcmp(key,"maxgrouptrans") == 0 ) {
-                maxtrans = val;
-            } else if ( strcmp(key,"waittime") == 0 ) {
-                wtime = val;
-            } else if ( strcmp(key,"gcsizefactor") == 0 ) {
-                gcfactor = val;
-            } else if ( strcmp(key,"gcupdatefactor") == 0 ) {
-                gcupdate = val;
-            } else if ( strcmp(key,"force") == 0 ) {
-                force = val;
-            } else if ( strcmp(key,"usegc") == 0 ) {
-                usegc = val;
             } else if ( strcmp(key,"objectloader") == 0 ) {
                 SetJavaObjectLoader(val);
             } else if ( strcmp(key,"datadir") == 0 ) {
                 DataDir = strdup(val);
             } else if ( strcmp(key,"delegatedtransfermax") == 0 ) {
                 DelegatedSetTransferMax(atoi(val));
-            } else if ( strcmp(key,"disable_crc") == 0 ) {
-		disable_crc = (toupper(val[0]) == 'T') ? true : false;
             } else if ( strcmp(key,"fastindexbuild") == 0 ) {
 		FastIndexBuild = (toupper(val[0]) == 'T') ? true : false;
             } else if ( strcmp(key,"delegatedindexbuild") == 0 ) {
 		DelegatedIndexBuild = (toupper(val[0]) == 'T') ? true : false;
             } else if ( strcmp(key,"start_delay") == 0 ) {
 		start_delay = atoi(val);
-            } else if ( strcmp(key,"lingeringbuffers") == 0 ) {
-		lingeringbuffers = (toupper(val[0]) == 'T') ? true : false;
             } else {
                 NameData nkey;
                 Name nval;
@@ -202,9 +152,6 @@ extern void initweaverbackend(char* vars)
                 namestrcpy(&nkey,key);
                 nval = hash_search(properties,(char*)&nkey,HASH_ENTER,&found);
                 namestrcpy(nval + 1,val);
-/*
-                printf("database parameter %s=%s inserting into properties table\n",key,val);
-*/
             }
             key = strtok_r(NULL,"=",&lasts);
             val = strtok_r(NULL,";",&lasts);
@@ -220,9 +167,11 @@ extern void initweaverbackend(char* vars)
 	GoMultiuser();
 	
 
+/*  no more notion of shared server  
 	if ( servertype != NULL ) {
 		isPrivate = !(strcasecmp(servertype,"SHARED") == 0);
 	}    
+*/
 
         /*  only private mode is supported now  */
 #ifndef NOTUSED
@@ -240,48 +189,56 @@ extern void initweaverbackend(char* vars)
         data dir at a time   */
         if ( ipc_key == PrivateIPCKey ) {
             checklockfile();
-	}
-    
-    
+	}    
 	if ( dbug != NULL ) {
             DebugLvl = ( strcasecmp(dbug,"DEBUG") == 0 ) ? DEBUG : NOTICE;
 	}
-	if ( nbuff != NULL ) {
-		NBuffers = atoi(nbuff);
-	}
-	if ( ibufreserve != NULL ) {
-		IndexBufferReserve = atof(ibufreserve);
-	}
-	if ( back != NULL ) {
-		MaxBackends = atoi(back);
-                if ( MaxBackends > MAXBACKENDS ) MaxBackends = MAXBACKENDS;
+	if ( PropertyIsValid("buffers") ) {
+		NBuffers = GetIntProperty("buffers");
+	} else if ( PropertyIsValid("page_buffers") ) {
+                NBuffers = GetIntProperty("page_buffers");
+        } else if ( PropertyIsValid("buffercount") ) {
+                NBuffers = GetIntProperty("buffercount");
+        }
+    
+        MaxBuffers = NBuffers;
+        if ( PropertyIsValid("maxbuffers") ) {
+		MaxBuffers = GetIntProperty("maxbuffers");
+        }
+    
+	if ( PropertyIsValid("maxbackends") ) {
+            MaxBackends = GetIntProperty("maxbackends");
+            if ( MaxBackends > MAXBACKENDS ) MaxBackends = MAXBACKENDS;
 	}
 	disableFsync = false;
 	if ( nofsync != NULL ) {
 		disableFsync = (toupper(nofsync[0]) == 'T') ? true : false;
 	}
-	if ( transc != NULL ) {
-		if (toupper(transc[0]) == 'T') 
-			SetTransactionCommitType(CAREFUL_COMMIT);
-		else 
-			SetTransactionCommitType(SOFT_COMMIT);
+	if ( PropertyIsValid("transcareful") ) {
+            if (GetBoolProperty("transcareful")) {
+                SetTransactionCommitType(CAREFUL_COMMIT);
+            } else {
+                SetTransactionCommitType(SOFT_COMMIT);
+            }
 	} else {
             SetTransactionCommitType(SOFT_COMMIT);
         }
         
-        if ( GetProperty("enable_softcommits") != NULL ) {
-            if ( toupper(*GetProperty("enable_softcommits")) == 'T') {
+        if ( PropertyIsValid("enable_softcommits") ) {
+            if (GetBoolProperty("enable_softcommits")) {
                 SetTransactionCommitType(SOFT_COMMIT);
             } else {
                 SetTransactionCommitType(CAREFUL_COMMIT);
             }
-            
         }
-
+        
+        if ( PropertyIsValid("disable_crc") ) {
+            DisableCRC(GetBoolProperty("disable_crc"));
+        }
+        
 	gettimeofday(&timer,NULL);	
 
-	InitSystem(isPrivate);	
-        env = GetEnv();
+	env = InitSystem(isPrivate);	
         
 	if ( output != NULL && strlen(output) > 0 ) {
 		 strncpy(OutputFileName,output,MAXPGPATH);
@@ -296,9 +253,6 @@ extern void initweaverbackend(char* vars)
 	SetProcessingMode(InitProcessing);   
 
         MemoryContextInit();
-/*
-	EnablePortalManager();   
-*/
 
 	if ( shmget(IPCKeyGetBufferMemoryKey(ipc_key),0,0) < 0 ) {
 		CreateSharedMemoryAndSemaphores(ipc_key, MaxBackends);
@@ -317,6 +271,15 @@ extern void initweaverbackend(char* vars)
 	if ( dbname == NULL ) dbname = "template1";
 	SetDatabaseName(dbname);    
 
+/*  change to the database base   */
+/*        chdir(DataDir);       */
+	ValidatePgVersion(DataDir, &reason);
+        if (reason != NULL) {
+                elog(NOTICE, reason);
+                pthread_mutex_unlock(&init_lock);
+                unlink(lock_name);
+                return FALSE;
+        }
 
 	GetRawDatabaseInfo(dbname,&GetEnv()->DatabaseId, datpath);
 	elog(DEBUG,"Database id is %u",GetEnv()->DatabaseId);
@@ -326,14 +289,12 @@ extern void initweaverbackend(char* vars)
 	memset(datpath,0,MAXPGPATH);
 
 	/* Verify if DataDir is ok */
-	if (access(DataDir, F_OK) == -1)
-                elog(FATAL, "Database system not found. Data directory '%s' does not exist.",DataDir);
-/*  change to the database base   */
-/*        chdir(DataDir);       */
-	ValidatePgVersion(DataDir, &reason);
-		if (reason != NULL)
-			elog(FATAL, reason);
-
+	if (access(DataDir, F_OK) == -1) {
+                elog(NOTICE, "Database system not found. Data directory '%s' does not exist.",DataDir);
+                pthread_mutex_unlock(&init_lock);
+                unlink(lock_name);
+                return FALSE;
+        }
 
 	strncpy(datpath,DataDir,strlen(DataDir));
 	strncpy(datpath+strlen(DataDir),(char*)"/base/",6);
@@ -352,21 +313,12 @@ extern void initweaverbackend(char* vars)
 
 	AmiTransactionOverride(IsBootstrapProcessingMode());
 
-/*  this starts up the DBwriter thread.  */
-	if ( maxtrans != NULL ) maxxactgroup = atoi(maxtrans);
-	if ( wtime != NULL ) timeout = atoi(wtime);
-	if ( hgc != NULL ) hgci = atoi(hgc);
-        hgc = GetProperty("gcthreshold");
-        if ( hgc != NULL ) hgci = atoi(hgc);
-	if ( gcfactor != NULL ) gcfi = atoi(gcfactor);
-	if ( gcupdate != NULL ) gcui = atoi(gcupdate);
-
 	LockDisable(true);
         smgrinit();
 	RelationInitialize(); 
-        DBWriterInit(maxxactgroup,timeout,hgci,gcui,gcfi);	
+        DBWriterInit();	
         
-	DBCreateWriterThread();
+	DBCreateWriterThread(LOG_MODE);
         InitializeTransactionSystem();		/* pg_log,etc init/crash recovery here */
 	InitFreespace();
         LockDisable(false);
@@ -387,7 +339,7 @@ transaction system  */
 
 	InitCatalogCache();  
 
-	if ( usegc != NULL && toupper(usegc[0]) == 'F' ) {
+	if ( PropertyIsValid("usegc") && !GetBoolProperty("usegc") ) {
 		
 	} else {
 		PoolsweepInit(0);
@@ -474,6 +426,8 @@ if ( master ) {
         pthread_mutex_unlock(&init_lock);
         
         SetEnv(NULL);
+        
+        return true;
 }
 
 bool 
@@ -566,10 +520,12 @@ checklockfile(void) {
         return 1;
 }
 
-extern void 
+extern bool 
 prepareforshutdown()
 {
-	SetEnv(env);
+    if ( !isinitialized() ) return false;
+	
+    SetEnv(env);
         
     pthread_mutex_lock(&init_lock);
     initialized = false;
@@ -584,6 +540,8 @@ prepareforshutdown()
 	MasterWriteLock(); 
         
     SetEnv(NULL);
+    
+    return true;
 }
 
 extern void
@@ -724,6 +682,7 @@ char* GetProperty(char* key) {
 int GetIntProperty(char* key) {
     char* val = GetProperty(key);
     if ( val == NULL ) return 0;
+    if ( toupper(val[0]) == 'T') return 1;
     return atoi(val);
 }
 
@@ -731,6 +690,13 @@ double GetFloatProperty(char* key) {
     char* val = GetProperty(key);
     if ( val == NULL ) return 0;
     return atof(val);
+}
+
+bool GetBoolProperty(char* key) {
+    char* val = GetProperty(key);
+    if ( val == NULL) return false;
+    if ( toupper(val[0]) == 'T') return true;
+    return false;
 }
 
 bool PropertyIsValid(char* key) {

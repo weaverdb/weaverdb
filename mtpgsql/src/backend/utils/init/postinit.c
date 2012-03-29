@@ -51,6 +51,7 @@ void		BaseInit(void);
 
 static void ReverifyMyDatabase(const char *name);
 static void InitCommunication(void);
+static void flush_all();
 
 static IPCKey PostgresIpcKey;
 
@@ -220,9 +221,12 @@ InitCommunication()
  *		Be very careful with the order of calls in the InitPostgres function.
  * --------------------------------
  */
-extern int	NBuffers;
-
 int			lockingOff = 0;		/* backend -L switch */
+
+void 
+flush_all() {
+    FlushAllDirtyBuffers(true);
+}
 
 /*
  */
@@ -245,7 +249,7 @@ InitPostgres(const char *dbname)
 	/* initialize the local buffer manager */
 
 #ifndef XLOG
-		on_shmem_exit(FlushAllDirtyBuffers, (caddr_t) NULL);
+		on_shmem_exit(flush_all, (caddr_t) NULL);
 #endif
 
 	/* ----------------
@@ -327,8 +331,8 @@ InitPostgres(const char *dbname)
 
         smgrinit();
         RelationInitialize();		/* pre-allocated reldescs created here */
-        DBWriterInit(-1,-1,-1,-1,-1);
-        DBCreateWriterThread();
+        DBWriterInit();
+        DBCreateWriterThread(SYNC_MODE);
  	InitializeTransactionSystem();		/* pg_log,etc init/crash recovery here */
         InitFreespace();
 
@@ -347,7 +351,7 @@ InitPostgres(const char *dbname)
 	 */
 	InitSharedInvalidationState();
 
-	if (GetMyBackendId() > MAXBACKENDS || GetMyBackendId() <= 0)
+	if (GetMyBackendId() > GetMaxBackends() || GetMyBackendId() <= 0)
 	{
 		elog(FATAL, "cinit2: bad backend id %d (%d)",
                      GetMyBackendTag(),
@@ -388,7 +392,9 @@ InitPostgres(const char *dbname)
 		ReverifyMyDatabase(dbname);
         
         if ( !bootstrap ) {
+/*
             PoolsweepInit(0);   
+*/
             on_proc_exit(PoolsweepDestroy, NULL);
 /*  if there are recovered pages are present,
  *  index pages need to be scanned and items 
@@ -400,6 +406,7 @@ InitPostgres(const char *dbname)
                 List*  item;
 
                 if ( dbids != NULL ) {
+                    PoolsweepInit(0);   
                     foreach(item, dbids) {
                         AddRecoverRequest(smgrdbrecoveryname(lfirsti(item)), lfirsti(item));
                     }
@@ -408,6 +415,7 @@ InitPostgres(const char *dbname)
                     }   
                     
                     smgrcompleterecovery();
+                    PoolsweepDestroy();
                 }
             }
         }

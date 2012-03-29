@@ -154,7 +154,7 @@ PG_EXTERN int	mmcommit(void);
 PG_EXTERN int	mmabort(void);
 
 PG_EXTERN int	mmshutdown(void);
-PG_EXTERN int	MMShmemSize(void);
+PG_EXTERN size_t	MMShmemSize(void);
 #endif
 
 /* smgrtype.c */
