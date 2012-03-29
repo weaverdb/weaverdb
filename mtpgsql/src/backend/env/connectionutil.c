@@ -374,7 +374,6 @@ transaction system  */
     
 	dbname = NULL;
 
-	GetEnv()->Mode = NormalProcessing;   
  	SetProcessingMode(NormalProcessing);   
         
     if ( DebugLvl > 1 ) {

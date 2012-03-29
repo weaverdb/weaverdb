@@ -49,7 +49,7 @@ pthread_mutex_t                 envlock;
 
 bool 				multiuser = false;
 
-static ProcessingMode		CurrentMode;
+static ProcessingMode		CurrentMode = InitProcessing;
 
 #define WRITELOCK_MASK	0x04
 #define READLOCK_MASK	0x02
@@ -815,19 +815,20 @@ MemoryContext GetEnvMemoryContext( void ) {
     return GetEnv()->global_context;
 }
 
-void SetProcessingMode(ProcessingMode mode ) {
-    if ( mode == BootstrapProcessing || CurrentMode == ShutdownProcessing ) {
+void SetProcessingMode(ProcessingMode mode) {
+    if ( CurrentMode == InitProcessing && mode == NormalProcessing ) {
+        CurrentMode = NormalProcessing;
+    } else if ( mode == BootstrapProcessing || mode == ShutdownProcessing ) {
         CurrentMode = mode;
     } else {
         GetEnv()->Mode = mode;
-        if ( mode == NormalProcessing ) CurrentMode = mode;
     }
 }
 
 ProcessingMode GetProcessingMode(void)
 {
     CheckForCancel();
-    if ( CurrentMode == BootstrapProcessing || CurrentMode == ShutdownProcessing ) {
+    if ( CurrentMode == InitProcessing || CurrentMode == BootstrapProcessing || CurrentMode == ShutdownProcessing ) {
         return CurrentMode;
     } else {
         return ((GetEnv()->Mode == NormalProcessing) ? CurrentMode : GetEnv()->Mode);

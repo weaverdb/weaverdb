@@ -280,7 +280,7 @@ Poolsweep(void *args) {
     tool->env = env;
     
     SetEnv(env);
-    env->Mode = InitProcessing;
+    SetProcessingMode(InitProcessing);
     
     MemoryContextInit();
     
@@ -301,7 +301,7 @@ Poolsweep(void *args) {
     InitCatalogCache();
     
     
-    env->Mode = NormalProcessing;
+    SetProcessingMode(NormalProcessing);
     
     while (activated && !IsShutdownProcessingMode()) {
         JobList        *item = NULL;

@@ -410,7 +410,7 @@ void* SyncWriter(void *jones) {
     char           dbuser[255];
     
     SetEnv(env);
-    env->Mode = InitProcessing;
+    SetProcessingMode(InitProcessing);
         
     MemoryContextInit();
     MemoryContextSwitchTo(MemoryContextGetTopContext());
@@ -508,7 +508,7 @@ void* DBWriter(void *jones) {
     Env            *env = CreateEnv(NULL);
     
     SetEnv(env);
-    env->Mode = InitProcessing;
+    SetProcessingMode(InitProcessing);
         
     MemoryContextInit();
     
@@ -523,7 +523,7 @@ void* DBWriter(void *jones) {
     
     while ( !CallableInitInvalidationState() ) { elog(NOTICE,"cannot create dbwriter's shared state"); };
     
-    env->Mode = NormalProcessing;
+    SetProcessingMode(NormalProcessing);
     
     GetSnapshotHolder()->ReferentialIntegritySnapshotOverride = true;
     

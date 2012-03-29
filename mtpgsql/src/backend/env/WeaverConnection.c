@@ -176,7 +176,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     RelationInitialize();
     InitCatalogCache();
 
-    connection->env->Mode = NormalProcessing;
+    SetProcessingMode(NormalProcessing);
 
     /* this code checks to see if the user is valid  */
     if (dbid != InvalidOid) {
@@ -270,7 +270,7 @@ WCreateSubConnection(OpaqueWConn parent) {
 
     
     connection->env = env;
-    connection->env->Mode = InitProcessing;
+    SetProcessingMode(InitProcessing);
 
     connection->env->DatabaseId = parent->env->DatabaseId;
     connection->env->DatabaseName = parent->env->DatabaseName;
