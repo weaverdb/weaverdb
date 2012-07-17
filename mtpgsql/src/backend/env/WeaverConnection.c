@@ -326,8 +326,11 @@ WDestroyConnection(OpaqueWConn conn) {
     }
     
     while ( conn->plan ) {
+        SetEnv(parent->env);
         WDestroyPreparedStatement(conn->plan);
+        SetEnv(NULL);
     }
+    
     if (conn->validFlag >= 0) {
         WCancelAndJoin(conn);
         WDisposeConnection(conn);
