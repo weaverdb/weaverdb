@@ -326,7 +326,7 @@ WDestroyConnection(OpaqueWConn conn) {
     }
     
     while ( conn->plan ) {
-        SetEnv(parent->env);
+        SetEnv(conn->env);
         WDestroyPreparedStatement(conn->plan);
         SetEnv(NULL);
     }
