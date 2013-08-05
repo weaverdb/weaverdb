@@ -125,6 +125,14 @@ long int	BufferFlushCount;
 long int	LocalBufferFlushCount;
 
 static void InitializeBuffers(int start, int count, char* block);
+static void* LockedAlloc(MemoryContext cxt, Size size) {
+    void* pointer = MemoryContextAlloc(cxt,size);
+    if ( pointer != NULL ) {
+        mlock(pointer,size);
+    }
+    return pointer;
+}
+
 /*
  * Initialize module:
  *
@@ -191,7 +199,7 @@ AddMoreBuffers(int count) {
             pthread_mutex_lock(&buf->cntx_lock.guard);
             if ( buf->locflags & BM_RETIRED ) {
                 activate += 1;
-                buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+                buf->data = LockedAlloc(buffer_cxt,BLCKSZ);
                 buf->locflags &= ~(BM_RETIRED);
                 buf->freeNext = INVALID_DESCRIPTOR;
                 if ( head == NULL ) {
@@ -216,7 +224,7 @@ AddMoreBuffers(int count) {
             buf = &BufferDescriptors[i];
             pthread_mutex_lock(&buf->cntx_lock.guard);
             buf->locflags &= ~(BM_RETIRED);
-            buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+            buf->data = LockedAlloc(buffer_cxt,BLCKSZ);
             pthread_mutex_unlock(&buf->cntx_lock.guard);
             Assert(buf->data != NULL);
         }
@@ -269,7 +277,7 @@ InitializeBuffers(int start, int count, char* block) {
                     buf->data = block;
                     block += BLCKSZ;
                 } else {
-                    buf->data = MemoryContextAlloc(buffer_cxt,BLCKSZ);
+                    buf->data = LockedAlloc(buffer_cxt,BLCKSZ);
                 }
                 Assert(buf->data != NULL);
             }
