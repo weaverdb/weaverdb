@@ -533,7 +533,7 @@ other			.
      pfree(ptr);  
  }
 
-void yyerror(const char * message) {  
+void yyerror(void* info, const char * message) {  
 	elog(ERROR, "parser: %s at or near \"%s\"", message, yyget_text(GetParserInfo()->yyscanner));
 }
 

@@ -23,7 +23,8 @@ public class BaseWeaverConnection {
     public final static int bindStream = 42;
     public final static int bindDirect = 43;
     public final static int bindNull = 0;
-    public LinkID id = new LinkID();
+    public final LinkID id = new LinkID();
+    public final long nativePointer = 0;
     
     public int resultField = 0;
     String errorText = "";
@@ -52,8 +53,7 @@ public class BaseWeaverConnection {
     }
 
     public synchronized void dispose() throws SQLException {
-        if ( id!= null ) dispose(id);
-        id = null;
+        if ( id!= null ) dispose(this);
     }
     
     @Override

@@ -32,6 +32,7 @@ typedef struct javacache {
    /*  BaseWeaverConnection fields */
     jfieldID                        idfield;   
     jfieldID                        tracker;
+    jfieldID                        nativePointer;
     jfieldID                        result;
     jfieldID                        eText;
     jfieldID                        eState;

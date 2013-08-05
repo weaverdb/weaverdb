@@ -1,5 +1,5 @@
-%define api.pure
-%pure_parser
+%define api.pure true
+%param {void* yyparser}
 %{
 
 
@@ -2370,7 +2370,7 @@ grantee:  PUBLIC
 
 opt_with_grant:  WITH GRANT OPTION
 				{
-					yyerror("WITH GRANT OPTION is not supported.  Only relation owners can set privileges");
+					yyerror(NULL, "WITH GRANT OPTION is not supported.  Only relation owners can set privileges");
 				 }
 		| 
 		;

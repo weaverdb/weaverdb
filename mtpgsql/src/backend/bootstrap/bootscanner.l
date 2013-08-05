@@ -139,7 +139,7 @@ yywrap(void)
 }
 
 void
-Int_yyerror(const char *str)
+Int_yyerror(void* info, const char *str)
 {
 	fprintf(stderr,"\tsyntax error %d : %s",GetParserInfo()->yyline, str);
 }

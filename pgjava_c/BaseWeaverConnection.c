@@ -51,12 +51,16 @@
 
 JavaVM*   jvm;
 
+/*
 jobject 		*javaSideLog;
 StmtMgr                 *theManagers;
+*/
 static          javacache*      Cache;
 
+/*
 static pthread_mutex_t		allocator;
 static pthread_mutexattr_t	allocatt;
+*/
 
 static bool                     debug = false;
 static bool                     shuttingdown = false;
@@ -92,9 +96,6 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
 	char		datapass[2048];
 	memset(datapass,0,2048);
 	
-	pthread_mutexattr_init(&allocatt);
-	pthread_mutex_init(&allocator,&allocatt);
-	
 	if ( jd != NULL ) {
             int len = (*env)->GetStringUTFLength(env,jd);
             (*env)->GetStringUTFRegion(env,jd,0,len,datapass);
@@ -104,11 +105,6 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,job
             (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment not valid, see db log");
             return;
         }
-        
-        javaSideLog = malloc(GetMaxBackends() * sizeof(jobject));
-        theManagers = malloc(GetMaxBackends() * sizeof(StmtMgr));
-	memset(javaSideLog,0,GetMaxBackends() * sizeof(jobject));
-	memset(theManagers,0,GetMaxBackends() * sizeof(StmtMgr));
         
         Cache = CreateCache(env);
 		
@@ -122,28 +118,9 @@ JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_close(JNIEnv *env,jo
 /*  shutdown any threads resources still hanging around */
 	if ( prepareforshutdown() ) {
             shuttingdown = true;
-                
-            pthread_mutex_lock(&allocator);
-
-            for (int x = 0;x<GetMaxBackends();x++) {
-                    if (theManagers[x] != NULL ) {
-                            Init(theManagers[x],clean_input,clean_output);
-                            DestroyWeaverConnection(theManagers[x]);
-                            theManagers[x] = NULL;
-                    }
-                    if ( javaSideLog[x] != NULL ) {
-                            (*env)->DeleteGlobalRef(env,javaSideLog[x]);
-                            javaSideLog[x] = NULL;    
-                    }
-            }
-                
-            pthread_mutex_unlock(&allocator);
-
             wrapupweaverbackend();
         }
         DropCache(env);
-        
-	pthread_mutex_destroy(&allocator);
 }
 
 JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnection
@@ -156,38 +133,17 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnectio
             return JNI_FALSE;
         }
         
-	pthread_mutex_lock(&allocator);
-	for(x=0;x<GetMaxBackends();x++)
-	{
-		if (theManagers[x] == NULL) break;
-	}
+        StmtMgr mgr = allocateWeaver(env,theName,thePassword,theConnect);
 
-        if ( x < GetMaxBackends() ) {
-            jobject tracker = (*env)->GetObjectField(env,talkerObject,Cache->idfield);
-            (*env)->SetIntField(env,tracker,Cache->tracker,x);
-
-            theManagers[x] = allocateWeaver(env,theName,thePassword,theConnect);
-
-            if ( theManagers[x] != NULL ) {
-                if ( IsValid(theManagers[x]) ) {
-                    javaSideLog[x] = (*env)->NewGlobalRef(env,talkerObject);
-                } else {
-                    DestroyWeaverConnection(theManagers[x]);
-                    theManagers[x] = NULL;
-                }
-            } 
-            if ( theManagers[x] == NULL ) {
-                   if (!(*env)->ExceptionOccurred(env) ) 
-                        (*env)->ThrowNew(env,Cache->exception,"User not valid");
-            }
-       } else {
-           if (!(*env)->ExceptionOccurred(env) ) 
-                (*env)->ThrowNew(env,Cache->exception,"Too many users");
-       }
+        if ( mgr == NULL || !IsValid(mgr) ) {
+            DestroyWeaverConnection(mgr);
+            mgr = NULL;
+            (*env)->ThrowNew(env,Cache->exception,"User not valid");
+        } else {
+            (*env)->SetLongField(env,talkerObject,Cache->nativePointer,(jlong)mgr);
+        }
 //  done grabbing
 //  logging the id and creating statement space if logon is valid
-	
-	pthread_mutex_unlock(&allocator);
 
         return !(*env)->ExceptionOccurred(env);
     }
@@ -202,96 +158,37 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnect
             (*env)->ThrowNew(env,Cache->exception,"shutting down");
             return;
         }
-        pthread_mutex_lock(&allocator);
-	for(x=0;x<GetMaxBackends();x++)
-	{
-		if (theManagers[x] == NULL) break;
-                else if ((*env)->IsSameObject(env,javaSideLog[x],parent)) cparent = theManagers[x];
-	}
-        target = x;
-        while ( cparent == NULL && x < GetMaxBackends() ) {
-            if ((*env)->IsSameObject(env,javaSideLog[x],parent)) cparent = theManagers[x];
-            x++;
-        }
-        x = target;
 
-        if ( x < GetMaxBackends() ) {
-            jobject tracker = (*env)->GetObjectField(env,talkerObject,Cache->idfield);
-            (*env)->SetIntField(env,tracker,Cache->tracker,x);
 
-            theManagers[x] = CreateSubConnection(cparent);
+        StmtMgr mgr = CreateSubConnection(cparent);
 
-            if ( theManagers[x] != NULL ) {
-                if ( IsValid(theManagers[x]) ) {
-                    javaSideLog[x] = (*env)->NewGlobalRef(env,talkerObject);
-                } else {
-                    DestroyWeaverConnection(theManagers[x]);
-                    theManagers[x] = NULL;
-                }
-            }
-            
-            if ( theManagers[x] == NULL ) {
-                   if (!(*env)->ExceptionOccurred(env) ) 
-                        (*env)->ThrowNew(env,Cache->exception,"User not valid");
-            }
+        if ( mgr == NULL || !IsValid(mgr) ) {
+            DestroyWeaverConnection(mgr);
+            mgr = NULL;
+            (*env)->ThrowNew(env,Cache->exception,"User not valid");
         } else {
-           if (!(*env)->ExceptionOccurred(env) ) 
-                (*env)->ThrowNew(env,Cache->exception,"Too many users");
-       }
-
-	pthread_mutex_unlock(&allocator);
+            (*env)->SetLongField(env,talkerObject,Cache->nativePointer,(jlong)mgr);
+        }
 }
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
   (JNIEnv *env, jobject talkerObject, jobject linkid)
 {
 	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
-        
-        if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
     //	get proper agent	
-            jint link = getProperAgent(env,talkerObject);
-            if ( link < 0 ) return;
-        
-        //  free all resources associated with this connection
-            pthread_mutex_lock(&allocator);
-
-            if (javaSideLog[link] != NULL && (*env)->IsSameObject(env,talkerObject, javaSideLog[link]))
-            {
-                if ( theManagers[link] != NULL ) {
-                    Init(theManagers[link],clean_input,clean_output);
-                    DestroyWeaverConnection(theManagers[link]);
-                    theManagers[link] = NULL;
-                }
-                (*env)->DeleteGlobalRef(env,javaSideLog[link]);
-                javaSideLog[link] = NULL;
+        StmtMgr mgr = getStmtMgr(env,linkid);
+        if ( mgr == NULL ) {
+            if ( (*env)->ExceptionOccurred(env) ) {
+                (*env)->ExceptionClear(env);
             }
-            else
-            {
-                long count = 0;
-                for(count=0;count<GetMaxBackends();count++)
-                {
-                    if ( (*env)->IsSameObject(env,talkerObject, javaSideLog[count]) )
-                    {
-                        Init(theManagers[link],clean_input,clean_output);
-                        (*env)->DeleteGlobalRef(env,javaSideLog[count]);
-                        javaSideLog[count] = NULL;
-                        DestroyWeaverConnection(theManagers[count]);
-                        theManagers[count] = NULL;
-                    }
-                }
-            }
-            pthread_mutex_unlock(&allocator);
-                
+            return;
         } else {
-            StmtMgr ref = getStmtMgr(env,linkid);
-            if ( ref == NULL ) {
-                if ( (*env)->ExceptionOccurred(env) ) {
-                    (*env)->ExceptionClear(env);
-                }
-                return;
+            Init(mgr,clean_input,clean_output);
+            if ( (*env)->IsSameObject(env,talkerObject,linkid) ) {
+                GetWeaverConnection(mgr);
+            } else {
+                DestroyWeaverStmtManager(mgr); 
             }
-            Init(ref,clean_input,clean_output);
-            DestroyWeaverStmtManager(ref); 
         }
 
 }
@@ -660,9 +557,10 @@ static StmtMgr getStmtMgr(JNIEnv* env, jobject linkid) {
     if ( shuttingdown ) {
         ref = NULL;
     }else if ( (*env)->IsInstanceOf(env,linkid,Cache->talker) ) {
-        ref = theManagers[getProperAgent(env,linkid)];
+        jlong pointer = (*env)->GetLongField(env,linkid,Cache->nativePointer);
+        ref = *(StmtMgr*)pointer;
     } else if ( (*env)->IsInstanceOf(env,linkid,Cache->linkid) ) {
-        ref = theManagers[getProperAgent(env,linkid)];
+
     } else {
         jbyte* pointer = (*env)->GetByteArrayElements(env,linkid,NULL);
         ref = *(StmtMgr*)pointer;
@@ -753,10 +651,6 @@ static jint getProperAgent(JNIEnv * env,jobject talker)
 }
 
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
-    jint link = getProperAgent(env,talker);
-    
-    if ( !(*env)->IsSameObject(env,talker,javaSideLog[link]) ) return false;
-    if ( theManagers[link] == NULL || !IsValid(theManagers[link]) ) return false;
     if ( stmt == NULL || IsValid(stmt) ) return false;
     return true;
 }

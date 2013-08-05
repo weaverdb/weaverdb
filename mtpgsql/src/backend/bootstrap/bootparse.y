@@ -1,4 +1,5 @@
-%pure_parser
+%define api.pure true
+%param {void* yyparse}
 %name-prefix "Int_yy"
 %{
 /*-------------------------------------------------------------------------

@@ -39,6 +39,7 @@ javacache*  CreateCache(JNIEnv* env) {
 
         /*  field ids  */
         CachedClasses.idfield = (*env)->GetFieldID(env,CachedClasses.talker,"id","Ldriver/weaver/LinkID;");
+        CachedClasses.nativePointer = (*env)->GetFieldID(env,CachedClasses.talker,"nativePointer","J");
         CachedClasses.tracker = (*env)->GetFieldID(env,CachedClasses.linkid,"linkNumber","I");
         CachedClasses.result = (*env)->GetFieldID(env,CachedClasses.talker, "resultField","I");
 	CachedClasses.eText =  (*env)->GetFieldID(env,CachedClasses.talker,"errorText","Ljava/lang/String;");

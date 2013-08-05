@@ -21,7 +21,7 @@ extern "C" {
 #endif 
 /* from scan.l */
 PG_EXTERN void init_io(void);
-PG_EXTERN void yyerror(const char *message);
+PG_EXTERN void yyerror(void* info, const char *message);
 
 /* from gram.y */
 PG_EXTERN Oid	param_type(int t);

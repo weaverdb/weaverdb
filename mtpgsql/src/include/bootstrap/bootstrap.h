@@ -60,6 +60,6 @@ Form_pg_attribute attrtypes[MAXATTR];
 /* extern */ int	EnterString(char *str);
 /* extern */ void build_indices(void);
 
-/* extern */ void Int_yyerror(const char *str);
+/* extern */ void Int_yyerror(void* info, const char *str);
 
 #endif	 /* BOOTSTRAP_H */
