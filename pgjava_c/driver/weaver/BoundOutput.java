@@ -18,12 +18,12 @@ import java.util.Date;
 public class BoundOutput<T> extends Bound<T> {
 
     private BaseWeaverConnection owner;
-    private Object link;
+    private long link;
     private int index;
     private Object value;
     private boolean isnull = true;
 
-    protected BoundOutput(BaseWeaverConnection fc, Object link, int index, Class<T> type) throws SQLException {
+    protected BoundOutput(BaseWeaverConnection fc, long link, int index, Class<T> type) throws SQLException {
         owner = fc;
         this.link = link;
         setTypeClass(type);

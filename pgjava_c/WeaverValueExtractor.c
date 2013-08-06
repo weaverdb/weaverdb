@@ -33,12 +33,10 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.truncation = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BinaryTruncation"));
         /*  boundary objects */
         CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BaseWeaverConnection"));
-        CachedClasses.linkid = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/LinkID"));
         CachedClasses.boundin = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BoundInput"));
         CachedClasses.boundout = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BoundOutput"));
 
         /*  field ids  */
-        CachedClasses.idfield = (*env)->GetFieldID(env,CachedClasses.talker,"id","Ldriver/weaver/LinkID;");
         CachedClasses.nativePointer = (*env)->GetFieldID(env,CachedClasses.talker,"nativePointer","J");
         CachedClasses.tracker = (*env)->GetFieldID(env,CachedClasses.linkid,"linkNumber","I");
         CachedClasses.result = (*env)->GetFieldID(env,CachedClasses.talker, "resultField","I");

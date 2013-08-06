@@ -24,7 +24,6 @@ public class BaseWeaverConnection {
     public final static int bindDirect = 43;
     public final static int bindNull = 0;
     
-    private LinkID id = new LinkID();
     private long nativePointer = 0;
     
     public int resultField = 0;
@@ -46,7 +45,8 @@ public class BaseWeaverConnection {
         String password = connect.substring(userbr+1, passbr);
         String connection = connect.substring(passbr + 1);
 
-        return grabConnection(name, password, connection);
+        nativePointer = grabConnection(name, password, connection);
+        return ( nativePointer != 0 );
     }
 
     public boolean connect(String connString) throws SQLException {
@@ -54,9 +54,9 @@ public class BaseWeaverConnection {
     }
 
     public synchronized void dispose() throws SQLException {
-        if ( id!= null ) {
-            id = null;
-            dispose(this);
+        if ( nativePointer != 0 ) {
+            dispose(nativePointer);
+            nativePointer = 0;
         }
     }
     
@@ -68,7 +68,7 @@ public class BaseWeaverConnection {
 
     public BaseWeaverConnection spawnHelper() throws SQLException {
         BaseWeaverConnection cloned = new BaseWeaverConnection();
-        cloned.connectSubConnection(this);
+        cloned.nativePointer = cloned.connectSubConnection(this);
         return cloned;
     }
 
@@ -94,7 +94,7 @@ public class BaseWeaverConnection {
             else bo.deactivate();
         }
 
-        bo = new BoundOutput<T>(this,id, index, type);
+        bo = new BoundOutput<T>(this,nativePointer, index, type);
         outputs.put(index, bo);
         return bo;
     }
@@ -108,7 +108,7 @@ public class BaseWeaverConnection {
             else bi.deactivate();
         }
 
-        bi = new BoundInput<T>(this,id, name, type);
+        bi = new BoundInput<T>(this,nativePointer, name, type);
         inputs.put(name, bi);
         return bi;
     }
@@ -163,24 +163,24 @@ public class BaseWeaverConnection {
     }
 
     public long execute() throws SQLException {
-        return executeStatement(id);
+        return executeStatement(nativePointer);
     }
 
     public boolean fetch() throws SQLException {
-        return fetchResults(id);
+        return fetchResults(nativePointer);
     }
     
-    private native boolean grabConnection(String name, String password, String connect) throws SQLException;
-    private native void connectSubConnection(BaseWeaverConnection parent) throws SQLException;
-    private native void dispose(Object link);
+    private native long grabConnection(String name, String password, String connect) throws SQLException;
+    private native long connectSubConnection(BaseWeaverConnection parent) throws SQLException;
+    private native void dispose(long link);
 
-    private native Object prepareStatement(String theStatement) throws SQLException;
+    private native long prepareStatement(String theStatement) throws SQLException;
     private native long parseStatement(String theStatement) throws SQLException;
-    private native long executeStatement(Object link) throws SQLException;
-    private native boolean fetchResults(Object link) throws SQLException;
+    private native long executeStatement(long link) throws SQLException;
+    private native boolean fetchResults(long link) throws SQLException;
 
-    native void setInput(Object link, String name, int type, Object value) throws SQLException;
-    native void getOutput(Object link, int index, int type, BoundOutput test) throws SQLException;
+    native void setInput(long link, String name, int type, Object value) throws SQLException;
+    native void getOutput(long link, int index, int type, BoundOutput test) throws SQLException;
 
     private native void prepareTransaction() throws SQLException;
     private native void cancelTransaction();
@@ -233,7 +233,7 @@ public class BaseWeaverConnection {
     }
     
     public class Statement {
-        private Object  link;
+        private long  link;
         
         Statement(String statement) throws SQLException {
             link = prepareStatement(statement);
@@ -280,8 +280,8 @@ public class BaseWeaverConnection {
         
         public void dispose() {
             synchronized (BaseWeaverConnection.this) {
-                if ( link != null ) BaseWeaverConnection.this.dispose(link);
-                link = null;
+                if ( link != 0 ) BaseWeaverConnection.this.dispose(link);
+                link = 0;
             }
         }
         

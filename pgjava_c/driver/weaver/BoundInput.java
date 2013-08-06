@@ -20,11 +20,11 @@ import java.nio.channels.ReadableByteChannel;
 public class BoundInput<T> extends Bound<T> {
 
     private BaseWeaverConnection owner;
-    private Object  link;
+    private long  link;
     private String name;
     private Object stream_holder;
 
-    protected BoundInput(BaseWeaverConnection fc, Object id,String name, Class<T> type) throws SQLException {
+    protected BoundInput(BaseWeaverConnection fc, long id,String name, Class<T> type) throws SQLException {
         owner = fc;
         link = id;
         setTypeClass(type);

@@ -42,33 +42,33 @@ extern "C" {
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    grabConnection
- * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)J
  */
-JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnection
+JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnection
   (JNIEnv *, jobject, jstring, jstring, jstring);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    connectSubConnection
- * Signature: (Ldriver/weaver/BaseWeaverConnection;)V
+ * Signature: (Ldriver/weaver/BaseWeaverConnection;)J
  */
-JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnection
+JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnection
   (JNIEnv *, jobject, jobject);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    dispose
- * Signature: (Ljava/lang/Object;)V
+ * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
-  (JNIEnv *, jobject, jobject);
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    prepareStatement
- * Signature: (Ljava/lang/String;)Ljava/lang/Object;
+ * Signature: (Ljava/lang/String;)J
  */
-JNIEXPORT jobject JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
+JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
   (JNIEnv *, jobject, jstring);
 
 /*
@@ -82,34 +82,34 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_parseStatement
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    executeStatement
- * Signature: (Ljava/lang/Object;)J
+ * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_executeStatement
-  (JNIEnv *, jobject, jobject);
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    fetchResults
- * Signature: (Ljava/lang/Object;)Z
+ * Signature: (J)Z
  */
 JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
-  (JNIEnv *, jobject, jobject);
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    setInput
- * Signature: (Ljava/lang/Object;Ljava/lang/String;ILjava/lang/Object;)V
+ * Signature: (JLjava/lang/String;ILjava/lang/Object;)V
  */
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_setInput
-  (JNIEnv *, jobject, jobject, jstring, jint, jobject);
+  (JNIEnv *, jobject, jlong, jstring, jint, jobject);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    getOutput
- * Signature: (Ljava/lang/Object;IILdriver/weaver/BoundOutput;)V
+ * Signature: (JIILdriver/weaver/BoundOutput;)V
  */
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_getOutput
-  (JNIEnv *, jobject, jobject, jint, jint, jobject);
+  (JNIEnv *, jobject, jlong, jint, jint, jobject);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection

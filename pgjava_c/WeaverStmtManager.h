@@ -40,6 +40,7 @@ ConnMgr GetWeaverConnection(StmtMgr );
 void DestroyWeaverConnection( ConnMgr );
 StmtMgr CreateWeaverStmtManager(ConnMgr connection);
 short  IsValid(ConnMgr mgr);
+short  IsStmtValid(StmtMgr mgr);
 
 StmtMgr  CreateSubConnection(StmtMgr );
 ConnMgr DestroyWeaverStmtManager( StmtMgr );

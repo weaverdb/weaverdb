@@ -463,6 +463,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
 extern long 
 WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     WConn connection = SETUP(stmt->owner);
+    long err;
     READY(connection,err);
     if ( stmt == connection->plan ) {
         connection->plan = stmt->next;

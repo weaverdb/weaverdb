@@ -86,9 +86,10 @@ CreateWeaverConnection( const char* name, const char * paslong, const char* conn
         WDestroyConnection(conn);
         return NULL;
     } else {
-        ConnMgr mgr = (WeaverConnectionManager)WAllocConnectionMemory(connection,sizeof(WeaverConnectionManager));
+        ConnMgr mgr = (WeaverConnectionManager*)WAllocConnectionMemory(conn,sizeof(WeaverConnectionManager));
         pthread_mutex_init(&mgr->control, NULL);
         mgr->refCount = 0;
+        mgr->theConn = conn;
         return mgr;
     }
 }
@@ -98,10 +99,10 @@ CreateWeaverStmtManager(ConnMgr connection)
 {
     int counter = 0;
 
-    if ( !WIsValidConnection(connection) ) return NULL;
+    if ( !WIsValidConnection(connection->theConn) ) return NULL;
     
     pthread_mutex_lock(&connection->control);
-    StmtMgr mgr = (StmtMgr)WAllocConnectionMemory(connection,sizeof(WeaverStmtManager));
+    StmtMgr mgr = (StmtMgr)WAllocConnectionMemory(connection->theConn,sizeof(WeaverStmtManager));
     if ( mgr != NULL ) {
         connection->refCount += 1;
         mgr->connection = connection;
@@ -117,7 +118,7 @@ CreateWeaverStmtManager(ConnMgr connection)
 
     mgr->blob_size = BLOBSIZE;
     mgr->stackSize = mgr->blob_size * 2;
-    mgr->dataStack = WAllocConnectionMemory(connection,mgr->stackSize);
+    mgr->dataStack = WAllocConnectionMemory(connection->theConn,mgr->stackSize);
     if ( mgr->dataStack == NULL ) return NULL;
     mgr->transactionId = 0;
 
@@ -126,18 +127,23 @@ CreateWeaverStmtManager(ConnMgr connection)
 
     mgr->log_count = MAX_FIELDS;
 
-    mgr->inputLog = WAllocConnectionMemory(connection,sizeof(inputDef) * mgr->log_count);
-    mgr->outputLog = WAllocConnectionMemory(connection,sizeof(outputDef) * mgr->log_count);
-/*  zero statement structures */
-    for ( counter = 0;counter < mgr->log_count;counter++ ) {
-        memset(&mgr->outputLog[counter],0,sizeof(outputDef));
-        mgr->outputLog[counter].base.indicator = -1;
-        mgr->outputLog[counter].base.byval = 0;
-        mgr->outputLog[counter].base.userspace = NULL;
-        memset(&mgr->inputLog[counter],0,sizeof(inputDef));
-        mgr->inputLog[counter].base.indicator = -1;
-        mgr->inputLog[counter].base.byval = 0;
-        mgr->inputLog[counter].base.userspace = NULL;
+    if ( mgr->log_count > 0 ) {
+        mgr->inputLog = WAllocConnectionMemory(connection->theConn,sizeof(inputDef) * mgr->log_count);
+        mgr->outputLog = WAllocConnectionMemory(connection->theConn,sizeof(outputDef) * mgr->log_count);
+    /*  zero statement structures */
+        for ( counter = 0;counter < mgr->log_count;counter++ ) {
+            memset(&mgr->outputLog[counter],0,sizeof(outputDef));
+            mgr->outputLog[counter].base.indicator = -1;
+            mgr->outputLog[counter].base.byval = 0;
+            mgr->outputLog[counter].base.userspace = NULL;
+            memset(&mgr->inputLog[counter],0,sizeof(inputDef));
+            mgr->inputLog[counter].base.indicator = -1;
+            mgr->inputLog[counter].base.byval = 0;
+            mgr->inputLog[counter].base.userspace = NULL;
+        }
+    } else {
+        mgr->inputLog = NULL;
+        mgr->outputLog = NULL;
     }
     
     return mgr;
@@ -169,7 +175,7 @@ ConnMgr GetWeaverConnection( StmtMgr mgr )
 
 ConnMgr DestroyWeaverStmtManager( StmtMgr mgr )
 {
-    if ( mgr == NULL ) return;
+    if ( mgr == NULL ) return NULL;
     
     ConnMgr conn = mgr->connection;
     
@@ -177,9 +183,9 @@ ConnMgr DestroyWeaverStmtManager( StmtMgr mgr )
     conn->refCount -= 1;
     pthread_mutex_unlock(&conn->control);
 
-    WFreeMemory(conn->theConn,mgr->dataStack);
-    WFreeMemory(conn->theConn,mgr->inputLog);
-    WFreeMemory(conn->theConn,mgr->outputLog);
+    if ( mgr->dataStack != NULL ) WFreeMemory(conn->theConn,mgr->dataStack);
+    if ( mgr->inputLog != NULL ) WFreeMemory(conn->theConn,mgr->inputLog);
+    if ( mgr->outputLog != NULL ) WFreeMemory(conn->theConn,mgr->outputLog);
     
     WFreeMemory(conn->theConn,mgr);
     
@@ -191,9 +197,10 @@ CreateSubConnection( StmtMgr parent)
 {
     if ( parent == NULL ) return NULL;
     OpaqueWConn connection = WCreateSubConnection(parent->connection->theConn);
-    ConnMgr mgr = (WeaverConnectionManager)WAllocConnectionMemory(connection,sizeof(WeaverConnectionManager));
+    ConnMgr mgr = (WeaverConnectionManager*)WAllocConnectionMemory(connection,sizeof(WeaverConnectionManager));
     pthread_mutex_init(&mgr->control, NULL);
     mgr->refCount = 0;
+    mgr->theConn = connection;
     return CreateWeaverStmtManager(mgr);
 }
 
@@ -204,10 +211,18 @@ short IsValid( ConnMgr mgr )
     return (short)(WIsValidConnection(mgr->theConn));
 }
 
+short IsStmtValid( StmtMgr mgr )
+{
+    if ( mgr == NULL ) return 0;
+    if ( mgr->connection == NULL ) return (short)0;
+    return (short)(WIsValidConnection(mgr->connection->theConn));
+}
+
 void Clean( StmtMgr mgr, usercleanup input, usercleanup output )
 {
         short x;
-        if ( !IsValid(mgr) )  return;
+        ConnMgr conn = mgr->connection;
+        if ( !IsValid(conn) )  return;
         ClearData(mgr);
         for (x=0;x<mgr->log_count;x++)
         {
@@ -237,7 +252,8 @@ short Init( StmtMgr mgr, usercleanup input, usercleanup output )
 {
     short clean;
 
-    if ( !IsValid(mgr) ) return 0;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return 0;
     
     if ( mgr->statement != NULL ) {
         Clean(mgr,input,output);
@@ -269,12 +285,13 @@ short Fetch( StmtMgr mgr )
 
     long val = WFetch(mgr->statement);
     if ( val == 4 ) return 1;
-    return CheckForErrors(conn);
+    return CheckForErrors(mgr);
 }
 
 long Count( StmtMgr mgr )
 {
-    if ( !IsValid(mgr) ) return -1;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return -1;
     return WExecCount(mgr->statement);
 }
 
@@ -331,12 +348,16 @@ short Exec( StmtMgr mgr )
 }
 
 long GetTransactionId( StmtMgr mgr ) {
-        if ( !IsValid(mgr) )  return -1;
+    
+    ConnMgr conn = mgr->connection;
+    
+        if ( !IsValid(conn) )  return -1;
     return mgr->transactionId;
 }
 
 long GetCommandId( StmtMgr mgr ) {
-        if ( !IsValid(mgr) )  return -1;
+    ConnMgr conn = mgr->connection;
+        if ( !IsValid(conn) )  return -1;
     return mgr->commandId;
 }
 
@@ -525,7 +546,8 @@ Input AddBind(StmtMgr mgr, const char * vari, short type)
 
 Input  GetBind(StmtMgr mgr, const char * vari, short type) {
         Input    bind = NULL;
-        if ( !IsValid(mgr) ) return NULL;
+        ConnMgr conn = mgr->connection;
+        if ( !IsValid(conn) ) return NULL;
 
      /*  remove the marker flag of the named parameter if there is one */
         switch (*vari) {
@@ -633,7 +655,8 @@ short GetOutputs(StmtMgr mgr, void* funcargs, outputfunc sendfunc)
 {
     short x;
     
-    if ( !IsValid(mgr) ) return -1;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return -1;
     for (x=0;x<mgr->log_count;x++) {
         Output      output = &mgr->outputLog[x];
         void* value = NULL;
@@ -654,9 +677,8 @@ Output OutputLink(StmtMgr mgr, int index, short type)
         Bound       base = NULL;
         
         ConnMgr conn = mgr->connection;
-        if ( !IsValid(conn) ) return NULL;
 
-        if ( !IsValid(mgr) ) {
+        if ( !IsValid(conn) ) {
             return NULL;
         } else {
             short x;
@@ -753,14 +775,16 @@ Output OutputLink(StmtMgr mgr, int index, short type)
 
 void ClearData(StmtMgr mgr)
 {
-    if ( !IsValid(mgr) ) return;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return;
 	if (mgr->dataStack != NULL ) memset(mgr->dataStack,'\0',mgr->stackSize);
         mgr->holdingArea = 0;
 }
 
 void* Advance(StmtMgr mgr, long size)
 {
-    if ( !IsValid(mgr) ) return NULL;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return NULL;
 	if (size >= mgr->stackSize ) return NULL;
 	return ((char*)mgr->dataStack)+size;
 }
@@ -835,7 +859,8 @@ short ResetBindings(StmtMgr mgr) {
 
 short SetStatementBlobSize(StmtMgr mgr, long size ) 
 {
-    if ( !IsValid(mgr) ) return -1;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return -1;
     
     mgr->blob_size = size;
     if ( ( mgr->blob_size * 4 ) > mgr->stackSize ) SetStatementSpaceSize(mgr, mgr->blob_size * 4);
@@ -844,7 +869,8 @@ short SetStatementBlobSize(StmtMgr mgr, long size )
 
 long GetStatementSpaceSize( StmtMgr mgr ) 
 {
-    if ( !IsValid(mgr) ) return -1;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return -1;
     
     return mgr->stackSize;
 }
@@ -852,14 +878,16 @@ long GetStatementSpaceSize( StmtMgr mgr )
 
 long GetStatementBlobSize( StmtMgr mgr ) 
 {
-    if ( !IsValid(mgr) ) return -1;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return -1;
     
     return mgr->blob_size;
 }
 
 short DelegateError(StmtMgr mgr, const char* state,const char* text,int code)
 {
-    if ( !IsValid(mgr) ) return -1;
+    ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) return -1;
     
     mgr->errorlevel = 2;
     mgr->errordelegate.rc = code;
