@@ -29,20 +29,20 @@ typedef struct bindObj * Input;
 #define OutputToBound(bound) ( (Bound)bound )
 #define InputToBound(bound) ( (Bound)bound )
 
+typedef struct WeaverConnectionManager* ConnMgr;
 typedef struct WeaverStmtManager* StmtMgr;
 
 typedef int (*outputfunc)(StmtMgr , int type, void* value, int length, void* userarg, void* funcarg);
 typedef int (*usercleanup)(StmtMgr , int type, void* userarg);
 
-OpaqueWConn CreateWeaverConnection(const char* name, const char * paslong, const char* connect);
-OpaqueWConn GetWeaverConnection(StmtMgr );
-void DestroyWeaverConnection( StmtMgr );
-
-StmtMgr CreateWeaverStmtManager(OpaqueWConn connection);
+ConnMgr CreateWeaverConnection(const char* name, const char * paslong, const char* connect);
+ConnMgr GetWeaverConnection(StmtMgr );
+void DestroyWeaverConnection( ConnMgr );
+StmtMgr CreateWeaverStmtManager(ConnMgr connection);
+short  IsValid(ConnMgr mgr);
 
 StmtMgr  CreateSubConnection(StmtMgr );
-void DestroyWeaverStmtManager( StmtMgr );
-short  IsValid( StmtMgr mgr);
+ConnMgr DestroyWeaverStmtManager( StmtMgr );
 
 short Begin( StmtMgr );
 short Rollback( StmtMgr );
@@ -59,7 +59,7 @@ short EndProcedure( StmtMgr );
 
 short UserLock(StmtMgr , const char* grouptolock,uint32_t val,char lock);
 
-void	Init(StmtMgr ,usercleanup input,usercleanup output);
+short	Init(StmtMgr ,usercleanup input,usercleanup output);
 
 Pipe     PipeConnect(StmtMgr , void* args, pipefunc func);
 void*    PipeDisconnect(StmtMgr , Pipe comm);

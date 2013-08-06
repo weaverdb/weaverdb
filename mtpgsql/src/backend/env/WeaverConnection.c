@@ -463,7 +463,6 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
 extern long 
 WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     WConn connection = SETUP(stmt->owner);
-    long err;
     READY(connection,err);
     if ( stmt == connection->plan ) {
         connection->plan = stmt->next;
@@ -483,7 +482,7 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     MemoryContextDelete(stmt->plan_cxt);
 
     RELEASE(connection);
-    return err;
+    return ( connection->plan == NULL ) ? 1 : 0;
 }
 
 extern long

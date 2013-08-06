@@ -19,7 +19,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <pthread.h>
 #include <math.h>
 
 #include "env/connectionutil.h"
@@ -80,14 +79,13 @@ static int direct_pipein(void* args,char* buff,int start,int run);
 static int clean_output(StmtMgr mgr, int type, void* arg);
 static int clean_input(StmtMgr mgr,int type, void* arg);
 
-static jint getProperAgent(JNIEnv* env,jobject talker);
 static StmtMgr getStmtMgr(JNIEnv* env,jobject id);
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt);
 static jint  clearError(JNIEnv* env,jobject talker,StmtMgr link);
 static jint  reportError(JNIEnv* env,jobject talker,StmtMgr link);
 static int   translateType(jint type);
 
-static StmtMgr  allocateWeaver(JNIEnv* env,jstring username,jstring password,jstring database);
+static ConnMgr  allocateWeaver(JNIEnv* env,jstring username,jstring password,jstring database);
 
 static char object_loader[512];
 
@@ -133,14 +131,14 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnectio
             return JNI_FALSE;
         }
         
-        StmtMgr mgr = allocateWeaver(env,theName,thePassword,theConnect);
+        ConnMgr mgr = allocateWeaver(env,theName,thePassword,theConnect);
 
         if ( mgr == NULL || !IsValid(mgr) ) {
             DestroyWeaverConnection(mgr);
             mgr = NULL;
             (*env)->ThrowNew(env,Cache->exception,"User not valid");
         } else {
-            (*env)->SetLongField(env,talkerObject,Cache->nativePointer,(jlong)mgr);
+            (*env)->SetLongField(env,talkerObject,Cache->nativePointer,(jlong)CreateWeaverStmtManager(mgr));
         }
 //  done grabbing
 //  logging the id and creating statement space if logon is valid
@@ -150,16 +148,13 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnectio
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnection
   (JNIEnv * env, jobject talkerObject, jobject parent) {
-	int			x;
-        int                     target;
         StmtMgr    cparent = NULL;
 
         if ( shuttingdown ) {
             (*env)->ThrowNew(env,Cache->exception,"shutting down");
             return;
         }
-
-
+        //  TODO:  GET THE CPARENT HERE
         StmtMgr mgr = CreateSubConnection(cparent);
 
         if ( mgr == NULL || !IsValid(mgr) ) {
@@ -184,11 +179,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
             return;
         } else {
             Init(mgr,clean_input,clean_output);
-            if ( (*env)->IsSameObject(env,talkerObject,linkid) ) {
-                GetWeaverConnection(mgr);
-            } else {
-                DestroyWeaverStmtManager(mgr); 
-            }
+            DestroyWeaverConnection(DestroyWeaverStmtManager(mgr)); 
         }
 
 }
@@ -209,9 +200,7 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_beginTransaction
 
 JNIEXPORT jobject JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement(JNIEnv *env, jobject talkerObject, jstring statement)
 {
-	const char* 	pass_stmt;
-	jsize           statementlen;
-        int x;	
+	const char* 	pass_stmt;	
 
         StmtMgr base = getStmtMgr(env,talkerObject);
 
@@ -236,7 +225,6 @@ JNIEXPORT jobject JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStateme
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_parseStatement(JNIEnv *env, jobject talkerObject, jstring statement)
 {
 	const char* 	pass_stmt;
-	jsize           statementlen;
         
         StmtMgr base = getStmtMgr(env,talkerObject);
 
@@ -616,40 +604,6 @@ static jint reportError(JNIEnv* env,jobject talkerObject,StmtMgr base)
 	return 0;
 }
 
-static jint getProperAgent(JNIEnv * env,jobject talker)
-{
-        if (  (*env)->ExceptionOccurred(env) ) {
-            (*env)->ExceptionDescribe(env);
-            return -1;
-        }
-         
-        if ( shuttingdown ) {
-            (*env)->ThrowNew(env,Cache->exception,"shutting down");
-            return -1;
-        }
-        
-        jobject tracker = NULL;
-        
-        if ( (*env)->IsInstanceOf(env,talker,Cache->talker) ) {
-            tracker =  (*env)->GetObjectField(env,talker,Cache->idfield);
-        } else if ( (*env)->IsInstanceOf(env,talker,Cache->linkid) ) {
-            tracker = talker;
-        }
-        
-	jint 	        link =  (*env)->GetIntField(env,tracker,Cache->tracker);
-
-        if ( link >= GetMaxBackends() || link < 0 ) {
-            link = -1;
-        }
-
-        if ( link < 0 ) {
-            if (!(*env)->ExceptionOccurred(env) ) 
-                (*env)->ThrowNew(env,Cache->exception,"agent not valid");
-        }
-        
-        return link;
-}
-
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
     if ( stmt == NULL || IsValid(stmt) ) return false;
     return true;
@@ -788,7 +742,7 @@ int clean_input(StmtMgr mgr,int type, void* arg) {
     return 0;
 }
 
-static StmtMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jstring connection) {
+static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jstring connection) {
 	jsize passlen = (*env)->GetStringUTFLength(env,password);
 	jsize namelen = (*env)->GetStringUTFLength(env,username);
 	jsize connlen = (*env)->GetStringUTFLength(env,connection);
@@ -813,7 +767,7 @@ static StmtMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
 	(*env)->GetStringUTFRegion(env,username,0,namelen,name);
 	(*env)->GetStringUTFRegion(env,connection,0,connlen,conn);
 
-	return CreateWeaverStmtManager(CreateWeaverConnection(name, pass, conn));
+	return CreateWeaverConnection(name, pass, conn);
          
 }
 
