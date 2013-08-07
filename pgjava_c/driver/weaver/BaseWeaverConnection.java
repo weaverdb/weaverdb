@@ -68,7 +68,7 @@ public class BaseWeaverConnection {
 
     public BaseWeaverConnection spawnHelper() throws SQLException {
         BaseWeaverConnection cloned = new BaseWeaverConnection();
-        cloned.nativePointer = cloned.connectSubConnection(this);
+        cloned.nativePointer = cloned.connectSubConnection();
         return cloned;
     }
 
@@ -171,7 +171,7 @@ public class BaseWeaverConnection {
     }
     
     private native long grabConnection(String name, String password, String connect) throws SQLException;
-    private native long connectSubConnection(BaseWeaverConnection parent) throws SQLException;
+    private native long connectSubConnection() throws SQLException;
     private native void dispose(long link);
 
     private native long prepareStatement(String theStatement) throws SQLException;

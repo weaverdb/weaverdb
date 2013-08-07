@@ -19,6 +19,12 @@ JAVA_HOME=/usr/jdk/latest
 endif
 endif
 
+ifeq ($(CC), CC)
+SHARED=-G -Mmapfile.txt
+else
+SHARED=-shared
+endif
+
 MYINC=\
 -I${PG_HOME}/include -I./.  -I${PG_HOME}/backend -I${JAVA_HOME}/include \
 -I${JAVA_HOME}/include/${PORTNAME} 
@@ -47,54 +53,28 @@ MACOSPATH=\
 -L${SRCDIR}/backend \
 -L${JAVA_HOME}/lib \
 
-ifneq ($(PORTNAME),macosx)
 all: java_bits libweaver.so weaver 
-legacy: libmtpgjava.so pgjava 
 # think about using malloc mtmalloc as memory management libs
 java_bits:
 	${JAVA_HOME}/bin/javac -g driver/weaver/*.java
 	# ${JAVA_HOME}/bin/javac driver/weaver/*.java driver/weaver/jdbc/*.java
 	${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class 
 	# ${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class driver/weaver/jdbc/*.class
+ifneq ($(PORTNAME),macosx)
 weaver: libweaver.so
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
 	${MYINC} ${MYPATH} ${MYLIBS} -L. \
 	-ljvm \
 	main.c \
 	-o weaver
-ifeq ($(PORTNAME),linux)
 libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c $(SRCDIR)/backend/libmtpg.a 
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
-	-shared \
+	${SHARED} \
 	${MYINC} ${MYPATH} ${MYLIBS} \
 	WeaverStmtManager.c \
 	BaseWeaverConnection.c \
 	WeaverValueExtractor.c 	\
 	-o libweaver.so -lmtpg
-endif
-ifeq ($(PORTNAME),solaris)
-libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c $(SRCDIR)/backend/libmtpg.a
-	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
-	-G -Mmapfile.txt \
-	${MYINC} ${MYPATH} ${MYLIBS} \
-	WeaverStmtManager.c \
-	BaseWeaverConnection.c \
-	WeaverValueExtractor.c 	\
-	-o libweaver.so -lmtpg
-endif
-pgjava: libmtpgjava.so
-	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
-	${MYINC} ${MYPATH} ${MYLIBS} -L. \
-	-ljvm \
-	main.c \
-	-o weaver
-libmtpgjava.so: PostgresStmtManager.c PostgresFrameConnection.c $(SRCDIR)/backend/libmtpg.a 
-	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
-	-G \
-	${MYINC} ${MYPATH} ${MYLIBS} -lmtpg -i \
-	PostgresStmtManager.c \
-	PostgresFrameConnection.c \
-	-o libmtpgjava.so
 else
 all: libweaver.jnilib weaver 
 weaver: 

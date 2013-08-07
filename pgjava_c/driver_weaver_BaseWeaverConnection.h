@@ -50,10 +50,10 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnection
 /*
  * Class:     driver_weaver_BaseWeaverConnection
  * Method:    connectSubConnection
- * Signature: (Ldriver/weaver/BaseWeaverConnection;)J
+ * Signature: ()J
  */
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnection
-  (JNIEnv *, jobject, jobject);
+  (JNIEnv *, jobject);
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection

@@ -448,7 +448,8 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
                     memmove(entry->index_size + (idx+1),entry->index_size + (idx),(INDEX_SIZE - idx - 1) * sizeof(Size));
                     entry->index[idx] = p;
                     entry->index_size[idx] = request;
-                } else if ( (MaxTupleSize / (INDEX_SIZE - idx)) > alloc[p].avail > (MaxTupleSize / (INDEX_SIZE)) * idx ) {
+                } else if ( (MaxTupleSize / (INDEX_SIZE - idx)) > alloc[p].avail &&
+			alloc[p].avail > (MaxTupleSize / (INDEX_SIZE)) * idx ) {
                     entry->index[idx] = p;
                     entry->index_size[idx] = alloc[p].avail;
                 } else {

@@ -147,14 +147,13 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_grabConnection
     }
 
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnection
-  (JNIEnv * env, jobject talkerObject, jobject parent) {
-        StmtMgr    cparent = NULL;
+  (JNIEnv * env, jobject talkerObject) {
+        StmtMgr    cparent = getStmtMgr(env,talkerObject,0);
 
         if ( shuttingdown ) {
             (*env)->ThrowNew(env,Cache->exception,"shutting down");
             return 0;
         }
-        //  TODO:  GET THE CPARENT HERE
         StmtMgr mgr = CreateSubConnection(cparent);
 
         if ( mgr == NULL ) {
