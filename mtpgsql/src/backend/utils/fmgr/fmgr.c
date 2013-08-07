@@ -630,7 +630,7 @@ fmgr(Oid procedureId,...)
             JavaInfo*   jinfo = finfo.fn_data;
             jvalue      values[FUNC_MAX_ARGS];
             
-            va_start(pvar, first);
+            va_start(pvar, procedureId);
 
             for (i = 0; i < pronargs; ++i)
                     values[i] = ConvertToJavaArg(jinfo->types[i],va_arg(pvar, Datum));
@@ -639,7 +639,7 @@ fmgr(Oid procedureId,...)
             return (char*)fmgr_javaA(PointerGetDatum(finfo.fn_data),NULL,finfo.fn_nargs,jinfo->types,values,&isNull);
         } else {
             FmgrValues	values;
-            va_start(pvar, first);
+            va_start(pvar, procedureId);
 
             for (i = 0; i < pronargs; ++i)
                     values.data[i] = va_arg(pvar, char *);

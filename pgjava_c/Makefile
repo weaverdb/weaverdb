@@ -65,7 +65,7 @@ weaver: libweaver.so
 ifeq ($(PORTNAME),linux)
 libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c $(SRCDIR)/backend/libmtpg.a 
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
-	-G \
+	-shared \
 	${MYINC} ${MYPATH} ${MYLIBS} \
 	WeaverStmtManager.c \
 	BaseWeaverConnection.c \

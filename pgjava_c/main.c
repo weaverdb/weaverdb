@@ -118,6 +118,7 @@ int main(int argc,char* argv[])
         (*jvm)->DetachCurrentThread(jvm);
         /* We are done. */
        (*jvm)->DestroyJavaVM(jvm);
+       return 0;
 }
 
 static int cleanupTempDir(char* path) {

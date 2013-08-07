@@ -97,20 +97,16 @@ CreateWeaverConnection( const char* name, const char * paslong, const char* conn
 StmtMgr
 CreateWeaverStmtManager(ConnMgr connection)
 {
+    StmtMgr mgr = NULL;
     int counter = 0;
 
-    if ( !WIsValidConnection(connection->theConn) ) return NULL;
-    
     pthread_mutex_lock(&connection->control);
-    StmtMgr mgr = (StmtMgr)WAllocConnectionMemory(connection->theConn,sizeof(WeaverStmtManager));
-    if ( mgr != NULL ) {
-        connection->refCount += 1;
-        mgr->connection = connection;
-    }
-    pthread_mutex_unlock(&connection->control);
-    if ( mgr == NULL ) {
-        return NULL;
-    }
+    if ( WIsValidConnection(connection->theConn) ) {
+    
+    	mgr = (StmtMgr)WAllocConnectionMemory(connection->theConn,sizeof(WeaverStmtManager));
+    	if ( mgr != NULL ) {
+        	connection->refCount += 1;
+        	mgr->connection = connection;
 
     mgr->statement = NULL;
 
@@ -119,7 +115,6 @@ CreateWeaverStmtManager(ConnMgr connection)
     mgr->blob_size = BLOBSIZE;
     mgr->stackSize = mgr->blob_size * 2;
     mgr->dataStack = WAllocConnectionMemory(connection->theConn,mgr->stackSize);
-    if ( mgr->dataStack == NULL ) return NULL;
     mgr->transactionId = 0;
 
     mgr->errorlevel = 0;
@@ -145,6 +140,10 @@ CreateWeaverStmtManager(ConnMgr connection)
         mgr->inputLog = NULL;
         mgr->outputLog = NULL;
     }
+
+    } 
+    }
+    pthread_mutex_unlock(&connection->control);
     
     return mgr;
 } 
@@ -181,13 +180,13 @@ ConnMgr DestroyWeaverStmtManager( StmtMgr mgr )
     
     pthread_mutex_lock(&conn->control);
     conn->refCount -= 1;
-    pthread_mutex_unlock(&conn->control);
 
     if ( mgr->dataStack != NULL ) WFreeMemory(conn->theConn,mgr->dataStack);
     if ( mgr->inputLog != NULL ) WFreeMemory(conn->theConn,mgr->inputLog);
     if ( mgr->outputLog != NULL ) WFreeMemory(conn->theConn,mgr->outputLog);
     
     WFreeMemory(conn->theConn,mgr);
+    pthread_mutex_unlock(&conn->control);
     
     return conn;
 }
@@ -893,6 +892,7 @@ short DelegateError(StmtMgr mgr, const char* state,const char* text,int code)
     mgr->errordelegate.rc = code;
     strncpy(mgr->errordelegate.text,text,255);
     strncpy(mgr->errordelegate.state,text,40);
+    return 2;
 }
 
 short CheckForErrors( StmtMgr mgr ) 

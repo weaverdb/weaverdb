@@ -49,12 +49,16 @@ endif
 %.so: %.o
 	$(LD) -G -Bdynamic -o $@ $<
 MK_NO_LORDER=true
-CC=cc
-CPP=CC
+CC=gcc
+CPP=g++
+CFLAGS+= -g -fPIC -m64
+CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
+#CC=cc
+#CPP=CC
 #debug new SUNspro Express
-CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
-CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
-CFLAGS+= -DDEBUGLOGS
+#CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
+#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
+#CFLAGS+= -DDEBUGLOGS
 # performance
 #CFLAGS+= -xO4 -m64 -KPIC
 #CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
@@ -81,7 +85,7 @@ LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket
 endif
 ifeq ($(OS),LINUX) 
 LDFLAGS= -L/usr/lib64
-LIBS= -lnsl -lrt -lm -lcrypt -lmcheck 
+LIBS= -lnsl -lrt -lm -lcrypt -lmcheck -lpthread 
 endif
 
 INSTALL= $(SRCDIR)/install-sh -c
