@@ -35,10 +35,8 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BaseWeaverConnection"));
         CachedClasses.boundin = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BoundInput"));
         CachedClasses.boundout = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BoundOutput"));
-
         /*  field ids  */
         CachedClasses.nativePointer = (*env)->GetFieldID(env,CachedClasses.talker,"nativePointer","J");
-        CachedClasses.tracker = (*env)->GetFieldID(env,CachedClasses.linkid,"linkNumber","I");
         CachedClasses.result = (*env)->GetFieldID(env,CachedClasses.talker, "resultField","I");
 	CachedClasses.eText =  (*env)->GetFieldID(env,CachedClasses.talker,"errorText","Ljava/lang/String;");
 	CachedClasses.eState =  (*env)->GetFieldID(env,CachedClasses.talker,"state","Ljava/lang/String;");
@@ -88,7 +86,6 @@ javacache*  DropCache(JNIEnv* env) {
         (*env)->DeleteGlobalRef(env,CachedClasses.truncation);
         /*  boundary objects */
         (*env)->DeleteGlobalRef(env,CachedClasses.talker);
-        (*env)->DeleteGlobalRef(env,CachedClasses.linkid);
         (*env)->DeleteGlobalRef(env,CachedClasses.boundin);
         (*env)->DeleteGlobalRef(env,CachedClasses.boundout);
         /*  output types */
