@@ -49,15 +49,18 @@ endif
 %.so: %.o
 	$(LD) -G -Bdynamic -o $@ $<
 MK_NO_LORDER=true
-#CC=gcc
-#CPP=g++
-#CFLAGS+= -g -fPIC -m64
-#CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
+ifeq ($(CC), gcc)
+CC=gcc
+CPP=g++
+CFLAGS+= -g -fPIC -m64
+CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
+else 
 CC=cc
 CPP=CC
 #debug new SUNspro Express
 CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
 CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
+endif
 #CFLAGS+= -DDEBUGLOGS
 # performance
 #CFLAGS+= -xO4 -m64 -KPIC
