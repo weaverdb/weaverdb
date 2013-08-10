@@ -762,7 +762,7 @@ HeapKeyTest(HeapTuple tuple,
 	 */
 	bool            isnull;
 	Datum           atp;
-	long            test;
+	int            test;
 	int             cur_nkeys = (nkeys);
 	ScanKey         cur_keys = (keys);
 
@@ -783,13 +783,13 @@ HeapKeyTest(HeapTuple tuple,
 		 * if (cur_keys->sk_func.fn_addr == (func_ptr) oideq) test =
 		 * (cur_keys->sk_argument == atp); else
 		 */
-		if (cur_keys->sk_flags & SK_COMMUTE)
-			test = (*FMGR_PTR2(&cur_keys->sk_func,
-						cur_keys->sk_argument, atp)) ? 1 : 0;
-		else
-			test = (*FMGR_PTR2(&cur_keys->sk_func,
-						atp, cur_keys->sk_argument)) ? 1 : 0;
-
+		if (cur_keys->sk_flags & SK_COMMUTE) {
+ 			test = DatumGetChar((FMGR_PTR2(&cur_keys->sk_func,
+						cur_keys->sk_argument, atp)));
+		} else {
+			test = DatumGetChar((FMGR_PTR2(&cur_keys->sk_func,
+						atp, cur_keys->sk_argument)));
+		}
 		if (!test == !(cur_keys->sk_flags & SK_NEGATE)) {
 			/* XXX eventually should check if SK_ISNULL */
 			return false;
