@@ -779,16 +779,11 @@ HeapKeyTest(HeapTuple tuple,
 		if (cur_keys->sk_flags & SK_ISNULL) {
 			return false;
 		}
-		/*
-		 * if (cur_keys->sk_func.fn_addr == (func_ptr) oideq) test =
-		 * (cur_keys->sk_argument == atp); else
-		 */
+
 		if (cur_keys->sk_flags & SK_COMMUTE) {
- 			test = DatumGetChar((FMGR_PTR2(&cur_keys->sk_func,
-						cur_keys->sk_argument, atp)));
+ 			test = DatumGetChar(FMGR_PTR2(&cur_keys->sk_func,cur_keys->sk_argument, atp));
 		} else {
-			test = DatumGetChar((FMGR_PTR2(&cur_keys->sk_func,
-						atp, cur_keys->sk_argument)));
+			test = DatumGetChar(FMGR_PTR2(&cur_keys->sk_func, atp, cur_keys->sk_argument));
 		}
 		if (!test == !(cur_keys->sk_flags & SK_NEGATE)) {
 			/* XXX eventually should check if SK_ISNULL */

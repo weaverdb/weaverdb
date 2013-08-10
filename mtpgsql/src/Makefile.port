@@ -54,6 +54,8 @@ CC=gcc
 CPP=g++
 CFLAGS+= -g -fPIC -m64
 CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
+LD=gcc
+LDREL= -m64 -r 
 else 
 CC=cc
 CPP=CC
@@ -83,11 +85,11 @@ CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
 AROPT= crs
 CFLAGS_SL=
 ifeq ($(OS),SUNOS) 
-LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU} 
+LDFLAGS+= -L/usr/lib/64 -L/usr/lib/${CPU} 
 LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket 
 endif
 ifeq ($(OS),LINUX) 
-LDFLAGS= -L/usr/lib64
+LDFLAGS+= -L/usr/lib64
 LIBS= -lnsl -lrt -lm -lcrypt -lmcheck -lpthread 
 endif
 
