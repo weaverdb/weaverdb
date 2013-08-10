@@ -2179,43 +2179,43 @@ long m_init_irels(void) {
     strncpy(masterlist[listsize].database, database, 255);
 
     bi.infotype = INFO_RELNAME;
-    namestrcpy(bi.i.info_name, AttributeRelidNumIndex);
+    namestrcpy(&bi.i.info_name, AttributeRelidNumIndex);
     masterlist[listsize].icache[0] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[0]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, ClassNameIndex);
+    namestrcpy(&bi.i.info_name, ClassNameIndex);
     masterlist[listsize].icache[1] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[1]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, ClassOidIndex);
+    namestrcpy(&bi.i.info_name, ClassOidIndex);
     masterlist[listsize].icache[2] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[2]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, IndexRelidIndex);
+    namestrcpy(&bi.i.info_name, IndexRelidIndex);
     masterlist[listsize].icache[3] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[3]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, OpclassNameIndex);
+    namestrcpy(&bi.i.info_name, OpclassNameIndex);
     masterlist[listsize].icache[4] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[4]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, OperatorOidIndex);
+    namestrcpy(&bi.i.info_name, OperatorOidIndex);
     masterlist[listsize].icache[5] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[5]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, RewriteRulenameIndex);
+    namestrcpy(&bi.i.info_name, RewriteRulenameIndex);
     masterlist[listsize].icache[6] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[6]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, TriggerRelidIndex);
+    namestrcpy(&bi.i.info_name, TriggerRelidIndex);
     masterlist[listsize].icache[7] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[7]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, AccessMethodStrategyIndex);
+    namestrcpy(&bi.i.info_name, AccessMethodStrategyIndex);
     masterlist[listsize].icache[8] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[8]->rd_isnailed = true;
 
-    namestrcpy(bi.i.info_name, AccessMethodOpidIndex);
+    namestrcpy(&bi.i.info_name, AccessMethodOpidIndex);
     masterlist[listsize].icache[9] = RelationBuildDesc(bi, NULL);
     masterlist[listsize].icache[9]->rd_isnailed = true;
 
