@@ -317,7 +317,7 @@ scan_pg_rel_seq(RelationBuildDescInfo buildinfo) {
             ScanKeyEntryInitialize(&key, 0,
                     Anum_pg_class_relname,
                     F_NAMEEQ,
-                    NameGetDatum(buildinfo.i.info_name));
+                    NameGetDatum(&buildinfo.i.info_name));
             break;
 
         default:
@@ -1320,7 +1320,7 @@ RelationNameGetRelation(const char *relationName, Oid databaseId) {
          * ----------------
          */
         buildinfo.infotype = INFO_RELNAME;
-        namestrcpy(buildinfo.i.info_name,relationName);
+        namestrcpy(&buildinfo.i.info_name,relationName);
 
         oldcxt = MemoryContextSwitchTo(rglobal->rcache_cxt);
         rd = RelationBuildDesc(buildinfo, NULL);
