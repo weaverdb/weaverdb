@@ -1035,7 +1035,7 @@ ExecEvalNot(Expr * notclause, ExprContext * econtext, bool * isNull)
 	 * evaluation of 'not' is simple.. expr is false, then return 'true'
 	 * and vice versa.
 	 */
-	if (DatumGetInt32(expr_value) == 0)
+	if (DatumGetChar(expr_value) == 0)
 		return (Datum) true;
 
 	return (Datum) false;
@@ -1088,7 +1088,7 @@ ExecEvalOr(Expr * orExpr, ExprContext * econtext, bool * isNull)
 		 */
 		if (*isNull)
 			AnyNull = true;	/* remember we got a null */
-		else if (DatumGetInt32(clause_value) != 0)
+		else if (DatumGetChar(clause_value) != 0)
 			return clause_value;
 	}
 
@@ -1138,7 +1138,7 @@ ExecEvalAnd(Expr * andExpr, ExprContext * econtext, bool * isNull)
 		 */
 		if (*isNull)
 			AnyNull = true;	/* remember we got a null */
-		else if (DatumGetInt32(clause_value) == 0)
+		else if (DatumGetChar(clause_value) == 0)
 			return clause_value;
 	}
 
@@ -1187,7 +1187,7 @@ ExecEvalCase(CaseExpr * caseExpr, ExprContext * econtext, bool * isNull)
 		 * the case statement is satisfied.  A NULL result from the
 		 * test is not considered true.
 		 */
-		if (DatumGetInt32(clause_value) != 0 && !*isNull) {
+		if (DatumGetChar(clause_value) != 0 && !*isNull) {
 			return ExecEvalExpr(wclause->result,
 					    econtext,
 					    isNull,
@@ -1420,7 +1420,7 @@ ExecQual(List * qual, ExprContext * econtext, bool resultForNull)
 			if (resultForNull == false)
 				return false;	/* treat NULL as FALSE */
 		} else {
-			if (DatumGetInt32(expr_value) == 0)
+			if (DatumGetChar(expr_value) == 0)
 				return false;	/* definitely FALSE */
 		}
 	}
