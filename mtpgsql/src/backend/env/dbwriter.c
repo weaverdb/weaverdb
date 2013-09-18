@@ -146,7 +146,7 @@ static void* SyncWriter(void *jones);
 static WriteGroup GetSyncGroup();
 static void ActivateSyncGroup();
 static void ReleaseSyncGroup();
-static void FlushWriteGroup(WriteGroup cart);
+static int FlushWriteGroup(WriteGroup cart);
 
 static void DBTableInit();
 static void* DBAlloc(Size size, void* cxt);
@@ -468,7 +468,7 @@ void ReleaseSyncGroup() {
     pthread_mutex_unlock(&sync_group->checkpoint);
 }
 
-void FlushWriteGroup(WriteGroup cart) {
+int FlushWriteGroup(WriteGroup cart) {
     int release = 0;
     struct timeval t1,t2;
     long elapsed;
@@ -500,6 +500,8 @@ void FlushWriteGroup(WriteGroup cart) {
     pthread_mutex_lock(&cart->checkpoint);
     cart->currstate = READY;
     pthread_cond_broadcast(&cart->broadcaster);
+    
+    return release;
 }
 
 void* DBWriter(void *jones) {
@@ -1275,11 +1277,10 @@ bool FlushAllDirtyBuffers(bool wait) {
     bool iflushed = false;
         
     if (IsDBWriter()) {
-        while ( cart->currstate != RUNNING && cart->currstate != FLUSHING ) {
+        while ( FlushWriteGroup(cart) == 0 ) {
             UnlockWriteGroup(cart);
             cart = GetNextTarget(cart);
         }
-        FlushWriteGroup(cart);
         DTRACE_PROBE2(mtpg, dbwriter__circularflush, sync_buffers, releasecount);
     } else {      
         if ( cart->currstate != FLUSHING ) {
