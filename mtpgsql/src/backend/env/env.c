@@ -83,7 +83,10 @@ Env* InitSystem(bool  isPrivate) {
         MyProcPid = getpid();
 #ifdef SUNOS
         umem_nofail_callback(memory_fail);
+#elif defined(_GNU_SOURCE)
+        mcheck(glibc_memory_fail);
 #endif
+        
 	pthread_mutex_init(&envlock,NULL);
 	
         envmap = os_malloc(sizeof(Env*) * GetMaxBackends());
@@ -915,6 +918,9 @@ base_mem_alloc(size_t size) {
 #else 
     size_t* pointer = malloc(size + sizeof(size_t));
 #endif
+    if ( pointer == NULL ) {
+        memory_fail();
+    } 
     *pointer = size;
     return (pointer + 1);
 }
@@ -957,11 +963,7 @@ base_mem_realloc(void * pointer, size_t size) {
 
     if ( mark != NULL ) {
         memmove((moved + 1), mark, *(mark - 1));
-#ifdef SUNOS
-        umem_free((mark - 1), *(mark - 1) + sizeof(size_t));
-#else
-	free(mark-1);
-#endif
+        base_mem_free(pointer);
     }
 
     return (moved + 1);
