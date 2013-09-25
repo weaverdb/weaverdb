@@ -481,9 +481,10 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
 
     if ( stmt->exec_cxt ) MemoryContextDelete(stmt->exec_cxt);
     MemoryContextDelete(stmt->plan_cxt);
-
+    
+    err = ( connection->plan == NULL ) ? 1 : 0;
     RELEASE(connection);
-    return ( connection->plan == NULL ) ? 1 : 0;
+    return err;
 }
 
 extern long

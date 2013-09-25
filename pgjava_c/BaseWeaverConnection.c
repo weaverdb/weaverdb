@@ -172,15 +172,11 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
     //	get proper agent	
         StmtMgr mgr = getStmtMgr(env,talkerObject,linkid);
         if ( mgr == NULL ) {
-            if ( (*env)->ExceptionOccurred(env) ) {
-                (*env)->ExceptionClear(env);
-            }
             return;
         } else {
             Init(mgr,clean_input,clean_output);
             DestroyWeaverConnection(DestroyWeaverStmtManager(mgr)); 
         }
-
 }
 
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_beginTransaction(JNIEnv *env, jobject talkerObject)

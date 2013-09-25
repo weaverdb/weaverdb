@@ -147,17 +147,20 @@ CreateWeaverStmtManager(ConnMgr connection) {
 
 void DestroyWeaverConnection(ConnMgr mgr) {
     if (mgr == NULL) return;
+    if ( !IsValid(mgr) ) {
+        return;
+    }
     pthread_mutex_lock(&mgr->control);
     if (mgr->refCount == 0 && mgr->theConn != NULL) {
+        OpaqueWConn connection = mgr->theConn;
         /*  it's possible the the owning thread is not the
          *  destroying thread so to a cancel/join for
          *  safety's sake.
          */
         WCancelAndJoin(mgr->theConn);
         pthread_mutex_destroy(&mgr->control);
-        WDestroyConnection(mgr->theConn);
-        //  connection memory freed with destroy
-        mgr->theConn = NULL;
+        
+        WDestroyConnection(connection);
     } else {
         pthread_mutex_unlock(&mgr->control);
     }
@@ -172,6 +175,9 @@ ConnMgr DestroyWeaverStmtManager(StmtMgr mgr) {
     if (mgr == NULL) return NULL;
 
     ConnMgr conn = mgr->connection;
+    if ( !IsValid(conn) ) {
+        return NULL;
+    }
 
     pthread_mutex_lock(&conn->control);
     conn->refCount -= 1;

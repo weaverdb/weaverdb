@@ -83,7 +83,7 @@ Env* InitSystem(bool  isPrivate) {
         MyProcPid = getpid();
 #ifdef SUNOS
         umem_nofail_callback(memory_fail);
-#elif defined(_GNU_SOURCE)
+#elif defined _GNU_SOURCE
         mcheck(glibc_memory_fail);
 #endif
         
