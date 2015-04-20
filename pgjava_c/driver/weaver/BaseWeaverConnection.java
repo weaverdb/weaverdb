@@ -4,8 +4,14 @@ import java.util.*;
 import java.io.*;
 
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class BaseWeaverConnection {
+public class BaseWeaverConnection implements AutoCloseable {
+    
+    private final Logger   logging;
+    
+    private Throwable creationPath;
 
     public final static int bindString = 2;
     public final static int bindDouble = 3;
@@ -31,6 +37,11 @@ public class BaseWeaverConnection {
     String state = "";
 
     public BaseWeaverConnection() {
+        logging = Logger.getGlobal();
+    }
+    
+    public BaseWeaverConnection(Logger parent) {
+        logging = parent;
     }
 
     private boolean convertString(String connect) throws SQLException {
@@ -50,7 +61,13 @@ public class BaseWeaverConnection {
     }
 
     public boolean connect(String connString) throws SQLException {
+        creationPath = new Throwable();
         return convertString(connString);
+    }
+
+    @Override
+    public void close() throws SQLException {
+        dispose();
     }
 
     public synchronized void dispose() throws SQLException {
@@ -63,7 +80,12 @@ public class BaseWeaverConnection {
     @Override
     protected void finalize() throws Throwable {
         super.finalize();
-        dispose();
+        synchronized (this) {
+            if (nativePointer != 0) {
+                logging.log(Level.WARNING, "disposal in finalize ", creationPath);
+                dispose();
+            }
+        }
     }
 
     public BaseWeaverConnection spawnHelper() throws SQLException {
@@ -232,11 +254,13 @@ public class BaseWeaverConnection {
         is = in;
     }
     
-    public class Statement {
+    public class Statement implements AutoCloseable {
         private long  link;
+        private final Throwable statementPath;
         
         Statement(String statement) throws SQLException {
             link = prepareStatement(statement);
+            statementPath = new Throwable(creationPath);
         }
 
         public BaseWeaverConnection getConnection() {
@@ -277,10 +301,17 @@ public class BaseWeaverConnection {
         public long execute() throws SQLException {
             return executeStatement(link);
         }
-        
+
+        @Override
+        public void close() {
+            dispose();
+        }
+
         public void dispose() {
             synchronized (BaseWeaverConnection.this) {
-                if ( link != 0 ) BaseWeaverConnection.this.dispose(link);
+                if ( link != 0 && nativePointer != 0 ) {
+                    BaseWeaverConnection.this.dispose(link);
+                }
                 link = 0;
             }
         }
@@ -288,6 +319,11 @@ public class BaseWeaverConnection {
         @Override
         protected void finalize() throws Throwable {
             super.finalize();
+            synchronized (BaseWeaverConnection.this) {
+                if (link != 0) {
+                    logging.log(Level.WARNING, "disposal in finalize ", statementPath);
+                }
+            }
             this.dispose();
         }
     }
