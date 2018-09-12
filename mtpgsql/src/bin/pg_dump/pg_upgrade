@@ -1,0 +1,181 @@
+#!/bin/sh
+#
+# pg_upgrade: update a database without needing a full dump/reload cycle.
+# CAUTION: read the manual page before trying to use this!
+
+# $Header: /cvs/weaver/mtpgsql/src/bin/pg_dump/pg_upgrade,v 1.1.1.1 2006/08/12 00:11:21 synmscott Exp $
+#
+# NOTE: we must be sure to update the version-checking code a few dozen lines
+# below for each new PostgreSQL release.
+
+TMPFILE="/tmp/pgupgrade.$$"
+
+trap "rm -f $TMPFILE" 0 1 2 3 15
+
+if [ "$#" -eq 0 ]
+then	echo "Usage:  $0 -f inputfile old_data_dir" 1>&2
+	exit 1
+fi
+
+if [ "X$1" = "X-f" ]
+then	INPUT="$2"
+	shift 2
+	if [ ! -f "$INPUT" ]
+	then	echo "$INPUT does not exist" 1>&2
+		exit 1
+	fi
+else	echo "Usage:  $0 -f inputfile old_data_dir" 1>&2
+	exit 1
+fi
+
+if [ "$#" -ne 1 ]
+then	echo "Usage:  $0 -f inputfile old_data_dir" 1>&2
+	exit 1
+fi
+
+OLDDIR="$1"
+
+# check things
+
+if [ ! -d "./data" ]
+then	echo "`basename $0` must be run from the directory containing
+the database directory \`data\' (`dirname $PGDATA`.)" 1>&2
+	echo "You must have run initdb to create the template1 database." 1>&2
+	exit 1
+fi
+
+if [ ! -d "./$OLDDIR" ]
+then	echo "You must rename your old data directory to $OLDDIR and run initdb." 1>&2
+	exit 1
+fi
+
+if [ ! -d "./data/base/template1" ]
+then	echo "Cannot find database template1 in ./data/base." 1>&2
+	echo "Are you running $0 as the postgres superuser?" 1>&2
+	exit 1
+fi
+
+if [ ! -d "./$OLDDIR/base/template1" ]
+then	echo "There is no database template1 in ./$OLDDIR/base." 1>&2
+	exit 1
+fi
+
+if [ ! -r "./data/PG_VERSION" ]
+then	echo "Cannot read ./data/PG_VERSION --- something is wrong." 1>&2
+	exit 1
+fi
+
+if [ ! -r "./$OLDDIR/PG_VERSION" ]
+then	echo "Cannot read ./$OLDDIR/PG_VERSION --- something is wrong." 1>&2
+	exit 1
+fi
+
+# Get the actual versions seen in the data dirs.
+DESTVERSION=`cat ./data/PG_VERSION`
+SRCVERSION=`cat ./$OLDDIR/PG_VERSION`
+
+# Check for version compatibility.
+# This code will need to be updated/reviewed for each new PostgreSQL release.
+
+# MYVERSION is the expected output database version
+MYVERSION="7.0"
+
+if [ "$DESTVERSION" != "$MYVERSION" ]
+then	echo "$0 is for PostgreSQL version $MYVERSION, but ./data/PG_VERSION contains $DESTVERSION." 1>&2
+	echo "Did you run initdb for version $MYVERSION?" 1>&2
+	exit 1
+fi
+
+# Check that input database is of a compatible version (anything with the same
+# physical layout of user tables and indexes should be OK).  I did not write
+# something like "$SRCVERSION -ge $MINVERSION" because test(1) isn't bright
+# enough to compare dotted version strings properly.  Using a case statement
+# looks uglier but is more flexible.
+
+case "$SRCVERSION" in
+    6.5) ;;
+    7.0) ;;
+    *)	echo "Sorry, `basename $0` cannot upgrade database version $SRCVERSION to $DESTVERSION." 1>&2
+	echo "The on-disk structure of tables has changed." 1>&2
+	echo "You will need to dump and restore using pg_dump." 1>&2
+	exit 1;;
+esac
+
+
+# OK, ready to proceed.
+
+# Execute the input script to create everything, except that we remove
+# any COPY statements, except for the ones that load pg_shadow/pg_group.
+# There shouldn't be any others in there anyway...
+
+cat $INPUT | awk '	{
+				if (tolower($1) == "copy" &&
+				    $2 != "pg_shadow" &&
+				    $2 != "pg_group")
+					while (getline $0 > 0 && $0 != "\\.")
+						;
+				else	print $0;
+			}' >$TMPFILE
+
+psql "template1" <$TMPFILE
+
+if [ $? -ne 0 ]
+then	echo "There were errors in the input script $INPUT.
+$0 aborted." 1>&2
+	exit 1
+fi
+
+echo "Input script $INPUT complete, fixing row commit statuses..."
+
+# Now vacuum each result database to mark all system-table rows as committed,
+# because when pg_log is replaced with the saved version, the transaction
+# statuses will no longer match the data.  VACUUM will force the on-row
+# status flags to the right value so that pg_log will not matter anymore.
+# Note: we used to try to do this as part of the previous step, but that
+# risks permissions problems if VACUUM is run as the wrong user.
+# Note: the initial VACUUM does template1, then we do everything else.
+
+cat $INPUT | awk 'BEGIN	{ print "VACUUM;" }
+			{
+				if (tolower($1) == "copy")
+					while (getline $0 > 0 && $0 != "\\.")
+						;
+				else if (tolower($1) == "\\connect" && 
+					 $2 != "-" &&
+					 $2 != "template1")
+					printf "\\connect %s\nVACUUM;\n", $2;
+			}' >$TMPFILE
+
+psql "template1" <$TMPFILE
+
+if [ $? -ne 0 ]
+then	echo "There were errors in the vacuuming step.
+$0 aborted." 1>&2
+	exit 1
+fi
+
+echo "Commit fixes complete, moving data files..."
+
+for DIR in data/base/*
+do
+	BASEDIR="`basename $DIR`"
+	if [ -d "$DIR" -a \
+	     -d "$OLDDIR/base/$BASEDIR" -a \( "$BASEDIR" != "template1" \) ]
+	then	for FILE in $OLDDIR/base/$BASEDIR/*
+		do
+			BASEFILE="`basename $FILE`"
+			if [ `expr "$BASEFILE" : "pg_"` -ne 3 -a \
+				"$BASEFILE" != "PG_VERSION" ]
+			then	mv -f $FILE $DIR
+			fi
+		done
+	fi
+done
+
+mv -f $OLDDIR/pg_log data
+mv -f $OLDDIR/pg_variable data
+
+echo "You must stop/start the postmaster before doing anything else."
+echo "You may remove the $OLDDIR directory with 'rm -r $OLDDIR'."
+
+exit 0

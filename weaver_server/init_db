@@ -1,0 +1,7 @@
+#!/bin/sh
+cd `dirname $0`
+PGUSER=`logname`
+
+mtpg/bin/initdb --pglib=`pwd`/mtpg/lib --pgdata=`pwd`/dbfiles
+echo "revoke all on pg_shadow from public;" | mtpg/bin/postgres -D`pwd`/dbfiles template1
+echo "alter user $PGUSER with password 'manager'" | mtpg/bin/postgres -D`pwd`/dbfiles template1

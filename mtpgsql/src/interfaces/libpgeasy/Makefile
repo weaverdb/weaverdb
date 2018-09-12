@@ -1,0 +1,56 @@
+# Generated automatically from Makefile.in by configure.
+#-------------------------------------------------------------------------
+#
+# Makefile
+#    Makefile for pgeasy library
+#
+# IDENTIFICATION
+#    $Header: /cvs/weaver/mtpgsql/src/interfaces/libpgeasy/Makefile,v 1.1.1.1 2006/08/12 00:23:00 synmscott Exp $
+#
+#-------------------------------------------------------------------------
+
+NAME= pgeasy
+SO_MAJOR_VERSION= 2
+SO_MINOR_VERSION= 1
+
+SRCDIR= ../..
+include $(SRCDIR)/Makefile.global
+
+CFLAGS+= -I$(LIBPQDIR)
+
+ifdef KRBVERS
+CFLAGS+= $(KRBFLAGS)
+endif
+
+OBJS= libpgeasy.o halt.o
+
+SHLIB_LINK+= $(LIBPQ)
+
+# If crypt is a separate library, rather than part of libc, it may need
+# to be referenced separately to keep (broken) linkers happy.  (This is
+# braindead; users of libpq should not need to know what it depends on.)
+SHLIB_LINK+= $(findstring -lcrypt,$(LIBS))
+
+# Shared library stuff, also default 'all' target
+include $(SRCDIR)/Makefile.shlib
+
+
+.PHONY: install install-headers
+
+install: install-headers install-lib $(install-shlib-dep)
+
+install-headers: libpgeasy.h
+	-@if [ ! -d $(HEADERDIR) ]; then mkdir $(HEADERDIR); fi
+	$(INSTALL) $(INSTLOPTS) libpgeasy.h $(HEADERDIR)/libpgeasy.h
+
+.PHONY: clean
+
+clean: clean-shlib
+	rm -f lib$(NAME).a $(OBJS)
+
+depend dep:
+	$(CC) -MM $(CFLAGS) *.c >depend
+
+ifeq (depend,$(wildcard depend))
+include depend
+endif

@@ -1,0 +1,1307 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configurationDescriptor version="79">
+  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
+    <logicalFolder name="pgjava_c" displayName="pgjava_c" projectFiles="true">
+      <logicalFolder name="driver" displayName="driver" projectFiles="true">
+        <logicalFolder name="weaver" displayName="weaver" projectFiles="true">
+          <logicalFolder name="connector" displayName="connector" projectFiles="true">
+          </logicalFolder>
+          <logicalFolder name="jdbc" displayName="jdbc" projectFiles="true">
+          </logicalFolder>
+        </logicalFolder>
+      </logicalFolder>
+      <itemPath>../pgjava_c/WeaverFrameConnection.c</itemPath>
+      <itemPath>../pgjava_c/WeaverStmtManager.c</itemPath>
+      <itemPath>../pgjava_c/WeaverStmtManager.h</itemPath>
+      <itemPath>../pgjava_c/driver_weaver_WeaverFrameConnection.h</itemPath>
+      <itemPath>../pgjava_c/driver_weaver_WeaverInitializer.h</itemPath>
+      <itemPath>../pgjava_c/main.c</itemPath>
+      <itemPath>../pgjava_c/main.h</itemPath>
+    </logicalFolder>
+    <logicalFolder name="src" displayName="src" projectFiles="true">
+      <logicalFolder name="backend" displayName="backend" projectFiles="true">
+        <logicalFolder name="access" displayName="access" projectFiles="true">
+          <logicalFolder name="common" displayName="common" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/common/heaptuple.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/common/indextuple.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/common/indexvalid.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/common/printtup.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/common/scankey.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/common/tupdesc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/common/valid.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="gist" displayName="gist" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/gist/gist.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/gist/gistget.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/gist/gistscan.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/gist/giststrat.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="hash" displayName="hash" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/hash/hash.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashfunc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashinsert.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashovfl.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashpage.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashscan.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashsearch.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashstrat.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/hash/hashutil.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="heap" displayName="heap" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/heap/blobstorage.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/heap/heapam.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/heap/hio.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/heap/stats.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/heap/tuptoaster.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="index" displayName="index" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/index/genam.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/index/indexam.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/index/istrat.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="nbtree" displayName="nbtree" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtcompare.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtinsert.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtpage.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtree.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtsearch.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtsort.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtstrat.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/nbtree/nbtutils.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="rtree" displayName="rtree" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/rtree/rtget.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/rtree/rtproc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/rtree/rtree.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/rtree/rtscan.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/rtree/rtstrat.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="transam" displayName="transam" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/access/transam/rmgr.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/transam/transam.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/transam/transsup.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/transam/varsup.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/transam/xact.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/transam/xid.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/access/transam/xlog.c</itemPath>
+          </logicalFolder>
+        </logicalFolder>
+        <logicalFolder name="bootstrap" displayName="bootstrap" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/bootstrap/bootparse.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/bootstrap/bootscanner.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/bootstrap/bootstrap.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/bootstrap/bootstrap_tokens.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="catalog" displayName="catalog" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/catalog/aclchk.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/catalog.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/heap.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/index.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/indexing.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/pg_aggregate.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/pg_operator.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/pg_proc.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/catalog/pg_type.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="commands" displayName="commands" projectFiles="true">
+          <logicalFolder name="_deadcode" displayName="_deadcode" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/commands/_deadcode/recipe.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/commands/_deadcode/recipe.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/commands/_deadcode/version.c</itemPath>
+          </logicalFolder>
+          <itemPath>../mtpgsql/src/backend/commands/async.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/cluster.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/command.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/comment.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/copy.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/creatinh.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/dbcommands.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/define.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/explain.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/indexcmds.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/proclang.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/remove.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/rename.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/sequence.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/trigger.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/user.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/vacuum.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/variable.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/commands/view.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="env" displayName="env" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/env/WeaverConnection.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/analyze.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/connectionutil.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/dbwriter.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/delegatedscan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/dolhelper.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/env.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/freespace.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/pg_crc.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/poolsweep.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/slotvar.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/test.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/env/vacuumlazy.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="executor" displayName="executor" projectFiles="true">
+          <logicalFolder name="_deadcode" displayName="_deadcode" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/executor/_deadcode/nodeTee.c</itemPath>
+          </logicalFolder>
+          <itemPath>../mtpgsql/src/backend/executor/execAmi.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execFlatten.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execJunk.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execMain.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execProcnode.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execQual.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execScan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execTuples.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/execUtils.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/functions.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeAgg.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeAppend.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeDelegatedIndexscan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeDelegatedSeqscan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeGroup.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeHash.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeHashjoin.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeIndexscan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeMaterial.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeMergejoin.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeNestloop.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeResult.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeSeqscan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeSort.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeSubplan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeTidscan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/nodeUnique.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/executor/spi.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="lib" displayName="lib" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/lib/bit.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/lib/dllist.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/lib/dllistmutex.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/lib/dllistold.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/lib/fstack.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/lib/hasht.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/lib/lispsort.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/lib/stringinfo.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="libpq" displayName="libpq" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/libpq/auth.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/be-dumpdata.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/be-fsstubs.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/be-pqexec.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/bufcomm.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/crypt.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/hba.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/password.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/portal.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/portalbuf.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/pqcomm.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/pqformat.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/pqpacket.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/pqsignal.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/libpq/util.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="main" displayName="main" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/main/main.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="nodes" displayName="nodes" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/nodes/copyfuncs.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/equalfuncs.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/freefuncs.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/list.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/makefuncs.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/nodeFuncs.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/nodes.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/outfuncs.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/print.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/read.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/nodes/readfuncs.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="optimizer" displayName="optimizer" projectFiles="true">
+          <logicalFolder name="geqo" displayName="geqo" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_copy.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_cx.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_erx.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_eval.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_main.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_misc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_mutation.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_ox1.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_ox2.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_params.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_pmx.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_pool.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_px.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_recombination.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/geqo/geqo_selection.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="path" displayName="path" projectFiles="true">
+            <logicalFolder name="_deadcode" displayName="_deadcode" projectFiles="true">
+              <itemPath>../mtpgsql/src/backend/optimizer/path/_deadcode/predmig.c</itemPath>
+              <itemPath>../mtpgsql/src/backend/optimizer/path/_deadcode/xfunc.c</itemPath>
+            </logicalFolder>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/allpaths.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/clausesel.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/costsize.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/indxpath.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/joinpath.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/joinrels.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/orindxpath.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/pathkeys.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/path/tidpath.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="plan" displayName="plan" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/optimizer/plan/createplan.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/plan/initsplan.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/plan/planmain.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/plan/planner.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/plan/setrefs.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/plan/subselect.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="prep" displayName="prep" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/optimizer/prep/prepkeyset.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/prep/prepqual.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/prep/preptlist.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/prep/prepunion.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="util" displayName="util" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/optimizer/util/clauses.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/indexnode.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/joininfo.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/pathnode.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/plancat.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/relnode.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/restrictinfo.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/tlist.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/optimizer/util/var.c</itemPath>
+          </logicalFolder>
+        </logicalFolder>
+        <logicalFolder name="parser" displayName="parser" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/parser/analyze.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/gram.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/gram.y</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/keywords.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse.h</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_agg.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_clause.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_coerce.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_expr.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_func.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_node.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_oper.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_relation.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_target.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parse_type.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parser.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/parserinfo.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/redef.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/redef.h</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/scan.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/scan.l</itemPath>
+          <itemPath>../mtpgsql/src/backend/parser/scansup.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="port" displayName="port" projectFiles="true">
+          <logicalFolder name="dynloader" displayName="dynloader" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/port/dynloader/aix.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/aix.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/alpha.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/alpha.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/bsd.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/bsd.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/bsdi.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/bsdi.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/dgux.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/dgux.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/freebsd.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/freebsd.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/hpux.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/hpux.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/irix5.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/irix5.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/linux.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/linux.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/netbsd.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/netbsd.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/nextstep.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/nextstep.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/qnx4.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/qnx4.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/sco.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/sco.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/solaris_i386.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/solaris_i386.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/solaris_sparc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/solaris_sparc.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/sunos4.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/sunos4.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/svr4.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/svr4.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/ultrix4.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/ultrix4.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/univel.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/univel.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/unixware.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/unixware.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/win.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/dynloader/win.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="hpux" displayName="hpux" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/port/hpux/fixade.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/hpux/port-protos.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="nextstep" displayName="nextstep" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/port/nextstep/port.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="qnx4" displayName="qnx4" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/port/qnx4/ipc.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/isnan.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/rint.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/sem.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/sem.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/shm.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/shm.h</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/tstrint.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/tstsem.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/port/qnx4/tstshm.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="sunos4" displayName="sunos4" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/port/sunos4/float.h</itemPath>
+          </logicalFolder>
+          <itemPath>../mtpgsql/src/backend/port/gethostname.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/getrusage.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/inet_aton.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/inet_aton.h</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/isinf.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/random.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/snprintf.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/srandom.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/strcasecmp.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/strerror.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/strtol.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/port/strtoul.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="postmaster" displayName="postmaster" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/postmaster/postmaster.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="regex" displayName="regex" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/regex/regc_color.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regc_cvec.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regc_lex.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regc_locale.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regc_nfa.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regcomp.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/rege_dfa.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regerror.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regexec.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/regex/regfree.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="rewrite" displayName="rewrite" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/rewrite/locks.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/rewrite/rewriteDefine.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/rewrite/rewriteHandler.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/rewrite/rewriteManip.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/rewrite/rewriteRemove.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/rewrite/rewriteSupport.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="storage" displayName="storage" projectFiles="true">
+          <logicalFolder name="buffer" displayName="buffer" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/storage/buffer/buf_init.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/buffer/buf_table.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/buffer/bufmgr.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/buffer/freelist.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/buffer/localbuf.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/buffer/m_lock.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/buffer/s_lock.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="file" displayName="file" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/storage/file/buffile.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/file/fd.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="ipc" displayName="ipc" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/storage/ipc/ipc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/ipc/ipci.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/ipc/shmem.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/ipc/shmqueue.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/ipc/sinval.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/ipc/sinvaladt.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/ipc/spin.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="large_object"
+                         displayName="large_object"
+                         projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/storage/large_object/inv_api.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="lmgr" displayName="lmgr" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/storage/lmgr/lmgr.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/lmgr/lock.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/lmgr/multithread.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/lmgr/proc.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="page" displayName="page" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/storage/page/bufpage.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/page/itemptr.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="smgr" displayName="smgr" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/storage/smgr/md.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/smgr/mm.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/smgr/mmd.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/smgr/smgr.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/smgr/smgrtype.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/smgr/vfd.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/storage/smgr/zfs.c</itemPath>
+          </logicalFolder>
+        </logicalFolder>
+        <logicalFolder name="tcop" displayName="tcop" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/tcop/dest.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/tcop/fastpath.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/tcop/postgres.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/tcop/pquery.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/tcop/utility.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="tioga" displayName="tioga" projectFiles="true">
+          <itemPath>../mtpgsql/src/backend/tioga/Arr_TgRecipe.h</itemPath>
+          <itemPath>../mtpgsql/src/backend/tioga/Varray.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/tioga/Varray.h</itemPath>
+          <itemPath>../mtpgsql/src/backend/tioga/tgRecipe.c</itemPath>
+          <itemPath>../mtpgsql/src/backend/tioga/tgRecipe.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="utils" displayName="utils" projectFiles="true">
+          <logicalFolder name="adt" displayName="adt" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/adt/acl.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/arrayfuncs.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/arrayutils.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/bool.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/cash.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/char.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/chunk.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/date.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/datetime.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/datum.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/filename.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/float.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/formatting.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/geo_ops.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/geo_selfuncs.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/inet_net_ntop.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/inet_net_pton.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/int.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/int8.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/java.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/like.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/lztext.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/mac.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/misc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/nabstime.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/name.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/network.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/not_in.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/numeric.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/numutils.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/oid.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/oracle_compat.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/pg_locale.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/pg_lzcompress.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/regexp.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/regproc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/ri_triggers.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/ruleutils.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/selfuncs.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/sets.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/tid.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/timestamp.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/varbit.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/varchar.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/varlena.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/version.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/adt/wrapdatum.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="cache" displayName="cache" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/cache/catcache.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/cache/fcache.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/cache/inval.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/cache/lsyscache.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/cache/rel.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/cache/relcache.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/cache/syscache.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/cache/temprel.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="error" displayName="error" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/error/assert.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/error/elog.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/error/exc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/error/excabort.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/error/excid.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/error/format.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="fmgr" displayName="fmgr" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/fmgr/dfmgr.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/fmgr/fmgr.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="hash" displayName="hash" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/hash/dynahash.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/hash/dynahashnew.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/hash/hashfn.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="init" displayName="init" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/init/enbl.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/init/findbe.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/init/globals.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/init/miscinit.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/init/postinit.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="mb" displayName="mb" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/mb/alt.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/big5.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/common.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/conv.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/iso.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/mbutils.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/utftest.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/variable.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/wchar.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/win.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/wstrcmp.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mb/wstrncmp.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="misc" displayName="misc" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/misc/database.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/misc/superuser.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/misc/trace.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="mmgr" displayName="mmgr" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/mmgr/aset.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mmgr/mcxt.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mmgr/mcxtold.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mmgr/oset.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mmgr/palloc.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mmgr/portalmem.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/mmgr/subset.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="sort" displayName="sort" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/sort/logtape.c</itemPath>
+            <itemPath>../mtpgsql/src/backend/utils/sort/tuplesort.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="time" displayName="time" projectFiles="true">
+            <itemPath>../mtpgsql/src/backend/utils/time/tqual.c</itemPath>
+          </logicalFolder>
+        </logicalFolder>
+      </logicalFolder>
+      <logicalFolder name="bin" displayName="bin" projectFiles="true">
+        <logicalFolder name="maccleaner" displayName="maccleaner" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/maccleaner/maccleaner.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="pg_dump" displayName="pg_dump" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/pg_dump/common.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/pg_dump/pg_dump.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/pg_dump/pg_dump.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="pg_encoding" displayName="pg_encoding" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/pg_encoding/pg_encoding.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="pg_id" displayName="pg_id" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/pg_id/pg_id.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="pg_passwd" displayName="pg_passwd" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/pg_passwd/pg_passwd.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="pg_version" displayName="pg_version" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/pg_version/pg_version.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="pgtclsh" displayName="pgtclsh" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/pgtclsh/pgtclAppInit.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/pgtclsh/pgtkAppInit.c</itemPath>
+        </logicalFolder>
+        <logicalFolder name="psql" displayName="psql" projectFiles="true">
+          <itemPath>../mtpgsql/src/bin/psql/command.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/command.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/common.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/common.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/copy.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/copy.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/describe.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/describe.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/help.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/help.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/input.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/input.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/large_obj.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/large_obj.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/mainloop.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/mainloop.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/print.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/print.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/prompt.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/prompt.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/settings.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/sql_help.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/startup.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/stringutils.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/stringutils.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/tab-complete.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/tab-complete.h</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/variables.c</itemPath>
+          <itemPath>../mtpgsql/src/bin/psql/variables.h</itemPath>
+        </logicalFolder>
+      </logicalFolder>
+      <logicalFolder name="include" displayName="include" projectFiles="true">
+        <logicalFolder name="access" displayName="access" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/access/attnum.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/blobstorage.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/funcindex.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/genam.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/gist.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/gistscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/giststrat.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/hash.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/heapam.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/hio.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/htup.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/ibit.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/iqual.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/istrat.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/itup.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/nbtree.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/printtup.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/relscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/rmgr.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/rtree.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/rtscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/rtstrat.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/sdir.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/skey.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/strat.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/transam.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/tupdesc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/tupmacs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/tuptoaster.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/xact.h</itemPath>
+          <itemPath>../mtpgsql/src/include/access/xlog.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="bootstrap" displayName="bootstrap" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/bootstrap/bootstrap.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="catalog" displayName="catalog" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/catalog/catalog.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/catname.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/catversion.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/heap.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/index.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/indexing.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_aggregate.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_am.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_amop.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_amproc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_attrdef.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_attribute.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_class.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_database.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_description.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_extent.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_extstore.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_group.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_index.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_inheritproc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_inherits.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_ipl.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_language.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_listener.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_log.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_opclass.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_operator.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_proc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_relcheck.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_rewrite.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_schema.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_shadow.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_statistic.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_trigger.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_type.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_variable.h</itemPath>
+          <itemPath>../mtpgsql/src/include/catalog/pg_version.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="commands" displayName="commands" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/commands/async.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/cluster.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/command.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/comment.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/copy.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/creatinh.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/dbcommands.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/defrem.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/explain.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/proclang.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/rename.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/sequence.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/trigger.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/user.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/vacuum.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/variable.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/version.h</itemPath>
+          <itemPath>../mtpgsql/src/include/commands/view.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="env" displayName="env" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/env/._env.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/WeaverConnection.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/WeaverInterface.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/connectionutil.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/dbwriter.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/delegatedscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/dolhelper.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/env.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/freespace.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/pg_crc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/poolsweep.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/slotvar.h</itemPath>
+          <itemPath>../mtpgsql/src/include/env/timestamp.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="executor" displayName="executor" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/executor/execFlatten.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/execdebug.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/execdefs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/execdesc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/executor.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/functions.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/hashjoin.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeAgg.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeAppend.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeDelegatedIndexscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeDelegatedSeqscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeGroup.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeHash.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeHashjoin.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeIndexscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeMaterial.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeMergejoin.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeNestloop.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeResult.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeSeqscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeSort.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeSubplan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeTidscan.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/nodeUnique.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/spi.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/spi_priv.h</itemPath>
+          <itemPath>../mtpgsql/src/include/executor/tuptable.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="lib" displayName="lib" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/lib/dllist.h</itemPath>
+          <itemPath>../mtpgsql/src/include/lib/fstack.h</itemPath>
+          <itemPath>../mtpgsql/src/include/lib/hasht.h</itemPath>
+          <itemPath>../mtpgsql/src/include/lib/lispsort.h</itemPath>
+          <itemPath>../mtpgsql/src/include/lib/stringinfo.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="libpq" displayName="libpq" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/libpq/auth.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/be-fsstubs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/crypt.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/hba.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/libpq-be.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/libpq-fs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/libpq.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/password.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/pqcomm.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/pqformat.h</itemPath>
+          <itemPath>../mtpgsql/src/include/libpq/pqsignal.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="mb" displayName="mb" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/mb/pg_wchar.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="nodes" displayName="nodes" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/nodes/execnodes.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/makefuncs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/memnodes.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/nodeFuncs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/nodes.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/params.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/parsenodes.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/pg_list.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/plannodes.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/primnodes.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/print.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/readfuncs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/nodes/relation.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="optimizer" displayName="optimizer" projectFiles="true">
+          <logicalFolder name="_deadcode" displayName="_deadcode" projectFiles="true">
+            <itemPath>../mtpgsql/src/include/optimizer/_deadcode/xfunc.h</itemPath>
+          </logicalFolder>
+          <itemPath>../mtpgsql/src/include/optimizer/clauses.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/cost.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_copy.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_gene.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_misc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_mutation.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_pool.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_random.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_recombination.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/geqo_selection.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/internal.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/joininfo.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/pathnode.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/paths.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/plancat.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/planmain.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/planner.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/prep.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/restrictinfo.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/subselect.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/tlist.h</itemPath>
+          <itemPath>../mtpgsql/src/include/optimizer/var.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="parser" displayName="parser" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/parser/analyze.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/gramparse.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/keywords.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_agg.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_clause.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_coerce.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_expr.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_func.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_node.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_oper.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_relation.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_target.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parse_type.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parser.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parserinfo.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/parsetree.h</itemPath>
+          <itemPath>../mtpgsql/src/include/parser/scansup.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="port" displayName="port" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/port/._macosx.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/aix.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/alpha.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/bsd.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/bsdi.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/dgux.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/freebsd.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/hpux.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/irix5.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/linux.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/macosx.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/netbsd.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/nextstep.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/qnx4.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/sco.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/solaris_i386.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/solaris_sparc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/sunos.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/sunos4.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/sunos5.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/svr4.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/ultrix4.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/univel.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/unixware.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/win.h</itemPath>
+          <itemPath>../mtpgsql/src/include/port/win32.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="regex" displayName="regex" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/regex/regcustom.h</itemPath>
+          <itemPath>../mtpgsql/src/include/regex/regerrs.h</itemPath>
+          <itemPath>../mtpgsql/src/include/regex/regex.h</itemPath>
+          <itemPath>../mtpgsql/src/include/regex/regguts.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="rewrite" displayName="rewrite" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/rewrite/locks.h</itemPath>
+          <itemPath>../mtpgsql/src/include/rewrite/prs2lock.h</itemPath>
+          <itemPath>../mtpgsql/src/include/rewrite/rewriteDefine.h</itemPath>
+          <itemPath>../mtpgsql/src/include/rewrite/rewriteHandler.h</itemPath>
+          <itemPath>../mtpgsql/src/include/rewrite/rewriteManip.h</itemPath>
+          <itemPath>../mtpgsql/src/include/rewrite/rewriteRemove.h</itemPath>
+          <itemPath>../mtpgsql/src/include/rewrite/rewriteSupport.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="storage" displayName="storage" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/storage/backendid.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/block.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/buf.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/buf_internals.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/buffile.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/bufmgr.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/bufpage.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/fd.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/ipc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/item.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/itemid.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/itempos.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/itemptr.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/large_object.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/lmgr.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/localbuf.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/lock.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/m_lock.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/multilev.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/multithread.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/off.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/page.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/pagenum.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/pos.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/proc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/s_lock.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/shmem.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/sinval.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/sinvaladt.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/smgr.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/smgr_spi.h</itemPath>
+          <itemPath>../mtpgsql/src/include/storage/spin.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="tcop" displayName="tcop" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/tcop/dest.h</itemPath>
+          <itemPath>../mtpgsql/src/include/tcop/fastpath.h</itemPath>
+          <itemPath>../mtpgsql/src/include/tcop/pquery.h</itemPath>
+          <itemPath>../mtpgsql/src/include/tcop/tcopdebug.h</itemPath>
+          <itemPath>../mtpgsql/src/include/tcop/tcopprot.h</itemPath>
+          <itemPath>../mtpgsql/src/include/tcop/utility.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="utils" displayName="utils" projectFiles="true">
+          <itemPath>../mtpgsql/src/include/utils/acl.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/array.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/bit.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/builtins.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/cash.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/catcache.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/date.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/datetime.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/datum.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/dynahash.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/dynamic_loader.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/elog.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/exc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/excid.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/fcache.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/fcache2.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/fmgrtab.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/formatting.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/geo_decls.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/hsearch.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/inet.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/int8.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/inval.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/java.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/logtape.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/lsyscache.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/lztext.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/mcxt.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/memutils.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/module.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/nabstime.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/numeric.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/palloc.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/pg_locale.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/pg_lzcompress.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/portal.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/ps_status.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/rel.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/relcache.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/sets.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/syscache.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/temprel.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/timestamp.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/tqual.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/trace.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/tuplesort.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/varbit.h</itemPath>
+          <itemPath>../mtpgsql/src/include/utils/wrapdatum.h</itemPath>
+        </logicalFolder>
+        <itemPath>../mtpgsql/src/include/._postgres_ext.h</itemPath>
+        <itemPath>../mtpgsql/src/include/FlexLexer.h</itemPath>
+        <itemPath>../mtpgsql/src/include/c.h</itemPath>
+        <itemPath>../mtpgsql/src/include/config.h</itemPath>
+        <itemPath>../mtpgsql/src/include/dlfcn.h</itemPath>
+        <itemPath>../mtpgsql/src/include/miscadmin.h</itemPath>
+        <itemPath>../mtpgsql/src/include/os.h</itemPath>
+        <itemPath>../mtpgsql/src/include/postgres.h</itemPath>
+        <itemPath>../mtpgsql/src/include/postgres_ext.h</itemPath>
+        <itemPath>../mtpgsql/src/include/rusagestub.h</itemPath>
+        <itemPath>../mtpgsql/src/include/strdup.h</itemPath>
+        <itemPath>../mtpgsql/src/include/version.h</itemPath>
+      </logicalFolder>
+      <logicalFolder name="interfaces" displayName="interfaces" projectFiles="true">
+        <logicalFolder name="cli" displayName="cli" projectFiles="true">
+          <itemPath>../mtpgsql/src/interfaces/cli/example1.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/cli/example2.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/cli/sqlcli.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="ecpg" displayName="ecpg" projectFiles="true">
+          <logicalFolder name="include" displayName="include" projectFiles="true">
+            <itemPath>../mtpgsql/src/interfaces/ecpg/include/ecpgerrno.h</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/include/ecpglib.h</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/include/ecpgtype.h</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/include/sql3types.h</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/include/sqlca.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="lib" displayName="lib" projectFiles="true">
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/connect.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/data.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/descriptor.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/error.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/execute.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/extern.h</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/memory.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/misc.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/prepare.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/lib/typename.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="preproc" displayName="preproc" projectFiles="true">
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/c_keywords.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/descriptor.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/ecpg.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/ecpg_keywords.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/extern.h</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/keywords.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/output.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/type.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/type.h</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/ecpg/preproc/variable.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="test" displayName="test" projectFiles="true">
+            <itemPath>../mtpgsql/src/interfaces/ecpg/test/header_test.h</itemPath>
+          </logicalFolder>
+        </logicalFolder>
+        <logicalFolder name="libpgeasy" displayName="libpgeasy" projectFiles="true">
+          <logicalFolder name="examples" displayName="examples" projectFiles="true">
+            <itemPath>../mtpgsql/src/interfaces/libpgeasy/examples/pginsert.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpgeasy/examples/pgnulltest.c</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpgeasy/examples/pgwordcount.c</itemPath>
+          </logicalFolder>
+          <itemPath>../mtpgsql/src/interfaces/libpgeasy/halt.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgeasy/halt.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgeasy/libpgeasy.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgeasy/libpgeasy.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="libpgtcl" displayName="libpgtcl" projectFiles="true">
+          <itemPath>../mtpgsql/src/interfaces/libpgtcl/libpgtcl.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgtcl/pgtcl.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgtcl/pgtclCmds.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgtcl/pgtclCmds.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgtcl/pgtclId.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpgtcl/pgtclId.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="libpq" displayName="libpq" projectFiles="true">
+          <itemPath>../mtpgsql/src/interfaces/libpq/dllist.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/fe-auth.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/fe-auth.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/fe-connect.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/fe-exec.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/fe-lobj.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/fe-misc.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/fe-print.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/inet_aton.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/libpq-fe.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/libpq-int.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/libpqdll.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/pqexpbuffer.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/pqexpbuffer.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/pqsignal.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/pqsignal.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq/win32.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="libpq++" displayName="libpq++" projectFiles="true">
+          <logicalFolder name="examples" displayName="examples" projectFiles="true">
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlibpq0.cc</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlibpq1.cc</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlibpq2.cc</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlibpq3.cc</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlibpq4.cc</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlibpq5.cc</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlibpq6.cc</itemPath>
+            <itemPath>../mtpgsql/src/interfaces/libpq++/examples/testlo.cc</itemPath>
+          </logicalFolder>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/libpq++.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgconnection.cc</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgconnection.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgcursordb.cc</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgcursordb.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgdatabase.cc</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgdatabase.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pglobject.cc</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pglobject.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgtransdb.cc</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/libpq++/pgtransdb.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="odbc" displayName="odbc" projectFiles="true">
+          <itemPath>../mtpgsql/src/interfaces/odbc/acconfig.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/bind.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/bind.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/columninfo.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/columninfo.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/connection.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/connection.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/convert.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/convert.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/dlg_specific.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/dlg_specific.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/drvconn.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/environ.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/environ.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/execute.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/gpps.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/gpps.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/info.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/iodbc.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/isql.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/isqlext.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/lobj.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/lobj.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/misc.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/misc.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/options.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/parse.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/pgtypes.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/pgtypes.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/psqlodbc.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/psqlodbc.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/qresult.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/qresult.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/resource.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/results.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/setup.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/socket.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/socket.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/statement.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/statement.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/tuple.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/tuple.h</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/tuplelist.c</itemPath>
+          <itemPath>../mtpgsql/src/interfaces/odbc/tuplelist.h</itemPath>
+        </logicalFolder>
+        <logicalFolder name="python" displayName="python" projectFiles="true">
+          <itemPath>../mtpgsql/src/interfaces/python/pgmodule.c</itemPath>
+        </logicalFolder>
+      </logicalFolder>
+      <logicalFolder name="mflex" displayName="mflex" projectFiles="true">
+        <logicalFolder name="MISC" displayName="MISC" projectFiles="true">
+          <logicalFolder name="Amiga" displayName="Amiga" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/Amiga/config.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="Borland" displayName="Borland" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/Borland/config.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="fastwc" displayName="fastwc" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/fastwc/mywc.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="Macintosh" displayName="Macintosh" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/Macintosh/alloca.c</itemPath>
+            <itemPath>../mtpgsql/src/mflex/MISC/Macintosh/alloca.h</itemPath>
+            <itemPath>../mtpgsql/src/mflex/MISC/Macintosh/xmalloc.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="MVS" displayName="MVS" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/MVS/initscan-mvs.c</itemPath>
+          </logicalFolder>
+          <logicalFolder name="NT" displayName="NT" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/NT/config.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="OS2" displayName="OS2" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/OS2/config.h</itemPath>
+          </logicalFolder>
+          <logicalFolder name="VMS" displayName="VMS" projectFiles="true">
+            <itemPath>../mtpgsql/src/mflex/MISC/VMS/vms-code.c</itemPath>
+            <itemPath>../mtpgsql/src/mflex/MISC/VMS/vms-conf.h</itemPath>
+          </logicalFolder>
+          <itemPath>../mtpgsql/src/mflex/MISC/alloca.c</itemPath>
+          <itemPath>../mtpgsql/src/mflex/MISC/parse.c</itemPath>
+          <itemPath>../mtpgsql/src/mflex/MISC/parse.h</itemPath>
+        </logicalFolder>
+        <itemPath>../mtpgsql/src/mflex/FlexLexer.h</itemPath>
+        <itemPath>../mtpgsql/src/mflex/ccl.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/config.h</itemPath>
+        <itemPath>../mtpgsql/src/mflex/dfa.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/ecs.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/flexdef.h</itemPath>
+        <itemPath>../mtpgsql/src/mflex/gen.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/initscan.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/libmain.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/libyywrap.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/main.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/misc.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/nfa.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/oldskel.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/scan.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/skel.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/sym.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/tblcmp.c</itemPath>
+        <itemPath>../mtpgsql/src/mflex/version.h</itemPath>
+        <itemPath>../mtpgsql/src/mflex/yylex.c</itemPath>
+      </logicalFolder>
+      <logicalFolder name="mtpg" displayName="mtpg" projectFiles="true">
+        <logicalFolder name="include" displayName="include" projectFiles="true">
+          <logicalFolder name="access" displayName="access" projectFiles="true">
+          </logicalFolder>
+          <logicalFolder name="commands" displayName="commands" projectFiles="true">
+          </logicalFolder>
+          <logicalFolder name="executor" displayName="executor" projectFiles="true">
+          </logicalFolder>
+          <logicalFolder name="lib" displayName="lib" projectFiles="true">
+          </logicalFolder>
+          <logicalFolder name="libpq" displayName="libpq" projectFiles="true">
+          </logicalFolder>
+          <logicalFolder name="utils" displayName="utils" projectFiles="true">
+          </logicalFolder>
+        </logicalFolder>
+      </logicalFolder>
+      <logicalFolder name="simpleserver"
+                     displayName="simpleserver"
+                     projectFiles="true">
+        <itemPath>../mtpgsql/src/simpleserver/._org_mtpgsql_server_Connection.c</itemPath>
+        <itemPath>../mtpgsql/src/simpleserver/org_mtpgsql_server_Connection.c</itemPath>
+        <itemPath>../mtpgsql/src/simpleserver/org_mtpgsql_server_Connection.h</itemPath>
+        <itemPath>../mtpgsql/src/simpleserver/org_mtpgsql_server_SimpleServer.h</itemPath>
+      </logicalFolder>
+      <logicalFolder name="utils" displayName="utils" projectFiles="true">
+        <itemPath>../mtpgsql/src/utils/dllinit.c</itemPath>
+        <itemPath>../mtpgsql/src/utils/getopt.c</itemPath>
+        <itemPath>../mtpgsql/src/utils/strdup.c</itemPath>
+        <itemPath>../mtpgsql/src/utils/version.c</itemPath>
+      </logicalFolder>
+      <itemPath>../mtpgsql/src/config.h</itemPath>
+      <itemPath>../mtpgsql/src/backend/mtpg.d</itemPath>
+    </logicalFolder>
+    <logicalFolder name="ExternalFiles"
+                   displayName="Important Files"
+                   projectFiles="false">
+      <itemPath>../mtpgsql/src/Makefile</itemPath>
+      <itemPath>weaver2-Makefile.mk</itemPath>
+    </logicalFolder>
+  </logicalFolder>
+  <sourceRootList>
+    <Elem>../pgjava_c</Elem>
+    <Elem>../mtpgsql/src</Elem>
+  </sourceRootList>
+  <projectmakefile>weaver2-Makefile.mk</projectmakefile>
+  <confs>
+    <conf name="Default" type="0">
+      <toolsSet>
+        <remote-sources-mode>LOCAL_SOURCES</remote-sources-mode>
+        <compilerSet>SunStudio|SunStudio</compilerSet>
+      </toolsSet>
+      <makefileType>
+        <makeTool>
+          <buildCommandWorkingDir>../mtpgsql/src</buildCommandWorkingDir>
+          <buildCommand>gmake -f Makefile</buildCommand>
+          <cleanCommand>gmake -f Makefile clean</cleanCommand>
+          <executablePath>../mtpgsql/src/mtpg/bin/weaver</executablePath>
+          <cTool>
+            <inheritIncValues>false</inheritIncValues>
+          </cTool>
+        </makeTool>
+      </makefileType>
+    </conf>
+    <conf name="NewConfiguration" type="0">
+      <toolsSet>
+        <remote-sources-mode>LOCAL_SOURCES</remote-sources-mode>
+        <compilerSet>SunStudio_12|SunStudio_12</compilerSet>
+      </toolsSet>
+      <makefileType>
+        <makeTool>
+          <buildCommandWorkingDir>.</buildCommandWorkingDir>
+          <buildCommand>${MAKE} -f Makefile</buildCommand>
+          <cleanCommand>${MAKE} -f Makefile clean</cleanCommand>
+          <executablePath></executablePath>
+        </makeTool>
+      </makefileType>
+    </conf>
+  </confs>
+</configurationDescriptor>

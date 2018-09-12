@@ -1,0 +1,63 @@
+# Generated automatically from Makefile.in by configure.
+#-------------------------------------------------------------------------
+#
+# Makefile
+#    Makefile for libpgtcl library
+#
+# Copyright (c) 1994, Regents of the University of California
+#
+# IDENTIFICATION
+#    $Header: /cvs/weaver/mtpgsql/src/interfaces/libpgtcl/Makefile,v 1.1.1.1 2006/08/12 00:23:00 synmscott Exp $
+#
+#-------------------------------------------------------------------------
+
+NAME= pgtcl
+SO_MAJOR_VERSION= 2
+SO_MINOR_VERSION= 1
+
+SRCDIR= ../..
+include $(SRCDIR)/Makefile.global
+
+CFLAGS+= -I$(SRCDIR)/backend \
+         -I$(SRCDIR)/include \
+         -I$(LIBPQDIR)
+
+ifdef KRBVERS
+CFLAGS+= $(KRBFLAGS)
+endif
+
+OBJS= pgtcl.o pgtclCmds.o pgtclId.o
+
+SHLIB_LINK+= $(LIBPQ)
+
+# If crypt is a separate library, rather than part of libc, it may need
+# to be referenced separately to keep (broken) linkers happy.  (This is
+# braindead; users of libpq should not need to know what it depends on.)
+SHLIB_LINK+= $(findstring -lcrypt,$(LIBS))
+
+# Shared library stuff, also default 'all' target
+include $(SRCDIR)/Makefile.shlib
+
+
+.PHONY: install beforeinstall-headers install-headers
+
+install: install-headers install-lib $(install-shlib-dep)
+
+install-headers: beforeinstall-headers libpgtcl.h
+	$(INSTALL) $(INSTLOPTS) libpgtcl.h $(HEADERDIR)/libpgtcl.h
+
+beforeinstall-headers:
+	-@if [ ! -d $(HEADERDIR) ]; then mkdir $(HEADERDIR); fi
+
+
+.PHONY: clean
+
+clean: clean-shlib
+	rm -f lib$(NAME).a $(OBJS)
+
+depend dep:
+	$(CC) -MM $(CFLAGS) *.c >depend
+
+ifeq (depend,$(wildcard depend))
+include depend
+endif

@@ -1,0 +1,107 @@
+ARCH=$(shell uname -s)
+PROC=$(shell uname -p)
+
+ifeq ($(ARCH),SunOS)
+OS=SUNOS
+PORTNAME=solaris
+endif
+
+ifeq ($(ARCH),Linux)
+OS=LINUX
+PORTNAME=linux
+CFLAGS+= -D_GNU_SOURCE
+endif
+
+ifeq ($(PROC),i386)
+CPU=amd64
+ENDIAN=LITTLE_ENDIAN
+endif
+
+ifeq ($(PROC),x86_64)
+CPU=amd64
+ENDIAN=LITTLE_ENDIAN
+endif
+
+ifeq ($(PROC),sparc)
+CPU=sparcv9
+ENDIAN=BIG_ENDIAN
+endif
+
+ifndef JAVA_HOME
+JAVA_HOME=/usr/latest/jdk
+endif
+
+#OS=LINUX
+#CPU=amd64
+#PORTNAME=linux
+#ENDIAN=LITTLE_ENDIAN
+
+#OS=SUNOS
+#CPU=amd64
+#PORTNAME=solaris
+#ENDIAN=LITTLE_ENDIAN
+
+#OS=SUNOS
+#CPU=sparcv9
+#PORTNAME=solaris
+#ENDIAN=BIG_ENDIAN
+
+%.so: %.o
+	$(LD) -G -Bdynamic -o $@ $<
+MK_NO_LORDER=true
+ifeq ($(CC), gcc)
+CC=gcc
+CPP=g++
+CFLAGS+= -g -fPIC -m64
+CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
+LD=/usr/bin/ld
+else 
+CC=cc
+CPP=CC
+LD=/usr/bin/ld
+#debug new SUNspro Express
+CFLAGS+= -g -m64 -KPIC # -xinstrument=datarace
+CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN}
+endif
+#CFLAGS+= -DDEBUGLOGS
+# performance
+#CFLAGS+= -xO4 -m64 -KPIC
+#CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
+
+#for java
+ifeq ($(JAVA_HOME),"")
+JAVA_HOME=/usr/jdk/latest
+endif
+
+CFLAGS+= -I${JAVA_HOME}/include -I${JAVA_HOME}/include/${PORTNAME}
+BKIOPTS+= -DNOARRAY -I../../include -I..
+
+#CFLAGS+= -DDEBUG_INDEX_INSERT
+#CFLAGS+= -DCACHEDEBUG
+#CFLAGS+= -DHEAPDEBUGALL
+#CFLAGS+= -DCLOBBER_FREED_MEMORY
+#CFLAGS+= -DMEMORY_CONTEXT_CHECKING
+CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
+AROPT= crs
+CFLAGS_SL=
+ifeq ($(OS),SUNOS) 
+LDFLAGS= -L/usr/lib/64 -L/usr/lib/${CPU} 
+LIBS= -lgen -lnsl -lrt -lm -lumem -lsocket
+endif
+ifeq ($(OS),LINUX) 
+LDFLAGS= -L/usr/lib64
+LIBS= -lnsl -lrt -lm -lcrypt -lmcheck -lpthread 
+endif
+
+INSTALL= $(SRCDIR)/install-sh -c
+POSTGRESDIR=$(SRCDIR)/mtpg
+
+LEAK_DETECT=0
+
+ifeq ($(LEAK_DETECT),1)
+CFLAGS+= -I$(SRCDIR)/../../gc/include
+CFLAGS+= -L/usr/ucblib/${CPU}
+CFLAGS+= -DGC_DEBUG=1
+CFLAGS+= -L$(SRCDIR)/../../gc/.libs
+endif
+

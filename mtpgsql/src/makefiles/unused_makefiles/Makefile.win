@@ -1,0 +1,20 @@
+CFLAGS+= -I/usr/local/include
+LDFLAGS+= -g
+DLLTOOL= dlltool
+DLLWRAP= dllwrap
+DLLLIBS=-L/usr/local/lib -L$(LIBDIR) -L$(SRCDIR)/backend -lpostgres -lcygipc -lcygwin -lcrypt -lkernel32
+X=.exe
+MK_NO_LORDER=true
+MAKE_DLL=true
+#MAKE_DLL=false
+SHLIB_LINK=$(DLLLIBS)
+
+%.dll: %.o
+	$(DLLTOOL) --export-all --output-def $*.def $<
+	$(DLLWRAP) -o $@ --def $*.def $< $(SRCDIR)/utils/dllinit.o $(DLLLIBS)
+	rm -f $*.def
+
+curdir:=$(shell pwd)
+ifeq ($(findstring backend,$(curdir)), backend)
+CFLAGS+= -DBUILDING_DLL=1
+endif

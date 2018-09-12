@@ -1,0 +1,10 @@
+#!/bin/sh
+printf "please input java home:"
+read JAVA_HOME
+export JAVA_HOME
+cd mflex;./configure;cd ..
+rm include/os.h
+rm Makefile.port
+ln -s port/solaris_sparc.h include/os.h
+ln -s makefiles/Makefile.solaris_sparc Makefile.port
+exec make $1

@@ -1,0 +1,8 @@
+
+
+#ifndef BUILDTIME
+
+#define BUILDTIME "SED_TIMESTAMP"
+
+#endif
+

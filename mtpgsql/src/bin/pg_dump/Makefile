@@ -1,0 +1,55 @@
+# Generated automatically from Makefile.in by configure.
+#-------------------------------------------------------------------------
+#
+# Makefile.inc--
+#    Makefile for bin/pg_dump
+#
+# Copyright (c) 1994, Regents of the University of California
+#
+#
+# IDENTIFICATION
+#    $Header: /cvs/weaver/mtpgsql/src/bin/pg_dump/Makefile,v 1.1.1.1 2006/08/12 00:11:18 synmscott Exp $
+#
+#-------------------------------------------------------------------------
+
+SRCDIR= ../..
+include ../../Makefile.global
+
+OBJS= pg_dump.o common.o 
+
+CFLAGS+= -I$(LIBPQDIR)
+
+#
+# And where libpq goes, so goes the authentication stuff...
+#
+ifdef KRBVERS
+LDFLAGS+= $(KRBLIBS)
+CFLAGS+= $(KRBFLAGS)
+endif
+
+all: submake pg_dump
+
+pg_dump: $(OBJS) $(LIBPQDIR)/libpq.a
+	$(CC) $(CFLAGS) -o pg_dump $(OBJS) $(LIBPQ) $(LDFLAGS) $(LIBS)
+
+../../utils/strdup.o:
+	$(MAKE) -C ../../utils strdup.o
+
+.PHONY: submake
+submake:
+	$(MAKE) -C $(LIBPQDIR) libpq.a
+
+install: pg_dump
+	$(INSTALL) $(INSTL_EXE_OPTS) pg_dump$(X) $(BINDIR)/pg_dump$(X)
+	$(INSTALL) $(INSTL_EXE_OPTS) pg_dumpall $(BINDIR)/pg_dumpall
+	$(INSTALL) $(INSTL_EXE_OPTS) pg_upgrade $(BINDIR)/pg_upgrade
+
+depend dep:
+	$(CC) -MM $(CFLAGS) *.c >depend
+
+clean: 
+	rm -f pg_dump$(X) $(OBJS) 
+
+ifeq (depend,$(wildcard depend))
+include depend
+endif
