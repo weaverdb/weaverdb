@@ -349,7 +349,7 @@ ExtendIndex(char *indexRelationName, Expr *predicate, List *rangetable)
 									ObjectIdGetDatum(indproc),
 									0, 0, 0);
 		if (!HeapTupleIsValid(tuple))
-			elog(ERROR, "ExtendIndex: index procedure %u not found",
+			elog(ERROR, "ExtendIndex: index procedure %lu not found",
 				 indproc);
 
 		namecpy(&(funcInfo->funcName),
@@ -857,9 +857,9 @@ ReindexDatabase(const char *dbname, bool force, bool all,bool exclusive)
 		StartTransactionCommand();
 		
                 if (reindex_relation(relids[i], force))
-			elog(NOTICE, "relation %u was reindexed", relids[i]);
+			elog(NOTICE, "relation %lu was reindexed", relids[i]);
 		else
-			elog(NOTICE, "relation %u was not reindexed", relids[i]);
+			elog(NOTICE, "relation %lu was not reindexed", relids[i]);
                 
                 CommitTransactionCommand();
 	}

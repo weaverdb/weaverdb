@@ -184,20 +184,20 @@ static bool ActivateFile(Vfd* file);
 static void RetireFile(Vfd* file);
 static bool CheckFileAccess(Vfd* target);
 
-static bool ReleaseFileIfNeeded();
+static bool ReleaseFileIfNeeded(void);
 
 static Vfd* AllocateVfd(FileName name, int fileflags, int filemode, bool private);
 static void FreeVfd(Vfd* file);
 
 static Vfd* GetVirtualFD(int index);
 static Index InitializeBlock(int start);
-static int GetVfdPoolSize();
+static int GetVfdPoolSize(void);
 
 static char *filepath(char* buf, char *filename, int len);
 static long pg_nofile(void);
-static bool CheckRealFileCount();
+static bool CheckRealFileCount(void);
 
-static void closeAllVfds();
+static void closeAllVfds(void);
 
 /*
  * pg_fsync --- same as fsync except does nothing if -F switch was given
@@ -229,7 +229,7 @@ pg_nofile(void) {
             elog(DEBUG, "pg_nofile: Unable to get _SC_OPEN_MAX using sysconf(); using %d", NOFILE);
             no_files = (long) NOFILE;
         } else {
-            elog(DEBUG, "maximum number of open files %i", no_files);
+            elog(DEBUG, "maximum number of open files %li", no_files);
         }
 
 #endif
@@ -405,7 +405,7 @@ ActivateFile(Vfd* vfdP) {
     if (vfdP->seekPos != 0L) {
         off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
         if (check != vfdP->seekPos) {
-            elog(NOTICE, "bad file activation during seek filename:%s, current: %d, seeked: %d", vfdP->fileName, vfdP->seekPos, check);
+            elog(NOTICE, "bad file activation during seek filename:%s, current: %ld, seeked: %ld", vfdP->fileName, vfdP->seekPos, check);
         }
     }
 
@@ -513,7 +513,6 @@ InitializeBlock(int start) {
 
 static Vfd*
 AllocateVfd(FileName name, int fileflags, int filemode, bool private) {
-    Index i;
     File file;
     Vfd* target;
     Vfd* list = GetVirtualFD(0);
@@ -639,7 +638,7 @@ CheckFileAccess(Vfd* target) {
     while (target->fd == VFD_CLOSED && trys++ < 5) {
         if (!ActivateFile(target)) {
             char* err = strerror(errno);
-            elog(NOTICE, "bad file activation: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            elog(NOTICE, "bad file activation: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             errno = 0;
         }
     }
@@ -904,7 +903,7 @@ FileRead(File file, char *buffer, int amount) {
         if (blit < 0) {
             char* err = strerror(errno);
             errno = 0;
-            elog(NOTICE, "bad read file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            elog(NOTICE, "bad read file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             return -1;
         } else if (blit == 0) {
             /* EOF  */
@@ -940,7 +939,7 @@ FileWrite(File file, char *buffer, int amount) {
         ssize_t blit = write(target->fd, buffer, amount);
         if (blit < 0) {
             char* err = strerror(errno);
-            elog(NOTICE, "bad write file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            elog(NOTICE, "bad write file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             return -1;
         } else if (blit == 0) {
             elog(NOTICE, "partial write %s", target->fileName);
@@ -989,7 +988,7 @@ FileSeek(File file, long offset, int whence) {
         blit = lseek(target->fd, offset, whence);
         if (blit < 0) {
             char* err = strerror(errno);
-            elog(NOTICE, "bad seek file: %s loc: %d err: %s", target->fileName, target->seekPos, err);
+            elog(NOTICE, "bad seek file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             if (fails++ > 5) {
                 return -1;
             }
@@ -1084,6 +1083,7 @@ FilePin(File file, int key) {
     target->key = key;
 
     Assert(target->owner != 0);
+    return 0;
 }
 
 int
@@ -1136,8 +1136,9 @@ FileMarkDirty(File file) {
 int
 FileOptimize(File file) {
     Vfd *target = GetVirtualFD(file);
+#ifdef SUNOS
     int flag = 0;
-
+#endif
     if (target->fd == VFD_CLOSED) return 0;
 
 #ifdef SUNOS
@@ -1151,8 +1152,9 @@ FileOptimize(File file) {
 int
 FileNormalize(File file) {
     Vfd *target = GetVirtualFD(file);
+#ifdef SUNOS
     int flag = 0;
-
+#endif
     if (target->fd == VFD_CLOSED) return 0;
 
 #ifdef SUNOS
@@ -1390,7 +1392,7 @@ CheckRealFileCount() {
             }
         } else if (size <= RealFiles.maxfiles * 0.20 && vfdsharemax > 1) {
             if (RealFiles.checks++ >= RealFiles.maxfiles) {
-                RealFiles.checks == 0;
+                RealFiles.checks = 0;
                 vfdsharemax -= 1;
             }
         }

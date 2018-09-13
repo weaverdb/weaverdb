@@ -713,8 +713,7 @@ ApplyRetrieveRule(Query *parsetree,
 	List	   *rtable,
 			   *addedrtable,
 			   *l;
-	int			nothing,
-				rt_length;
+	int			rt_length;
 	int			modified = false;
 	int			badsql = false;
 
@@ -727,10 +726,7 @@ ApplyRetrieveRule(Query *parsetree,
 
 			return parsetree;
 		rule_action = copyObject(lfirst(rule->actions));
-		nothing = FALSE;
 	}
-	else
-		nothing = TRUE;
 
 	rtable = copyObject(parsetree->rtable);
 	rt_length = length(rtable); /* original length, not counting rule */
@@ -1122,7 +1118,6 @@ fireRules(Query *parsetree,
 		if (rule_lock->isInstead &&
 			parsetree->commandType != CMD_SELECT)
 		{
-			RangeTblEntry *rte;
 #ifdef USEACL
 			int32		acl_rc;
 			int32		reqperm;
@@ -1139,7 +1134,7 @@ fireRules(Query *parsetree,
 			}
 #endif
 
-			rte = rt_fetch(parsetree->resultRelation, parsetree->rtable);
+			rt_fetch(parsetree->resultRelation, parsetree->rtable);
 #ifdef USEACL
 			if (!rte->skipAcl)
 			{

@@ -77,7 +77,6 @@ static int	ElogDebugIndentLevel = 0;
  * See elog.h for the error level definitions.
  *--------------------
  */
-
 int my_system(const char* cmd) {
 	FILE *p;
         char msg[512];
@@ -96,17 +95,16 @@ int my_system(const char* cmd) {
 void
 coded_elog(int lev, int code, const char *fmt,...)
 {
-		int			nprinted;
 	va_list		ap;
 	char          msg_buf[256];
 
 	GetEnv()->errorcode = code;
         va_start(ap, fmt);
-        nprinted = vsnprintf(msg_buf, 255, fmt, ap);
+        vsnprintf(msg_buf, 255, fmt, ap);
         va_end(ap);
-	elog(lev,msg_buf);
+	elog(lev, "%s", msg_buf);
 }
- 
+
 void
 elog(int lev, const char *fmt,...)
 {
@@ -457,9 +455,9 @@ elog(int lev, const char *fmt,...)
 	if (lev >= FATAL)
 	{
             if ( IsMultiuser() ) {
-                printf("SYSTEM HALT: from thread %d\n",pthread_self());
-                printf(msg_buf);
-                fprintf(stderr,msg_buf);
+                printf("SYSTEM HALT: from thread %ld\n",pthread_self());
+                printf("%s", msg_buf);
+                fprintf(stderr, "%s", msg_buf);
                 #ifdef MACOSX
                 kill(getpid(),SIGABRT);
                 #else
@@ -490,8 +488,7 @@ elog(int lev, const char *fmt,...)
 int
 DebugFileOpen(void)
 {
-	int			fd,
-				istty;
+	int			fd;
 
 	Err_file = Debugfile = -1;
 	ElogDebugIndentLevel = 0;
@@ -502,7 +499,6 @@ DebugFileOpen(void)
 					   0666)) < 0)
 			elog(FATAL, "DebugFileOpen: open of %s: %m",
 				 OutputFileName);
-		istty = isatty(fd);
 		close(fd);
 
 		if (!freopen(OutputFileName, "a", stderr))

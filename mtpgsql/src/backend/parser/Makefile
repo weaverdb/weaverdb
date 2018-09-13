@@ -14,7 +14,7 @@ include ../../Makefile.global
 #CFLAGS += -I.. 
 
 ifeq ($(CC), gcc)
-CFLAGS+= -Wno-error
+CFLAGS+= -Wno-unused-variable
 endif
 
 OBJS= analyze.o gram.o keywords.o parser.o parse_agg.o parse_clause.o \

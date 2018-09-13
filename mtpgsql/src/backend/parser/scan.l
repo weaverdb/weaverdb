@@ -46,6 +46,7 @@ int yylex(YYSTYPE* yylval_param, yyscan_t yyscanner);
 
 #define YY_NEVER_INTERACTIVE 1
 #define YY_NO_UNPUT
+#define YY_NO_INPUT
 static int myinput(char* buf, int max);
 #undef YY_INPUT
 #define YY_INPUT(buf,result,max) {result = myinput(buf,max);}

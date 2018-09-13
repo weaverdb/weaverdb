@@ -339,6 +339,8 @@ WDestroyConnection(OpaqueWConn conn) {
     if (conn->env != NULL) {
         DestroyEnv(conn->env);
     }
+
+    return 0;
 }
 
 extern long
@@ -399,7 +401,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return NULL;
     }
@@ -495,7 +497,7 @@ WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, 
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -538,7 +540,7 @@ WExec(OpaquePreparedStatement plan) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -660,7 +662,7 @@ WFetch(OpaquePreparedStatement plan) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -758,7 +760,7 @@ WPrepare(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -777,7 +779,7 @@ WCommit(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -823,7 +825,7 @@ WRollback(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -875,7 +877,7 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1017,7 +1019,7 @@ WGetTransactionId(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1046,7 +1048,7 @@ WGetCommandId(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1073,7 +1075,7 @@ WBeginProcedure(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1100,7 +1102,7 @@ WEndProcedure(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %d, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1557,6 +1559,7 @@ FillExecArgs(PreparedPlan* plan) {
     }
     paramLI->kind = PARAM_INVALID;
     MemoryContextSwitchTo(old);
+    return 0;
 }
 
 static PreparedPlan *

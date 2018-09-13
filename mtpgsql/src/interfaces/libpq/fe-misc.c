@@ -209,7 +209,7 @@ pqGetnchar(char *s, size_t len, PGconn *conn)
 	conn->inCursor += len;
 
 	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "From backend (%d)> %.*s\n", len, (int) len, s);
+		fprintf(conn->Pfdebug, "From backend (%ld)> %.*s\n", len, (int) len, s);
 
 	return 0;
 }
@@ -260,13 +260,13 @@ pqGetInt(int *result, size_t bytes, PGconn *conn)
 			break;
 		default:
 			sprintf(noticeBuf,
-					"pqGetInt: int size %d not supported\n", bytes);
+					"pqGetInt: int size %ld not supported\n", bytes);
 			DONOTICE(conn, noticeBuf);
 			return EOF;
 	}
 
 	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "From backend (#%d)> %d\n", bytes, *result);
+		fprintf(conn->Pfdebug, "From backend (#%ld)> %d\n", bytes, *result);
 
 	return 0;
 }
@@ -297,13 +297,13 @@ pqPutInt(int value, size_t bytes, PGconn *conn)
 			break;
 		default:
 			sprintf(noticeBuf,
-					"pqPutInt: int size %d not supported\n", bytes);
+					"pqPutInt: int size %ld not supported\n", bytes);
 			DONOTICE(conn, noticeBuf);
 			return EOF;
 	}
 
 	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "To backend (%d#)> %d\n", bytes, value);
+		fprintf(conn->Pfdebug, "To backend (%ld#)> %d\n", bytes, value);
 
 	return 0;
 }

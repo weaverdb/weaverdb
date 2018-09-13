@@ -475,9 +475,9 @@ texteq(text *arg1, text *arg2)
 			   *a2p;
 
 	if (arg1 == NULL || arg2 == NULL)
-		return (bool) NULL;
+		return FALSE;
 	if ((len = arg1->vl_len) != arg2->vl_len)
-		return (bool) 0;
+		return FALSE;
 	a1p = arg1->vl_dat;
 	a2p = arg2->vl_dat;
 
@@ -489,8 +489,8 @@ texteq(text *arg1, text *arg2)
 	len -= VARHDRSZ;
 	while (len-- != 0)
 		if (*a1p++ != *a2p++)
-			return (bool) 0;
-	return (bool) 1;
+			return FALSE;
+	return TRUE;
 }	/* texteq() */
 
 bool

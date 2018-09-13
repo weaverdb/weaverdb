@@ -179,7 +179,7 @@ Boot_CreateStmt:
 						id = heap_create_with_catalog(LexIDStr($3),
 											tupdesc, RELKIND_RELATION, false);
 						if (!Quiet)
-							printf("CREATED relation %s with OID %u\n",
+							printf("CREATED relation %s with OID %lu\n",
 								   LexIDStr($3), id);
 					}
 

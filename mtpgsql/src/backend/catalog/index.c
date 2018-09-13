@@ -1317,7 +1317,7 @@ LockClassinfoForUpdate(Oid relid, HeapTuple rtup, bool confirmCommitted)
 		case HeapTupleMayBeUpdated:
 			break;
 		default:
-			elog(ERROR, "LockStatsForUpdate couldn't lock relid %u", relid);
+			elog(ERROR, "LockStatsForUpdate couldn't lock relid %lu", relid);
 			return false;
 	}
 	RelationInvalidateHeapTuple(relationRelation, rtup);
@@ -1349,9 +1349,9 @@ IndexesAreActive(Oid relid, bool confirmCommitted)
 	bool		isactive;
 
 	if (!LockClassinfoForUpdate(relid, &tuple, confirmCommitted))
-		elog(ERROR, "IndexesAreActive couldn't lock %u", relid);
+		elog(ERROR, "IndexesAreActive couldn't lock %lu", relid);
 	if (((Form_pg_class) GETSTRUCT(&tuple))->relkind != RELKIND_RELATION)
-		elog(ERROR, "relation %u isn't an relation", relid);
+		elog(ERROR, "relation %lu isn't an relation", relid);
 	isactive = ((Form_pg_class) GETSTRUCT(&tuple))->relhasindex;
 
 	if (isactive)
@@ -1403,7 +1403,7 @@ setRelhasindexInplace(Oid relid, bool hasindex, bool immediate)
 	whichRel = heap_open(relid, ShareLock);
 
 	if (!RelationIsValid(whichRel))
-		elog(ERROR, "setRelhasindexInplace: cannot open relation id %u", relid);
+		elog(ERROR, "setRelhasindexInplace: cannot open relation id %lu", relid);
 
 	/* ----------------
 	 * Find the RELATION relation tuple for the given relation.
@@ -1547,7 +1547,7 @@ UpdateStats(Oid relid, long reltuples)
 	whichRel = RelationIdGetRelation(relid,DEFAULTDBOID);
 
 	if (!RelationIsValid(whichRel))
-		elog(ERROR, "UpdateStats: cannot open relation id %u", relid);
+		elog(ERROR, "UpdateStats: cannot open relation id %lu", relid);
 
 	LockRelation(whichRel, ShareLock);
 
@@ -1983,7 +1983,7 @@ IndexGetRelation(Oid indexId)
 								0, 0, 0);
 	if (!HeapTupleIsValid(tuple))
 	{
-		elog(ERROR, "IndexGetRelation: can't find index id %u",
+		elog(ERROR, "IndexGetRelation: can't find index id %lu",
 			 indexId);
 	}
 	index = (Form_pg_index) GETSTRUCT(tuple);
@@ -2008,7 +2008,7 @@ IndexProperties(Oid indexId)
 								0, 0, 0);
 	if (!HeapTupleIsValid(tuple))
 	{
-		elog(ERROR, "IndexIsUnique: can't find index id %u",
+		elog(ERROR, "IndexIsUnique: can't find index id %lu",
 			 indexId);
 	}
 	index = (Form_pg_index) GETSTRUCT(tuple);
@@ -2061,7 +2061,7 @@ IndexIsUniqueNoCache(Oid indexId)
 	if (!HeapTupleIsValid(tuple)) {
             heap_endscan(scandesc);
             heap_close(pg_index, AccessShareLock);
-            elog(ERROR, "IndexIsUniqueNoCache: can't find index id %u", indexId);
+            elog(ERROR, "IndexIsUniqueNoCache: can't find index id %lu", indexId);
         }
 
 	index = (Form_pg_index) GETSTRUCT(tuple);
@@ -2127,7 +2127,7 @@ reindex_index(Oid indexId, bool force)
 	if (!HeapTupleIsValid(indexTuple)) {
                 heap_endscan(scan);
                 heap_close(indexRelation, AccessShareLock);
-		elog(ERROR, "reindex_index index %d tuple is invalid", indexId);
+		elog(ERROR, "reindex_index index %ld tuple is invalid", indexId);
         }
 
 	/*

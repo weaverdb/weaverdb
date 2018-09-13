@@ -11,7 +11,7 @@
 SRCDIR = ../../..
 include ../../../Makefile.global
 
-CFLAGS += -I../.. 
+CFLAGS += -I../.. -Wno-unused-function
 
 OBJS = transam.o transsup.o varsup.o xact.o xid.o xlog.o rmgr.o
 

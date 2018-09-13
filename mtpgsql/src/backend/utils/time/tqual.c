@@ -175,8 +175,6 @@ HeapTupleSatisfiesItself(HeapTupleHeader tuple)
 bool
 HeapTupleSatisfiesNow(void* e ,HeapTupleHeader tuple)
 {
-	SnapshotHolder* env = (SnapshotHolder*)e;
-
 	if (AMI_OVERRIDE)
 		return true;
 
@@ -631,7 +629,7 @@ HeapTupleSatisfiesVacuum(HeapTupleHeader tuple, TransactionId OldestXmin)
          
         if (!TransactionIdIsValid(tuple->t_xmax)) {
             tuple->t_infomask |= HEAP_XMAX_INVALID; 
-            elog(DEBUG,"testing invalid xmax %d - %d/%d",tuple->t_xmin,ItemPointerGetBlockNumber(&tuple->t_ctid),
+            elog(DEBUG,"testing invalid xmax %ld - %ld/%d",tuple->t_xmin,ItemPointerGetBlockNumber(&tuple->t_ctid),
                     ItemPointerGetOffsetNumber(&tuple->t_ctid));
             return HEAPTUPLE_LIVE;
         }

@@ -18,7 +18,7 @@ SO_MINOR_VERSION= 1
 SRCDIR= ../..
 include $(SRCDIR)/Makefile.global
 
-CFLAGS+= -DFRONTEND
+CFLAGS+= -DFRONTEND -Wno-incompatible-pointer-types -Wno-unused-variable
 
 ifdef KRBVERS
 CFLAGS+= $(KRBFLAGS)

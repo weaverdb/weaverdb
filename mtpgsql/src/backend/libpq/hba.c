@@ -36,7 +36,7 @@
    Others, including Solaris, do not.  So we have our own.
 */
 static bool
-isblank(const char c)
+isblank_local(const char c)
 {
 	return c == ' ' || c == 9 /* tab */ ;
 }
@@ -58,7 +58,7 @@ next_token(FILE *fp, char *buf, const int bufsz)
 	char	   *eb = buf + (bufsz - 1);
 
 	/* Move over inital token-delimiting blanks */
-	while (isblank(c = getc(fp)));
+	while (isblank_local(c = getc(fp)));
 
 	if (c != '\n')
 	{
@@ -67,7 +67,7 @@ next_token(FILE *fp, char *buf, const int bufsz)
 		 * build a token in buf of next characters up to EOF, eol, or
 		 * blank.
 		 */
-		while (c != EOF && c != '\n' && !isblank(c))
+		while (c != EOF && c != '\n' && !isblank_local(c))
 		{
 			if (buf < eb)
 				*buf++ = c;
@@ -485,14 +485,14 @@ interpret_ident_response(char *ident_response,
 			int			i;		/* Index into *response_type */
 
 			cursor++;			/* Go over colon */
-			while (isblank(*cursor))
+			while (isblank_local(*cursor))
 				cursor++;		/* skip blanks */
 			i = 0;
-			while (*cursor != ':' && *cursor != '\r' && !isblank(*cursor)
+			while (*cursor != ':' && *cursor != '\r' && !isblank_local(*cursor)
 				   && i < (int) (sizeof(response_type) - 1))
 				response_type[i++] = *cursor++;
 			response_type[i] = '\0';
-			while (isblank(*cursor))
+			while (isblank_local(*cursor))
 				cursor++;		/* skip blanks */
 			if (strcmp(response_type, "USERID") != 0)
 				*error_p = true;
@@ -519,7 +519,7 @@ interpret_ident_response(char *ident_response,
 						int			i;	/* Index into *ident_username */
 
 						cursor++;		/* Go over colon */
-						while (isblank(*cursor))
+						while (isblank_local(*cursor))
 							cursor++;	/* skip blanks */
 						/* Rest of line is username.  Copy it over. */
 						i = 0;

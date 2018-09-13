@@ -26,6 +26,7 @@ static void ExtractLongValue(JNIEnv* env,StmtMgr mgr,char* name, short type, job
 static void ExtractDateValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject target);
 static void ExtractByteArrayValue(JNIEnv* env,StmtMgr mgr,char* name, short type,jobject target);
 static void ExtractBytes(JNIEnv* env, StmtMgr mgr,char* name, short type,jbyteArray target);
+static int PassOutValue(StmtMgr , int , void* , int , void* , void*  );
 
 javacache*  CreateCache(JNIEnv* env) {
 	/* exceptions  */
@@ -140,8 +141,9 @@ int PassInValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject data) {
                 break;
             default:
                 break;
-	}
+	    }
     }
+    return 0;
 }
 /*
 jfieldID
@@ -359,7 +361,7 @@ static jobject CreateLongField(jlong* var, JNIEnv* env) {
     return (*env)->NewObject(env,Cache->longtype,Cache->createlong,*var);
 }
 
-int PassOutValue(StmtMgr mgr, int type, void* value, int length, void* userspace, void* funcargs ) {
+static int PassOutValue(StmtMgr mgr, int type, void* value, int length, void* userspace, void* funcargs ) {
     JNIEnv*   env = funcargs;
     jobject      target = userspace;
     jobject setval = NULL;

@@ -200,7 +200,7 @@ get_attdisbursion(Oid relid, AttrNumber attnum, double min_estimate)
 	if (!HeapTupleIsValid(atp))
 	{
 		/* this should not happen */
-		elog(ERROR, "get_attdisbursion: no attribute tuple %u %d",
+		elog(ERROR, "get_attdisbursion: no attribute tuple %lu %d",
 			 relid, attnum);
 		return min_estimate;
 	}
@@ -231,7 +231,7 @@ get_attdisbursion(Oid relid, AttrNumber attnum, double min_estimate)
 	if (!HeapTupleIsValid(atp))
 	{
 		/* this should not happen */
-		elog(ERROR, "get_attdisbursion: no relation tuple %u", relid);
+		elog(ERROR, "get_attdisbursion: no relation tuple %lu", relid);
 		return min_estimate;
 	}
 
@@ -508,7 +508,7 @@ get_func_rettype(Oid funcid)
 									 0, 0, 0);
 
 	if (!HeapTupleIsValid(func_tuple))
-		elog(ERROR, "Function OID %u does not exist", funcid);
+		elog(ERROR, "Function OID %lu does not exist", funcid);
 
 	funcrettype = (Oid)
 		((Form_pg_proc) GETSTRUCT(func_tuple))->prorettype;
@@ -664,7 +664,7 @@ get_typdefault(Oid typid)
 									0, 0, 0);
 
 	if (!HeapTupleIsValid(typeTuple))
-		elog(ERROR, "get_typdefault: failed to lookup type %u", typid);
+		elog(ERROR, "get_typdefault: failed to lookup type %lu", typid);
 
 	type = (Form_pg_type) GETSTRUCT(typeTuple);
 

@@ -576,7 +576,6 @@ static int
 RecordTransactionCommit()
 {
 	TransactionId xid;
-	int			leak = 0;
 
 	/* ----------------
 	 *	get the current transaction id

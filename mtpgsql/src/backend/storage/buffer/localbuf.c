@@ -56,7 +56,7 @@ TLS LocalBufferEnv* localbuffer_globals = NULL;
 #define localbuffer_globals GetEnv()->localbuffer_globals
 #endif
 
-static LocalBufferEnv* GetLocalBufferEnv();
+static LocalBufferEnv* GetLocalBufferEnv(void);
 
 /*#define LBDEBUG*/
 

@@ -73,7 +73,6 @@
 
 
 void		HandleDeadLock(SIGNAL_ARGS);
-static void ProcFreeAllSemaphores(void);
 static bool GetOffWaitqueue(THREAD *);
 
 
@@ -114,9 +113,9 @@ static void ThreadDequeue(THREAD* self);
 SPINLOCK	ProcStructLock;
 static PROC_HDR *ProcGlobal = NULL;
 
-
+/*
 static char *DeadLockMessage = "Deadlock detected -- See the lock(l) manual page for a possible cause.";
-
+*/
 /*
  * InitProcGlobal -
  *	  initializes the global process table. We put it here so that
@@ -155,8 +154,6 @@ InitThreadGlobal(IPCKey key, int maxBackends)
 
 	if (!found)
 	{
-		int			i;
-
 		ProcGlobal->freeProcs = INVALID_OFFSET;
 		ProcGlobal->groupleader = getpid();
                 ProcGlobal->free = 0;
@@ -329,7 +326,7 @@ ThreadReleaseLocks(bool isCommit)
   *    in the thread sleep loop!
   */
 	if ( GetOffWaitqueue(tenv->thread) ) {
-            elog(DEBUG,"got off wait queue tid: %u",pthread_self());
+            elog(DEBUG,"got off wait queue tid: %lu",pthread_self());
         }
 	LockReleaseAll(HEAP_LOCKMETHOD, tenv->thread,
 				   !isCommit, xid);
@@ -361,6 +358,7 @@ DestroyThread()
 
         DTRACE_PROBE4(mtpg,thread__destroy,thread->ttype,ProcGlobal->created,ProcGlobal->alloc,ProcGlobal->free);
 	SpinRelease(ProcStructLock);
+	return true;
 }
 
 
@@ -715,6 +713,7 @@ ThreadReleaseSpins(THREAD *proc)
 		pthread_mutex_unlock(&global->thread->gate);
 		return global->thread->xid;
 	 }
+	 return 0;
  }
  
  void

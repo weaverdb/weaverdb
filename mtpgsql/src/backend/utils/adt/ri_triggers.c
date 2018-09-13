@@ -158,7 +158,9 @@ RI_FKey_check(FmgrInfo *proinfo)
 	Relation	fk_rel;
 	Relation	pk_rel;
 	HeapTuple	new_row;
+	/*
 	HeapTuple	old_row;
+	*/
 	RI_QueryKey qkey;
 	void	   *qplan;
 	Datum		check_values[RI_MAX_NUMKEYS];
@@ -205,12 +207,16 @@ RI_FKey_check(FmgrInfo *proinfo)
 	pk_rel = heap_openr(tgargs[RI_PK_RELNAME_ARGNO], NoLock);
 	if (TRIGGER_FIRED_BY_UPDATE(trigdata->tg_event))
 	{
+		/*
 		old_row = trigdata->tg_trigtuple;
+		*/
 		new_row = trigdata->tg_newtuple;
 	}
 	else
 	{
+		/*
 		old_row = NULL;
+		*/
 		new_row = trigdata->tg_trigtuple;
 	}
 
@@ -3301,7 +3307,7 @@ ri_AttributesEqual(Oid typeid, Datum oldvalue, Datum newvalue)
 
 		if (!HeapTupleIsValid(opr_tup))
 			elog(ERROR, "ri_AttributesEqual(): cannot find '=' operator "
-				 "for type %d", typeid);
+				 "for type %ld", typeid);
 		opr_struct = (Form_pg_operator) GETSTRUCT(opr_tup);
 
 		entry = (RI_OpreqHashEntry *) hash_search(ri_opreq_cache,

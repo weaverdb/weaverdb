@@ -32,7 +32,7 @@
 #include "utils/catcache.h"
 #include "utils/inval.h"
 
-SPINLOCK	SInvalLock = (SPINLOCK) NULL;
+SPINLOCK	SInvalLock = (SPINLOCK) 0;
 
 /****************************************************************************/
 /*	CreateSharedInvalidationState()		 Create a buffer segment			*/
@@ -154,7 +154,6 @@ InvalidateSharedInvalid(void)
 {
 	SharedInvalidData data;
 	int			getResult;
-	bool		gotMessage = false;
 	BackendId  bid = GetMyBackendId();
 
 	for (;;)
@@ -178,7 +177,6 @@ InvalidateSharedInvalid(void)
 						  data.hashIndex,
 						  &data.pointerData);
 		}
-		gotMessage = true;
 	}
 
 	/* If we got any messages, try to release dead messages */

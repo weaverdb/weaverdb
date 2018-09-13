@@ -16,6 +16,7 @@
 
 #include "postgres.h"
 #include "env/env.h"
+#include "env/connectionutil.h"
 #include "miscadmin.h"
 #include "utils/catcache.h"
 #include "access/xact.h"
@@ -34,7 +35,6 @@
 #define INITENVCACHESIZE  30
 
 static int                      envcount;
-static int                      envid = 0;
 static pthread_key_t		envkey;
 static CommitType               default_type = SOFT_COMMIT;
 
@@ -65,7 +65,9 @@ typedef struct global_env_entry {
 static void* EnvAlloc(Size size,void* cxt);
 static void EnvFree(void* pointer,void* cxt);
 static HTAB* CreateHash(MemoryContext context);
+#ifdef UNUSED
 static int DestroyHash(HTAB* hash);
+#endif
 static long sectionid_hash(void* key, int size);
 static int memory_fail(void);
 #ifdef _GNU_SOURCE
@@ -372,7 +374,7 @@ HTAB* CreateHash(MemoryContext context)
     ctl.hcxt = context;
     return hash_create("environment hash",INITENVCACHESIZE, &ctl, HASH_ELEM | HASH_ALLOC | HASH_FUNCTION | HASH_CONTEXT);
 }
-
+#ifdef UNUSED
 int DestroyHash(HTAB* hash) 
 {
     HASH_SEQ_STATUS   seq;
@@ -392,6 +394,7 @@ int DestroyHash(HTAB* hash)
 
     return 0;
 }
+#endif
 
 
 int MasterWriteLock()
@@ -498,7 +501,7 @@ int TransactionLock()
 	Env* env = GetEnv();
 	if (IsShutdownProcessingMode())
 	{
-		elog(ERROR,"System is shutting down",998);
+		elog(ERROR,"System is shutting down code: %d",998);
 	}
 
 /*  do nothing if we already have the a transaction lock  */
@@ -616,6 +619,8 @@ int MasterUpgradeLock()
 		return MasterReadLock();
 	if ( env->masterlock == 0x00000000 ) 
 		return MasterReadLock();
+
+    return 0;
 }
 
 int MasterDowngradeLock()
@@ -630,6 +635,8 @@ int MasterDowngradeLock()
 		return TransactionUnlock();
 	if ( env->masterlock == 0x00000000 ) 
 		return TransactionUnlock();
+
+    return 0;
 }
 
 void
@@ -693,7 +700,9 @@ bool IsTransactionCareful() {
                 case CAREFUL_COMMIT:
                 case SYNCED_COMMIT:
                 case FAST_CAREFUL_COMMIT:
-                        return true;
+                    return true;
+                default:
+                    return false;
         }
         return false;
 	
@@ -738,9 +747,11 @@ bool IsTransactionFriendly() {
         }
 
         switch ( check ) {
-                case FAST_SOFT_COMMIT:
-                case FAST_CAREFUL_COMMIT:
-                        return false;
+            case FAST_SOFT_COMMIT:
+            case FAST_CAREFUL_COMMIT:
+                return false;
+            default:
+                return true;
         }
         return true;
 	
@@ -972,7 +983,6 @@ base_mem_realloc(void * pointer, size_t size) {
 void user_log(char* pattern, ...) {
      char            msg[256];
    va_list         args;
-   Env*             env = GetEnv();
 
     va_start(args, pattern);
     vsprintf(msg,pattern,args);

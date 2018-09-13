@@ -262,7 +262,7 @@ transformArraySubscripts(ParseState *pstate,
 									 ObjectIdGetDatum(typearray),
 									 0, 0, 0);
 	if (!HeapTupleIsValid(type_tuple))
-		elog(ERROR, "transformArraySubscripts: Cache lookup failed for array type %u",
+		elog(ERROR, "transformArraySubscripts: Cache lookup failed for array type %lu",
 			 typearray);
 	type_struct_array = (Form_pg_type) GETSTRUCT(type_tuple);
 
@@ -276,7 +276,7 @@ transformArraySubscripts(ParseState *pstate,
 									 ObjectIdGetDatum(typeelement),
 									 0, 0, 0);
 	if (!HeapTupleIsValid(type_tuple))
-		elog(ERROR, "transformArraySubscripts: Cache lookup failed for array element type %u",
+		elog(ERROR, "transformArraySubscripts: Cache lookup failed for array element type %lu",
 			 typeelement);
 	type_struct_element = (Form_pg_type) GETSTRUCT(type_tuple);
 

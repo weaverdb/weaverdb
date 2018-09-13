@@ -65,9 +65,9 @@ static char *lock_mode_names[] =
 	"AccessExclusiveLock"
 };
 
-
+#ifdef UNUSED
 static char *DeadLockMessage = "Deadlock detected.\n\tSee the lock(l) manual page for a possible cause.";
-
+#endif
 
 #ifdef LOCK_DEBUG
 
@@ -1059,7 +1059,6 @@ LockReleaseAll(LOCKMETHOD lockmethod, THREAD *proc,
 				numLockModes;
 	LOCK	   *lock;
 	int			nleft;
-        Env*                env = GetEnv();
 
 	Assert(lockmethod < NumLockMethods);
 	lockMethodTable = LockMethodTable[lockmethod];
@@ -1245,8 +1244,8 @@ LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
 
 	if (!target)
 	{
-                pthread_mutex_unlock(table_lock);
-                elog(ERROR,"corrupted %d %d by %d on %d",lid->relId,lid->dbId,pthread_self(),action);
+		pthread_mutex_unlock(table_lock);
+		elog(ERROR,"corrupted %ld %ld by %ld on %d",lid->relId,lid->dbId,pthread_self(),action);
 		return NULL;
 	}
 
@@ -1696,4 +1695,4 @@ DumpAllLocks(void)
 }
 
 
-#endif LOCK_DEBUG
+#endif /*LOCK_DEBUG*/

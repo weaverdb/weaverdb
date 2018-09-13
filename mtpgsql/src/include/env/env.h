@@ -233,7 +233,7 @@ void GoMultiuser(void);
 bool IsMultiuser(void);
 
 void clearerror(Env* env);
-bool CheckForCancel();
+bool CheckForCancel(void);
 void CancelEnvAndJoin(Env* env);
 pthread_t FindChildThread(Env* env);
 

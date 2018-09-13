@@ -199,7 +199,7 @@ PG_EXTERN TransactionId GetCheckpointId(void);
 PG_EXTERN void InitTransactionLowWaterMark(void);
 PG_EXTERN void SetTransactionLowWaterMark(TransactionId lowwater);
 PG_EXTERN TransactionId GetTransactionLowWaterMark(void);
-PG_EXTERN TransactionId GetTransactionRecoveryCheckpoint();
+PG_EXTERN TransactionId GetTransactionRecoveryCheckpoint(void);
 PG_EXTERN void SetTransactionRecoveryCheckpoint(TransactionId recover);
 PG_EXTERN void VacuumTransactionLog(void);
 

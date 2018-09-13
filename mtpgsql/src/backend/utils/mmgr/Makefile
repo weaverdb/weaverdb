@@ -11,7 +11,7 @@
 SRCDIR = ../../..
 include ../../../Makefile.global
 
-CFLAGS += -I../..
+CFLAGS += -I../.. -Wno-unused-variable
 
 OBJS = aset.o subset.o mcxt.o portalmem.o
 

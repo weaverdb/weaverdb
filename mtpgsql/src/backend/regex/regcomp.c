@@ -217,7 +217,7 @@ struct vars
 	int			cflags;			/* copy of compile flags */
 	int			lasttype;		/* type of previous token */
 	int			nexttype;		/* type of next token */
-	chr			nextvalue;		/* value (if any) of next token */
+	unsigned char			nextvalue;		/* value (if any) of next token */
 	int			lexcon;			/* lexical context type (see lex.c) */
 	int			nsubexp;		/* subexpression count */
 	struct subre **subs;		/* subRE pointer vector */

@@ -30,7 +30,7 @@ typedef struct smgrdata {
 } SmgrData;
 
 
-PG_EXTERN MemoryContext GetSmgrMemoryContext();
+PG_EXTERN MemoryContext GetSmgrMemoryContext(void);
 PG_EXTERN int   smgraddrecoveredpage(char* dbname, Oid dbid, Oid relid, BlockNumber block);
 #endif	/* _smgr_spi_H */
 

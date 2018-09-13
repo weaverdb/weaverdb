@@ -14,6 +14,7 @@
  */
 #include <sys/types.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <math.h>
 #include <signal.h>
 #include <pthread.h>
@@ -193,7 +194,7 @@ AddMoreBuffers(int count) {
         head = NULL;
         tail = NULL;
         
-        for (i = 0; i < MaxBuffers, activate < count; i++)
+        for (i = 0; activate < count && i < MaxBuffers; i++)
         {
             buf = &BufferDescriptors[i];
             pthread_mutex_lock(&buf->cntx_lock.guard);
@@ -218,7 +219,7 @@ AddMoreBuffers(int count) {
     } else {
         BufferDesc* buf = NULL;
         int i=0;
-        if ( buffer_cxt == NULL ) return NULL;
+        if ( buffer_cxt == NULL ) return 0;
         if ( count > MaxBuffers - NBuffers ) count = MaxBuffers - NBuffers;
         for (i=NBuffers;i<NBuffers+count;i++) {
             buf = &BufferDescriptors[i];

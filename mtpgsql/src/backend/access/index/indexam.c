@@ -131,7 +131,7 @@ index_open(Oid relationId)
 	r = RelationIdGetRelation(relationId,DEFAULTDBOID);
 
 	if (!RelationIsValid(r))
-		elog(ERROR, "Index %u does not exist", relationId);
+		elog(ERROR, "Index %lu does not exist", relationId);
 
 	if (r->rd_rel->relkind != RELKIND_INDEX)
 		elog(ERROR, "%s is not an index relation", RelationGetRelationName(r));

@@ -48,7 +48,6 @@ static int 				nextoid;
 static int 				oid_queue_count;
 static pthread_mutex_t	oid_access;
 
-static Oid GetNewObjectIdBlock(int oid_block_size);
 static Oid VariableRelationGetNextOid(void);
 static TransactionId VariableRelationGetNextXid(void);
 
@@ -264,7 +263,6 @@ TransactionId
 GetNewTransactionId(void)
 {
         TransactionId xid = InvalidTransactionId;
-	TransactionInfo* info = GetTransactionInfo();
 	/* ----------------
 	 *	during bootstrap initialization, we return the special
 	 *	bootstrap transaction id.
@@ -485,7 +483,7 @@ GetTransactionRecoveryCheckpoint()
 	hb = BufferGetBlock(header);
 	theader = (Header*)hb;
 	recover = ( theader->checkpoint > theader->baseline ) ? theader->checkpoint : theader->baseline;
-	elog(DEBUG,"transaction recovery checkpoint is %llu",recover);
+	elog(DEBUG,"transaction recovery checkpoint is %lu",recover);
 
         LockBuffer((VariableRelation),header,BUFFER_LOCK_UNLOCK);
         ReleaseBuffer(VariableRelation,header);
@@ -509,7 +507,7 @@ SetTransactionRecoveryCheckpoint(TransactionId recover)
         hb = BufferGetBlock(header);
 	theader = (Header*)hb;
 	theader->checkpoint = recover;
-	elog(DEBUG,"recording transaction recovery checkpoint at %llu",recover);
+	elog(DEBUG,"recording transaction recovery checkpoint at %lu",recover);
 
 		
         LockBuffer((VariableRelation),header,BUFFER_LOCK_UNLOCK);
@@ -555,7 +553,7 @@ SetTransactionLowWaterMark(TransactionId lowwater)
 	}
 	
 	area->lowwater = lowwater;
-	elog(DEBUG,"recording transaction low water mark for db %u at %llu",dbid,lowwater);
+	elog(DEBUG,"recording transaction low water mark for db %lu at %lu",dbid,lowwater);
 
 		
 /*	UnlockRelation(VariableRelation,ExclusiveLock);    */
@@ -583,7 +581,6 @@ VacuumTransactionLog()
 	Buffer 			first; 
 	Block 			fb;
 	TransactionId  		low = ~0ULL;
-	int 			i;
 
 	BlockNumber    		base;
 
@@ -639,11 +636,11 @@ VacuumTransactionLog()
 	so that it computes the block properly 
 */	
    base = TransComputeBlockNumber(LogRelation,low);
-   elog(DEBUG,"Initializing transaction log - current checkpoint %llu",ShmemVariableCache->xid_low_water_mark);
-   elog(DEBUG,"Initializing transaction log - current startup id %llu",ShmemVariableCache->xid_checkpoint);
+   elog(DEBUG,"Initializing transaction log - current checkpoint %lu",ShmemVariableCache->xid_low_water_mark);
+   elog(DEBUG,"Initializing transaction log - current startup id %lu",ShmemVariableCache->xid_checkpoint);
 
 	if ( low > ShmemVariableCache->xid_low_water_mark ) {
-		elog(DEBUG,"moving transaction checkpoint from %llu to %llu",ShmemVariableCache->xid_low_water_mark,low);
+		elog(DEBUG,"moving transaction checkpoint from %lu to %lu",ShmemVariableCache->xid_low_water_mark,low);
 		ShmemVariableCache->xid_low_water_mark = low;   
 		header->baseline = low;
 	}

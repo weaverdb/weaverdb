@@ -1024,7 +1024,7 @@ GetOutputFunction(Oid type)
 	if (HeapTupleIsValid(typeTuple))
 		return (int) ((Form_pg_type) GETSTRUCT(typeTuple))->typoutput;
 
-	elog(ERROR, "GetOutputFunction: Cache lookup of type %u failed", type);
+	elog(ERROR, "GetOutputFunction: Cache lookup of type %lu failed", type);
 	return InvalidOid;
 }
 
@@ -1040,7 +1040,7 @@ GetTypeElement(Oid type)
 	if (HeapTupleIsValid(typeTuple))
 		return (int) ((Form_pg_type) GETSTRUCT(typeTuple))->typelem;
 
-	elog(ERROR, "GetOutputFunction: Cache lookup of type %u failed", type);
+	elog(ERROR, "GetOutputFunction: Cache lookup of type %lu failed", type);
 	return InvalidOid;
 }
 
@@ -1056,7 +1056,7 @@ GetInputFunction(Oid type)
 	if (HeapTupleIsValid(typeTuple))
 		return (int) ((Form_pg_type) GETSTRUCT(typeTuple))->typinput;
 
-	elog(ERROR, "GetInputFunction: Cache lookup of type %u failed", type);
+	elog(ERROR, "GetInputFunction: Cache lookup of type %lu failed", type);
 	return InvalidOid;
 }
 
@@ -1072,7 +1072,7 @@ IsTypeByVal(Oid type)
 	if (HeapTupleIsValid(typeTuple))
 		return (int) ((Form_pg_type) GETSTRUCT(typeTuple))->typbyval;
 
-	elog(ERROR, "GetInputFunction: Cache lookup of type %u failed", type);
+	elog(ERROR, "GetInputFunction: Cache lookup of type %lu failed", type);
 
 	return InvalidOid;
 }

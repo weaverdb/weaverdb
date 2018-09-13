@@ -191,7 +191,7 @@ PageGetTempPage(Page page, Size specialSize)
 	pageSize = PageGetPageSize(page);
 
 	if ((temp = (Page) palloc(pageSize)) == (Page) NULL)
-		elog(FATAL, "Cannot allocate %d bytes for temp page.", pageSize);
+		elog(FATAL, "Cannot allocate %ld bytes for temp page.", pageSize);
 	thdr = (PageHeader) temp;
 
 	/* copy old page in */
@@ -398,8 +398,9 @@ PageManagerModeSet(PageManagerMode mode)
 
 bool
 DisableCRC(bool enable) {
-    
+    bool prev = disable_crc;
     disable_crc = !enable;
+	return prev != disable_crc;
 }
 
 /*

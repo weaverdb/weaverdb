@@ -239,7 +239,7 @@ on_exit_reset(void)
 	on_shmem_exit_index = 0;
 	on_proc_exit_index = 0;
 }
-
+#ifdef UNUSED
 /****************************************************************************/
 /*	 IPCPrivateSemaphoreKill(status, semId)									*/
 /*																			*/
@@ -253,7 +253,7 @@ IPCPrivateSemaphoreKill(int status,
 
 	semctl(semId, 0, IPC_RMID, semun);
 }
-
+#endif
 
 /****************************************************************************/
 /*	 IPCPrivateMemoryKill(status, shmId)									*/

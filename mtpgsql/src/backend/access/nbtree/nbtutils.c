@@ -462,7 +462,7 @@ _bt_getstrategynumber(RegProcedure sk_procedure, StrategyMap map)
 		if (sk_procedure == map->entry[j].sk_procedure)
 			return j;
 	}
-	elog(ERROR, "_bt_getstrategynumber: unable to identify operator %u",
+	elog(ERROR, "_bt_getstrategynumber: unable to identify operator %lu",
 		 sk_procedure);
 	return -1;					/* keep compiler quiet */
 }

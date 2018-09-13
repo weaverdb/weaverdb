@@ -197,7 +197,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     if ( !isLocalBuf ) {
         iostatus = ReadBufferIO(bufHdr);
         if ( !iostatus )  {
-            elog(DEBUG, "read buffer failed in io start bufid:%d dbid:%d relid:%d blk:%d\n",
+            elog(DEBUG, "read buffer failed in io start bufid:%d dbid:%ld relid:%ld blk:%ld\n",
                 bufHdr->buf_id,
                 bufHdr->tag.relId.dbId,
                 bufHdr->tag.relId.relId,
@@ -218,7 +218,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                     AddReindexRequest(RelationGetRelationName(reln),GetDatabaseName(),bufHdr->tag.relId.relId,bufHdr->tag.relId.dbId);
                     status = SM_FAIL;
                 }
-                elog(NOTICE, "Index Page is corrupted name:%s page:%d check:%d\n", reln->rd_rel->relname, blockNum,check);
+                elog(NOTICE, "Index Page is corrupted name:%s page:%ld check:%ld\n", NameStr(reln->rd_rel->relname), blockNum,check);
                 elog(NOTICE, "checksum=%lld\n", ((PageHeader)bufHdr->data)->checksum);
             }
         } else if ( reln->rd_rel->relkind == RELKIND_RELATION ) {
@@ -232,7 +232,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                     PageInit((Page)(bufHdr->data),BLCKSZ,0);
                     status = SM_FAIL;
                 }
-                elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", reln->rd_rel->relname, blockNum);
+                elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", NameStr(reln->rd_rel->relname), blockNum);
            }
         }
     }
@@ -240,7 +240,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     
     if (status == SM_FAIL) {
         if ( !isLocalBuf ) {
-            elog(DEBUG, "read buffer failed bufid:%d dbid:%d relid:%d blk:%d\n",
+            elog(DEBUG, "read buffer failed bufid:%d dbid:%ld relid:%ld blk:%ld\n",
                 bufHdr->buf_id,
                 bufHdr->tag.relId.dbId,
                 bufHdr->tag.relId.relId,
@@ -475,7 +475,6 @@ FlushBuffer(Relation rel, Buffer buffer) {
 int
 DirectWriteBuffer(Relation rel, Buffer buffer) {
     BufferDesc *bufHdr;
-    Oid			bufdb;
     Oid			relId;
     BufferEnv* bufenv = RelationGetBufferCxt(rel);
     int			status = STATUS_OK;
@@ -491,7 +490,6 @@ DirectWriteBuffer(Relation rel, Buffer buffer) {
         /*  rely on the fact that the buffer is already pinned so
 we don't have to lock  */
         
-        bufdb = bufHdr->tag.relId.dbId;
         relId = bufHdr->tag.relId.relId;
         
         Assert ( relId == RelationGetRelid(rel) );
@@ -515,7 +513,7 @@ we don't have to lock  */
 
             if (status == SM_FAIL) {
                 ErrorBufferIO(iostatus,bufHdr);
-                elog(NOTICE, "FlushBuffer: cannot flush block %u of the relation %s",
+                elog(NOTICE, "FlushBuffer: cannot flush block %lu of the relation %s",
                 bufHdr->tag.blockNum, bufHdr->blind.relname);
             } else {
                 /* copy new page to shadow */
@@ -574,7 +572,6 @@ ReleaseAndReadBuffer(Buffer buffer,
 Relation relation,
 BlockNumber blockNum) {
     BufferDesc *bufHdr;
-    Buffer		retbuf;
     
     if (BufferIsValid(buffer)) {
         if (BufferIsLocal(buffer)) {
@@ -654,7 +651,7 @@ BufferPoolCheckLeak() {
             
             elog(NOTICE,
             "Buffer Leak: [%03d] (freeNext=%ld, \
-            relname=%s, blockNum=%d, flags=0x%x, refCount=%d %ld)",
+            relname=%s, blockNum=%ld, flags=0x%x, refCount=%d %ld)",
             i, buf->freeNext,
             buf->blind.relname, buf->tag.blockNum, buf->ioflags,
             buf->refCount, env->PrivateRefCount[i]);
@@ -799,7 +796,7 @@ PrintBufferDescs() {
         lockowner = pthread_self();
         for (i = 0; i < MaxBuffers; ++i, ++buf) {
             elog(DEBUG, "[%02d] (freeNext=%ld, relname=%s, \
-            blockNum=%d, flags=0x%x, refCount=%d %ld)",
+            blockNum=%ld, flags=0x%x, refCount=%d %ld)",
             i, buf->freeNext,
             buf->blind.relname, buf->tag.blockNum, buf->ioflags,
             buf->refCount, env->PrivateRefCount[i]);
@@ -807,7 +804,7 @@ PrintBufferDescs() {
     } else {
         /* interactive backend */
         for (i = 0; i < MaxBuffers; ++i, ++buf) {
-            printf("[%-2d] (%s, %d) flags=0x%x, refcnt=%d %ld)\n",
+            printf("[%-2d] (%s, %ld) flags=0x%x, refcnt=%d %ld)\n",
             i, buf->blind.relname, buf->tag.blockNum,
             buf->ioflags, buf->refCount, env->PrivateRefCount[i]);
         }
@@ -824,7 +821,7 @@ PrintPinnedBufs() {
     for (i = 0; i < MaxBuffers; ++i, ++buf) {
         if (env->PrivateRefCount[i] > 0)
             elog(NOTICE, "[%02d] (freeNext=%ld, relname=%s, \
-            blockNum=%d, flags=0x%x, refCount=%d %ld)\n",
+            blockNum=%ld, flags=0x%x, refCount=%d %ld)\n",
             i, buf->freeNext, buf->blind.relname,
             buf->tag.blockNum, buf->ioflags,
             buf->refCount, env->PrivateRefCount[i]);
@@ -1459,6 +1456,7 @@ SyncShadowPage(BufferDesc* bufHdr) {
     /*  copy into shadow */
 #ifdef USE_SHADOW_PAGES
 #endif
+return TRUE;
 }
 
 /*

@@ -593,7 +593,7 @@ check_subplans_for_ungrouped_vars_walker(Node *node,
 				rte = rt_fetch(var->varno, context->rtable);
 				attname = get_attname(rte->relid, var->varattno);
 				if (!attname)
-					elog(ERROR, "cache lookup of attribute %d in relation %u failed",
+					elog(ERROR, "cache lookup of attribute %d in relation %lu failed",
 						 var->varattno, rte->relid);
 				elog(ERROR, "Sub-SELECT uses un-GROUPed attribute %s.%s from outer query",
 					 rte->ref->relname, attname);
@@ -909,7 +909,7 @@ CommuteClause(Expr *clause)
 		get_operator_tuple(get_commutator(((Oper *) clause->oper)->opno));
 
 	if (heapTup == (HeapTuple) NULL)
-		elog(ERROR, "CommuteClause: no commutator for operator %u",
+		elog(ERROR, "CommuteClause: no commutator for operator %lu",
 			 ((Oper *) clause->oper)->opno);
 
 	commuTup = (Form_pg_operator) GETSTRUCT(heapTup);
@@ -1371,7 +1371,7 @@ simplify_op_or_func(Expr *expr, List *args)
 									 ObjectIdGetDatum(funcid),
 									 0, 0, 0);
 	if (!HeapTupleIsValid(func_tuple))
-		elog(ERROR, "Function OID %u does not exist", funcid);
+		elog(ERROR, "Function OID %lu does not exist", funcid);
 	funcform = (Form_pg_proc) GETSTRUCT(func_tuple);
 	if (!funcform->proiscachable)
 		return NULL;

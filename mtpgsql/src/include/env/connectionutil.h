@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 extern bool initweaverbackend(char* dbname);
-extern bool isinitialized();
+extern bool isinitialized(void);
 extern bool prepareforshutdown(void);
 extern void wrapupweaverbackend(void);
 extern void singleusershutdown(int code);
@@ -29,7 +29,8 @@ extern bool GetBoolProperty(char* key);
 extern int GetIntProperty(char* key);
 extern double GetFloatProperty(char* key);
 extern bool PropertyIsValid(char* key);
-extern int GetMaxBackends();
+extern int GetMaxBackends(void);
+extern int GetProcessorCount(void);
 
 #ifdef __cplusplus
 }

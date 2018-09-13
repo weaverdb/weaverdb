@@ -160,9 +160,9 @@ checkLockPerms(List *locks, Query *parsetree, int rt_index)
 {
 	Relation	ev_rel;
 	HeapTuple	usertup;
-	char	   *evowner;
 	RangeTblEntry *rte;
 #ifdef USEACL
+	char	   *evowner;
 	int32		reqperm;
 	int32		aclcheck_res;
 #endif
@@ -186,8 +186,9 @@ checkLockPerms(List *locks, Query *parsetree, int rt_index)
 			 ev_rel->rd_rel->relowner);
 	}
 	heap_close(ev_rel, AccessShareLock);
+#ifdef USEACL
 	evowner = pstrdup(NameStr(((Form_pg_shadow) GETSTRUCT(usertup))->usename));
-
+#endif
 	/*
 	 * Check all the locks, that should get fired on this query
 	 */

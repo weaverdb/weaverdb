@@ -22,6 +22,7 @@
 
 #include "postgres.h"
 #include "env/env.h"
+#include "env/connectionutil.h"
 #include "env/dbwriter.h"
 #include "env/dolhelper.h"
 
@@ -51,7 +52,7 @@ void		BaseInit(void);
 
 static void ReverifyMyDatabase(const char *name);
 static void InitCommunication(void);
-static void flush_all();
+static void flush_all(void);
 
 static IPCKey PostgresIpcKey;
 
@@ -114,7 +115,7 @@ ReverifyMyDatabase(const char *name)
 		 */
 		DropBuffers(GetEnv()->DatabaseId);
 		/* Now I can commit hara-kiri with a clear conscience... */
-		elog(FATAL, "Database '%s', OID %u, has disappeared from pg_database",
+		elog(FATAL, "Database '%s', OID %lu, has disappeared from pg_database",
 			 name, GetEnv()->DatabaseId);
 	}
 
@@ -279,7 +280,7 @@ InitPostgres(const char *dbname)
 	
 		ValidatePgVersion(DataDir, &reason);
 		if (reason != NULL)
-			elog(FATAL, reason);
+			elog(FATAL, "%s", reason);
 
 		SetDatabaseName(dbname);
 		GetRawDatabaseInfo(dbname, &GetEnv()->DatabaseId, datpath);

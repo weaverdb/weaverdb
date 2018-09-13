@@ -62,8 +62,10 @@
 
 /* static functions decls */
 static Datum    ExecEvalAggref(Aggref * aggref, ExprContext * econtext, bool * isNull);
+#ifndef NOARRAY
 static Datum    ExecEvalArrayRef(ArrayRef * arrayRef, ExprContext * econtext,
 		 bool * isNull, bool * isDone);
+#endif
 static Datum    ExecEvalAnd(Expr * andExpr, ExprContext * econtext, bool * isNull);
 static Datum    ExecEvalFunc(Expr * funcClause, ExprContext * econtext,
                 bool * isNull, bool * isDone);
@@ -987,7 +989,7 @@ ExecEvalFunc(Expr * funcClause,
 		Java           *javaNode = (Java *) funcClause->oper;
 		bool            done, isn;
 
-		Datum           javaTarget = NULL;
+		Datum           javaTarget = PointerGetDatum(NULL);
 		if (javaNode->java_target)
 			javaTarget = ExecEvalExpr(javaNode->java_target, econtext, &done, &isn);
 

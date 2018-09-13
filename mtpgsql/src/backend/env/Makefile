@@ -13,7 +13,7 @@ include ../../Makefile.global
 
 INCLUDE_OPT = -I.. 
 
-CFLAGS+=$(INCLUDE_OPT)
+CFLAGS+=$(INCLUDE_OPT) -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function
 
 OBJS = env.o dbwriter.o poolsweep.o freespace.o \
 	vacuumlazy.o bitmapset.o \

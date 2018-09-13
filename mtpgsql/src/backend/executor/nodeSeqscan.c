@@ -53,7 +53,6 @@ SeqNext(SeqScan *node)
 	HeapScanDesc scandesc;
 	CommonScanState *scanstate;
 	EState	   *estate;
-	ScanDirection direction;
 	TupleTableSlot *slot;
 
 	/* ----------------
@@ -63,7 +62,6 @@ SeqNext(SeqScan *node)
 	estate = node->plan.state;
 	scanstate = node->scanstate;
 	scandesc = scanstate->css_currentScanDesc;
-	direction = estate->es_direction;
 	slot = scanstate->css_ScanTupleSlot;
 
 	/*
@@ -167,7 +165,6 @@ InitScanRelation(SeqScan *node, EState *estate,
 	ScanDirection direction;
 	Relation	currentRelation;
 	HeapScanDesc currentScanDesc;
-	RelationInfo *resultRelationInfo;
 
 	if (outerPlan == NULL)
 	{
@@ -185,7 +182,6 @@ InitScanRelation(SeqScan *node, EState *estate,
 		rtentry = rt_fetch(relid, rangeTable);
 		reloid = rtentry->relid;
 		direction = estate->es_direction;
-		resultRelationInfo = estate->es_result_relation_info;
 
 		ExecOpenScanR(reloid,	/* relation */
 					  0,		/* nkeys */
@@ -244,8 +240,6 @@ ExecInitSeqScan(SeqScan *node, EState *estate)
 {
 	CommonScanState *scanstate;
 	Plan	   *outerPlan;
-	Oid			reloid;
-	HeapScanDesc scandesc;
 
 	/* ----------------
 	 *	assign the node's execution state
@@ -284,9 +278,8 @@ ExecInitSeqScan(SeqScan *node, EState *estate)
 	 */
 	outerPlan = outerPlan((Plan *) node);
 
-	reloid = InitScanRelation(node, estate, scanstate, outerPlan);
+	InitScanRelation(node, estate, scanstate, outerPlan);
 
-	scandesc = scanstate->css_currentScanDesc;
 	scanstate->cstate.cs_TupFromTlist = false;
 
 	/* ----------------

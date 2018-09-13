@@ -289,6 +289,8 @@ SIResetProcState(SISeg *segP)
 {
     /*  already have lock  */
    SISetProcStateInvalid(segP,2);
+
+   return true;
 }
 /*
  * SISetProcStateInvalid

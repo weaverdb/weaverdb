@@ -125,7 +125,6 @@ GetDatabaseInfo(const char* name,char* path) {
 	Name			dbname;
     HeapScanDesc  scan;
     HeapTuple 		tup;
-	bool 			isnull;
         TupleDesc desc;
 	Oid         dbid;
 

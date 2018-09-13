@@ -97,7 +97,7 @@ CreateSharedMemoryAndSemaphores(IPCKey key, int maxBackends)
 
 	if (DebugLvl > 1)
 	{
-		fprintf(stderr, "binding ShmemCreate(key=%x, size=%d)\n",
+		fprintf(stderr, "binding ShmemCreate(key=%x, size=%ld)\n",
 				IPCKeyGetBufferMemoryKey(key), size);
 	}
 	ShmemCreate(IPCKeyGetBufferMemoryKey(key), size);

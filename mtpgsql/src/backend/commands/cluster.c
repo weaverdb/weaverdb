@@ -131,7 +131,7 @@ cluster(char *oldrelname, char *oldindexname)
 
 	/* Create new index over the tuples of the new heap. */
 	copy_index(OIDOldIndex, OIDNewHeap);
-	snprintf(NewIndexName, NAMEDATALEN, "temp_%x", OIDOldIndex);
+	snprintf(NewIndexName, NAMEDATALEN, "temp_%lx", OIDOldIndex);
 
 	/*
 	 * make this really happen. Flush all the buffers. (Believe me, it is
@@ -164,7 +164,7 @@ copy_heap(Oid OIDOldHeap)
 	 * Create a new heap relation with a temporary name, which has the
 	 * same tuple description as the old one.
 	 */
-	snprintf(NewName, NAMEDATALEN, "temp_%x", OIDOldHeap);
+	snprintf(NewName, NAMEDATALEN, "temp_%lx", OIDOldHeap);
 
 	OldHeap = heap_open(OIDOldHeap, AccessExclusiveLock);
 	OldHeapDesc = RelationGetDescr(OldHeap);
@@ -231,7 +231,7 @@ copy_index(Oid OIDOldIndex, Oid OIDNewHeap)
 
 	/* Set the name. */
 	NewIndexName = palloc(NAMEDATALEN); /* XXX */
-	snprintf(NewIndexName, NAMEDATALEN, "temp_%x", OIDOldIndex);
+	snprintf(NewIndexName, NAMEDATALEN, "temp_%lx", OIDOldIndex);
 
 	/*
 	 * Ugly as it is, the only way I have of working out the number of

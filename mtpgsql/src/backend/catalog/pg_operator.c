@@ -822,7 +822,7 @@ OperatorDef(char *operatorName,
 			heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 		}
 		else
-			elog(ERROR, "OperatorDef: no operator %u", operatorObjectId);
+			elog(ERROR, "OperatorDef: no operator %lu", operatorObjectId);
 
 		heap_endscan(pg_operator_scan);
 	}

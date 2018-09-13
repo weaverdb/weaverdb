@@ -208,6 +208,7 @@ _bpchar(ArrayType *v, int32 len)
 {
 #ifdef NOARRAY
 	elog(ERROR,"array map not implemented");
+	return NULL;
 #else
 	return array_map(v, BPCHAROID, bpchar, BPCHAROID, 1, len);
 #endif
@@ -415,6 +416,7 @@ _varchar(ArrayType *v, int32 len)
 {
 #ifdef NOARRAY
 	elog(ERROR,"array map not implemented");
+	return NULL;
 #else
 	return array_map(v, VARCHAROID, varchar, VARCHAROID, 1, len);
 #endif

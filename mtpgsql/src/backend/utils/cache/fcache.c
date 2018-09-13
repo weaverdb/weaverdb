@@ -96,7 +96,7 @@ init_fcache(Oid foid,
 										 0, 0, 0);
 
 	if (!HeapTupleIsValid(procedureTuple))
-		elog(ERROR, "init_fcache: Cache lookup failed for procedure %u",
+		elog(ERROR, "init_fcache: Cache lookup failed for procedure %lu",
 			 foid);
 
 	procedureStruct = (Form_pg_proc) GETSTRUCT(procedureTuple);
@@ -110,7 +110,7 @@ init_fcache(Oid foid,
 									0, 0, 0);
 
 	if (!HeapTupleIsValid(typeTuple))
-		elog(ERROR, "init_fcache: Cache lookup failed for type %u",
+		elog(ERROR, "init_fcache: Cache lookup failed for type %lu",
 			 procedureStruct->prorettype);
 
 	typeStruct = (Form_pg_type) GETSTRUCT(typeTuple);
@@ -226,7 +226,7 @@ init_fcache(Oid foid,
 									   Anum_pg_proc_prosrc,
 									   &isNull);
 		if (isNull)
-			elog(ERROR, "init_fcache: null prosrc for procedure %u",
+			elog(ERROR, "init_fcache: null prosrc for procedure %lu",
 				 foid);
 		retval->src = textout(tmp);
 		retval->bin = (char *) NULL;
@@ -244,7 +244,7 @@ init_fcache(Oid foid,
 										   Anum_pg_proc_probin,
 										   &isNull);
 			if (isNull)
-				elog(ERROR, "init_fcache: null probin for procedure %u",
+				elog(ERROR, "init_fcache: null probin for procedure %lu",
 					 foid);
 			retval->bin = textout(tmp);
 			src = (text *) SysCacheGetAttr(PROCOID,
@@ -273,7 +273,7 @@ setFcache(Node *node, Oid foid, List *argList, ExprContext *econtext)
 	Oper	   *onode;
 	FunctionCachePtr fcache;
 
-        MemoryContext old = MemoryContextSameContext(node);
+        MemoryContext old = MemoryContextSameContext((Pointer)node);
 	fcache = init_fcache(foid, true, argList, econtext);
         MemoryContextSwitchTo(old);
         
@@ -289,7 +289,7 @@ setFcache(Node *node, Oid foid, List *argList, ExprContext *econtext)
 	}
 	else if (IsA(node, Java))
 	{
-		Java* jnode = (Java *) node;
+
 	}
 	else 
 		elog(ERROR, "init_fcache: node must be Oper or Func!");

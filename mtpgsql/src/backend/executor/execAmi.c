@@ -106,7 +106,7 @@ ExecOpenScanR(Oid relOid,
 		relation = heap_open(relOid, NoLock);
 
 	if (relation == NULL)
-		elog(ERROR, "ExecOpenScanR: failed to open relation %u", relOid);
+		elog(ERROR, "ExecOpenScanR: failed to open relation %lu", relOid);
 
 	scanDesc = ExecBeginScan(relation,
 							 nkeys,

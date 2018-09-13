@@ -69,7 +69,6 @@ regprocin(char *pro_name_or_oid)
 			Relation	idesc;
 			IndexScanDesc sd;
 			ScanKeyData skey[1];
-			bool indexRes;
 			Buffer		buffer;
 			int			matches = 0;
 
@@ -222,7 +221,7 @@ regprocout(RegProcedure proid)
 			if (!isnull)
 				StrNCpy(result, s, NAMEDATALEN);
 			else
-				elog(FATAL, "regprocout: null procedure %u", proid);
+				elog(FATAL, "regprocout: null procedure %lu", proid);
 		}
 		else
 		{

@@ -45,7 +45,7 @@ typeidTypeName(Oid id)
 									ObjectIdGetDatum(id),
 									0, 0, 0)))
 	{
-		elog(ERROR, "Unable to locate type oid %u in catalog", id);
+		elog(ERROR, "Unable to locate type oid %lu in catalog", id);
 		return NULL;
 	}
 	typetuple = (Form_pg_type) GETSTRUCT(tup);
@@ -62,7 +62,7 @@ typeidType(Oid id)
 									ObjectIdGetDatum(id),
 									0, 0, 0)))
 	{
-		elog(ERROR, "Unable to locate type oid %u in catalog", id);
+		elog(ERROR, "Unable to locate type oid %lu in catalog", id);
 		return NULL;
 	}
 
@@ -161,7 +161,7 @@ typeidOutfunc(Oid type_id)
 									ObjectIdGetDatum(type_id),
 									0, 0, 0);
 	if (!HeapTupleIsValid(typeTuple))
-		elog(ERROR, "typeidOutfunc: Invalid type - oid = %u", type_id);
+		elog(ERROR, "typeidOutfunc: Invalid type - oid = %lu", type_id);
 
 	type = (Form_pg_type) GETSTRUCT(typeTuple);
 	outfunc = type->typoutput;
@@ -180,7 +180,7 @@ typeidTypeRelid(Oid type_id)
 									ObjectIdGetDatum(type_id),
 									0, 0, 0);
 	if (!HeapTupleIsValid(typeTuple))
-		elog(ERROR, "typeidTypeRelid: Invalid type - oid = %u", type_id);
+		elog(ERROR, "typeidTypeRelid: Invalid type - oid = %lu", type_id);
 
 	type = (Form_pg_type) GETSTRUCT(typeTuple);
 	return type->typrelid;
@@ -220,7 +220,7 @@ GetArrayElementType(Oid typearray)
 									 0, 0, 0);
 
 	if (!HeapTupleIsValid(type_tuple))
-		elog(ERROR, "GetArrayElementType: Cache lookup failed for type %u",
+		elog(ERROR, "GetArrayElementType: Cache lookup failed for type %lu",
 			 typearray);
 
 	/* get the array type struct from the type tuple */

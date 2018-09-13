@@ -575,7 +575,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 				tmask,
 				type;
 	int			i;
-	int			flen,
+	int			flen, 
 				val;
 	int			mer = HR24;
 	int			haveTextMonth = FALSE;
@@ -1669,8 +1669,7 @@ DecodeDateDelta(char **field, int *ftype, int nf, int *dtype, struct tm * tm, do
 				tmask,
 				type;
 	int			i;
-	int			flen,
-				val;
+	int			val;
 	double		fval;
 	double		sec;
 
@@ -1719,7 +1718,6 @@ DecodeDateDelta(char **field, int *ftype, int nf, int *dtype, struct tm * tm, do
 				else
 					return -1;
 
-				flen = strlen(field[i]);
 				tmask = 0;		/* DTK_M(type); */
 
 				switch (type)

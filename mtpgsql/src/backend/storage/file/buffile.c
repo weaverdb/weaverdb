@@ -75,7 +75,6 @@ struct BufFile
 };
 
 static BufFile *makeBufFile(File firstfile);
-static void extendBufFile(BufFile *file);
 static void BufFileLoadBuffer(BufFile *file);
 static void BufFileDumpBuffer(BufFile *file);
 static int	BufFileFlush(BufFile *file);
@@ -142,8 +141,6 @@ BufFileCreate(File file)
 void
 BufFileClose(BufFile *file)
 {
-	int			i;
-
 	/* flush any unwritten data */
 	BufFileFlush(file);
 	FileClose(file->file);

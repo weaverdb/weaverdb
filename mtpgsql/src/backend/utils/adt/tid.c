@@ -85,7 +85,7 @@ tidout(ItemPointer itemPtr)
 	blockNumber = ItemPointerGetBlockNumber(itemPtr);
 	offsetNumber = ItemPointerGetOffsetNumber(itemPtr);
 
-	sprintf(buf, "(%d,%d)", blockNumber, offsetNumber);
+	sprintf(buf, "(%ld,%d)", blockNumber, offsetNumber);
 
 	str = (char *) palloc(strlen(buf) + 1);
 	strcpy(str, buf);
@@ -96,15 +96,18 @@ tidout(ItemPointer itemPtr)
 bytea* tidtobytes(ItemPointer itemPtr) {
 	bytea            *array = palloc(sizeof(ItemPointerData) + VARHDRSZ);
             
-        memset(array,0x00,sizeof(ItemPointerData) + VARHDRSZ);
-        *(int32_t*)array = sizeof(ItemPointerData) + VARHDRSZ;
+    memset(array,0x00,sizeof(ItemPointerData) + VARHDRSZ);
+    *(int32_t*)array = sizeof(ItemPointerData) + VARHDRSZ;
 
-	if (!itemPtr || !ItemPointerIsValid(itemPtr))
+	if (itemPtr && ItemPointerIsValid(itemPtr))
 	{
-            return array;
+	    memcpy(VARDATA(array),itemPtr,sizeof(ItemPointerData));
+        return array;
+	} else {
+		pfree(array);
 	}
 
-        memcpy(VARDATA(array),itemPtr,sizeof(ItemPointerData));
+	return NULL;
 }
 
 
@@ -196,7 +199,7 @@ currtid_byreloid(Oid reloid, ItemPointer tid)
 		heap_close(rel, AccessShareLock);
 	}
 	else
-		elog(ERROR, "Relation %u not found", reloid);
+		elog(ERROR, "Relation %lu not found", reloid);
 
 	return result;
 }	/* currtid_byreloid() */

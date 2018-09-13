@@ -199,7 +199,7 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
 
         StmtMgr base = getStmtMgr(env,talkerObject,0);
 
-    if ( base == NULL ) return NULL;
+    if ( base == NULL ) return 0L;
 
         if ( statement == NULL ) {
             (*env)->ThrowNew(env,Cache->exception,"no statement");
@@ -467,7 +467,7 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_getTransactionId
 
 	return GetTransactionId(base);
 }
-
+#ifdef UNUSED
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_userLock
   (JNIEnv *env, jobject talkerObject, jstring group, jint val, jboolean lock)
 {
@@ -496,7 +496,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_userLock
 		reportError(env,talkerObject,base);
 	}
 }
-
+#endif
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_streamExec
   (JNIEnv * env, jobject talkerObject, jstring statement)
 {	
@@ -604,7 +604,10 @@ static int direct_pipeout(void* arg,char* buff,int start,int run)
     
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
 
-    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+    target = (*env)->NewLocalRef(env,target);
+    if (target == NULL) {
+        return PIPING_ERROR;
+    }
 
     jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
     
@@ -630,7 +633,10 @@ static int direct_pipein(void* arg,char* buff,int start,int run)
         
     (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
     
-    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+    target = (*env)->NewLocalRef(env,target);
+    if (target == NULL) {
+        return PIPING_ERROR;
+    }
 
     jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
 
@@ -656,7 +662,11 @@ static int pipeout(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
-    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+    target = (*env)->NewLocalRef(env,target);
+    
+    if (target == NULL) {
+        return PIPING_ERROR;
+    }
     
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
@@ -682,7 +692,11 @@ static int pipein(void* args,char* buff,int start,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
-    if ( (*env)->IsSameObject(env,target,NULL) ) return PIPING_ERROR;
+    target = (*env)->NewLocalRef(env,target);
+
+    if (target == NULL) {
+        return PIPING_ERROR;
+    }
     
     jbyteArray jb = (*env)->NewByteArray(env,run);
 

@@ -61,7 +61,7 @@ PG_EXTERN void UpdateStats(Oid relid, long reltuples);
 PG_EXTERN bool IndexesAreActive(Oid relid, bool comfirmCommitted);
 PG_EXTERN void setRelhasindexInplace(Oid relid, bool hasindex, bool immediate);
 PG_EXTERN bool SetReindexProcessing(bool processing);
-PG_EXTERN void ResetReindexProcessing();
+PG_EXTERN void ResetReindexProcessing(void);
 PG_EXTERN bool IsReindexProcessing(void);
 
 PG_EXTERN void FillDummyExprContext(ExprContext *econtext, TupleTableSlot *slot,

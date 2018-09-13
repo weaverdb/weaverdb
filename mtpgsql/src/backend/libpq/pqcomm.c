@@ -139,28 +139,6 @@ pq_close(void)
 
 }
 
-
-
-/*
- * Streams -- wrapper around Unix socket system calls
- *
- *
- *		Stream functions are used for vanilla TCP connection protocol.
- */
-
-static char sock_path[MAXPGPATH];
-
-
-/* StreamDoUnlink()
- * Shutdown routine for backend connection
- * If a Unix socket is used for communication, explicitly close it.
- */
-static void
-StreamDoUnlink()
-{
-	printf("trying to do stream unlink\n");
-}
-
 /*
  * StreamServerPort -- open a sock stream "listening" port.
  *
@@ -543,6 +521,6 @@ extern void* DisconnectIO() {
     
     env->pipein = NULL;
     env->pipeout = NULL;
-    
+    return args;
 }
 

@@ -48,12 +48,13 @@
 #include "bootstrap_tokens.h"
 
 #define			YY_NO_UNPUT
+#define YY_NO_INPUT
 
 /* some versions of lex define this as a macro */
 #if defined(yywrap)
 #undef yywrap
 #endif /* yywrap */
-
+static int Int_yywrap(void);
 
 %}
 
@@ -133,7 +134,7 @@ insert			{ return(INSERT_TUPLE); }
 %%
 
 int
-yywrap(void)
+Int_yywrap(void)
 {
 	return 1;
 }

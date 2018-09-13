@@ -59,7 +59,6 @@ static MemoryContextMethods SubSetMethods = {
 	SubSetStats
 };
 
-
 /*
  * Public routines
  */
@@ -88,10 +87,10 @@ SubSetContextCreate(MemoryContext parent,const char *name)
         Assert( parent->type != T_SubSetContext );
 	/* Do the type-independent part of context creation */
 	context = (SubSetContext*) MemoryContextCreate(T_SubSetContext,
-                                                                     sizeof(SubSetContext),
-                                                                     &SubSetMethods,
-                                                                     parent,
-                                                                     name);
+										sizeof(SubSetContext),
+										&SubSetMethods,
+										parent,
+										name);
 	context->alloced_pointers = MemoryContextAlloc(parent,10 * sizeof(void*));
 	memset(context->alloced_pointers,0x00,sizeof(void*) * 10);
 	context->map_size = 10;

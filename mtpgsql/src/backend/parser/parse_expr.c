@@ -882,7 +882,7 @@ exprIsLengthCoercion(Node *expr, int32 *coercedTypmod)
 							  ObjectIdGetDatum(func->funcid),
 							  0, 0, 0);
 	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup for proc %u failed", func->funcid);
+		elog(ERROR, "cache lookup for proc %lu failed", func->funcid);
 	procStruct = (Form_pg_proc) GETSTRUCT(tup);
 
 	/*
@@ -904,7 +904,7 @@ exprIsLengthCoercion(Node *expr, int32 *coercedTypmod)
 							  ObjectIdGetDatum(procStruct->prorettype),
 							  0, 0, 0);
 	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup for type %u failed",
+		elog(ERROR, "cache lookup for type %lu failed",
 			 procStruct->prorettype);
 	typeStruct = (Form_pg_type) GETSTRUCT(tup);
 	if (strncmp(NameStr(procStruct->proname),

@@ -31,18 +31,18 @@ int			m_spincycle[M_NSPINCYCLE] =
 	0, 10000, 0, 0, 10000, 0, 10000, 0, 10000, 10000
 };
 
-
+#ifdef UNUSED
 static void
 m_lock_stuck(slock_t *lock)
 {
 	fprintf(stderr,
-			"\nFATAL: s_lock(%08x) at %d, stuck spinlock. Aborting.\n",
+			"\nFATAL: s_lock(%08lx), stuck spinlock. Aborting.\n",
 			(unsigned long) lock);
 	fprintf(stdout,
-			"\nFATAL: s_lock(%08x) at %d, stuck spinlock. Aborting.\n",
+			"\nFATAL: s_lock(%08lx), stuck spinlock. Aborting.\n",
 			(unsigned long) lock);
 }
-
+#endif
 
 void
 m_lock_sleep(int spin)

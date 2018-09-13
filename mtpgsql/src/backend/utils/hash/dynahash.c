@@ -80,7 +80,6 @@ static void *DynaHashAlloc(Size size,void* cxt);
 static void DynaHashFree(void* pointer,void* cxt);
 static HashMemory* CreateHashContext(void);
 static HashMemory* GetHashContext(void);
-static void	DestroyHashMemory(void);
 static uint32 call_hash(HTAB *hashp, void *k);
 static HASHSEGMENT seg_alloc(HTAB *hashp);
 static bool element_alloc(HTAB *hashp);
@@ -445,7 +444,6 @@ hash_destroy(HTAB *hashp)
 {
 	if (hashp != NULL)
 	{
-            void*          		entry;
             HASHSEGMENT*		segp;
             HASHELEMENT*		dellist = NULL;
             HASHHDR*			hctl = hashp->hctl;

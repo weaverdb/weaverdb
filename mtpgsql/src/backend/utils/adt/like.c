@@ -67,7 +67,7 @@ fixedlen_like(char *s, struct varlena * p, int charlen)
 #else
 	pterm = (char *) palloc(len + 1);
 	memmove(pterm, VARDATA(p), len);
-	*(pterm + len) = (char) NULL;
+	*(pterm + len) = (char) 0;
 #endif
 
 	/* do the regexp matching */

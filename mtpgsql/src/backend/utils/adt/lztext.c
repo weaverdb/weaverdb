@@ -25,7 +25,7 @@
 #include "mb/pg_wchar.h"
 #endif
 
-#define UNCOMPRESSED(length) ((length | 0x80000000))
+#define UNCOMPRESSED(length) (((length) | 0x80000000))
 #define ISCOMPRESSED(lz) (!(lz->vl_len_ & 0x80000000))
 
 /* ----------
@@ -315,7 +315,7 @@ lztext_text(lztext *lz)
             memmove(VARDATA(result),VARDATA(lz),VARSIZE(lz) - VARHDRSZ);
             SETVARSIZE(result,VARSIZE(lz));
         } else if ( PGLZ_RAW_SIZE(lz) == VARSIZE(lz) - sizeof(lztext) ) {
-            result = (char *) palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ);
+            result = palloc(PGLZ_RAW_SIZE(lz) + VARHDRSZ);
             memmove(VARDATA(result),((char*)lz) + sizeof(lztext),PGLZ_RAW_SIZE(lz));
             SETVARSIZE(result,PGLZ_RAW_SIZE(lz) + VARHDRSZ);
         } else {

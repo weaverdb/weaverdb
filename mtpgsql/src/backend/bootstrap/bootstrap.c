@@ -502,7 +502,7 @@ boot_openrel(char *relname)
 		{
 			Form_pg_attribute at = attrtypes[i];
 
-			printf("create attribute %d name %s len %d num %d type %d align %c\n",
+			printf("create attribute %d name %s len %d num %d type %ld align %c\n",
 				   i, NameStr(at->attname), at->attlen, at->attnum,
 				   at->atttypid,at->attalign
 				);
@@ -639,7 +639,7 @@ InsertOneTuple(Oid objectid)
 
 	if (DebugMode)
 	{
-		printf("InsertOneTuple oid %u, %d attrs\n", objectid, numattr);
+		printf("InsertOneTuple oid %lu, %d attrs\n", objectid, numattr);
 		fflush(stdout);
 	}
 
@@ -655,7 +655,7 @@ InsertOneTuple(Oid objectid)
 
 	if (DebugMode)
 	{
-		printf("End InsertOneTuple, objectid=%u\n", objectid);
+		printf("End InsertOneTuple, objectid=%lu\n", objectid);
 		fflush(stdout);
 	}
 
@@ -702,7 +702,7 @@ InsertOneValue(Oid objectid, char *value, int i)
 		ap = *app;
 		if (ap == NULL)
 		{
-			printf("Unable to find atttypid in Typ list! %u\n",
+			printf("Unable to find atttypid in Typ list! %lu\n",
 				   reldesc->rd_att->attrs[i]->atttypid
 				);
 			Assert(0);
@@ -726,7 +726,7 @@ InsertOneValue(Oid objectid, char *value, int i)
 				break;
 		}
 		if (typeindex >= n_types)
-			elog(ERROR, "can't find type OID %u", attrtypes[i]->atttypid);
+			elog(ERROR, "can't find type OID %lu", attrtypes[i]->atttypid);
 		if (DebugMode)
 			printf("Typ == NULL, typeindex = %u idx = %d\n", typeindex, i);
 		values[i] = fmgr(Procid[typeindex].inproc, value,

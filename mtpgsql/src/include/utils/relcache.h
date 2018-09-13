@@ -50,7 +50,7 @@ PG_EXTERN void RelationIdInvalidateRelationCache(Oid relationId,Oid databaseId);
 PG_EXTERN void RelationCacheInvalidate(void);
 PG_EXTERN void RelationCacheShutdown(void);
 
-PG_EXTERN MemoryContext RelationGetCacheContext();
+PG_EXTERN MemoryContext RelationGetCacheContext(void);
 
 PG_EXTERN void RelationRegisterRelation(Relation relation);
 PG_EXTERN void RelationPurgeLocalRelation(bool xactComitted);

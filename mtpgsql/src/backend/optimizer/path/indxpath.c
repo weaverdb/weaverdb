@@ -1630,8 +1630,7 @@ match_special_index_operator(Expr *clause, Oid opclass, Oid relam,
 							 bool indexkey_on_left)
 {
 	bool		isIndexable = false;
-	Var		   *leftop,
-			   *rightop;
+	Var		   *rightop;
 	Oid			expr_op;
 	Datum		constvalue;
 	char	   *patt;
@@ -1647,7 +1646,6 @@ match_special_index_operator(Expr *clause, Oid opclass, Oid relam,
 		return false;
 
 	/* we know these will succeed */
-	leftop = get_leftop(clause);
 	rightop = get_rightop(clause);
 	expr_op = ((Oper *) clause->oper)->opno;
 
@@ -1891,7 +1889,7 @@ prefix_quals(Var *leftop, Oid expr_op,
 			break;
 
 		default:
-			elog(ERROR, "prefix_quals: unexpected operator %u", expr_op);
+			elog(ERROR, "prefix_quals: unexpected operator %lu", expr_op);
 			return NIL;
 	}
 
@@ -1902,7 +1900,7 @@ prefix_quals(Var *leftop, Oid expr_op,
 	{
 		oproid = find_operator("=", datatype);
 		if (oproid == InvalidOid)
-			elog(ERROR, "prefix_quals: no = operator for type %u", datatype);
+			elog(ERROR, "prefix_quals: no = operator for type %lu", datatype);
 		con = string_to_const(prefix, datatype);
 		op = makeOper(oproid, InvalidOid, BOOLOID, 0, NULL);
 		expr = make_opclause(op, leftop, (Var *) con);
@@ -1917,7 +1915,7 @@ prefix_quals(Var *leftop, Oid expr_op,
 	 */
 	oproid = find_operator(">=", datatype);
 	if (oproid == InvalidOid)
-		elog(ERROR, "prefix_quals: no >= operator for type %u", datatype);
+		elog(ERROR, "prefix_quals: no >= operator for type %lu", datatype);
 	con = string_to_const(prefix, datatype);
 	op = makeOper(oproid, InvalidOid, BOOLOID, 0, NULL);
 	expr = make_opclause(op, leftop, (Var *) con);
@@ -1932,7 +1930,7 @@ prefix_quals(Var *leftop, Oid expr_op,
 	{
 		oproid = find_operator("<", datatype);
 		if (oproid == InvalidOid)
-			elog(ERROR, "prefix_quals: no < operator for type %u", datatype);
+			elog(ERROR, "prefix_quals: no < operator for type %lu", datatype);
 		con = string_to_const(greaterstr, datatype);
 		op = makeOper(oproid, InvalidOid, BOOLOID, 0, NULL);
 		expr = make_opclause(op, leftop, (Var *) con);

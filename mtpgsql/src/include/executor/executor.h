@@ -112,7 +112,7 @@ PG_EXTERN TupleTableSlot *ExecScan(Scan *node, TupleTableSlot *(*accessMtd) ());
 PG_EXTERN TupleTable ExecCreateTupleTable(int initialSize);
 PG_EXTERN void ExecDropTupleTable(TupleTable table, bool shouldFree);
 PG_EXTERN TupleTableSlot *ExecAllocTableSlot(TupleTable table);
-PG_EXTERN TupleTableSlot *ExecCreateTableSlot();
+PG_EXTERN TupleTableSlot *ExecCreateTableSlot(void);
 PG_EXTERN TupleTableSlot *ExecStoreTuple(HeapTuple tuple,TupleTableSlot *slot, bool transfer);
 PG_EXTERN TupleTableSlot *ExecClearTuple(TupleTableSlot *slot);
 PG_EXTERN TupleDesc ExecSetSlotDescriptor(TupleTableSlot *slot,

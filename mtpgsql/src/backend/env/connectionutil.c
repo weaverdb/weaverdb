@@ -84,10 +84,10 @@ static HTAB*        properties;
 
 static bool initialized = false;
 
-static void CreateProperties();
+static void CreateProperties(void);
 
 static void checkDataDir(const char *DataDir, bool *DataDirOK);
-static int checklockfile();
+static int checklockfile(void);
 
 pthread_mutex_t    init_lock;
 
@@ -275,14 +275,14 @@ extern bool initweaverbackend(char* vars)
 /*        chdir(DataDir);       */
 	ValidatePgVersion(DataDir, &reason);
         if (reason != NULL) {
-                elog(NOTICE, reason);
+                elog(NOTICE, "%s", reason);
                 pthread_mutex_unlock(&init_lock);
                 unlink(lock_name);
                 return FALSE;
         }
 
 	GetRawDatabaseInfo(dbname,&GetEnv()->DatabaseId, datpath);
-	elog(DEBUG,"Database id is %u",GetEnv()->DatabaseId);
+	elog(DEBUG,"Database id is %lu",GetEnv()->DatabaseId);
 	elog(DEBUG,"Build date is %s", BUILDTIME);
 	elog(DEBUG,"Build byte order is %d", BYTE_ORDER);
 
@@ -379,7 +379,7 @@ transaction system  */
     if ( DebugLvl > 1 ) {
 	TransactionId  dd;	
 	dd = GetNewTransactionId();
-	elog(DEBUG,"Current Transaction %llu",dd);
+	elog(DEBUG,"Current Transaction %lu",dd);
 	elog(DEBUG,"BLCKSZ size %d",BLCKSZ);
     }
 	

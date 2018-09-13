@@ -27,7 +27,7 @@ PG_EXTERN bool DelegatedTransferPointers(Delegate delegate,ItemPointer items,int
 PG_EXTERN bool DelegatedCollectorWaiting(Delegate delegate);
 PG_EXTERN void DelegatedDone(Delegate delegate);
 
-PG_EXTERN int DelegatedGetTransferMax();
+PG_EXTERN int DelegatedGetTransferMax(void);
 PG_EXTERN void DelegatedSetTransferMax(int max);
 
 

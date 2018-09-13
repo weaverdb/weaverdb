@@ -31,7 +31,9 @@
 static HTAB*  			freetable;
 static pthread_mutex_t          freespace_access;
 static bool			inited = false;
+#ifdef UNUSED
 static bool			print_freespace_memory = false;
+#endif
 static MemoryContext            free_cxt;
 
 #define DEFAULT_MINLIVE  (BLCKSZ / 10)  /*  default if the available space is only 10% don't bother checking anymore */
@@ -94,8 +96,9 @@ static BlockNumber PerformAllocation(Relation rel, FreeSpace* free, BlockNumber 
 static bool LookupExtentForRelation(Relation rel, FreeSpace* free);
 static void SetExtentForRelation(Relation rel, int count,bool percentage);
 static void RemoveExtentForRelation(Relation rel);
-static void InitIndex(FreeSpace* space);
-
+#ifdef UNUSED
+static void  freespace_log(FreeSpace*, char*, ...);
+#endif
 static int cmp_freeruns(const void *left, const void *right);
 
 static void* FreespaceAlloc(Size size,void* cxt)
@@ -270,6 +273,7 @@ RegisterFreespace(Relation rel, int space,BlockNumber* index,
         }
 /*  new statistics available */
 	pthread_mutex_unlock(&entry->accessor);
+    return 0;
 }
 
 int 
@@ -747,7 +751,7 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, BlockNumber nb
     freespace->relsize = nblocks;
 
     if ( found+ allocated + freespace->relsize != rel->rd_nblocks ) {
-        elog(FATAL,"file extension inconsistent %d %d",found + freespace->relsize,rel->rd_nblocks);
+        elog(FATAL,"file extension inconsistent %ld %ld",found + freespace->relsize,rel->rd_nblocks);
         freespace->relsize = rel->rd_nblocks - found;
     }
 
@@ -1016,7 +1020,6 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
 
         while (index_getnext(scan, ForwardScanDirection)) {
             HeapTupleData   tuple;
-            bool isnull = false;
             tuple.t_self = scan->xs_ctup.t_self;
 
             if (heap_fetch(erel, SnapshotNow, &tuple, &release)) {
@@ -1096,7 +1099,6 @@ RemoveExtentForRelation(Relation rel) {
         IndexScanDesc scan;
         ScanKeyData    skey;
         Buffer          release;
-        bool         handled = false;
 
         erel = heap_openr("pg_extent", RowExclusiveLock);
         irel = index_openr("pg_extent_index");
@@ -1110,13 +1112,11 @@ RemoveExtentForRelation(Relation rel) {
 
         while (index_getnext(scan, ForwardScanDirection)) {
             HeapTupleData   tuple;
-            bool isnull = false;
             tuple.t_self = scan->xs_ctup.t_self;
 
             if (heap_fetch(erel, SnapshotNow, &tuple, &release)) {
                 ReleaseBuffer(erel,release);
                 heap_delete(erel,&scan->xs_ctup.t_self,NULL,NULL);
-                handled = true;
                 break;
             }
         }
@@ -1141,7 +1141,7 @@ int cmp_freeruns(const void *left, const void *right) {
 	return 0;
 }
 
-
+#ifdef UNUSED
 void  freespace_log(FreeSpace* rel, char* pattern, ...) {
     char            msg[256];
     va_list         args;
@@ -1156,3 +1156,4 @@ void  freespace_log(FreeSpace* rel, char* pattern, ...) {
 #endif
     va_end(args);
 }
+#endif

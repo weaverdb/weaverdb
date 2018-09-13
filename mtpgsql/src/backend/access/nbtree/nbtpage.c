@@ -237,7 +237,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 /*  ok this is will undoubtly cause buffer leaks and 
     held locks but it should be ok to rely on AbortTransaction
     to clean up this situation properly */
-                    elog(ERROR,"error reading index page %d for index %s",blkno,RelationGetRelationName(rel));
+                    elog(ERROR,"error reading index page %ld for index %s",blkno,RelationGetRelationName(rel));
                 }
                 LockBuffer((rel),buf, access);
 	}

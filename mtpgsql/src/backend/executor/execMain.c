@@ -992,7 +992,7 @@ ExecutePlan(EState *estate,
 	ItemPointerData tuple_ctid;
 	int			current_tuple_count;
 	TupleTableSlot *result;
-    TransactionInfo* t_info;
+    TransactionInfo* t_info = GetTransactionInfo();
 
 	/*
 	 * initialize local variables
@@ -1934,7 +1934,7 @@ EvalPlanQual(EState *estate, Index rti, ItemPointer tid)
 			TransactionId xwait = holder->SnapshotDirty->xmax;
 			if (TransactionIdIsValid(holder->SnapshotDirty->xmin))
 			{
-				elog(NOTICE, "EvalPlanQual: t_xmin:%d is uncommitted ?!",holder->SnapshotDirty->xmin);
+				elog(NOTICE, "EvalPlanQual: t_xmin:%ld is uncommitted ?!",holder->SnapshotDirty->xmin);
 				ReleaseBuffer(relation, buffer);
 				TransactionId xwait = GetCheckpointId();
 				XactLockTableWait(xwait);

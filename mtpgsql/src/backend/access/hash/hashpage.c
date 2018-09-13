@@ -68,8 +68,6 @@ _hash_metapinit(Relation rel)
 	Buffer		metabuf;
 	Buffer		buf;
 	Page		pg;
-	int			nbuckets;
-	uint32		nelem;			/* number elements */
 	uint32		lg2nelem;		/* _hash_log2(nelem)   */
 	uint32		nblocks;
 	uint16		i;
@@ -111,9 +109,7 @@ _hash_metapinit(Relation rel)
 	 * Make nelem = 2 rather than 0 so that we end up allocating space for
 	 * the next greater power of two number of buckets.
 	 */
-	nelem = 2;
 	lg2nelem = 1;				/* _hash_log2(MAX(nelem, 2)) */
-	nbuckets = 2;				/* 1 << lg2nelem */
 
 	MemSet((char *) metap->hashm_spares, 0, sizeof(metap->hashm_spares));
 	MemSet((char *) metap->hashm_mapp, 0, sizeof(metap->hashm_mapp));
@@ -221,7 +217,7 @@ _hash_relbuf(Relation rel, Buffer buf, int access)
 			_hash_unsetpagelock(rel, blkno, access);
 			break;
 		default:
-			elog(ERROR, "_hash_relbuf: invalid access (%d) on blk %x: %s",
+			elog(ERROR, "_hash_relbuf: invalid access (%d) on blk %lx: %s",
 				 access, blkno, RelationGetRelationName(rel));
 	}
 
@@ -255,9 +251,6 @@ _hash_wrtbuf(Relation rel, Buffer buf)
 void
 _hash_wrtnorelbuf(Relation rel, Buffer buf)
 {
-	BlockNumber blkno;
-
-	blkno = BufferGetBlockNumber(buf);
 	WriteNoReleaseBuffer(rel, buf);
 }
 
@@ -280,7 +273,7 @@ _hash_chgbufaccess(Relation rel,
 			_hash_relbuf(rel, *bufp, from_access);
 			break;
 		default:
-			elog(ERROR, "_hash_chgbufaccess: invalid access (%d) on blk %x: %s",
+			elog(ERROR, "_hash_chgbufaccess: invalid access (%d) on blk %lx: %s",
 				 from_access, blkno, RelationGetRelationName(rel));
 			break;
 	}
@@ -325,7 +318,7 @@ _hash_setpagelock(Relation rel,
 				LockPage(rel, blkno, ShareLock);
 				break;
 			default:
-				elog(ERROR, "_hash_setpagelock: invalid access (%d) on blk %x: %s",
+				elog(ERROR, "_hash_setpagelock: invalid access (%d) on blk %lx: %s",
 					 access, blkno, RelationGetRelationName(rel));
 				break;
 		}
@@ -349,7 +342,7 @@ _hash_unsetpagelock(Relation rel,
 				UnlockPage(rel, blkno, ShareLock);
 				break;
 			default:
-				elog(ERROR, "_hash_unsetpagelock: invalid access (%d) on blk %x: %s",
+				elog(ERROR, "_hash_unsetpagelock: invalid access (%d) on blk %lx: %s",
 					 access, blkno, RelationGetRelationName(rel));
 				break;
 		}
@@ -476,7 +469,7 @@ _hash_splitpage(Relation rel,
 	Page		npage;
 	TupleDesc	itupdesc;
 
-/*	  elog(DEBUG, "_hash_splitpage: splitting %d into %d,%d",
+/*	  elog(DEBUG, "_hash_splitpage: splitting %ld into %ld,%ld",
 		 obucket, obucket, nbucket);
 */
 	metap = (HashMetaPage) BufferGetPage(metabuf);
@@ -528,7 +521,7 @@ _hash_splitpage(Relation rel,
 		opage = BufferGetPage(obuf);
 		_hash_checkpage(opage, LH_OVERFLOW_PAGE);
 		if (PageIsEmpty(opage))
-			elog(ERROR, "_hash_splitpage: empty overflow page %d", oblkno);
+			elog(ERROR, "_hash_splitpage: empty overflow page %ld", oblkno);
 		oopaque = (HashPageOpaque) PageGetSpecialPointer(opage);
 	}
 
@@ -569,7 +562,7 @@ _hash_splitpage(Relation rel,
 				/* we're guaranteed that an ovfl page has at least 1 tuple */
 				if (PageIsEmpty(opage))
 				{
-					elog(ERROR, "_hash_splitpage: empty ovfl page %d!",
+					elog(ERROR, "_hash_splitpage: empty ovfl page %ld!",
 						 oblkno);
 				}
 				ooffnum = FirstOffsetNumber;
@@ -666,7 +659,7 @@ _hash_splitpage(Relation rel,
 				oopaque = (HashPageOpaque) PageGetSpecialPointer(opage);
 				if (PageIsEmpty(opage))
 				{
-					elog(ERROR, "_hash_splitpage: empty overflow page %d",
+					elog(ERROR, "_hash_splitpage: empty overflow page %ld",
 						 oblkno);
 				}
 				ooffnum = FirstOffsetNumber;

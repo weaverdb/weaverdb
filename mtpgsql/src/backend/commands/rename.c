@@ -124,7 +124,7 @@ renameatt(char *relname,
 										 0, 0, 0);
 			if (!HeapTupleIsValid(reltup))
 			{
-				elog(ERROR, "renameatt: can't find catalog entry for inheriting class with oid %u",
+				elog(ERROR, "renameatt: can't find catalog entry for inheriting class with oid %lu",
 					 childrelid);
 			}
 			/* make copy of cache value, could disappear in call */

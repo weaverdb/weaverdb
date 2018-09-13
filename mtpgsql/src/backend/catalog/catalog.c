@@ -108,7 +108,7 @@ relpath_blind(const char *dbname, const char *relname,
 		}
 
 		if (id != dbid)
-			elog(FATAL, "relpath_blind: oid of db %s is not %u",
+			elog(FATAL, "relpath_blind: oid of db %s is not %lu",
 				 dbname, dbid);
 		dbpath = ExpandDatabasePath(dbpathtmp);
 		if (dbpath == NULL)
@@ -238,7 +238,7 @@ fillatt(TupleDesc tupleDesc)
 									0, 0, 0);
 		if (!HeapTupleIsValid(tuple))
 		{
-			elog(ERROR, "fillatt: unknown atttypid %d",
+			elog(ERROR, "fillatt: unknown atttypid %ld",
 				 (*attributeP)->atttypid);
 		}
 		else

@@ -156,7 +156,7 @@ eqsel(Oid opid,
 				bool		mostcommon;
 
 				if (eqproc == (RegProcedure) NULL)
-					elog(ERROR, "eqsel: no procedure for operator %u",
+					elog(ERROR, "eqsel: no procedure for operator %lu",
 						 opid);
 
 				/* be careful to apply operator right way 'round */
@@ -309,7 +309,7 @@ scalarltsel(Oid opid,
 		 */
 		oprtuple = get_operator_tuple(opid);
 		if (!HeapTupleIsValid(oprtuple))
-			elog(ERROR, "scalarltsel: no tuple for operator %u", opid);
+			elog(ERROR, "scalarltsel: no tuple for operator %lu", opid);
 		ltype = ((Form_pg_operator) GETSTRUCT(oprtuple))->oprleft;
 		rtype = ((Form_pg_operator) GETSTRUCT(oprtuple))->oprright;
 		contype = (flag & SEL_RIGHT) ? rtype : ltype;
@@ -444,7 +444,7 @@ patternsel(Oid opid,
 		 */
 		oprtuple = get_operator_tuple(opid);
 		if (!HeapTupleIsValid(oprtuple))
-			elog(ERROR, "patternsel: no tuple for operator %u", opid);
+			elog(ERROR, "patternsel: no tuple for operator %lu", opid);
 		ltype = ((Form_pg_operator) GETSTRUCT(oprtuple))->oprleft;
 		rtype = ((Form_pg_operator) GETSTRUCT(oprtuple))->oprright;
 
@@ -462,7 +462,7 @@ patternsel(Oid opid,
 			Datum	eqcon;
 
 			if (eqopr == InvalidOid)
-				elog(ERROR, "patternsel: no = operator for type %u", ltype);
+				elog(ERROR, "patternsel: no = operator for type %lu", ltype);
 			eqcon = string_to_datum(prefix, ltype);
 			result = eqsel(eqopr, relid, attno, eqcon, SEL_CONSTANT|SEL_RIGHT);
 			pfree(DatumGetPointer(eqcon));
@@ -878,7 +878,7 @@ convert_to_scalar(Datum value, Oid valuetypid, double *scaledvalue,
 			*scaledhibound = convert_timevalue_to_scalar(hibound, boundstypid);
 			return true;
                 case JAVAOID:
-                    return convert_java_to_scalar(value,scaledvalue,lobound,scaledlobound,hibound,scaledhibound, NULL);
+                    return convert_java_to_scalar(value,scaledvalue,lobound,scaledlobound,hibound,scaledhibound, PointerGetDatum(NULL));
 	}
 	/* Don't know how to convert */
 	return false;
@@ -916,7 +916,7 @@ convert_numeric_to_scalar(Datum value, Oid typid)
 	/* Can't get here unless someone tries to use scalarltsel/scalargtsel
 	 * on an operator with one numeric and one non-numeric operand.
 	 */
-	elog(ERROR, "convert_numeric_to_scalar: unsupported type %u", typid);
+	elog(ERROR, "convert_numeric_to_scalar: unsupported type %lu", typid);
 	return 0;
 }
 
@@ -1096,7 +1096,7 @@ convert_string_datum(Datum value, Oid typid)
 			/* Can't get here unless someone tries to use scalarltsel
 			 * on an operator with one string and one non-string operand.
 			 */
-			elog(ERROR, "convert_string_datum: unsupported type %u", typid);
+			elog(ERROR, "convert_string_datum: unsupported type %lu", typid);
 			return NULL;
 	}
 
@@ -1161,7 +1161,7 @@ convert_timevalue_to_scalar(Datum value, Oid typid)
 	/* Can't get here unless someone tries to use scalarltsel/scalargtsel
 	 * on an operator with one timevalue and one non-timevalue operand.
 	 */
-	elog(ERROR, "convert_timevalue_to_scalar: unsupported type %u", typid);
+	elog(ERROR, "convert_timevalue_to_scalar: unsupported type %lu", typid);
 	return 0;
 }
 
@@ -1183,7 +1183,7 @@ getattproperties(Oid relid, AttrNumber attnum,
 							  Int16GetDatum(attnum),
 							  0, 0);
 	if (!HeapTupleIsValid(atp))
-		elog(ERROR, "getattproperties: no attribute tuple %u %d",
+		elog(ERROR, "getattproperties: no attribute tuple %lu %d",
 			 relid, (int) attnum);
 	att_tup = (Form_pg_attribute) GETSTRUCT(atp);
 
@@ -1226,7 +1226,6 @@ getattstatistics(Oid relid,
 	HeapTuple	tuple;
 	HeapTuple	typeTuple;
 	FmgrInfo	inputproc;
-	Oid			typelem;
 	bool		isnull;
 
 	/*
@@ -1260,10 +1259,9 @@ getattstatistics(Oid relid,
 									ObjectIdGetDatum(typid),
 									0, 0, 0);
 	if (!HeapTupleIsValid(typeTuple))
-		elog(ERROR, "getattstatistics: Cache lookup failed for type %u",
+		elog(ERROR, "getattstatistics: Cache lookup failed for type %lu",
 			 typid);
 	fmgr_info(((Form_pg_type) GETSTRUCT(typeTuple))->typinput, &inputproc);
-	typelem = ((Form_pg_type) GETSTRUCT(typeTuple))->typelem;
 
 	/*
 	 * Values are variable-length fields, so cannot access as struct
@@ -1545,7 +1543,7 @@ prefix_selectivity(char *prefix,
 
 	cmpopr = find_operator(">=", datatype);
 	if (cmpopr == InvalidOid)
-		elog(ERROR, "prefix_selectivity: no >= operator for type %u",
+		elog(ERROR, "prefix_selectivity: no >= operator for type %lu",
 			 datatype);
 	prefixcon = string_to_datum(prefix, datatype);
 	/* Assume scalargtsel is appropriate for all supported types */
@@ -1564,7 +1562,7 @@ prefix_selectivity(char *prefix,
 
 		cmpopr = find_operator("<", datatype);
 		if (cmpopr == InvalidOid)
-			elog(ERROR, "prefix_selectivity: no < operator for type %u",
+			elog(ERROR, "prefix_selectivity: no < operator for type %lu",
 				 datatype);
 		prefixcon = string_to_datum(greaterstr, datatype);
 		/* Assume scalarltsel is appropriate for all supported types */
@@ -1895,7 +1893,7 @@ string_lessthan(const char *str1, const char *str2, Oid datatype)
 			break;
 
 		default:
-			elog(ERROR, "string_lessthan: unexpected datatype %u", datatype);
+			elog(ERROR, "string_lessthan: unexpected datatype %lu", datatype);
 			result = false;
 			break;
 	}

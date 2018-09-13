@@ -21,7 +21,7 @@ typedef enum mode {
     LOG_MODE
 } DBMode;
 
-void DBWriterInit();
+void DBWriterInit(void);
 
 void DBCreateWriterThread(DBMode mode);
 
@@ -38,7 +38,7 @@ void ResetAccessCounts(Oid relid,Oid dbid);
 
 char* RequestSnapshot(char* cmd);
 
-long GetFlushTime();
+long GetFlushTime(void);
 
 #ifdef __cplusplus
 }

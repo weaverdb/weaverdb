@@ -17,7 +17,7 @@ include $(SRCDIR)/Makefile.global
 
 DOCDIR= $(SRCDIR)/../doc/src/sgml/ref
 
-CFLAGS+= -I$(LIBPQDIR)
+CFLAGS+= -I$(LIBPQDIR) -Wno-pointer-sign -Wno-discarded-qualifiers
 
 #
 # And where libpq goes, so goes the authentication stuff...

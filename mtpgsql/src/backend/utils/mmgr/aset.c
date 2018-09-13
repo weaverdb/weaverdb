@@ -492,7 +492,7 @@ AllocSetAlloc(MemoryContext context, Size size)
 		if (block == NULL)
 		{
 			MemoryContextStats(MemoryContextGetTopContext());
-                        GetEnv()->errorcode;
+			GetEnv()->errorcode = 746;
 			elog(FATAL, "Memory exhausted in AllocSetAlloc(%lu)",
 				 (unsigned long) size);
 		}
@@ -691,7 +691,7 @@ AllocSetAlloc(MemoryContext context, Size size)
 		if (block == NULL)
 		{
 			MemoryContextStats(MemoryContextGetTopContext());
-                        GetEnv()->errorcode = 747;
+            GetEnv()->errorcode = 747;
 			elog(ERROR, "Memory exhausted in AllocSetAlloc(%lu)",
 				 (unsigned long) size);
 		}

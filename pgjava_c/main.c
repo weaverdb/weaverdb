@@ -93,9 +93,10 @@ int main(int argc,char* argv[])
         /* load and initialize a Java VM, return a JNI interface 
          * pointer in env */
         err = JNI_CreateJavaVM(&jvm, &henv, &vm_args);
-/*
-        printf("create err %d\n",err);
-*/
+        if (err != 0) {
+                printf("create err %d\n",err);
+                return err;
+        }
         env = (JNIEnv*)henv;
         (*jvm)->AttachCurrentThread(jvm,(void**)&env,NULL);
 

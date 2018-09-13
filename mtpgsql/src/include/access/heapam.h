@@ -108,7 +108,7 @@ extern "C" {
 #define fastgetattr(tup, attnum, tupleDesc, isnull) \
 ( \
 	AssertMacro((attnum) > 0), \
-	((isnull) ? (*(isnull) = false) : (Datum)NULL), \
+	((isnull != NULL) ? (*(isnull) = false) : (Datum)NULL), \
 	HeapTupleNoNulls(tup) ? \
 	( \
 		((tupleDesc)->attrs[(attnum)-1]->attcacheoff != -1 || \
@@ -131,7 +131,7 @@ extern "C" {
 	( \
 		att_isnull((attnum)-1, (tup)->t_data->t_bits) ? \
 		( \
-			((isnull) ? (*(isnull) = true) : (Datum)NULL), \
+			((isnull != NULL) ? (*(isnull) = true) : (Datum)NULL), \
 			(Datum)NULL \
 		) \
 		: \
@@ -150,7 +150,7 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 	return (
 			(attnum) > 0 ?
 			(
-			 ((isnull) ? (*(isnull) = false) : (dummyret) NULL),
+			 ((isnull != NULL) ? (*(isnull) = false) : (dummyret) NULL),
 			 HeapTupleNoNulls(tup) ?
 			 (
 			  ((tupleDesc)->attrs[(attnum) - 1]->attcacheoff != -1 ||
@@ -173,7 +173,7 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 			 (
 			  att_isnull((attnum) - 1, (tup)->t_data->t_bits) ?
 			  (
-			   ((isnull) ? (*(isnull) = true) : (dummyret) NULL),
+			   ((isnull != NULL) ? (*(isnull) = true) : (dummyret) NULL),
 			   (Datum) NULL
 			   )
 			  :
@@ -223,7 +223,7 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 		(attnum) != 0), \
 	((attnum) > (int) (tup)->t_data->t_natts) ? \
 	( \
-		((isnull) ? (*(isnull) = true) : (Datum)NULL), \
+		((isnull != NULL) ? (*(isnull) = true) : (Datum)NULL), \
 		(Datum)NULL \
 	) \
 	: \
@@ -234,7 +234,7 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 		) \
 		: \
 		( \
-			((isnull) ? (*(isnull) = false) : (Datum)NULL), \
+			((isnull != NULL) ? (*(isnull) = false) : (Datum)NULL), \
 			((attnum) == SelfItemPointerAttributeNumber) ? \
 			( \
 				(Datum)((char *)&((tup)->t_self)) \

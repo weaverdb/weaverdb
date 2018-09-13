@@ -57,15 +57,15 @@ PG_EXTERN int	smgrsync(SmgrInfo info);
 PG_EXTERN int	smgrcommit(void);
 PG_EXTERN int	smgrabort(void);
 
-PG_EXTERN int   smgrbeginlog();
+PG_EXTERN int   smgrbeginlog(void);
 PG_EXTERN int   smgrlog(int which, char *dbname, char *relname,
 	Oid dbid, Oid relid, BlockNumber blocknum, char relkind, char* buffer);
-PG_EXTERN int   smgrcommitlog();
+PG_EXTERN int   smgrcommitlog(void);
 
-PG_EXTERN int   smgrexpirelogs();
-PG_EXTERN int   smgrreplaylogs();
+PG_EXTERN int   smgrexpirelogs(void);
+PG_EXTERN int   smgrreplaylogs(void);
 
-PG_EXTERN void smgrcompleterecovery();
+PG_EXTERN void smgrcompleterecovery(void);
 PG_EXTERN List* smgrgetrecoveredlist(Oid dbid);
 PG_EXTERN List* smgrdbrecoverylist(void);
 PG_EXTERN char* smgrdbrecoveryname(Oid dbid);

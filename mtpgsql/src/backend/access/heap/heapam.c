@@ -230,7 +230,7 @@ heap_open(Oid relationId, LOCKMODE lockmode)
 	r = RelationIdGetRelation(relationId,DEFAULTDBOID);
 
 	if (!RelationIsValid(r))
-		elog(ERROR, "Relation %u does not exist", relationId);
+		elog(ERROR, "Relation %lu does not exist", relationId);
 
 	/* Under no circumstances will we return an index as a relation. */
 	if (r->rd_rel->relkind == RELKIND_INDEX)

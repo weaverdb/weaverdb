@@ -16,7 +16,7 @@
 
 static SectionId parser_id = SECTIONID("PARS");
 
-static ParserInfo* InitializeParser();
+static ParserInfo* InitializeParser(void);
 
 #ifdef TLS
 TLS  ParserInfo* parser_info = NULL;

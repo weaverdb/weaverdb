@@ -107,7 +107,7 @@ static int NSmgr = lengthof(smgrsw);
 static List* recovered;
 static MemoryContext recovery_cxt;
 
-static void smgrbeginrecovery();
+static void smgrbeginrecovery(void);
 
 /*
  *	smgrinit(), smgrshutdown() -- Initialize or shut down all storage
@@ -141,6 +141,8 @@ smgrshutdown(void) {
                 elog(FATAL, "shutdown failed on %s", smgrout(i));
         }
     }
+
+    return i;
 }
 
 SmgrInfo
@@ -336,7 +338,7 @@ smgrmarkdirty(SmgrInfo info, BlockNumber blkno) {
     status = (*(smgrsw[info->which].smgr_markdirty)) (info, blkno);
 
     if (status == SM_FAIL)
-        elog(NOTICE, "cannot mark block %ld of %s",
+        elog(NOTICE, "cannot mark block %ld of %s:%s",
             blkno, NameStr(info->relname), NameStr(info->dbname));
 
     return status;
@@ -419,11 +421,11 @@ smgrsync(SmgrInfo info) {
             elog(NOTICE, "cannot sync %s-%s",
                 NameStr(info->relname), NameStr(info->dbname));
     }
-
+    return 0;
 }
 
 int
-smgrbeginlog() {
+smgrbeginlog(void) {
     int i;
 
     for (i = 0; i < NSmgr; i++) {
@@ -450,7 +452,7 @@ smgrlog(int which, char *dbname, char *relname,
 
     if (smgrsw[which].smgr_log) {
         if ((*(smgrsw[which].smgr_log)) (&data, number, buffer) == SM_FAIL)
-            elog(FATAL, "log failed on %s for %s-%s block number: %d", smgrout(which), NameStr(data.relname),
+            elog(FATAL, "log failed on %s for %s-%s block number: %ld", smgrout(which), NameStr(data.relname),
                 NameStr(data.dbname), number);
     }
 
@@ -514,7 +516,6 @@ int smgraddrecoveredpage(char* dbname, Oid dbid, Oid relid, BlockNumber block) {
 }
 
 List* smgrgetrecoveredlist(Oid dbid) {
-    RecoveredPage* page = NULL;
     List* item;
     List* specific = NULL;
 
@@ -550,7 +551,6 @@ void smgrcompleterecovery() {
 }
 
 List* smgrdbrecoverylist() {
-    RecoveredPage* page = NULL;
     List* item;
     List* specific = NULL;
 
@@ -575,13 +575,9 @@ List* smgrdbrecoverylist() {
 }
 
 char* smgrdbrecoveryname(Oid dbid) {
-    RecoveredPage* page = NULL;
     List* item;
-    List* specific = NULL;
 
     if (recovered == NULL) return NULL;
-
-    SmgrGlobals* global = GetSmgrGlobals();
 
     foreach(item, recovered) {
         RecoveredPage* page = lfirst(item);

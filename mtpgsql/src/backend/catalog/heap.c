@@ -294,7 +294,7 @@ heap_create(char *relname,
 		snprintf(relname, NAMEDATALEN, "pg_temp.%d.%u", MyProcPid, uniqueId++);
 	}
         
-	elog(DEBUG,"creating relation:%s-%s with id:%d",relname,GetDatabaseName(),relid);
+	elog(DEBUG,"creating relation:%s-%s with id:%ld",relname,GetDatabaseName(),relid);
 	/* ----------------
 	 *	allocate a new relation descriptor.
 	 * ----------------
@@ -1007,7 +1007,7 @@ RelationRemoveInheritance(Relation relation, bool schemadelete)
                 Oid  subclass = ((Form_pg_inherits) GETSTRUCT(tuple))->inhrelid;
                 heap_endscan(scan);
                 heap_close(catalogRelation, RowExclusiveLock);
-                elog(ERROR, "Relation '%u' inherits '%s'",
+                elog(ERROR, "Relation '%lu' inherits '%s'",
                          subclass, RelationGetRelationName(relation));
             }
         }
@@ -1479,7 +1479,7 @@ DeleteTypeTuple(Relation rel)
 		heap_endscan(pg_type_scan);
 		heap_close(pg_type_desc, RowExclusiveLock);
 
-		elog(ERROR, "DeleteTypeTuple: att of type %s exists in relation %u",
+		elog(ERROR, "DeleteTypeTuple: att of type %s exists in relation %lu",
 			 RelationGetRelationName(rel), relid);
 	}
 	heap_endscan(pg_attribute_scan);
@@ -1841,7 +1841,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum, char *adbin,
 								 ObjectIdGetDatum(RelationGetRelid(rel)),
 									 (Datum) attnum, 0, 0);
 	if (!HeapTupleIsValid(atttup))
-		elog(ERROR, "cache lookup of attribute %d in relation %u failed",
+		elog(ERROR, "cache lookup of attribute %d in relation %lu failed",
 			 attnum, RelationGetRelid(rel));
 	attStruct = (Form_pg_attribute) GETSTRUCT(atttup);
 	if (!attStruct->atthasdef)
@@ -2191,7 +2191,7 @@ AddRelationRawConstraints(Relation rel,
 								 ObjectIdGetDatum(RelationGetRelid(rel)),
 									 0, 0, 0);
 	if (!HeapTupleIsValid(reltup))
-		elog(ERROR, "cache lookup of relation %u failed", RelationGetRelid(rel));
+		elog(ERROR, "cache lookup of relation %lu failed", RelationGetRelid(rel));
 	relStruct = (Form_pg_class) GETSTRUCT(reltup);
 
 	relStruct->relchecks = numchecks;
@@ -2251,7 +2251,7 @@ AddRelationStorageDirectives(Relation rel, List *rawConstraints)
 		
                 reltup = SearchSysCacheTupleCopy(RELNAME,
                             PointerGetDatum(cdef->name),
-                            NULL,NULL,NULL);
+                            PointerGetDatum(NULL),PointerGetDatum(NULL),PointerGetDatum(NULL));
                 
                 if ( reltup == NULL ) {
                     elog(ERROR, "External storage relation does not exist");
@@ -2264,7 +2264,7 @@ AddRelationStorageDirectives(Relation rel, List *rawConstraints)
                 
                 atttup = SearchSysCacheTupleCopy(ATTNAME,
                             ObjectIdGetDatum(RelationGetRelid(rel)),
-                            PointerGetDatum(cdef->cooked_expr),NULL,NULL);
+                            PointerGetDatum(cdef->cooked_expr),PointerGetDatum(NULL),PointerGetDatum(NULL));
                 
                 attdata = (Form_pg_attribute)GETSTRUCT(atttup);
                 reldata = (Form_pg_class)GETSTRUCT(reltup);

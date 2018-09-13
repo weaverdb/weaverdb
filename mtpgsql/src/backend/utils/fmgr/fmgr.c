@@ -26,7 +26,7 @@
 #include "utils/syscache.h"
 #include "utils/java.h"
 #include "utils/relcache.h"
-
+#ifdef UNUSED
 /*
  * Interface for PL functions
  *
@@ -38,10 +38,9 @@ FmgrInfo        *fmgr_pl_finfo;
 static char *
 fmgr_pl(char *arg0,...)
 {
-        elog(ERROR,"procedural language functions not implemented");
-
+    elog(ERROR,"procedural language functions not implemented");
+	return NULL;
 }
-
 
 /*
  * Interface for untrusted functions
@@ -58,6 +57,7 @@ fmgr_untrusted(char *arg0,...)
 	elog(ERROR, "Untrusted functions not supported.");
 	return NULL;				/* keep compiler happy */
 }
+#endif
 
 
 /*
@@ -489,7 +489,7 @@ fmgr_c(FmgrInfo *finfo,
 			break;
 #endif
 		default:
-			elog(ERROR, "fmgr_c: function %u: too many arguments (%d > %d)",
+			elog(ERROR, "fmgr_c: function %lu: too many arguments (%d > %d)",
 				 finfo->fn_oid, n_arguments, FUNC_MAX_ARGS);
 			break;
 	}
@@ -530,7 +530,7 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
                                                              0, 0, 0);
 		if (!HeapTupleIsValid(procedureTuple))
 		{
-			elog(ERROR, "fmgr_info: function %u: cache lookup failed",
+			elog(ERROR, "fmgr_info: function %lu: cache lookup failed",
 				 procedureId);
 		}
 		procedureStruct = (FormData_pg_proc *) GETSTRUCT(procedureTuple);
@@ -589,7 +589,7 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
                                 }
 				break;
 			default:
-					elog(ERROR, "fmgr_info: %s %u",
+					elog(ERROR, "fmgr_info: %s %lu",
 						 "Cache lookup for language failed",
 						 DatumGetObjectId(procedureStruct->prolang));
 				break;
@@ -623,7 +623,7 @@ fmgr(Oid procedureId,...)
 	pronargs = finfo.fn_nargs;
 
 	if (pronargs > FUNC_MAX_ARGS)
-		elog(ERROR, "fmgr: function %u: too many arguments (%d > %d)",
+		elog(ERROR, "fmgr: function %lu: too many arguments (%d > %d)",
 			 procedureId, pronargs, FUNC_MAX_ARGS);
 
         if ( language == JAVAlanguageId ) {

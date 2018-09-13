@@ -77,8 +77,7 @@ static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf);
 static void SetTailBuffer(BufferDesc* buf);
 static BufferDesc* GetHead(Relation rel);
 static void SetHead(BufferDesc* buf);
-static long InitiateFlush();
-static void FlushCallback();
+static long InitiateFlush(void);
 static int buffer_wait = 400;
 static float addscale = .10;
 
@@ -272,12 +271,6 @@ static long InitiateFlush() {
     return GetFlushTime();
 }
 
-static void
-FlushCallback() {
-
-
-}
-
 static BufferDesc* RemoveNearestNeighbor(BufferDesc *bf) {
     /*  already holding a lock on the passed in buffer */
     BufferDesc* next = NULL;
@@ -326,6 +319,8 @@ int BiasPinned(BufferDesc* buf) {
     buf->bias++;
     
     pthread_mutex_unlock(&buf->cntx_lock.guard);
+
+    return buf->bias;
 }
 
 

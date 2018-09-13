@@ -148,7 +148,7 @@ PG_EXTERN void InitThreadBuffer(void);
 
 PG_EXTERN void ResetBufferPool(bool isCommit);
 PG_EXTERN int	BufferPoolCheckLeak(void);
-PG_EXTERN int BufferPoolCountHolds();
+PG_EXTERN int BufferPoolCountHolds(void);
 
 PG_EXTERN BlockNumber BufferGetBlockNumber(Buffer buffer);
 /*
@@ -185,7 +185,7 @@ PG_EXTERN Block BufferGetBlock(Buffer buffer);
 
 PG_EXTERN void IncrBufferRefCount(Relation rel, Buffer buffer);
 PG_EXTERN bool CheckBufferId(BufferDesc* buf, BlockNumber block, Oid relid, Oid dbid);
-PG_EXTERN BufferCxt GetBufferCxt();
+PG_EXTERN BufferCxt GetBufferCxt(void);
 
 
  #ifdef __cplusplus

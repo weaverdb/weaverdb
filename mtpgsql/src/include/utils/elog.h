@@ -26,15 +26,14 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#ifndef __GNUC__
 PG_EXTERN void coded_elog(int lev, int code, const char *fmt,...);
-PG_EXTERN void elog(int lev, const char *fmt,...);
 PG_EXTERN int my_system(const char* cmd);
+#ifndef __GNUC__
+PG_EXTERN void elog(int lev, const char *fmt,...);
 #else
 /* This extension allows gcc to check the format string for consistency with
    the supplied arguments. */
 PG_EXTERN void elog(int lev, const char *fmt,...) __attribute__((format(printf, 2, 3)));
-
 #endif
 
 #ifndef PG_STANDALONE

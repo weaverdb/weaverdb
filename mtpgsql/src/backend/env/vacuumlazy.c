@@ -2167,7 +2167,7 @@ vac_update_relstats(Oid relid, BlockNumber num_pages, TupleCount num_tuples,
 				       ObjectIdGetDatum(relid),
 				       0, 0, 0);
 	if (!HeapTupleIsValid(ctup))
-		elog(ERROR, "pg_class entry for relid %u vanished during vacuuming",
+		elog(ERROR, "pg_class entry for relid %lu vanished during vacuuming",
 		     relid);
 
 	/* get the buffer cache tuple */

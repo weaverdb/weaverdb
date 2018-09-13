@@ -374,6 +374,7 @@ btbuild(Relation heap, Relation index, int natts,
     /*	
             elog(DEBUG,"b-tree rebuild %s heap tuples:%ld index tuples:%ld",RelationGetRelationName(index),reltuples,buildstate.indtuples);
      **/
+    return PointerGetDatum(NULL);
 }
 
 /*
@@ -559,6 +560,7 @@ btrescan(IndexScanDesc scan, bool fromEnd, ScanKey scankey) {
                 scankey,
                 so->numberOfKeys * sizeof (ScanKeyData));
     }
+    return PointerGetDatum(NULL);
 }
 
 void
@@ -602,6 +604,7 @@ btendscan(IndexScanDesc scan) {
         pfree(so->keyData);
 
     pfree(so);
+    return PointerGetDatum(NULL);
 
 }
 
@@ -630,6 +633,7 @@ btmarkpos(IndexScanDesc scan) {
         scan->currentMarkData = scan->currentItemData;
         so->mrkHeapIptr = so->curHeapIptr;
     }
+    return PointerGetDatum(NULL);
 }
 
 /*
@@ -657,6 +661,7 @@ btrestrpos(IndexScanDesc scan) {
         scan->currentItemData = scan->currentMarkData;
         so->curHeapIptr = so->mrkHeapIptr;
     }
+    return PointerGetDatum(NULL);
 }
 
 Datum
@@ -668,7 +673,7 @@ btdelete(Relation rel, ItemPointer tid) {
     /* delete the data from the page */
     _bt_pagedel(rel, tid);
 #endif
-    return NULL;
+    return PointerGetDatum(NULL);
 }
 
 Datum
@@ -718,7 +723,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
 
     if ( !_bt_empty(page) ) {
         if (P_ISLEAF(opaque) && IsInitProcessingMode()) {
-            HeapTuple heap = SearchSysCacheTuple(INDEXRELID, ObjectIdGetDatum(rel->rd_id), NULL, NULL, NULL);
+            HeapTuple heap = SearchSysCacheTuple(INDEXRELID, ObjectIdGetDatum(rel->rd_id), PointerGetDatum(NULL), PointerGetDatum(NULL), PointerGetDatum(NULL));
             Oid heapid = SysCacheGetAttr(INDEXRELID, heap, Anum_pg_index_indrelid, NULL);
             Relation heaprel = RelationIdGetRelation(heapid, DEFAULTDBOID);
             OffsetNumber current;
@@ -751,7 +756,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
                 if (deleteit) {
                     LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
                     PageIndexTupleDelete(page, current);
-                    elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %d offset: %d", block, current);
+                    elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
                     current = OffsetNumberPrev(current);
                     changed = true;
                     LockBuffer(rel,buffer,BUFFER_LOCK_NOTCRITICAL);

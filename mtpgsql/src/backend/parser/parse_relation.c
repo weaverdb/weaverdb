@@ -280,7 +280,7 @@ addRangeTableEntry(ParseState *pstate,
 
 	eref = copyObject(ref);
 	if (maxattrs < length(eref->attrs))
-		elog(ERROR, "Table '%s' has %d columns available but %d columns specified",
+		elog(ERROR, "Table '%s' has %d columns available but %ld columns specified",
 			 relname, maxattrs, length(eref->attrs));
 
 	/* fill in any unspecified alias columns */

@@ -194,8 +194,8 @@ BACKSLASH_C= \\\\c
 CC= cc
 CPP= CC
 YFLAGS= -y -d
-YACC=/usr/local/bin/bison
-LEX= /usr/local/bin/flex
+YACC=bison
+LEX= flex
 CFLAGS= -I$(SRCDIR)/include -I$(SRCDIR)/backend 
 CFLAGS_SL= -dynamic
 PGSQL_INCLUDES= 
@@ -272,7 +272,7 @@ ifneq ($(CUSTOM_COPT),)
 endif
 
 ifeq ($(CC), gcc)
-CFLAGS+= -Wall -Wmissing-prototypes -Wmissing-declarations
+CFLAGS+= -Wall -Wmissing-prototypes -Wmissing-declarations -Werror
 endif
 
 ifdef COPT

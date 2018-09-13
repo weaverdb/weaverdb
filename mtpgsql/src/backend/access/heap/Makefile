@@ -11,7 +11,7 @@
 SRCDIR = ../../..
 include ../../../Makefile.global
 
-CFLAGS += -I../.. 
+CFLAGS += -I../.. -Wno-unused-variable -Wno-unused-function
 
 OBJS = heapam.o hio.o stats.o tuptoaster.o blobstorage.o
 

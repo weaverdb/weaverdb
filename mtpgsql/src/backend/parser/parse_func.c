@@ -837,8 +837,9 @@ ParseFuncOrColumn(ParseState *pstate, char *funcname, List *fargs,
 		Const	   *seq;
 		char	   *seqrel;
 		text	   *seqname;
+#ifdef USEACL
 		int32		aclcheck_result = -1;
-
+#endif
 		Assert(nargs == ((funcid == F_SETVAL) ? 2 : 1));
 		seq = (Const *) lfirst(fargs);
 		if (!IsA((Node *) seq, Const))
@@ -1544,7 +1545,7 @@ find_inheritors(Oid relid, Oid **supervec)
 			relid = lfirsti(elt);
 			rd = heap_open(relid, NoLock);
 			if (!RelationIsValid(rd))
-				elog(ERROR, "Relid %u does not exist", relid);
+				elog(ERROR, "Relid %lu does not exist", relid);
 			trelid = typeTypeId(typenameType(RelationGetRelationName(rd)));
 			heap_close(rd, NoLock);
 			*relidvec++ = trelid;
@@ -1805,7 +1806,7 @@ ParseComplexProjection(ParseState *pstate,
 					}
 					else
 					{
-						elog(ERROR, "Function '%s' has bad return type %d",
+						elog(ERROR, "Function '%s' has bad return type %ld",
 							 funcname, argtype);
 					}
 				}

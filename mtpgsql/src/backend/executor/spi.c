@@ -76,7 +76,6 @@ static bool _SPI_checktuples(void);
 int
 SPI_connect(void)
 {
-    SPIInfo*	external = SPI_GetInfo();
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	_SPI_connection *new_SPI_stack;
 
@@ -139,7 +138,6 @@ SPI_connect(void)
 int
 SPI_finish(void)
 {
-    SPIInfo*	external = SPI_GetInfo();
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	int			res;
 
@@ -226,8 +224,6 @@ SPI_pop(void)
 int
 SPI_exec(char *src, int tcount)
 {
-    SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	int			res;
 
 	if (src == NULL || tcount < 0)
@@ -246,8 +242,6 @@ SPI_exec(char *src, int tcount)
 int
 SPI_execp(void *plan, Datum *Values, char *Nulls, int tcount)
 {
-    SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	int			res;
 
 	if (plan == NULL || tcount < 0)
@@ -273,7 +267,6 @@ void *
 SPI_prepare(char *src, int nargs, Oid *argtypes)
 {
     SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	_SPI_plan  *plan;
 
 	if (src == NULL || nargs < 0 || (nargs > 0 && argtypes == NULL))
@@ -332,8 +325,6 @@ SPI_saveplan(void *plan)
 int
 SPI_freeplan(void *plan)
 {
-    SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	_SPI_plan  *spiplan = (_SPI_plan *) plan;
 
 	if (plan == NULL)
@@ -408,8 +399,6 @@ SPI_copytupleintoslot(HeapTuple tuple, TupleDesc tupdesc)
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	MemoryContext oldcxt = NULL;
 	TupleTableSlot *cslot;
-	HeapTuple	ctuple;
-	TupleDesc	ctupdesc;
 
 	if (tuple == NULL || tupdesc == NULL)
 	{
@@ -511,8 +500,6 @@ SPI_modifytuple(Relation rel, HeapTuple tuple, int natts, int *attnum,
 int
 SPI_fnumber(TupleDesc tupdesc, char *fname)
 {
-    SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	int			res;
 	Form_pg_attribute sysatt;
 
@@ -534,7 +521,6 @@ char *
 SPI_fname(TupleDesc tupdesc, int fnumber)
 {
     SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	Form_pg_attribute att;
 
 	external->SPI_result = 0;
@@ -558,7 +544,6 @@ char *
 SPI_getvalue(HeapTuple tuple, TupleDesc tupdesc, int fnumber)
 {
     SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	Datum		origval,
 				val,
 				result;
@@ -624,7 +609,6 @@ Datum
 SPI_getbinval(HeapTuple tuple, TupleDesc tupdesc, int fnumber, bool *isnull)
 {
     SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	external->SPI_result = 0;
 
 	if (fnumber > tuple->t_data->t_natts || fnumber == 0 ||
@@ -645,7 +629,6 @@ SPI_gettype(TupleDesc tupdesc, int fnumber)
 	HeapTuple	typeTuple;
 	char	   *result;
     SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 
 	external->SPI_result = 0;
 
@@ -680,7 +663,6 @@ Oid
 SPI_gettypeid(TupleDesc tupdesc, int fnumber)
 {
     SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
 	external->SPI_result = 0;
 
 	if (fnumber > tupdesc->natts || fnumber == 0 ||
@@ -705,7 +687,6 @@ SPI_getrelname(Relation rel)
 void *
 SPI_palloc(Size size)
 {
-    SPIInfo*	external = SPI_GetInfo();
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	MemoryContext oldcxt = NULL;
 	void	   *pointer;
@@ -956,7 +937,6 @@ SPI_cursor_close(Portal portal)
 void
 spi_printtup(HeapTuple tuple, TupleDesc tupdesc, DestReceiver *self)
 {
-    SPIInfo*	external = SPI_GetInfo();
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	SPITupleTable *tuptable;
 	MemoryContext oldcxt;
@@ -1203,10 +1183,7 @@ _SPI_pquery(QueryDesc *queryDesc, EState *state, int tcount)
 	Query	   *parseTree = queryDesc->parsetree;
 	int			operation = queryDesc->operation;
 	CommandDest dest = queryDesc->dest;
-	TupleDesc	tupdesc;
 	bool		isRetrieveIntoPortal = false;
-	bool		isRetrieveIntoRelation = false;
-	char	   *intoName = NULL;
 	int			res;
 	Oid			save_lastoid;
 
@@ -1217,7 +1194,6 @@ _SPI_pquery(QueryDesc *queryDesc, EState *state, int tcount)
 			if (parseTree->isPortal)
 			{
 				isRetrieveIntoPortal = true;
-				intoName = parseTree->into;
 				parseTree->isBinary = false;	/* */
 
 				return SPI_ERROR_CURSOR;
@@ -1226,7 +1202,6 @@ _SPI_pquery(QueryDesc *queryDesc, EState *state, int tcount)
 			else if (parseTree->into != NULL)	/* select into table */
 			{
 				res = SPI_OK_SELINTO;
-				isRetrieveIntoRelation = true;
 				queryDesc->dest = None; /* */
 			}
 			break;
@@ -1250,7 +1225,7 @@ _SPI_pquery(QueryDesc *queryDesc, EState *state, int tcount)
 	if (ShowExecutorStats)
 		ResetUsage();
 #endif
-	tupdesc = ExecutorStart(queryDesc, state);
+	ExecutorStart(queryDesc, state);
 
 	/*
 	 * Don't work currently --- need to rearrange callers so that we
@@ -1408,8 +1383,7 @@ _SPI_procmem()
 static int
 _SPI_begin_call(bool execmem)
 {
-    SPIInfo*	external = SPI_GetInfo();
-    InternalSPIInfo*  internal = GetInternalSPIInfo();
+	InternalSPIInfo*  internal = GetInternalSPIInfo();
 	if (internal->_SPI_curid + 1 != internal->_SPI_connected)
 		return SPI_ERROR_UNCONNECTED;
 	internal->_SPI_curid++;
@@ -1425,7 +1399,6 @@ _SPI_begin_call(bool execmem)
 static int
 _SPI_end_call(bool procmem)
 {
-    SPIInfo*	external = SPI_GetInfo();
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	/*
 	 * We' returning to procedure where internal->_SPI_curid == internal->_SPI_connected - 1
@@ -1447,7 +1420,6 @@ _SPI_end_call(bool procmem)
 static bool
 _SPI_checktuples(void)
 {
-    SPIInfo*	external = SPI_GetInfo();
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	uint32		processed = internal->_SPI_current->processed;
 	SPITupleTable *tuptable = internal->_SPI_current->tuptable;
@@ -1473,7 +1445,6 @@ _SPI_checktuples(void)
 static _SPI_plan *
 _SPI_copy_plan(_SPI_plan *plan, int location)
 {
-    SPIInfo*	external = SPI_GetInfo();
     InternalSPIInfo*  internal = GetInternalSPIInfo();
 	_SPI_plan  *newplan;
 	MemoryContext oldcxt;
@@ -1648,7 +1619,7 @@ getTypeOutputInfo(Oid type, Oid *typOutput, Oid *typElem,
 							   ObjectIdGetDatum(type),
 							   0, 0, 0);
 	if (!HeapTupleIsValid(typeTuple))
-		elog(ERROR, "getTypeOutputInfo: Cache lookup of type %u failed", type);
+		elog(ERROR, "getTypeOutputInfo: Cache lookup of type %lu failed", type);
 	pt = (Form_pg_type) GETSTRUCT(typeTuple);
 
 	*typOutput = pt->typoutput;

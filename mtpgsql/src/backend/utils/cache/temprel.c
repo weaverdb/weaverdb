@@ -144,7 +144,6 @@ void
 remove_temp_relation(Oid relid)
 {
 
-	MemoryContext oldcxt;
 	List	   *l,
 			   *prev;
 	TempGlobals* temps = GetTempGlobals();
@@ -187,7 +186,6 @@ remove_temp_relation(Oid relid)
 void
 invalidate_temp_relations(void)
 {
-	MemoryContext oldcxt;
 	List	   *l,
 			   *prev;
 	TempGlobals* temps = GetTempGlobals();

@@ -28,7 +28,7 @@ PG_EXTERN Oid	param_type(int t);
 PG_EXTERN Oid	param_type_name(char* t);
 PG_EXTERN void parser_init(char* stmt, Oid *typev, char** names, int nargs);
 PG_EXTERN int	parser_parse(List** parsetree);
-PG_EXTERN void parser_destroy();
+PG_EXTERN void parser_destroy(void);
 
 #ifdef __cplusplus
 }

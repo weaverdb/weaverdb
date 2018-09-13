@@ -325,7 +325,7 @@ ExecAllocTableSlot(TupleTable table)
 }
 
 TupleTableSlot *
-ExecCreateTableSlot(TupleTable table) {
+ExecCreateTableSlot() {
         TupleTableSlot* slot = makeNode(TupleTableSlot);
 
 	slot->val = (HeapTuple) NULL;

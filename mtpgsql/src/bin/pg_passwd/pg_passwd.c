@@ -295,7 +295,7 @@ prompt_for_password(char *prompt, char *password)
 
 #endif
 
-	printf(prompt);
+	printf("%s",prompt);
 #ifdef HAVE_TERMIOS_H
 	tcgetattr(0, &t);
 	t_orig = t;

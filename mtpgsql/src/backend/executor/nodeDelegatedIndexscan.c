@@ -57,7 +57,6 @@ DelegatedIndexNext(DelegatedIndexScan *node)
 {
 	CommonScanState *   scanstate;
 	EState	   *        estate;
-	ScanDirection       direction;
 	TupleTableSlot *    slot;
         Scan*               scan = &node->scan;
         bool                valid = true;
@@ -455,14 +454,11 @@ bool
 ExecInitDelegatedIndexScan(DelegatedIndexScan *node, EState *estate)
 {
 	CommonScanState *       scanstate;
-	ScanKey                 scankey;
-        int                     n_keys;
 	List	   *            rangeTable;
 	RangeTblEntry *         rtentry;
 	Index                   relid;
 	Oid                     reloid;
 
-	ScanDirection           direction;
 	int			baseid;
         IndexScanArgs*          scanargs;
 
@@ -562,7 +558,7 @@ ExecInitDelegatedIndexScan(DelegatedIndexScan *node, EState *estate)
         scanargs->heap = reloid;
 
 	if (!RelationGetForm(scanstate->css_currentRelation)->relhasindex)
-		elog(ERROR, "indexes of the relation %u was inactivated", reloid);
+		elog(ERROR, "indexes of the relation %lu was inactivated", reloid);
 
 	/* ----------------
 	 *	get the scan type from the relation descriptor.
@@ -581,9 +577,7 @@ ExecInitDelegatedIndexScan(DelegatedIndexScan *node, EState *estate)
 static void* 
 DolIndexDelegation(Delegate arg) {
     BufferTrigger       trigger;
-    int min = 8;
     int TransferMax = DelegatedGetTransferMax();
-    BlockNumber blk = InvalidBlockNumber;
 
     IndexScanArgs* scan_args = (IndexScanArgs*)DelegatedScanArgs(arg);
     

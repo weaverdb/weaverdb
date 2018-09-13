@@ -11,7 +11,7 @@
 SRCDIR = ../..
 include ../../Makefile.global
 
-CFLAGS += -I..
+CFLAGS += -I.. -Wno-unused-but-set-variable -Wno-unused-variable
 
 OBJS = async.o creatinh.o command.o comment.o copy.o indexcmds.o define.o \
        remove.o rename.o  view.o cluster.o \

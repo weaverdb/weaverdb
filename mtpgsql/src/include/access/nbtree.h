@@ -262,6 +262,7 @@ PG_EXTERN Datum btbuild(Relation heap,Relation index, int natts,
 		AttrNumber *attnum, IndexStrategy istrat, uint16 pcount,
 		Datum *params, FuncIndexInfo *finfo, PredInfo *predInfo);
 PG_EXTERN bool btgettuple(IndexScanDesc s, ScanDirection dir);
+PG_EXTERN Datum btinsert(Relation, Datum*, char*, ItemPointer, Relation, bool );
 PG_EXTERN Datum btbeginscan(Relation r, bool fromEnd, uint16 nkeys, ScanKey key);
 PG_EXTERN Datum btrecoverpage(Relation r, BlockNumber block);
 PG_EXTERN Datum btrescan(IndexScanDesc s, bool fromEnd, ScanKey key);

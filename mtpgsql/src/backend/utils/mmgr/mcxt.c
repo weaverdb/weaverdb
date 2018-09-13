@@ -351,7 +351,7 @@ MemoryContextCreate(NodeTag tag, Size size,
     } else {
         /* Special case for startup: use good ol' malloc */
         node = (MemoryContext) os_malloc(needed);
-        if (node == NULL) elog(FATAL, "cannot create memory context", 747);
+        if (node == NULL) elog(FATAL, "cannot create memory context code: %d", 747);
         Assert(node != NULL);
     }
 

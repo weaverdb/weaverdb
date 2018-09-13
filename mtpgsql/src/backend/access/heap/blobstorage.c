@@ -684,7 +684,7 @@ Datum seek_blob(Relation rel, Datum blob, Datum index, uint32 seek) {
         uint32 pos        = 0;
         int loc         = 0;
         BlobIndex*      segs = (BlobIndex*)VARDATA(index);
-        Datum ret = NULL;
+        Datum ret = PointerGetDatum(NULL);
 
 	LockRelation(rel, AccessShareLock);
 

@@ -66,7 +66,6 @@ static TupleTableSlot *
 ExecGroupEveryTuple(Group *node)
 {
 	GroupState *grpstate;
-	EState	   *estate;
 	ExprContext *econtext;
 	TupleDesc	tupdesc;
 
@@ -85,8 +84,6 @@ ExecGroupEveryTuple(Group *node)
 	grpstate = node->grpstate;
 	if (grpstate->grp_done)
 		return NULL;
-
-	estate = node->plan.state;
 
 	econtext = grpstate->csstate.cstate.cs_ExprContext;
 
@@ -178,7 +175,6 @@ static TupleTableSlot *
 ExecGroupOneTuple(Group *node)
 {
 	GroupState *grpstate;
-	EState	   *estate;
 	ExprContext *econtext;
 	TupleDesc	tupdesc;
 
@@ -197,9 +193,7 @@ ExecGroupOneTuple(Group *node)
 	grpstate = node->grpstate;
 	if (grpstate->grp_done)
 		return NULL;
-
-	estate = node->plan.state;
-
+		
 	econtext = node->grpstate->csstate.cstate.cs_ExprContext;
 
 	tupdesc = ExecGetScanType(&grpstate->csstate);

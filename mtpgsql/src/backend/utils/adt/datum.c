@@ -59,7 +59,7 @@ datumGetSize(Datum value, Oid type, bool byVal, Size len)
 		else
 		{
 			elog(ERROR,
-				 "datumGetSize: Error: type=%ld, byVaL with len=%d",
+				 "datumGetSize: Error: type=%ld, byVaL with len=%ld",
 				 (long) type, len);
 		}
 	}

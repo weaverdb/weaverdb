@@ -68,7 +68,7 @@ static LOCKMASK LockConflicts[] = {
 
 
 static int	LockPrios[] = {
-	(int) NULL,
+	0,
 	1,
 	2,
 	3,
@@ -78,7 +78,7 @@ static int	LockPrios[] = {
 	7
 };
 
-LOCKMETHOD	LongTermTableId = (LOCKMETHOD) NULL;
+LOCKMETHOD	LongTermTableId = (LOCKMETHOD) 0;
 
 LOCKMETHOD*      PartitionedTables;
 

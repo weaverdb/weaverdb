@@ -40,7 +40,6 @@ DelegatedSeqNext(DelegatedSeqScan *node)
 {
 	CommonScanState *   scanstate;
 	EState	   *        estate;
-	ScanDirection       direction;
 	TupleTableSlot *    slot;
         Scan*               scan = &node->scan;
         bool                valid = true;
@@ -135,7 +134,6 @@ InitScanRelation(SeqScan *node, EState *estate,CommonScanState* scanstate,
 	List	   *rangeTable;
 	RangeTblEntry *rtentry;
 	Oid			reloid;
-	Relation	currentRelation;
 
 	if (outerPlan == NULL)
 	{
@@ -343,9 +341,7 @@ ExecDelegatedSeqReScan(DelegatedSeqScan *dnode, ExprContext *exprCtxt)
 	EState	   *estate;
 	Plan	   *outerPlan;
 	Relation	rel;
-	HeapScanDesc scan;
-	ScanDirection direction;
-        SeqScan* node = &dnode->scan;
+	SeqScan* node = &dnode->scan;
 
 	scanstate = node->scanstate;
 	estate = node->plan.state;
@@ -368,8 +364,6 @@ ExecDelegatedSeqReScan(DelegatedSeqScan *dnode, ExprContext *exprCtxt)
 			return;
 		}
 		rel = scanstate->css_currentRelation;
-		scan = scanstate->css_currentScanDesc;
-		direction = estate->es_direction;
 		
 		scanstate->css_currentScanDesc = NULL;
 /*  free scan args */
@@ -390,7 +384,6 @@ DolHeapDelegation(Delegate arg) {
     BlockNumber blk = InvalidBlockNumber;
     int TransferMax = DelegatedGetTransferMax();
     int buf_count = 0;
-    int start_blk = 0;
     BufferTrigger       trigger;
 
 
@@ -439,7 +432,6 @@ DolHeapDelegation(Delegate arg) {
 
             scan_args->counter = 0;
             buf_count = 0;
-            start_blk = blk;
         }
     }
 

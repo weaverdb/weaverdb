@@ -585,7 +585,7 @@ CacheIdInvalidate(Index cacheId,
 	 */
 	if (!processed) elog(FATAL, "CacheIdInvalidate: cacheId=%d relation id?", cacheId);
 }
-
+#ifdef UNUSED
 /* --------------------------------
  *		ResetSystemCaches
  *
@@ -602,7 +602,7 @@ ResetSystemCaches()
  	*/
  	RelationCacheInvalidate();
 }
-
+#endif
 /* --------------------------------
  *		InvalidationMessageRegisterSharedInvalid
  * --------------------------------

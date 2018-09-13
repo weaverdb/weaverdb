@@ -78,8 +78,8 @@ PG_EXTERN int	FileUnpin(File file,int key);
 PG_EXTERN void FileMarkDirty(File file);
 
 /*  added to explicitly innitialize file system, before done in allocateVFD */
-PG_EXTERN void InitVirtualFileSystem();
-PG_EXTERN void ShutdownVirtualFileSystem();
+PG_EXTERN void InitVirtualFileSystem(void);
+PG_EXTERN void ShutdownVirtualFileSystem(void);
 
 /* Operations that allow use of regular stdio --- USE WITH CAUTION */
 PG_EXTERN FILE *AllocateFile(char *name, char *mode);

@@ -2011,6 +2011,7 @@ show_delegated_indexbuild()
 {
 	elog(NOTICE, "Delegated index build is %s",
 		 GetIndexGlobals()->DelegatedIndexBuild ? "ON" : "OFF");
+	return TRUE;
 }
 
 static bool
@@ -2033,6 +2034,7 @@ show_fast_indexbuild()
 {
 	elog(NOTICE, "Fast index build is %s",
 		 GetIndexGlobals()->FastIndexBuild ? "ON" : "OFF");
+	return TRUE;
 }
 
 static bool
@@ -2047,26 +2049,27 @@ static bool
 parse_extent(char *value)
 {
 	char* rel = strchr(value,' ');
-        char* amt = rel + 1;
-        char* percent = strchr(value,'%');
-        int size = 0;
-        Relation relation = NULL;
-        
-        bool isp = ( percent != NULL );
-        *rel = 0x00;
-        if ( isp ) *percent = 0x00;
+	char* amt = rel + 1;
+	char* percent = strchr(value,'%');
+	int size = 0;
+	Relation relation = NULL;
+	
+	bool isp = ( percent != NULL );
+	*rel = 0x00;
+	if ( isp ) *percent = 0x00;
 
-        relation = RelationNameGetRelation(value,DEFAULTDBOID);
-        if ( IsSystemRelationName(value) ) {
-            elog(ERROR,"Extents cannot be set for system relations",RelationGetRelationName(relation),GetDatabaseName());
-        }
-        if ( !RelationIsValid(relation) ) {
-            elog(ERROR,"Relation is not valid %s-%s",RelationGetRelationName(relation),GetDatabaseName());
-        }
+	relation = RelationNameGetRelation(value,DEFAULTDBOID);
+	if ( IsSystemRelationName(value) ) {
+		elog(ERROR,"Extents cannot be set for system relations %s-%s",RelationGetRelationName(relation),GetDatabaseName());
+	}
+	if ( !RelationIsValid(relation) ) {
+		elog(ERROR,"Relation is not valid %s-%s",RelationGetRelationName(relation),GetDatabaseName());
+	}
 
-        size = atoi(amt);
-        SetNextExtent(relation,size,isp);
-        RelationClose(relation);
+	size = atoi(amt);
+	SetNextExtent(relation,size,isp);
+	RelationClose(relation);
+	return TRUE;
         
 }
 

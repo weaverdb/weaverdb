@@ -250,7 +250,7 @@ const char *opt_align, bool opt_barebones, unsigned short int opt_border,
 		if (strlen(title) >= total_w)
 			fprintf(fout, "%s\n", title);
 		else
-			fprintf(fout, "%-*s%s\n", (total_w - strlen(title)) / 2, "", title);
+			fprintf(fout, "%-*s%s\n", (int)((total_w - strlen(title)) / 2), "", title);
 	}
 
 	/* print headers */
@@ -309,7 +309,7 @@ const char *opt_align, bool opt_barebones, unsigned short int opt_border,
 			if ((i + 1) % col_count == 0 && opt_border != 2)
 				fputs(cells[i], fout);
 			else
-				fprintf(fout, "%-*s", widths[i % col_count], cells[i]);
+				fprintf(fout, "%-*s", (int)widths[i % col_count], cells[i]);
 		}
 
 		/* divider */

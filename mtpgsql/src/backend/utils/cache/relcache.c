@@ -78,7 +78,9 @@ extern MemoryContext CacheCxt
  * ----------------
  */
 static FormData_pg_attribute Desc_pg_class[Natts_pg_class] = {Schema_pg_class};
+/*
 static FormData_pg_attribute Desc_pg_database[Natts_pg_database] = {Schema_pg_database};
+*/
 static FormData_pg_attribute Desc_pg_attribute[Natts_pg_attribute] = {Schema_pg_attribute};
 static FormData_pg_attribute Desc_pg_proc[Natts_pg_proc] = {Schema_pg_proc};
 static FormData_pg_attribute Desc_pg_type[Natts_pg_type] = {Schema_pg_type};
@@ -189,7 +191,6 @@ static void RelationCacheInsert(Relation RELATION) {
 } /*  while(0)  */
 
 static Relation RelationNameCacheLookup(char* NAME) {
-    Relation retrel;
     RelNameCacheEnt *hentry;
     bool found;
     RelationCacheGlobal* rglobal = GetRelationCacheGlobal();
@@ -564,7 +565,7 @@ build_tupdesc_seq(RelationBuildDescInfo buildinfo,
     }
 
     if (need > 0)
-        elog(ERROR, "catalog is missing %d attribute%s for relid %u",
+        elog(ERROR, "catalog is missing %d attribute%s for relid %lu",
             need, (need == 1 ? "" : "s"), RelationGetRelid(relation));
 
     /* ----------------
@@ -1385,7 +1386,6 @@ RelationShutdown(RelNameCacheEnt* ptr, int dummy) {
  */
 static void
 RelationClearRelation(Relation relation, bool rebuildIt) {
-    MemoryContext oldcxt = NULL;
 
     /*
      * Make sure smgr and lower levels close the relation's files, if they
@@ -1525,7 +1525,7 @@ RelationClearRelation(Relation relation, bool rebuildIt) {
         relation->rd_nblocks = 0;
 
         if (relDescChanged && old_refcnt > 0) {
-            elog(NOTICE, "RelationClearRelation: relation %u modified while in use %d",
+            elog(NOTICE, "RelationClearRelation: relation %lu modified while in use %d",
                     buildinfo.i.info_id, old_refcnt);
         }
 
@@ -1593,7 +1593,6 @@ RelationForgetRelation(Oid rid, Oid did) {
 
     if (PointerIsValid(relation)) {
         if (relation->rd_myxactonly) {
-            MemoryContext oldcxt;
             List *curr;
             List *prev = NIL;
 
@@ -1784,7 +1783,6 @@ RelationRegisterRelation(Relation relation) {
  */
 void
 RelationPurgeLocalRelation(bool xactCommitted) {
-    MemoryContext oldcxt;
     RelationCacheGlobal* rglobal = GetRelationCacheGlobal();
 
     if (rglobal->newlyCreatedRelns == NULL)

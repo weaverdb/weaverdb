@@ -3522,11 +3522,11 @@ setMaxOid(FILE *fout)
 	}
 	PQclear(res);
 	if (g_verbose)
-		fprintf(stderr, "%s maximum system oid is %u %s\n",
+		fprintf(stderr, "%s maximum system oid is %lu %s\n",
 				g_comment_start, max_oid, g_comment_end);
 	fprintf(fout, "CREATE TABLE pgdump_oid (dummy int4);\n");
 	fprintf(fout, "COPY pgdump_oid WITH OIDS FROM stdin;\n");
-	fprintf(fout, "%-d\t0\n", max_oid);
+	fprintf(fout, "%-ld\t0\n", max_oid);
 	fprintf(fout, "\\.\n");
 	fprintf(fout, "DROP TABLE pgdump_oid;\n");
 }

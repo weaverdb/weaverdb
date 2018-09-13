@@ -24,7 +24,7 @@ include ../../Makefile.global
 CFLAGS += -I..
 
 ifeq ($(CC), gcc)
-CFLAGS+= -Wno-error
+CFLAGS+= -Wno-unused-but-set-variable -Wno-unused-function
 endif
 
 BOOTYACCS= bootstrap_tokens.h bootparse.c

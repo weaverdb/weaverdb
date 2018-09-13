@@ -875,12 +875,10 @@ pg_checkretval(Oid rettype, List *queryTreeList)
 {
 	Query	   *parse;
 	List	   *tlist;
-	List	   *rt;
 	int			cmd;
 	Type		typ;
 	Resdom	   *resnode;
 	Relation	reln;
-	Oid			relid;
 	int			relnatts;
 	int			i;
 
@@ -901,7 +899,6 @@ pg_checkretval(Oid rettype, List *queryTreeList)
 
 	/* okay, it's an ordinary query */
 	tlist = parse->targetList;
-	rt = parse->rtable;
 	cmd = parse->commandType;
 
 	/*
@@ -919,7 +916,7 @@ pg_checkretval(Oid rettype, List *queryTreeList)
 
 	/* by here, the function is declared to return some type */
 	if ((typ = typeidType(rettype)) == NULL)
-		elog(ERROR, "can't find return type %u for function\n", rettype);
+		elog(ERROR, "can't find return type %lu for function\n", rettype);
 
 	/*
 	 * test 3:	if the function is declared to return a value, then the
@@ -967,7 +964,6 @@ pg_checkretval(Oid rettype, List *queryTreeList)
 	 * target list match the declared types.
 	 */
 	reln = heap_open(typeTypeRelid(typ), AccessShareLock);
-	relid = reln->rd_id;
 	relnatts = reln->rd_rel->relnatts;
 
 	if (ExecTargetListLength(tlist) != relnatts)

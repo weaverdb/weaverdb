@@ -338,6 +338,8 @@ DelegateSignal(Delegate delegate, CollectionState state) {
         case DELEGATE_SIGNALED:
             delegate->delestate = DELEGATE_SIGNALED;
             break;
+        default:
+            break;
     }
     return pthread_cond_signal(&delegate->gate);
 }
@@ -386,6 +388,8 @@ DelegateWait(Delegate delegate, CollectionState state) {
         default:
             elog(FATAL,"unknown delegate state");
     }
+
+    return 0;
 }
 
 bool

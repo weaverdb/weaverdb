@@ -97,8 +97,8 @@ PG_EXTERN bool DestroyThread(void);
 /* make static in storage/lmgr/proc.c -- jolly */
 
 PG_EXTERN void ThreadTransactionStart(TransactionId xid);
-PG_EXTERN TransactionId ThreadTransactionEnd();
-PG_EXTERN void ThreadTransactionReset();
+PG_EXTERN TransactionId ThreadTransactionEnd(void);
+PG_EXTERN void ThreadTransactionReset(void);
 
 PG_EXTERN void ThreadQueueInit(THREAD_QUEUE *queue, pthread_mutex_t* lock);
 PG_EXTERN int ThreadSleep(LOCKMETHODCTL *lockctl,LOCKMODE lockmode,LOCK *lock,HOLDER *holder);
@@ -109,12 +109,12 @@ PG_EXTERN void ThreadReleaseSpins(THREAD *proc);
 PG_EXTERN void LockWaitCancel(void); 
 PG_EXTERN void ShutdownProcess(bool master);
 
-PG_EXTERN THREAD* GetMyThread();
+PG_EXTERN THREAD* GetMyThread(void);
 
-PG_EXTERN BackendId GetMyBackendId();
+PG_EXTERN BackendId GetMyBackendId(void);
 PG_EXTERN void SetMyBackendId(BackendId in);
 
-PG_EXTERN BackendTag GetMyBackendTag();
+PG_EXTERN BackendTag GetMyBackendTag(void);
 PG_EXTERN void SetMyBackendTag(BackendTag in);
 
 

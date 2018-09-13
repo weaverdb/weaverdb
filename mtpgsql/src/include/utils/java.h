@@ -51,6 +51,8 @@ PG_EXTERN bool java_equals(bytea* obj1,bytea* obj2);
 PG_EXTERN bool java_noteq(bytea* obj1,bytea* obj2);
 PG_EXTERN bool java_gt(bytea* obj1,bytea* obj2);
 PG_EXTERN bool java_lt(bytea* obj1,bytea* obj2);
+PG_EXTERN bool java_gteq(bytea* obj1,bytea* obj2);
+PG_EXTERN bool java_lteq(bytea* obj1,bytea* obj2);
 
 PG_EXTERN int javalen(bytea* obj);
 

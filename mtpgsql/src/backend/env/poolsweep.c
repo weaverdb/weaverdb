@@ -122,8 +122,7 @@ static void* Poolsweep(void* arg);
 void
 PoolsweepInit(int priority) {
     struct sched_param sched;
-    int             sched_policy;
-    List*           item;
+
     memset(&sweeperprops, 0, sizeof(pthread_attr_t));
     memset(&sched, 0, sizeof(struct sched_param));
     /* init thread attributes  */
@@ -214,7 +213,7 @@ StartupPoolsweep(char *dbname, Oid dbid) {
     Sweeps         *next = NULL;
     char            name[256];
     /*  already holding listguard  */
-    snprintf(name,256,"SweepInstanceCxt -- dbid: %d",dbid);
+    snprintf(name,256,"SweepInstanceCxt -- dbid: %ld",dbid);
     
     if ( sweep_cxt == NULL ) {
         return NULL;
@@ -273,7 +272,6 @@ Poolsweep(void *args) {
     
     Sweeps         *tool = (Sweeps *) args;
     bool            activated = true;
-    bool            invalidate = false;
     Env*            env;
 
     env = CreateEnv(NULL);
@@ -362,7 +360,6 @@ Poolsweep(void *args) {
             } else {
                 item = tool->requests;
                 item->activejob = true;
-                invalidate = true;
                 pthread_mutex_unlock(&list_guard);
             }
             

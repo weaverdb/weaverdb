@@ -358,7 +358,7 @@ create_indexscan_node(Query *root,
 		indexTuple = SearchSysCacheTuple(INDEXRELID,ObjectIdGetDatum(lfirsti(ixid)),
 						0, 0, 0);
 		if (!HeapTupleIsValid(indexTuple))
-			elog(ERROR, "create_plan: index %u not found", lfirsti(ixid));
+			elog(ERROR, "create_plan: index %lu not found", lfirsti(ixid));
 		index = (Form_pg_index) GETSTRUCT(indexTuple);
 		if (IndexIsLossy(index))
 		{
@@ -800,7 +800,7 @@ fix_indxqual_references(List *indexquals, IndexPath *index_path)
 										 ObjectIdGetDatum(indexid),
 										 0, 0, 0);
 		if (!HeapTupleIsValid(indexTuple))
-			elog(ERROR, "fix_indxqual_references: index %u not found in pg_class",
+			elog(ERROR, "fix_indxqual_references: index %lu not found in pg_class",
 				 indexid);
 		relam = ((Form_pg_class) GETSTRUCT(indexTuple))->relam;
 
@@ -809,7 +809,7 @@ fix_indxqual_references(List *indexquals, IndexPath *index_path)
 										 ObjectIdGetDatum(indexid),
 										 0, 0, 0);
 		if (!HeapTupleIsValid(indexTuple))
-			elog(ERROR, "fix_indxqual_references: index %u not found in pg_index",
+			elog(ERROR, "fix_indxqual_references: index %lu not found in pg_index",
 				 indexid);
 		index = (Form_pg_index) GETSTRUCT(indexTuple);
 

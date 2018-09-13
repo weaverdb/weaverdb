@@ -193,7 +193,7 @@ do_lo_import(const char *filename_arg, const char *comment_arg)
 	/* insert description if given */
 	if (comment_arg)
 	{
-		sprintf(buf, "INSERT INTO pg_description VALUES (%d, '", loid);
+		sprintf(buf, "INSERT INTO pg_description VALUES (%ld, '", loid);
 		for (i = 0; i < strlen(comment_arg); i++)
 			if (comment_arg[i] == '\'')
 				strcat(buf, "\\'");
@@ -225,7 +225,7 @@ do_lo_import(const char *filename_arg, const char *comment_arg)
 	}
 
 
-	fprintf(pset.queryFout, "lo_import %d\n", loid);
+	fprintf(pset.queryFout, "lo_import %ld\n", loid);
 	sprintf(buf, "%u", (unsigned int) loid);
 	SetVariable(pset.vars, "LASTOID", buf);
 
@@ -284,7 +284,7 @@ do_lo_unlink(const char *loid_arg)
 	}
 
 	/* remove the comment as well */
-	sprintf(buf, "DELETE FROM pg_description WHERE objoid = %d", loid);
+	sprintf(buf, "DELETE FROM pg_description WHERE objoid = %ld", loid);
 	if (!(res = PSQLexec(buf)))
 	{
 		if (own_transaction)
@@ -308,7 +308,7 @@ do_lo_unlink(const char *loid_arg)
 	}
 
 
-	fprintf(pset.queryFout, "lo_unlink %d\n", loid);
+	fprintf(pset.queryFout, "lo_unlink %ld\n", loid);
 
 	return true;
 }

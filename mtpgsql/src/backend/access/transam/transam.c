@@ -227,7 +227,7 @@ TransactionLogUpdate(TransactionId transactionId,		/* trans id to update */
 					 XidStatus status)	/* new trans status */
 {
 /*	BlockNumber blockNumber;    */
-	bool		fail = false;	/* success/failure */
+
 	TransactionInfo*	trans = GetTransactionInfo();
 	
 	/* ----------------
@@ -337,7 +337,6 @@ TransRecover(Relation logrelation)
 	
 	bool		rollback = false;
 
-	int i = 0;
 	Buffer		buffer = InvalidBuffer;			/* buffer associated with block */
 	Block		block;			/* block containing xstatus */
 
@@ -350,8 +349,8 @@ TransRecover(Relation logrelation)
 	mark = lowwater;
 	
 	
-	elog(DEBUG,"xid is %llu",ctid);
-	elog(DEBUG,"low water is %llu\n",lowwater);
+	elog(DEBUG,"xid is %lu",ctid);
+	elog(DEBUG,"low water is %lu\n",lowwater);
 	
 	while (mark < ctid) {
 	
@@ -375,7 +374,7 @@ TransRecover(Relation logrelation)
 		} else if ( TransactionIdDidSoftCommit(mark) ) {
 			TransBlockSetXidStatus(block, mark, XID_ABORT);
 			WriteNoReleaseBuffer(logrelation,buffer);
-			elog(DEBUG,"soft to abort %llu",mark);
+			elog(DEBUG,"soft to abort %lu",mark);
 		/*  
 		
 		don't do this for now and see how it goes
@@ -498,9 +497,7 @@ InitializeTransactionLog(void)
 of the pg_log for commits
  */
 	if (!TransactionIdDidCommit(AmiTransactionId))
-	{
-		Buffer  log;
-		
+	{		
 		/* ----------------
 		 *	SOMEDAY initialize the information stored in
 		 *			the headers of the log/variable relations.

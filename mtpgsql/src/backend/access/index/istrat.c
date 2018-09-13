@@ -504,7 +504,7 @@ OperatorRelationFillScanKeyEntry(Relation operatorRelation,
 	{
 		if (!cachesearch)
 			heap_endscan(scan);
-		elog(ERROR, "OperatorObjectIdFillScanKeyEntry: unknown operator %u",
+		elog(ERROR, "OperatorObjectIdFillScanKeyEntry: unknown operator %lu",
 			 operatorObjectId);
 	}
 
@@ -519,7 +519,7 @@ OperatorRelationFillScanKeyEntry(Relation operatorRelation,
 	if (!RegProcedureIsValid(entry->sk_procedure))
 	{
 		elog(ERROR,
-		"OperatorObjectIdFillScanKeyEntry: no procedure for operator %u",
+		"OperatorObjectIdFillScanKeyEntry: no procedure for operator %lu",
 			 operatorObjectId);
 	}
 }

@@ -281,7 +281,6 @@ XLogInsert(RmgrId rmid, char *hdr, uint32 hdrlen, char *buf, uint32 buflen)
 	uint16		curridx;
 	bool		updrqst = false;
 	XlogGlobals* env = GetXlogInfo();
-        time_t          time;
 	
 
 	if (len == 0 || len > MAXLOGRECSZ)
@@ -1312,7 +1311,6 @@ void
 StartupXLOG()
 {
 	int			fd;
-	XlogGlobals* env = GetXlogInfo();
 
 	elog(LOG, "Data Base System is starting up at %s", str_time(time(NULL)));
 

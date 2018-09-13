@@ -568,8 +568,6 @@ tuplesort_begin_datum(Oid datumType,
 void
 tuplesort_end(Tuplesortstate *state)
 {
-	int			i;
-
 	if (state->tapeset) {
             LogicalTapeSetClose(state->tapeset);
         } else {
@@ -1753,15 +1751,15 @@ comparetup_heap(Tuplesortstate *state, const void *a, const void *b)
 			return -1;
 		else if (scanKey->sk_flags & SK_COMMUTE)
 		{
-			if (!(result = -(int) (*fmgr_faddr(&scanKey->sk_func)) (rattr, lattr)))
-				result = (int) (*fmgr_faddr(&scanKey->sk_func)) (lattr, rattr);
+			if (!(result = -DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (rattr, lattr))))
+				result = DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (lattr, rattr));
 			if (result)
 				return result;
 		}
 		else
 		{
-			if (!(result = -(int) (*fmgr_faddr(&scanKey->sk_func)) (lattr, rattr)))
-				result = (int) (*fmgr_faddr(&scanKey->sk_func)) (rattr, lattr);
+			if (!(result = -DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (lattr, rattr))))
+				result = DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (rattr, lattr));
 			if (result)
 				return result;
 		}
@@ -1893,8 +1891,8 @@ comparetup_index(Tuplesortstate *state, const void *a, const void *b)
 		}
 		else
 		{
-			compare = (int32) FMGR_PTR2(&entry->sk_func,
-										attrDatum1, attrDatum2);
+			compare = DatumGetInt32(FMGR_PTR2(&entry->sk_func,
+										attrDatum1, attrDatum2));
 		}
 
 		if (compare != 0)
@@ -2000,10 +1998,10 @@ comparetup_datum(Tuplesortstate *state, const void *a, const void *b)
 	{
 		int			result;
 
-		if (!(result = -(int) (*fmgr_faddr(&state->sortOpFn)) (ltup->val,
-															 rtup->val)))
-			result = (int) (*fmgr_faddr(&state->sortOpFn)) (rtup->val,
-															ltup->val);
+		if (!(result = -DatumGetInt32((*fmgr_faddr(&state->sortOpFn)) (ltup->val,
+															 rtup->val))))
+			result = DatumGetInt32((*fmgr_faddr(&state->sortOpFn)) (rtup->val,
+															ltup->val));
 		return result;
 	}
 }
@@ -2180,7 +2178,6 @@ SelectSortFunction(Oid sortOperator,
 				   RegProcedure *sortFunction,
 				   SortFunctionKind *kind)
 {
-	int			i;
 	HeapTuple	tuple;
 	Form_pg_operator optup;
 
@@ -2195,7 +2192,7 @@ SelectSortFunction(Oid sortOperator,
 						   ObjectIdGetDatum(sortOperator),
 						   0, 0, 0);
 	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "cache lookup failed for operator %u", sortOperator);
+		elog(ERROR, "cache lookup failed for operator %lu", sortOperator);
 	optup = (Form_pg_operator) GETSTRUCT(tuple);
 	if (strcmp(NameStr(optup->oprname), ">") == 0)
 		*kind = SORTFUNC_REVLT;

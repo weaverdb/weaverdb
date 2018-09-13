@@ -11,7 +11,7 @@
 SRCDIR = ../..
 include ../../Makefile.global
 
-CFLAGS += -I..
+CFLAGS += -I.. -Wno-unused-but-set-variable
 
 OBJS = nodeFuncs.o nodes.o list.o \
        copyfuncs.o equalfuncs.o freefuncs.o makefuncs.o outfuncs.o \

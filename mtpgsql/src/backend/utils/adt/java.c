@@ -24,7 +24,7 @@
 
 static          Datum
                 ConvertFromJavaArg(Oid type, jvalue val, bool* isNull);
-static JNIEnv  *GetJavaEnv();
+static JNIEnv  *GetJavaEnv(void);
 
 JavaVM         *jvm;
 static const char* loader = "driver/weaver/WeaverObjectLoader";
@@ -393,7 +393,7 @@ Datum
 ConvertFromJavaArg(Oid type, jvalue val, bool *isNull)
 {
 	JNIEnv         *jenv;
-	Datum           ret_datum = NULL;
+	Datum           ret_datum = PointerGetDatum(NULL);
 
 
 	jenv = GetJavaEnv();
@@ -401,7 +401,7 @@ ConvertFromJavaArg(Oid type, jvalue val, bool *isNull)
         if ( (*jenv)->IsSameObject(jenv,val.l,NULL) ) 
         {
             *isNull = true;
-            return NULL;
+            return PointerGetDatum(NULL);
         }
 
 	switch (type) {

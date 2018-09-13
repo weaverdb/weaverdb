@@ -143,9 +143,9 @@ TLS AnalyzeGlobals* analyze_globals = NULL;
 #define analyze_globals GetEnv()->analyze_globals
 #endif
 
-static AnalyzeGlobals *AnalyzeInitEnv();
-static void     AnalyzeDestroyEnv();
-static AnalyzeGlobals *AnalyzeGetEnv();
+static AnalyzeGlobals *AnalyzeInitEnv(void);
+static void     AnalyzeDestroyEnv(void);
+static AnalyzeGlobals *AnalyzeGetEnv(void);
 static void  analyze_log(Relation rel,const char* pattern, ...);
 
 static AnalyzeAttrStats *examine_attribute(Relation onerel, int attnum);
@@ -370,7 +370,7 @@ examine_attribute(Relation onerel, int attnum)
 				       ObjectIdGetDatum(attr->atttypid),
 				       0, 0, 0);
 	if (!HeapTupleIsValid(typtuple))
-		elog(ERROR, "cache lookup of type %u failed", attr->atttypid);
+		elog(ERROR, "cache lookup of type %lu failed", attr->atttypid);
 	stats->attrtype = (Form_pg_type) palloc(sizeof(FormData_pg_type));
 	memcpy(stats->attrtype, GETSTRUCT(typtuple), sizeof(FormData_pg_type));
 
@@ -493,7 +493,7 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
             Buffer targbuf = ReadBuffer(onerel,targblock++);
             
             if (!BufferIsValid(targbuf)) {
-                elog(ERROR, "acquire_sample_rows: ReadBuffer(%s,%u) failed",RelationGetRelationName(onerel), targblock);
+                elog(ERROR, "acquire_sample_rows: ReadBuffer(%s,%lu) failed",RelationGetRelationName(onerel), targblock);
             }
             LockBuffer((onerel), targbuf, BUFFER_LOCK_SHARE);
             targtup = find_tuple_on_page(onerel,targbuf,targoff);
@@ -597,7 +597,7 @@ acquire_sample_rows(Relation onerel, HeapTuple * rows, int targrows,
 
                 targbuf = ReadBuffer(onerel, targblock++);
                 if (!BufferIsValid(targbuf)) {
-                    elog(ERROR, "acquire_sample_rows: ReadBuffer(%s,%u) failed",RelationGetRelationName(onerel), targblock-1);
+                    elog(ERROR, "acquire_sample_rows: ReadBuffer(%s,%lu) failed",RelationGetRelationName(onerel), targblock-1);
                 }
                 LockBuffer((onerel), targbuf, BUFFER_LOCK_SHARE);
                 targtup = find_tuple_on_page(onerel,targbuf,targoffset);

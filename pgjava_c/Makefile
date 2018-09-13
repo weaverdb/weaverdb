@@ -19,6 +19,8 @@ JAVA_HOME=/usr/jdk/latest
 endif
 endif
 
+CFLAGS += -Wno-unused-variable -Wno-unused-function
+
 ifeq ($(CC), CC)
 SHARED=-G -Mmapfile.txt
 else

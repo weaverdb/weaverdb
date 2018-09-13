@@ -260,7 +260,7 @@ RE_compile_and_execute(text *text_re, const char *dat, int dat_len,
 	return (regexec_result == REG_OKAY);
 }
 
-
+#ifdef UNUSED
 /*
  * assign_regex_flavor - GUC hook to validate and set REGEX_FLAVOR
  */
@@ -288,7 +288,7 @@ assign_regex_flavor(const char *value,
 		return NULL;			/* fail */
 	return value;				/* OK */
 }
-
+#endif
 
 /*
  *	interface routines called by the function manager
@@ -384,7 +384,7 @@ texticregexne(struct varlena * s, struct varlena * p)
 										   0, NULL));
 }
 
-
+#ifdef UNUSED
 /*
  * textregexsubstr()
  *		Return a substring matched by a regular expression.
@@ -427,7 +427,6 @@ textregexsubstr(text *s,text *p)
 
 	return NULL;
 }
-
 /* similar_escape()
  * Convert a SQL99 regexp pattern to POSIX style, so it can be used by
  * our regexp engine.
@@ -514,6 +513,7 @@ similar_escape(text* pat_text,text* esc_text)
 	SETVARSIZE(result,(r - ((char *) result)));
 	return result;
 }
+#endif
 
 static RegExpInfo*
 GetRegExpInfo(void)

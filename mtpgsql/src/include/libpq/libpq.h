@@ -252,6 +252,6 @@ extern void pq_startcopyout(void);
 extern void pq_endcopyout(bool errorAbort);
 
 extern void ConnectIO(void* args, int (*in)(void*, char*, int, int), int (*out)(void*, char*, int, int));
-extern void* DisconnectIO();
+extern void* DisconnectIO(void);
 
 #endif	 /* LIBPQ_H */

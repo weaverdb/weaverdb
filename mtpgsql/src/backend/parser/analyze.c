@@ -173,8 +173,8 @@ transformStmt(ParseState *pstate, Node *parseTree)
 					List	   *targetList = n->query->targetList;
 
 					if (length(targetList) < length(n->aliases))
-						elog(ERROR, "CREATE VIEW specifies %d columns"
-							 " but only %d columns are present",
+						elog(ERROR, "CREATE VIEW specifies %ld columns"
+							 " but only %ld columns are present",
 							 length(targetList), length(n->aliases));
 
 					for (i = 0; i < length(n->aliases); i++)

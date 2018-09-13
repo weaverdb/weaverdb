@@ -56,7 +56,7 @@ typedef struct mem_manager_globals {
  #ifdef __cplusplus
 extern "C" {
 #endif
-PG_EXTERN MemoryContextGlobals* MemoryContextGetEnv();
+PG_EXTERN MemoryContextGlobals* MemoryContextGetEnv(void);
 PG_EXTERN void EnableMemoryContext(bool on);
 PG_EXTERN void* MemoryContextAlloc(MemoryContext context, Size size);
 /*

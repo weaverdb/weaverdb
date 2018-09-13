@@ -30,9 +30,10 @@
 #include "utils/syscache.h"
 #include "utils/relcache.h"
 
-
+#ifdef UNUSED
 static void free_catcache(MemoryContext cxt,void* pointer);
 static void* realloc_catcache(MemoryContext cxt,void* pointer,Size size);
+#endif
 
 static void CatCacheRemoveCTup(CatCache *cache, Dlelem *e);
 static Index CatalogCacheComputeHashIndex(struct catcache * cacheInP);
@@ -138,7 +139,7 @@ GetCCHashFunc(Oid keytype)
 		case OIDVECTOROID:
 			return (CCHashFunc) hashoidvector;
 		default:
-			elog(FATAL, "GetCCHashFunc: type %u unsupported as catcache key",
+			elog(FATAL, "GetCCHashFunc: type %lu unsupported as catcache key",
 				 keytype);
 			return NULL;
 	}
@@ -481,7 +482,6 @@ CatalogCacheIdInvalidate(int cacheId,	/* XXX */
 	CatCache   *ccp;
 	CatCTup    *ct;
 	Dlelem	   *elt;
-	MemoryContext oldcxt;
     CacheGlobal*    cglobal = GetCacheGlobal();
 
 	/* ----------------
@@ -560,7 +560,6 @@ ResetCatalogCacheMemory()
 void
 ResetSystemCache()
 {
-	MemoryContext oldcxt;
 	struct catcache *cache;
     CacheGlobal*    cglobal = GetCacheGlobal();
 	
@@ -1238,7 +1237,7 @@ InitializeCacheGlobal(void) {
 
         return cglobal;
 }
-
+#ifdef UNUSED
 static void free_catcache(MemoryContext cxt,void* pointer)
 {
     	GetCacheGlobal()->free_p(cxt,pointer);
@@ -1248,3 +1247,4 @@ static void* realloc_catcache(MemoryContext cxt,void* pointer,Size size)
 {
 	return GetCacheGlobal()->realloc(cxt,pointer,size);
 }
+#endif

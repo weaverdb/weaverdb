@@ -1015,7 +1015,7 @@ ExecInitIndexScan(IndexScan *node, EState *estate)
 				  (Pointer *) &currentScanDesc);		/* return: scan desc */
 
 	if (!RelationGetForm(currentRelation)->relhasindex)
-		elog(ERROR, "indexes of the relation %u was inactivated", reloid);
+		elog(ERROR, "indexes of the relation %lu was inactivated", reloid);
 	scanstate->css_currentRelation = currentRelation;
 	scanstate->css_currentScanDesc = currentScanDesc;
 

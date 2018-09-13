@@ -109,7 +109,7 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
                     Env * env = GetEnv();
                     env->errorcode = 901;
                     env->tupleSize = len;
-                    elog(ERROR, "Tuple is too big: size %u, max size %ld",
+                    elog(ERROR, "Tuple is too big: size %lu, max size %ld",
                             len, MaxTupleSize);
             }
 	}
@@ -192,7 +192,7 @@ RelationGetTupleData(Relation rel, HeapTuple tuple, bool readonly, Buffer buffer
                 desc->ioflags &= BM_READONLY;
                 if ( status == SM_SUCCESS ) {
                     if ( !PageConfirmChecksum((Page)(desc->data) ) ) {
-                        elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", rel->rd_rel->relname, ItemPointerGetBlockNumber(pointer));
+                        elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", NameStr(rel->rd_rel->relname), ItemPointerGetBlockNumber(pointer));
                     }
                 }
             }

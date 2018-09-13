@@ -403,12 +403,12 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
         FilePin(fd, 3);
         Assert(strstr(FileGetName(fd),NameStr(info->relname))!=NULL);
 	if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-            elog(NOTICE,"bad read seek filename:%s, %d db:%s,rel:%s,blk no.:%llu",FileGetName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
+            elog(NOTICE,"bad read seek filename:%s, %ld db:%s,rel:%s,blk no.:%lu",FileGetName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
             status = SM_FAIL_SEEK;
         } else {
             blit = FileRead(fd, buffer, BLCKSZ);
             if (blit < 0) {
-                elog(NOTICE,"bad read %d filename:%s, db:%s,rel:%s,blk no.:%llu",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum);
+                elog(NOTICE,"bad read %d filename:%s, db:%s,rel:%s,blk no.:%lu",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum);
                 status = SM_FAIL_BASE;
             } else if ( blit == 0 ) {
                 long checkpos = FileSeek(fd,0L,SEEK_END);
@@ -424,7 +424,7 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
                     }
                 }
             } else if ( blit != BLCKSZ ) {
-                elog(NOTICE,"bad read %d filename:%s,db:%s,rel:%s,blk no.:%llu,read length:%d",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum,blit);
+                elog(NOTICE,"bad read %d filename:%s,db:%s,rel:%s,blk no.:%lu,read length:%d",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum,blit);
                 status = SM_FAIL_BASE;
             }
         }
@@ -742,6 +742,8 @@ vfdexpirelogs() {
     FileRename(log_file,newname);
     newname[len] = 0x00;
     log_file = _openlogfile(newname,false);
+
+    return len;
 }
 
 int
@@ -783,7 +785,6 @@ _vfdreplaylogfile(File logfile, bool indexonly) {
     long total = 0;
     long end = 0;
     long id = 0;
-    int result = SM_SUCCESS;
     bool logged = false;
     
     vfd_log("--- Replaying VFD storage manager log ---");
@@ -802,13 +803,11 @@ _vfdreplaylogfile(File logfile, bool indexonly) {
 
         if ( read != BLCKSZ ) {
             vfd_log("Log File not valid. exiting.");
-            result = SM_FAIL;
             break;
         }
         total += read;
         if ( LogBuffer.LogHeader.header_magic != HEADER_MAGIC ) {
             vfd_log("VFD Log ID: %d invalid log file. exiting.",LogBuffer.LogHeader.log_id);
-            result = SM_FAIL;
             break;
         }
         if ( !LogBuffer.LogHeader.completed ) {
@@ -828,7 +827,6 @@ _vfdreplaylogfile(File logfile, bool indexonly) {
             long add =  _vfdreplaysegment(logfile,indexonly,LogBuffer.LogHeader.compressed);
             if ( add < 0 ) {
                 vfd_log("exiting due to invalid segment");
-                result = SM_FAIL;
                 break;
             }
             total += add;
@@ -937,7 +935,7 @@ void  vfd_log(char* pattern, ...) {
 
     va_start(args, pattern);
     vsprintf(msg,pattern,args);
-    elog(DEBUG,msg);
+    elog(DEBUG, "%s", msg);
     va_end(args);
 }
 

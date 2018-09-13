@@ -94,15 +94,15 @@ TransComputeBlockNumber(Relation relation,		/* relation to test */
 	 * ----------------
 	 */
 	 blocksToRemove = (unsigned long)(ShmemVariableCache->xid_low_water_mark / itemsPerBlock);
-	 if ( blocksToRemove < 0 ) elog(FATAL,"negative blocks to remove in pg_log",998);
+	 if ( blocksToRemove < 0 ) elog(FATAL,"negative blocks to remove in pg_log code: %d",998);
 	 
 	absoluteBlocks = ((unsigned long)((transactionId) / itemsPerBlock));
 	compublock = (absoluteBlocks - blocksToRemove);
 	if ((absoluteBlocks - blocksToRemove) < 0 ) {
-		elog(FATAL,"transaction id %lu block number %u",(transactionId),compublock);
+		elog(FATAL,"transaction id %lu block number %lu",(transactionId),compublock);
 	}
 	if ( compublock > 8192 ) {
-		elog(NOTICE,"Transaction Log is very large vacuum all databases soon. transaction id %lu block number %u",(transactionId),compublock);
+		elog(NOTICE,"Transaction Log is very large vacuum all databases soon. transaction id %lu block number %lu",(transactionId),compublock);
         }
 /*        printf("id: %d block: %d\n",transactionId,compublock);     */
         return compublock;

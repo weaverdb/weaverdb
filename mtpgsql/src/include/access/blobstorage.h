@@ -36,7 +36,7 @@ BlockNumber span_buffered_blob(Relation rel,HeapTuple direct);
 HeapTuple vacuum_respan_tuple_blob(Relation rel, HeapTuple tuple, bool exclude_self);
 
 Size sizeof_tuple_blob(Relation rel, HeapTuple tuple);
-Size sizeof_max_tuple_blob();
+Size sizeof_max_tuple_blob(void);
 
 bytea* rebuild_indirect_blob(Datum item);
 

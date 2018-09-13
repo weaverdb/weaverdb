@@ -26,7 +26,7 @@ PG_EXTERN void ShutdownDolHelpers(void);
 
 PG_EXTERN void CancelDolHelpers(void);
 
-PG_EXTERN int CheckDolHelperErrors();
+PG_EXTERN int CheckDolHelperErrors(void);
 
 PG_EXTERN int GetDolHelperErrorMessage(char* state,char* msg);
 #endif

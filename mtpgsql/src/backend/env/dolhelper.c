@@ -212,7 +212,7 @@ InitDolConnection(void* connection) {
             if ( conn->state == DOL_PRIMED ) {
             
             } else {
-                if ( conn->state = DOL_MAINWAITING ) {
+                if ( conn->state == DOL_MAINWAITING ) {
                     pthread_cond_signal(&conn->gate);
                 }
                 conn->state = DOL_WAITING;
@@ -338,6 +338,8 @@ DestroyDolConnection(DolConnection conn)
         dol->helpers[spin] = NULL;
         
 	pfree(conn);
+
+    return status;
 }
 
 static long 
@@ -402,7 +404,7 @@ static void CancelJump(void* arg) {
 */
 
 PG_EXTERN int
-CheckDolHelperErrors(char* state,char* msg) {
+CheckDolHelperErrors() {
         DolHelperInfo*  info = GetDolHelperInfo();
         int             spin = 0;
         int err = 0;

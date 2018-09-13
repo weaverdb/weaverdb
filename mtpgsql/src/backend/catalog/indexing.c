@@ -227,7 +227,7 @@ CatalogHasIndex(char *catName, Oid catId)
 
 	if (!HeapTupleIsValid(htup))
 	{
-		elog(NOTICE, "CatalogHasIndex: no relation with oid %u", catId);
+		elog(NOTICE, "CatalogHasIndex: no relation with oid %lu", catId);
 		return false;
 	}
 
