@@ -27,7 +27,8 @@ wrappedin(wrapped_datum * input)
 {
 	bytea	   *result;
 	HeapTuple	typeTuple;
-        int         varsize,datumsize;
+        int         varsize = 0,
+                datumsize;
         void *      data;
 	char*		tp;
 

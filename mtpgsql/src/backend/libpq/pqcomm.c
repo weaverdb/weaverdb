@@ -499,7 +499,7 @@ extern void ConnectIO(void* args, commfunc infunc,commfunc outfunc) {
 
 extern void* DisconnectIO() {
     Env* env = GetEnv();
-    void*       args;
+    void*       args = NULL;
     if ( env->pipein != NULL ) {
         CommCursor* comm = (CommCursor*)env->pipein;
         if (comm->ptr < comm->end) {

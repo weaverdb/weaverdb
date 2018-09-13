@@ -241,7 +241,7 @@ _getPlan(Plan *node)
 	else
 	{							/* Disgusting hack until I figure out what
 								 * to do here */
-		node->state = (EState *) !NULL;
+		node->state = (EState *) !0UL;
 	}
 
 	token = lsptok(NULL, &length);		/* eat :qptargetlist */

@@ -244,7 +244,7 @@ void Clean(StmtMgr mgr, usercleanup input, usercleanup output) {
 }
 
 short Init(StmtMgr mgr, usercleanup input, usercleanup output) {
-    short clean;
+    short clean = 0;
 
     ConnMgr conn = mgr->connection;
     if (!IsValid(conn)) return 0;
@@ -503,7 +503,8 @@ Input AddBind(StmtMgr mgr, const char * vari, short type) {
     }
 
     while (GetStatementSpaceSize(mgr) < (mgr->holdingArea)) {
-        long stmtsz = (stmtsz * 2 < MAX_STMTSIZE) ? stmtsz * 2 : MAX_STMTSIZE;
+        long stmtsz = GetStatementSpaceSize(mgr);
+        stmtsz = (stmtsz * 2 < MAX_STMTSIZE) ? stmtsz * 2 : MAX_STMTSIZE;
         SetStatementSpaceSize(mgr, stmtsz);
     }
 
@@ -730,7 +731,8 @@ Output OutputLink(StmtMgr mgr, int index, short type) {
     }
 
     while (GetStatementSpaceSize(mgr) < (mgr->holdingArea)) {
-        long stmtsz = (stmtsz * 2 < MAX_STMTSIZE) ? stmtsz * 2 : MAX_STMTSIZE;
+        long stmtsz = GetStatementSpaceSize(mgr);
+        stmtsz = (stmtsz * 2 < MAX_STMTSIZE) ? stmtsz * 2 : MAX_STMTSIZE;
         SetStatementSpaceSize(mgr, stmtsz);
     }
 

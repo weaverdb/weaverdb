@@ -370,7 +370,7 @@ nabstimein(char *str)
 
 	char	   *field[MAXDATEFIELDS];
 	char		lowstr[MAXDATELEN + 1];
-	int			dtype;
+	int			dtype = 0;
 	int			nf,
 				ftype[MAXDATEFIELDS];
 
@@ -710,7 +710,7 @@ reltimein(char *str)
 	struct tm	tt,
 			   *tm = &tt;
 	double		fsec;
-	int			dtype;
+	int			dtype = 0;
 	char	   *field[MAXDATEFIELDS];
 	int			nf,
 				ftype[MAXDATEFIELDS];

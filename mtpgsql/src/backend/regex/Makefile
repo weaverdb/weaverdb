@@ -14,6 +14,10 @@ include ../../Makefile.global
 CFLAGS += -I..
 CFLAGS += -DPOSIX_MISTAKE
 
+ifeq ($(CC), clang) 
+CFLAGS += -Wno-tautological-constant-out-of-range-compare
+endif
+
 OBJS = regcomp.o regerror.o regexec.o regfree.o
 
 all: SUBSYS.o

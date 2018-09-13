@@ -13,6 +13,10 @@ include ../../../Makefile.global
 
 CFLAGS += -I../..
 
+ifeq ($(CC), clang)
+CFLAGS += -Wno-expansion-to-defined
+endif
+
 OBJS = lzf_c.o lzf_d.o
 
 all: SUBSYS.o

@@ -11,7 +11,11 @@
 SRCDIR = ../../..
 include ../../../Makefile.global
 
-CFLAGS += -I../.. -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-variable
+CFLAGS += -I../.. -Wno-unused-function -Wno-unused-variable
+
+ifeq ($(CC), gcc) 
+CFLAGS += -Wno-unused-but-set-variable 
+endif
 
 OBJS = nbtcompare.o nbtinsert.o nbtpage.o nbtree.o nbtsearch.o \
        nbtstrat.o nbtutils.o nbtsort.o

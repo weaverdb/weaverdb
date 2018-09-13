@@ -721,6 +721,9 @@ ExecMakeFunctionResult(Node * node,
 	} else if (IsA(node, Oper)) {
 		operNode = (Oper *) node;
 		fcache = operNode->op_fcache;
+	} else {
+		elog(ERROR, "ExecMakeFunctionResult: unknown operation");
+		return PointerGetDatum(NULL);
 	}
 	/*
 	 * arguments is a list of expressions to evaluate before passing to

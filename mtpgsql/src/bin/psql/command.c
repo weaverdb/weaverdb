@@ -1088,7 +1088,7 @@ scan_option(char **string, enum option_type type, char *quote)
 static char *
 unescape(const unsigned char *source, size_t len)
 {
-	unsigned char *p;
+	const unsigned char *p;
 	bool		esc = false;	/* Last character we saw was the escape
 								 * character */
 	char	   *destination,

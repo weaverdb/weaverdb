@@ -51,7 +51,7 @@ timestamp_in(char *str)
 	struct tm	tt,
 			   *tm = &tt;
 	int			tz;
-	int			dtype;
+	int			dtype = 0;
 	int			nf;
 	char	   *field[MAXDATEFIELDS];
 	int			ftype[MAXDATEFIELDS];
@@ -152,7 +152,7 @@ interval_in(char *str)
 	double		fsec;
 	struct tm	tt,
 			   *tm = &tt;
-	int			dtype;
+	int			dtype = 0;
 	int			nf;
 	char	   *field[MAXDATEFIELDS];
 	int			ftype[MAXDATEFIELDS];

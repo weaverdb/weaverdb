@@ -411,7 +411,7 @@ elog(int lev, const char *fmt,...)
 		 * recursion!)	But in the latter case, we exit with nonzero exit
 		 * code to indicate that something's pretty wrong.
 		 */
-		if (!GetEnv()->errorContext)
+		if (IsMultiuser() && GetEnv() == NULL)
 		{
 			fflush(stdout);
 			fflush(stderr);
@@ -441,7 +441,7 @@ elog(int lev, const char *fmt,...)
 		}
                 */
 		if ( IsMultiuser() && !IsDBWriter() ) {
-                        CancelDolHelpers();
+            CancelDolHelpers();
 			if ( GetEnv()->errorcode != 0 ) 
 				longjmp(GetEnv()->errorContext, GetEnv()->errorcode);   
 			else 
@@ -449,7 +449,10 @@ elog(int lev, const char *fmt,...)
 		} else {
 			siglongjmp(Warn_restart, 1);
 		}
-
+		/*  if arrived here, jump failed */
+		fflush(stdout);
+		fflush(stderr);
+		proc_exit(lev);
 	}
 
 	if (lev >= FATAL)

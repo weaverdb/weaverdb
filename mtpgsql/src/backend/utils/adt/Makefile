@@ -11,7 +11,10 @@
 SRCDIR = ../../..
 include ../../../Makefile.global
 
-CFLAGS += -I../.. -Wno-format-overflow -Wno-unused-variable
+CFLAGS += -I../.. -Wno-unused-variable
+ifeq ($(CC), gcc)
+CFLAGS += -Wno-format-overflow 
+endif
 
 # seems to be required for some date/time stuff 1999/07/22 bjm
 ifeq ($(CPU),alpha)

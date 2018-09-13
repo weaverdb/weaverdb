@@ -208,7 +208,7 @@ update_fp_info(Oid func_id, struct fp_info * fip)
 								   0, 0, 0);
 	if (!HeapTupleIsValid(func_htp))
 	{
-		elog(ERROR, "update_fp_info: cache lookup for function %u failed",
+		elog(ERROR, "update_fp_info: cache lookup for function %lu failed",
 			 func_id);
 	}
 	pp = (Form_pg_proc) GETSTRUCT(func_htp);
@@ -225,7 +225,7 @@ update_fp_info(Oid func_id, struct fp_info * fip)
 										   0, 0, 0);
 			if (!HeapTupleIsValid(type_htp))
 			{
-				elog(ERROR, "update_fp_info: bad argument type %u for %u",
+				elog(ERROR, "update_fp_info: bad argument type %lu for %lu",
 					 argtypes[i], func_id);
 			}
 			tp = (Form_pg_type) GETSTRUCT(type_htp);
@@ -241,7 +241,7 @@ update_fp_info(Oid func_id, struct fp_info * fip)
 									   0, 0, 0);
 		if (!HeapTupleIsValid(type_htp))
 		{
-			elog(ERROR, "update_fp_info: bad return type %u for %u",
+			elog(ERROR, "update_fp_info: bad return type %lu for %lu",
 				 rettype, func_id);
 		}
 		tp = (Form_pg_type) GETSTRUCT(type_htp);

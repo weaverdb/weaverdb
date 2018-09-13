@@ -82,7 +82,7 @@ int main(int argc,char* argv[])
                 options[2+extras].extraInfo = NULL;
 	}
 
-       vm_args.version = JNI_VERSION_1_2;
+       vm_args.version = JNI_VERSION_10;
        vm_args.options = options;
        vm_args.nOptions = 3 + argc - 2;
        /*  extras +

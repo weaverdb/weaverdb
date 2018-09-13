@@ -43,7 +43,7 @@ date_in(char *str)
 	struct tm	tt,
 			   *tm = &tt;
 	int			tzp;
-	int			dtype;
+	int			dtype = 0;
 	int			nf;
 	char	   *field[MAXDATEFIELDS];
 	int			ftype[MAXDATEFIELDS];
@@ -383,14 +383,14 @@ time_in(char *str)
 {
 	TimeADT    *time;
 
-	double		fsec;
+	double		fsec = 0;
 	struct tm	tt,
 			   *tm = &tt;
 
 	int			nf;
 	char		lowstr[MAXDATELEN + 1];
 	char	   *field[MAXDATEFIELDS];
-	int			dtype;
+	int			dtype = 0;
 	int			ftype[MAXDATEFIELDS];
 
 	if (!PointerIsValid(str))
@@ -626,15 +626,15 @@ timetz_in(char *str)
 {
 	TimeTzADT  *time;
 
-	double		fsec;
+	double		fsec = 0;
 	struct tm	tt,
 			   *tm = &tt;
-	int			tz;
+	int			tz = 0;
 
 	int			nf;
 	char		lowstr[MAXDATELEN + 1];
 	char	   *field[MAXDATEFIELDS];
-	int			dtype;
+	int			dtype = 0;
 	int			ftype[MAXDATEFIELDS];
 
 	if (!PointerIsValid(str))

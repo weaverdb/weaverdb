@@ -55,6 +55,13 @@ CPP=g++
 CFLAGS+= -g -fPIC -m64
 CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
 LD=/usr/bin/ld
+else ifeq ($(CC), clang)
+CC=clang
+CPP=clang++
+CFLAGS+= -g -fPIC -m64
+CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
+CFLAGS+= -Wall -Wmissing-prototypes -Wmissing-declarations -Werror
+LD=ld
 else 
 CC=cc
 CPP=CC

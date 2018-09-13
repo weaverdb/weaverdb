@@ -21,10 +21,10 @@
 SRCDIR= ../..
 include ../../Makefile.global
 
-CFLAGS += -I..
+CFLAGS += -I.. -Wno-unused-function
 
 ifeq ($(CC), gcc)
-CFLAGS+= -Wno-unused-but-set-variable -Wno-unused-function
+CFLAGS+= -Wno-unused-but-set-variable 
 endif
 
 BOOTYACCS= bootstrap_tokens.h bootparse.c

@@ -668,7 +668,7 @@ bool CheckForCancel() {
 }
 
 void clearerror(Env* env) {
-        env->cancelled = false;
+    env->cancelled = false;
 	env->InError = false;
 	memset(env->errortext,0,256);	
 	memset(env->state,0,40);
@@ -888,12 +888,12 @@ PrintEnvMemory( void ) {
     for (counter = 0;counter <GetMaxBackends();counter++) {
         if ( envmap[counter] != NULL ) {
             pthread_mutex_lock(envmap[counter]->env_guard);
-            if ( !envmap[counter]->owner == 0 ) {
+            if ( envmap[counter]->owner != 0 ) {
             /*  trick GetEnv() to use the correct env for printing out logging messages */
                 pthread_setspecific(envkey,&envmap[counter]);
                 size_t amt = MemoryContextStats(envmap[counter]->global_context);
                 env_log(envmap[counter],"Total env memory: %ld",amt);     
-                 pthread_setspecific(envkey,NULL);
+                pthread_setspecific(envkey,NULL);
            } else {
                 envmap[counter]->print_memory = true;
             }

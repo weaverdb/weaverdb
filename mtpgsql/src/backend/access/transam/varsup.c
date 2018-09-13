@@ -400,9 +400,9 @@ InitTransactionLowWaterMark()
             if ( oid != NULL ) {
                 oid_prefetch = atoi(oid);
             } else {
-                oid_prefetch *= VAR_OID_PREFETCH;
+                oid_prefetch *= VAR_OID_PREFETCH;  // square if not set and multiuser
             }
-            if ( oid_prefetch <= 0 ) oid_prefetch = oid_prefetch;
+            if ( oid_prefetch <= 0 ) oid_prefetch = VAR_OID_PREFETCH;
         }
 	first = ReadBuffer(VariableRelation,1);
         if (!BufferIsValid(first) ) elog(ERROR,"bad buffer read in variable logging");

@@ -390,7 +390,7 @@ UpdateCommandInfo(int operation, Oid lastoid, uint32 tuples)
 			case CMD_INSERT:
 			if (tuples > 1)
 				lastoid = InvalidOid;
-			sprintf(global->CommandInfo, " %u %u", lastoid, tuples);
+			sprintf(global->CommandInfo, " %lu %u", lastoid, tuples);
 			break;
 		case CMD_DELETE:
 		case CMD_UPDATE:

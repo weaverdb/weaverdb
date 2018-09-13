@@ -132,7 +132,7 @@ print_rt(List *rtable)
 	{
 		RangeTblEntry *rte = lfirst(l);
 
-		printf("%d\t%s(%s)\t%u\t%d\t%s\n",
+		printf("%d\t%s(%s)\t%lu\t%d\t%s\n",
 			   i, rte->relname, rte->ref->relname, rte->relid,
 			   rte->inFromCl,
 			   (rte->inh ? "inh" : ""));

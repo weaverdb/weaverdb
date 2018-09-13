@@ -91,22 +91,22 @@ struct _DestReceiver
 
 /* The primary destination management functions */
 
-extern void BeginCommand(char *pname, int operation, TupleDesc attinfo,
-			 bool isIntoRel, bool isIntoPortal, char *tag,
-			 CommandDest dest);
-extern DestReceiver *DestToFunction(CommandDest dest);
-extern void EndCommand(char *commandTag, CommandDest dest);
+extern void BeginCommand(char *, int , TupleDesc ,
+			 bool , bool , char *,
+			 CommandDest );
+extern DestReceiver *DestToFunction(CommandDest );
+extern void EndCommand(char *, CommandDest);
 
 /* Additional functions that go with destination management, more or less. */
 
 extern void SendCopyBegin(void);
 extern void ReceiveCopyBegin(void);
-extern void NullCommand(CommandDest dest);
-extern void ReadyForQuery(CommandDest dest);
-extern void UpdateCommandInfo(int operation, Oid lastoid, uint32 tuples);
-extern CommandDest WhereToSendOutput();
-extern void SetWhereToSendOutput(CommandDest dest);
-extern bool DoingCopyout();
-extern void SetCopyout(bool in);
+extern void NullCommand(CommandDest);
+extern void ReadyForQuery(CommandDest);
+extern void UpdateCommandInfo(int, Oid, uint32);
+extern CommandDest WhereToSendOutput(void);
+extern void SetWhereToSendOutput(CommandDest);
+extern bool DoingCopyout(void);
+extern void SetCopyout(bool);
 
 #endif	 /* DEST_H */

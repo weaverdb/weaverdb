@@ -686,7 +686,7 @@ bitAnd(bits8 *arg1, bits8 *arg2)
 			   *r;
 
 	if (!PointerIsValid(arg1) || !PointerIsValid(arg2))
-		return (bool) 0;
+		return NULL;
 
 	len = Min(VARSIZE(arg1), VARSIZE(arg2));
 	result = (bits8 *) palloc(len);
@@ -720,7 +720,7 @@ bitOr(bits8 *arg1, bits8 *arg2)
 	bits8		mask;
 
 	if (!PointerIsValid(arg1) || !PointerIsValid(arg2))
-		return (bool) 0;
+		return NULL;
 
 	len = Min(VARSIZE(arg1), VARSIZE(arg2));
 	result = (bits8 *) palloc(len);
@@ -756,7 +756,7 @@ bitxor(bits8 *arg1, bits8 *arg2)
 	bits8		mask;
 
 	if (!PointerIsValid(arg1) || !PointerIsValid(arg2))
-		return (bool) 0;
+		return NULL;
 
 	len = Min(VARSIZE(arg1), VARSIZE(arg2));
 	result = (bits8 *) palloc(len);
@@ -788,7 +788,7 @@ bitnot(bits8 *arg)
 	bits8		mask;
 
 	if (!PointerIsValid(arg))
-		return (bool) 0;
+		return NULL;
 
 	result = (bits8 *) palloc(VARSIZE(arg));
 	SETVARSIZE(result,VARSIZE(arg));
@@ -820,7 +820,7 @@ bitshiftleft(bits8 *arg, int shft)
 			   *r;
 
 	if (!PointerIsValid(arg))
-		return (bool) 0;
+		return NULL;
 
 	/* Negative shift is a shift to the right */
 	if (shft < 0)

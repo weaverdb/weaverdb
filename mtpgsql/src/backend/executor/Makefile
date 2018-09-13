@@ -11,8 +11,10 @@
 SRCDIR = ../..
 include ../../Makefile.global
 
-CFLAGS += -I.. -Wno-unused-variable -Wno-unused-but-set-variable
-
+CFLAGS += -I.. -Wno-unused-variable
+ifeq ($(CC), gcc) 
+CFLAGS += -Wno-unused-but-set-variable 
+endif
 OBJS = execAmi.o execFlatten.o execJunk.o execMain.o \
        execProcnode.o execQual.o execScan.o execTuples.o \
        execUtils.o functions.o nodeAppend.o nodeAgg.o nodeHash.o \

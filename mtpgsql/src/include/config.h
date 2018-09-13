@@ -296,7 +296,7 @@
 #define HAVE_ARPA_INET_H 1
 
 /* Set to 1 if you have <crypt.h> */
-#ifndef MACOSX
+#ifdef _GNUSOURCE
 #define HAVE_CRYPT_H 1  
 #endif
 /* Set to 1 if you have <dld.h> */

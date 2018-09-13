@@ -1401,7 +1401,7 @@ seq_search(char *name, char **array, int type, int max, int *len)
 		return -1;
 
 	/* set first char */
-	if (type == ONE_UPPER || ALL_UPPER)
+	if (type == ONE_UPPER || type == ALL_UPPER)
 		*name = toupper((unsigned char) *name);
 	else if (type == ALL_LOWER)
 		*name = tolower((unsigned char) *name);
@@ -3086,7 +3086,7 @@ NUM_numpart_from_char(NUMProc *Np, int id, int plen)
 	 * read sign
 	 * ----------
 	 */
-	if (*Np->number == ' ' && (id == NUM_0 || id == NUM_9 || NUM_S))
+	if (*Np->number == ' ' && (id == NUM_0 || id == NUM_9 || id == NUM_S))
 	{
 
 #ifdef DEBUG_TO_FROM_CHAR

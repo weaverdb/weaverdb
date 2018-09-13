@@ -217,8 +217,9 @@ createschema(const char *schemaname,int encoding)
 		
         heap_close(schema_relation,NoLock);
 
-	if (errno = mkdir(buf, S_IRWXU) != 0)
+	if ((errno = mkdir(buf, S_IRWXU)) != 0) {
 		elog(ERROR, "CREATE SCHEMA: unable to create database directory '%s': %s", buf, strerror(errno));
+	}
 }
 
 void

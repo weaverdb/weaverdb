@@ -13,6 +13,10 @@ include ../../../Makefile.global
 
 CFLAGS += -I../..
 
+ifeq ($(CC), clang) 
+CFLAGS += -Wno-array-bounds
+endif
+
 OBJS = catcache.o inval.o rel.o relcache.o syscache.o lsyscache.o \
 	fcache.o temprel.o
 

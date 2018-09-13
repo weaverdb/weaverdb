@@ -381,6 +381,7 @@ ConvertToJavaArg(Oid type, Datum val)
 		rval.l = javaout((bytea *) val);
 		break;
 	default:
+		rval.i = 0;
 		elog(ERROR, "java argument not valid");
 
 	}

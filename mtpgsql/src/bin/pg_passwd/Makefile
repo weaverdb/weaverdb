@@ -7,6 +7,10 @@
 SRCDIR= ../..
 include ../../Makefile.global
 
+ifeq ($(CC), clang) 
+LDFLAGS+= -lcrypt
+endif
+
 OBJS= pg_passwd.o
 
 all: pg_passwd

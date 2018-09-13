@@ -1365,6 +1365,9 @@ simplify_op_or_func(Expr *expr, List *args)
 			funcid = func->funcid;
 			result_typeid = func->functype;
 		}
+	} else {
+		funcid = InvalidOid;
+		return NULL;
 	}
 	/* Someday lsyscache.c might provide a function for this */
 	func_tuple = SearchSysCacheTuple(PROCOID,

@@ -1263,7 +1263,7 @@ ExecPut(TupleTableSlot *slot,
 		   EState *estate)
 {
 	HeapTuple	tuple;
-	int			result;
+	int			result = 0;
 	RelationInfo *resultRelationInfo;
 	Relation	resultRelationDesc;
 	int			numIndices;
@@ -1360,17 +1360,20 @@ ExecPut(TupleTableSlot *slot,
                     default:
                             elog(ERROR, "Unknown status %u from heap_delete during put operation", result);
                             return 0;
-            }       
-        }
+            }      
+        } else {
+			result = 0;
+		}
         
 	(estate->es_processed)++;
 	estate->es_lastoid = newId;
 
 	/* AFTER ROW INSERT Triggers */
-	if (resultRelationDesc->trigdesc)
+	if (resultRelationDesc->trigdesc) {
 		ExecARInsertTriggers(resultRelationDesc, tuple);
+	}
         
-        return result;
+	return result;
 }
 
 

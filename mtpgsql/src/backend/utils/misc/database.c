@@ -126,7 +126,7 @@ GetDatabaseInfo(const char* name,char* path) {
     HeapScanDesc  scan;
     HeapTuple 		tup;
         TupleDesc desc;
-	Oid         dbid;
+	Oid         dbid = InvalidOid;
 
 	dbname = namein(name);
 	dbrel = heap_openr(DatabaseRelationName,AccessShareLock);

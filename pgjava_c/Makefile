@@ -48,7 +48,7 @@ MACOSLIBS=\
 MYPATH=\
 -L${SRCDIR} \
 -L${SRCDIR}/backend \
--L${JAVA_HOME}/jre/lib/${CPU}/server \
+-L${JAVA_HOME}/lib/server \
 
 MACOSPATH=\
 -L${SRCDIR} \

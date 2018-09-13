@@ -407,8 +407,8 @@ BootstrapMain(int argc, char *argv[])
 	 * the sed script boot.sed renamed yyparse to Int_yyparse for the
 	 * bootstrap parser to avoid conflicts with the normal SQL parser
 	 */
-            Int_yyparse();
-        }
+        Int_yyparse();
+    }
 
 	/* clean up processing */
 /*	StartTransactionCommand();*/

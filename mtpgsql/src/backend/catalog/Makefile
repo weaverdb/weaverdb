@@ -11,7 +11,11 @@
 SRCDIR = ../..
 include ../../Makefile.global
 
-CFLAGS += -I.. -Wno-unused-but-set-variable -Wno-unused-variable
+CFLAGS += -I.. -Wno-unused-variable
+
+ifeq ($(CC), gcc) 
+CFLAGS += -Wno-unused-but-set-variable 
+endif
 
 OBJS = catalog.o heap.o index.o indexing.o \
        pg_aggregate.o pg_operator.o pg_proc.o pg_type.o

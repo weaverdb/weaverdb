@@ -187,7 +187,7 @@ ProcessUtility(Node *parsetree,
 				(commandTag = "DROP SCHEMA");
                 dropschema((char*)lfirst(args));
                 freeList(args);
-                args == NULL;
+                args = NULL;
 			} else {
 				(commandTag = "DROP");
 			
@@ -223,9 +223,6 @@ ProcessUtility(Node *parsetree,
 				/* OK, terminate 'em all */
 				foreach(arg, args)
 				{
-					Relation r;
-					bool isindex;
-
 					relname = strVal(lfirst(arg));
 					RemoveRelation(relname);
 				}
@@ -495,9 +492,9 @@ ProcessUtility(Node *parsetree,
 		case T_RuleStmt:		/* CREATE RULE */
 			{
 				RuleStmt   *stmt = (RuleStmt *) parsetree;
+#ifdef USEACL
 				int			aclcheck_result;
 
-#ifdef USEACL
 				relname = stmt->object->relname;
 				aclcheck_result = pg_aclcheck(relname, GetPgUserName(), ACL_RU);
 				if (aclcheck_result != ACLCHECK_OK)
@@ -552,9 +549,8 @@ ProcessUtility(Node *parsetree,
 					case RULE:
 						{
 							char	   *rulename = stmt->name;
-							int			aclcheck_result;
-
 #ifdef USEACL
+							int			aclcheck_result;
 
 							relationName = RewriteGetRuleEventRel(rulename);
 							aclcheck_result = pg_aclcheck(relationName, GetPgUserName(), ACL_RU);
@@ -573,9 +569,9 @@ ProcessUtility(Node *parsetree,
 					case VIEW:
 						{
 							char	   *viewName = stmt->name;
+#ifdef USEACL
 							char	   *ruleName;
 
-#ifdef USEACL
 							ruleName = MakeRetrieveViewRuleName(viewName);
 							relationName = RewriteGetRuleEventRel(ruleName);
 							if (!pg_ownercheck(GetPgUserName(), relationName, RELNAME))
@@ -700,12 +696,12 @@ ProcessUtility(Node *parsetree,
 			 *
 			 */
 		case T_LoadStmt:
-			{
+			{/*
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
 
 				(commandTag = "LOAD");
 				CHECK_IF_ABORTED();
-
+			*/
 			/*  we are removeing dynamic load for now  MKS  11.23.2001  */
 			/*	load_file(stmt->filename);    */
 			}
