@@ -72,6 +72,8 @@ PG_EXTERN void index_build(Relation heapRelation, Relation indexRelation,
 		uint16 parameterCount, Datum *parameter, FuncIndexInfo *funcInfo,
 			PredInfo *predInfo);
 
+PG_EXTERN void build_indices(void);
+
 PG_EXTERN Oid IndexGetRelation(Oid indexId);
 PG_EXTERN IndexProp IndexProperties(Oid indexId);
 PG_EXTERN bool IndexIsUniqueNoCache(Oid indexId);

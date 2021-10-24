@@ -1245,7 +1245,7 @@ LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
 	if (!target)
 	{
 		pthread_mutex_unlock(table_lock);
-		elog(ERROR,"corrupted %ld %ld by %ld on %d",lid->relId,lid->dbId,pthread_self(),action);
+		elog(ERROR,"corrupted %ld %ld by %ld on %d",lid->relId,lid->dbId,(long)pthread_self(),action);
 		return NULL;
 	}
 

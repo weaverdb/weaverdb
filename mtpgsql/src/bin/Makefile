@@ -18,7 +18,7 @@ DIRS = pg_id pg_version psql pg_dump pg_passwd \
  	scripts initdb initlocation ipcclean \
 	pg_ctl
 
-ifeq ($(PORTNAME),macosx)
+ifeq ($(PORTNAME),darwin)
 DIRS+=maccleaner
 endif
 

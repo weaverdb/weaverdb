@@ -26,7 +26,7 @@ endif
 
 OBJS= fe-auth.o fe-connect.o fe-exec.o fe-misc.o fe-print.o fe-lobj.o \
       pqexpbuffer.o dllist.o pqsignal.o 
-ifneq ($(PORTNAME), macosx)
+ifneq ($(PORTNAME), darwin)
 OBJS+= inet_aton.o
 endif
 ifdef MULTIBYTE
@@ -54,7 +54,7 @@ snprintf.c:	$(SRCDIR)/backend/port/snprintf.c
 	-$(LN_S) $(SRCDIR)/backend/port/snprintf.c .
 
 # this only gets done if configure finds system doesn't have inet_aton()
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 inet_aton.c:	$(SRCDIR)/backend/port/inet_aton.c
 	-$(LN_S) $(SRCDIR)/backend/port/inet_aton.c .
 else

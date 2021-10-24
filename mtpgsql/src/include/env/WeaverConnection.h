@@ -124,11 +124,11 @@ typedef struct preparedplan {
 #ifdef __cplusplus
 extern "C" {
 #endif
-void WHandleError( WConn conn,int sqlError );
-void  WResetExecutor(PreparedPlan* plan);
-void WResetQuery(WConn conn,bool err);
+LIB_EXTERN void WHandleError( WConn conn,int sqlError );
+LIB_EXTERN void  WResetExecutor(PreparedPlan* plan);
+LIB_EXTERN void WResetQuery(WConn conn,bool err);
 
-bool
+LIB_EXTERN bool
 TransferValue(Output* output, Form_pg_attribute desc, Datum value);
 #ifdef __cplusplus
 }

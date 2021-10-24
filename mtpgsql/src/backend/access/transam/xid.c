@@ -19,6 +19,7 @@
  *-------------------------------------------------------------------------
  */
 
+#include <stdio.h>
 
 #include "postgres.h"
 
@@ -51,7 +52,7 @@ xidout(TransactionId* transactionId)
 	/* maximum 32 bit unsigned integer representation takes 10 chars */
 	char	   *representation = palloc(64);
 
-	snprintf(representation, 64, "%lu", *transactionId);
+	snprintf(representation, 64, "%llu", *transactionId);
 
 	return representation;
 

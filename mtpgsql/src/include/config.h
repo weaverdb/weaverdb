@@ -18,7 +18,11 @@
 #include "os.h"
 
 #define PG_EXTERN
+#ifndef MACOSX
 #define LIB_EXTERN extern
+#else
+#define LIB_EXTERN __attribute__((__visibility__("default")))
+#endif
 #define USE_GLOBAL_ENVIRONMENT
 #define PROVIDE_64BIT_CRC
 #define USE_ASSERT_CHECKING 1
@@ -599,6 +603,8 @@ extern char *strdup(char const *);
 #ifdef SUNOS
 #define WHICH_CLOCK CLOCK_HIGHRES
 #elif LINUX
+#define WHICH_CLOCK CLOCK_REALTIME
+#elif MACOSX
 #define WHICH_CLOCK CLOCK_REALTIME
 #endif
 

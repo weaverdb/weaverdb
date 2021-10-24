@@ -62,9 +62,8 @@
 
 static Env* 				env;
 static int 					PostPortName  = 5432;
-static const char* 			progname  = "mtpg";
+//static const char* 			progname  = "mtpg";
 static IpcMemoryKey 		ipc_key;
-static 	void*				ipc_addr;
 static 	bool				master;
 static  bool				isPrivate = true;
 
@@ -86,12 +85,12 @@ static bool initialized = false;
 
 static void CreateProperties(void);
 
-static void checkDataDir(const char *DataDir, bool *DataDirOK);
+//static void checkDataDir(const char *DataDir, bool *DataDirOK);
 static int checklockfile(void);
 
 pthread_mutex_t    init_lock;
 
-extern bool initweaverbackend(char* vars)
+LIB_EXTERN bool initweaverbackend(char* vars)
 {    
         char*       dbname = NULL;
 	char	   *reason;
@@ -112,7 +111,6 @@ extern bool initweaverbackend(char* vars)
 	DataDir = getenv("PGDATA");
 
 	struct timeval     timer;	
-	struct timezone     tz;
 	
 	long 	seed 		= 0;	
 	int64_t 	sptime 		= 0;
@@ -379,7 +377,7 @@ transaction system  */
     if ( DebugLvl > 1 ) {
 	TransactionId  dd;	
 	dd = GetNewTransactionId();
-	elog(DEBUG,"Current Transaction %lu",dd);
+	elog(DEBUG,"Current Transaction %llu",dd);
 	elog(DEBUG,"BLCKSZ size %d",BLCKSZ);
     }
 	
@@ -420,13 +418,13 @@ if ( master ) {
 	}
 	sprandom(seed);
         
-        initialized = true;
+    initialized = true;
         
-        pthread_mutex_unlock(&init_lock);
+    pthread_mutex_unlock(&init_lock);
         
-        SetEnv(NULL);
+    SetEnv(NULL);
         
-        return true;
+    return true;
 }
 
 bool 
@@ -491,7 +489,7 @@ checklockfile(void) {
                     exit(2);
                 } else {
                     pid_t checkid = 0;
-                    int size = read(exclusive_lock,check,255);
+                    read(exclusive_lock,check,255);
 
                     checkid = atoi(check);
                     checkid = getpgid(checkid);
@@ -519,7 +517,7 @@ checklockfile(void) {
         return 1;
 }
 
-extern bool 
+LIB_EXTERN bool
 prepareforshutdown()
 {
     if ( !isinitialized() ) return false;
@@ -543,7 +541,7 @@ prepareforshutdown()
     return true;
 }
 
-extern void
+LIB_EXTERN void
 wrapupweaverbackend()
 {
 /*  not part of the inval message queue  */	
@@ -579,7 +577,7 @@ wrapupweaverbackend()
     
         unlink(lock_name);
 }
-
+#ifdef UNUSED
 static void
 checkDataDir(const char *DataDir, bool *DataDirOK)
 {
@@ -639,6 +637,7 @@ checkDataDir(const char *DataDir, bool *DataDirOK)
 		}
 	}
 }
+#endif
 
 static void* PropertiesAlloc(Size size,void* cxt)
 {

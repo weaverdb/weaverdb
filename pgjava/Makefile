@@ -79,21 +79,21 @@ libmtpgjava.so: PostgresStmtManager.cc PostgresFrameConnection.cc $(SRCDIR)/back
 	PostgresFrameConnection.cc \
 	-o libmtpgjava.so
 else
-all: libweaver.jnilib weaver 
+all: libweaver.dylib weaver
 weaver: 
-	g++ ${CFLAGS} -DPG_JAVA \
-	${MACOSINC} ${MACOSPATH} -lpthread -framework JavaVM -lobjc \
+	${CPP} ${CFLAGS} -DPG_JAVA \
+	${MACOSINC} ${MACOSPATH} -lpthread -lobjc \
 	main.cc \
 	-o weaver
-libweaver.jnilib:
-	g++ ${CFLAGS} -bundle -DMACOSX -DPG_JAVA \
+libweaver.dylib:
+	${CPP} ${CFLAGS} -bundle -DMACOSX -DPG_JAVA \
 	${MACOSINC} ${MACOSPATH} ${MACOSLIBS} -lmtpg \
 	WeaverFrameConnection.cc \
 	WeaverStmtManager.cc \
-	-o libweaver.jnilib
+	-o libweaver.dylib
 endif
 
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 clean_java:
 	rm driver/weaver/*.class
 	rm weaver.jar
@@ -109,11 +109,11 @@ clean_legacy:
 	rm pgjava
 else
 clean:
-	rm libweaver.jnilib
+	rm libweaver.dylib
 	rm weaver
 endif
 
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 install: all
 	cp libweaver.so ${POSTGRESDIR}/lib/libweaver.so
 	cp weaver ${POSTGRESDIR}/bin/weaver
@@ -125,7 +125,7 @@ install_legacy: legacy
 	ln -s pgjava ${POSTGRESDIR}/bin/pgjava_server
 else
 install: all
-	cp libweaver.jnilib ${POSTGRESDIR}/lib/libweaver.jnilib
+	cp libweaver.dylib ${POSTGRESDIR}/lib/libweaver.dylib
 	cp weaver ${POSTGRESDIR}/bin/weaver
 	ln -s weaver ${POSTGRESDIR}/bin/weaver_server
 endif

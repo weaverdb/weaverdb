@@ -107,16 +107,6 @@
 #define INVALID_SOCK	(-1)
 #define ARGV_SIZE	64
 
-#ifdef HAVE_SIGPROCMASK
-sigset_t	UnBlockSig,
-			BlockSig;
-
-#else
-int			UnBlockSig,
-			BlockSig;
-
-#endif
-
 /*
  * Info for garbage collection.  Whenever a process dies, the Postmaster
  * cleans up after it.	Currently, NO information is required for cleanup,
@@ -284,7 +274,7 @@ SetOptsFile(char *progname, int port, char *datadir,
 			int maxbackends, int reinit,
 			int silent, int sendstop, char *extraoptions);
 
-extern int	BootstrapMain(int argc, char *argv[]);
+extern int BootstrapMain(int argc, char *argv[]);
 static pid_t SSDataBase(bool startup);
 
 #define StartupDataBase()	SSDataBase(true)
@@ -297,12 +287,6 @@ static void InitSSL(void);
 
 #ifdef CYR_RECODE
 void		GetCharSetByHost(char *, int, char *);
-
-#endif
-
-#ifdef USE_ASSERT_CHECKING
-
-int			assert_enabled = 1;
 
 #endif
 

@@ -458,7 +458,7 @@ elog(int lev, const char *fmt,...)
 	if (lev >= FATAL)
 	{
             if ( IsMultiuser() ) {
-                printf("SYSTEM HALT: from thread %ld\n",pthread_self());
+                printf("SYSTEM HALT: from thread %ld\n",(long)pthread_self());
                 printf("%s", msg_buf);
                 fprintf(stderr, "%s", msg_buf);
                 #ifdef MACOSX

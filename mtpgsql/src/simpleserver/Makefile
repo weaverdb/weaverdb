@@ -13,7 +13,7 @@ include ../Makefile.global
 
 PG_HOME=..
 
-ifeq ($(PORTNAME), macosx)
+ifeq ($(PORTNAME), darwin)
 ifndef JAVA_HOME
 JAVA_HOME=/System/Library/Frameworks/JavaVM.framework
 endif
@@ -47,8 +47,10 @@ MACOSPATH=\
 -L${JAVA_HOME}/Libraries \
 -L/usr/lib -L/usr/local/lib \
 
-
-ifneq ($(PORTNAME),macosx)
+%.dylib: %.o
+	$(LD) -bundle -o $@ $<
+	
+ifneq ($(PORTNAME),darwin)
 all: libmtpgjava.so simpleserver.jar
 # think about using malloc mtmalloc as memory management libs
 pgjava: 
@@ -68,42 +70,42 @@ simpleserver.jar:
 	${JAVA_HOME}/bin/javac org/mtpgsql/server/*.java
 	${JAVA_HOME}/bin/jar cvf simpleserver.jar org/mtpgsql/server/*.class
 else
-all: libmtpgjava.jnilib simpleserver.jar
+all: libmtpgjava.dylib simpleserver.jar
 pgjava: 
 	${CC} ${CFLAGS} -DPG_JAVA \
-	${MACOSINC} ${MACOSPATH} -lpthread -framework JavaVM -lobjc \
+	${MACOSINC} ${MACOSPATH} -lpthread -framework JavaNativeFoundation -lobjc \
 	-L/usr/local/lib \
 	main.cc \
 	-o pgjava
-libmtpgjava.jnilib:
+libmtpgjava.dylib:
 	${CC} ${CFLAGS} -bundle $(CFLAGS) -DMACOSX -DPG_JAVA \
 	${MACOSINC} ${MACOSPATH} ${MACOSLIBS} -lmtpg \
 	org_mtpgsql_server_Connection.c \
-	-o libmtpgjava.jnilib
+	-o libmtpgjava.dylib
 simpleserver.jar: 
 	${JAVA_HOME}/Commands/javac org/mtpgsql/server/*.java
 	${JAVA_HOME}/Commands/jar cvf simpleserver.jar org/mtpgsql/server/*.class
 endif
 
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 clean:
 	rm libmtpgjava.so
 	rm org_mtpgsql_server_Connection.o 
 	rm simpleserver.jar
 else
 clean:
-	rm libmtpgjava.jnilib
+	rm libmtpgjava.dylib
 	rm simpleserver.jar
 endif
 
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 install: all
 	cp libmtpgjava.so ${POSTGRESDIR}/lib/libmtpgjava.so
 	cp simpleserver.jar ${POSTGRESDIR}/lib/simpleserver.jar
 	cp sstart ${POSTGRESDIR}/bin/mtpgstart
 else
 install: all
-	cp libmtpgjava.jnilib ${POSTGRESDIR}/lib/libmtpgjava.jnilib
+	cp libmtpgjava.dylib ${POSTGRESDIR}/lib/libmtpgjava.dylib
 	cp simpleserver.jar ${POSTGRESDIR}/lib/simpleserver.jar
 	cp mstart ${POSTGRESDIR}/bin/mtpgstart
 endif

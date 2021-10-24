@@ -107,7 +107,7 @@ static bool ReadyConnection(WConn connection);
     SetEnv(NULL);  \
 
 
-extern OpaqueWConn
+OpaqueWConn
 WCreateConnection(const char *tName, const char *pass, const char *conn) {
     int sqlError = 0;
     char dbpath[512];
@@ -302,7 +302,7 @@ WCreateSubConnection(OpaqueWConn parent) {
     return (OpaqueWConn) connection;
 }
 
-extern long
+long
 WDestroyConnection(OpaqueWConn conn) {
     if ( conn == NULL ) return 0;
     
@@ -343,7 +343,7 @@ WDestroyConnection(OpaqueWConn conn) {
     return 0;
 }
 
-extern long
+long
 WBegin(OpaqueWConn conn, long trans) {
     long err = 0;
     WConn connection = SETUP(conn);
@@ -386,12 +386,12 @@ WBegin(OpaqueWConn conn, long trans) {
     return err;
 }
 
-extern char*
+char*
 WStatement(OpaquePreparedStatement plan) {
     return plan->statement;
 }
 
-extern OpaquePreparedStatement
+OpaquePreparedStatement
 WPrepareStatement(OpaqueWConn conn, const char *smt) {
     WConn connection = SETUP(conn);
     long err = 0;
@@ -401,7 +401,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return NULL;
     }
@@ -462,7 +462,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     return plan;
 }
 
-extern long 
+long
 WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     WConn connection = SETUP(stmt->owner);
     long err;
@@ -489,7 +489,7 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     return err;
 }
 
-extern long
+long
 WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, int varType, short *ind, int *clength) {
     WConn connection = SETUP(plan->owner);
     long err;
@@ -497,7 +497,7 @@ WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, 
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -527,7 +527,7 @@ WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, 
     return err;
 }
 
-extern long
+long
 WExec(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
     long err = 0;
@@ -540,7 +540,7 @@ WExec(OpaquePreparedStatement plan) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -654,7 +654,7 @@ WExec(OpaquePreparedStatement plan) {
     return err;
 }
 
-extern long
+long
 WFetch(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
     long err;
@@ -662,7 +662,7 @@ WFetch(OpaquePreparedStatement plan) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -747,20 +747,20 @@ WFetch(OpaquePreparedStatement plan) {
     return err;
 }
 
-extern long
+long
 WFetchIsComplete(OpaquePreparedStatement stmt) {
     if (stmt->stage == STMT_EOD) return TRUE;
     else return FALSE;
 }
 
-extern long
+long
 WPrepare(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -772,14 +772,14 @@ WPrepare(OpaqueWConn conn) {
     return err;
 }
 
-extern long
+long
 WCommit(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err;
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -817,7 +817,7 @@ WCommit(OpaqueWConn conn) {
     return err;
 }
 
-extern long
+long
 WRollback(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err;
@@ -825,7 +825,7 @@ WRollback(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -854,7 +854,7 @@ WRollback(OpaqueWConn conn) {
     return err;
 }
 
-static int 
+int
 ExpandSlots(PreparedPlan* plan, slot_type type) {
     if ( type == INPUT ) {
         plan->input = repalloc(plan->input, sizeof(Binder) * plan->input_slots * 2);
@@ -869,7 +869,7 @@ ExpandSlots(PreparedPlan* plan, slot_type type) {
     }
 }
 
-extern long
+long
 WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSize, short *indAdd, int varType, int cType) {
     WConn connection = SETUP(plan->owner);
     long err = 0;
@@ -877,7 +877,7 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -930,12 +930,12 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
     return err;
 }
 
-extern long
+long
 WExecCount(OpaquePreparedStatement stmt) {
     return stmt->processed;
 }
 
-extern long
+long
 WCancel(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     int sqlError = 0;
@@ -945,7 +945,7 @@ WCancel(OpaqueWConn conn) {
     return sqlError;
 }
 
-extern long
+long
 WCancelAndJoin(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     int sqlError = 0;
@@ -1010,7 +1010,7 @@ WDisposeConnection(OpaqueWConn conn) {
     return sqlError;
 }
 
-extern long
+long
 WGetTransactionId(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
@@ -1019,7 +1019,7 @@ WGetTransactionId(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1040,7 +1040,7 @@ WGetTransactionId(OpaqueWConn conn) {
     return xid;
 }
 
-extern long
+long
 WGetCommandId(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
@@ -1048,7 +1048,7 @@ WGetCommandId(OpaqueWConn conn) {
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1068,14 +1068,14 @@ WGetCommandId(OpaqueWConn conn) {
     return cid;
 }
 
-extern long
+long
 WBeginProcedure(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1095,14 +1095,14 @@ WBeginProcedure(OpaqueWConn conn) {
     return err;
 }
 
-extern long
+long
 WEndProcedure(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
     if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %ld, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return err;
     }
@@ -1193,7 +1193,7 @@ WFreeMemory(OpaqueWConn conn, void* pointer) {
     RELEASE(connection);
 }
 
-extern long
+long
 WUserLock(OpaqueWConn conn, const char *group, uint32_t val, char lockit) {
     WConn connection = SETUP(conn);
     Oid grouplockid = (Oid) - 3;
@@ -1259,7 +1259,7 @@ WUserLock(OpaqueWConn conn, const char *group, uint32_t val, char lockit) {
     return err;
 }
 
-extern long
+long
 WIsValidConnection(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     if ( connection == NULL ) return 0;
@@ -1269,7 +1269,7 @@ WIsValidConnection(OpaqueWConn conn) {
     return 0;
 }
 
-extern long
+long
 WGetErrorCode(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     if (connection == NULL)
@@ -1278,7 +1278,7 @@ WGetErrorCode(OpaqueWConn conn) {
     return (long) connection->CDA.rc;
 }
 
-extern const char *
+const char *
 WGetErrorText(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     if (connection == NULL)
@@ -1286,7 +1286,7 @@ WGetErrorText(OpaqueWConn conn) {
     return connection->CDA.text;
 }
 
-extern const char *
+const char *
 WGetErrorState(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     if (connection == NULL)
@@ -1294,7 +1294,7 @@ WGetErrorState(OpaqueWConn conn) {
     return connection->CDA.state;
 }
 
-extern void
+void
 WConnectStdIO(OpaqueWConn conn, void* args, pipefunc in, pipefunc out) {
     WConn connection = SETUP(conn);
     long err;
@@ -1307,7 +1307,7 @@ WConnectStdIO(OpaqueWConn conn, void* args, pipefunc in, pipefunc out) {
     RELEASE(connection);
 }
 
-extern void*
+void*
 WDisconnectStdIO(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err;
@@ -1320,7 +1320,7 @@ WDisconnectStdIO(OpaqueWConn conn) {
     return args;
 }
 
-extern long
+long
 WStreamExec(OpaqueWConn conn, char *statement) {
     WConn connection = SETUP(conn);
     long err;
@@ -1354,7 +1354,7 @@ WStreamExec(OpaqueWConn conn, char *statement) {
     return err;
 }
 
-extern Pipe WPipeConnect(OpaqueWConn conn, void* args, pipefunc func) {
+Pipe WPipeConnect(OpaqueWConn conn, void* args, pipefunc func) {
     WConn connection = SETUP(conn);
     MemoryContext cxt;
     long err = 0;
@@ -1369,7 +1369,7 @@ extern Pipe WPipeConnect(OpaqueWConn conn, void* args, pipefunc func) {
     return pipe;
 }
 
-extern void*
+void*
 WPipeDisconnect(OpaqueWConn conn, Pipe pipe) {
     WConn connection = SETUP(conn);
     void* userargs;
@@ -1383,12 +1383,12 @@ WPipeDisconnect(OpaqueWConn conn, Pipe pipe) {
     return userargs;
 }
 
-extern int
+int
 WPipeSize(OpaqueWConn conn) {
     return sizeof (CommBuffer);
 }
 
-void
+static void
 SetError(WConn connection, int sqlError, char* state, char* err) {
     connection->CDA.rc = sqlError;
 

@@ -318,9 +318,9 @@ typedef struct
 #define DCH_CACHE_FIELDS	16
 */
 
-#define NUM_CACHE_SIZE		1
+#define NUM_CACHE_SIZE		64
 #define NUM_CACHE_FIELDS	0
-#define DCH_CACHE_SIZE		1
+#define DCH_CACHE_SIZE		128
 #define DCH_CACHE_FIELDS	0
 
 typedef struct

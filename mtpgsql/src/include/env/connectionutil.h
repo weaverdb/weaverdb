@@ -18,19 +18,19 @@
 extern "C" {
 #endif
 
-extern bool initweaverbackend(char* dbname);
-extern bool isinitialized(void);
-extern bool prepareforshutdown(void);
-extern void wrapupweaverbackend(void);
-extern void singleusershutdown(int code);
+LIB_EXTERN bool initweaverbackend(char* dbname);
+LIB_EXTERN bool isinitialized(void);
+LIB_EXTERN bool prepareforshutdown(void);
+LIB_EXTERN void wrapupweaverbackend(void);
+LIB_EXTERN void singleusershutdown(int code);
 
-extern char* GetProperty(char* key);
-extern bool GetBoolProperty(char* key);
-extern int GetIntProperty(char* key);
-extern double GetFloatProperty(char* key);
-extern bool PropertyIsValid(char* key);
-extern int GetMaxBackends(void);
-extern int GetProcessorCount(void);
+LIB_EXTERN char* GetProperty(char* key);
+LIB_EXTERN bool GetBoolProperty(char* key);
+LIB_EXTERN int GetIntProperty(char* key);
+LIB_EXTERN double GetFloatProperty(char* key);
+LIB_EXTERN bool PropertyIsValid(char* key);
+LIB_EXTERN int GetMaxBackends(void);
+LIB_EXTERN int GetProcessorCount(void);
 
 #ifdef __cplusplus
 }

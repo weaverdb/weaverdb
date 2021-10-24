@@ -19,6 +19,8 @@
 
 #include "postgres.h"
 
+#include <stdio.h>
+
 #include "catalog/pg_type.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_type.h"
@@ -557,9 +559,9 @@ BuildDescForRelation(List *schema, char *relname)
 		if (arry != NIL)
 		{
 			/* array of XXX is _XXX */
-			snprintf(typename, NAMEDATALEN,
+			/*snprintf(typename, NAMEDATALEN,
 					 "_%.*s", NAMEDATALEN - 2, entry->typename->name);
-			attdim = length(arry);
+			*/attdim = length(arry);
 		}
 		else
 		{

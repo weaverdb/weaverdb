@@ -50,6 +50,21 @@ pthread_mutex_t                 envlock;
 bool 				multiuser = false;
 
 static ProcessingMode		CurrentMode = InitProcessing;
+#ifdef USE_ASSERT_CHECKING
+
+int            assert_enabled = 1;
+
+#endif
+
+#ifdef HAVE_SIGPROCMASK
+sigset_t    UnBlockSig,
+            BlockSig;
+
+#else
+int            UnBlockSig,
+            BlockSig;
+
+#endif
 
 #define WRITELOCK_MASK	0x04
 #define READLOCK_MASK	0x02
@@ -79,6 +94,7 @@ static void  env_log(Env* env, char* pattern, ...);
 static __thread Env* env_cache = NULL;
 #endif
 
+
 Env* InitSystem(bool  isPrivate) {
 	int counter = 0;
 
@@ -98,7 +114,6 @@ Env* InitSystem(bool  isPrivate) {
      	   envmap[counter] = NULL;
     	}
         
-          
 #ifdef MACOSX
 
 #else   

@@ -19,6 +19,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <math.h>
 #include "postgres.h"
 
 

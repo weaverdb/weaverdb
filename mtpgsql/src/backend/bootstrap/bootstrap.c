@@ -53,7 +53,6 @@ extern char ControlFilePath[];
 extern int	Int_yyparse(void);
 static hashnode *AddStr(char *str, int strlength, int mderef);
 static Form_pg_attribute AllocateAttribute(void);
-static bool BootstrapAlreadySeen(Oid id);
 static int	CompHash(char *str, int len);
 static hashnode *FindStr(char *str, int length, hashnode *mderef);
 static Oid	gettype(char *type);
@@ -149,32 +148,9 @@ static char *values[MAXATTR];	/* cooresponding attribute values */
 int			numattr;			/* number of attributes for cur. rel */
 
 int			DebugMode;
-static MemoryContext nogc = NULL; /* special no-gc mem
-												 * context */
 
 extern int	optind;
 extern char *optarg;
-
-/*
- *	At bootstrap time, we first declare all the indices to be built, and
- *	then build them.  The IndexList structure stores enough information
- *	to allow us to build the indices after they've been declared.
- */
-
-typedef struct _IndexList
-{
-	char	   *il_heap;
-	char	   *il_ind;
-	int			il_natts;
-	AttrNumber *il_attnos;
-	uint16		il_nparams;
-	Datum	   *il_params;
-	FuncIndexInfo *il_finfo;
-	PredInfo   *il_predInfo;
-	struct _IndexList *il_next;
-} IndexList;
-
-static IndexList *ILHead = (IndexList *) NULL;
 
 typedef void (*sig_func) ();
 
@@ -759,34 +735,6 @@ InsertOneNull(int i)
 	Blanks[i] = 'n';
 }
 
-#define MORE_THAN_THE_NUMBER_OF_CATALOGS 256
-
-static bool
-BootstrapAlreadySeen(Oid id)
-{
-	static Oid	seenArray[MORE_THAN_THE_NUMBER_OF_CATALOGS];
-	static int	nseen = 0;
-	bool		seenthis;
-	int			i;
-
-	seenthis = false;
-
-	for (i = 0; i < nseen; i++)
-	{
-		if (seenArray[i] == id)
-		{
-			seenthis = true;
-			break;
-		}
-	}
-	if (!seenthis)
-	{
-		seenArray[nseen] = id;
-		nseen++;
-	}
-	return seenthis;
-}
-
 /* ----------------
  *		cleanup
  * ----------------
@@ -1077,138 +1025,4 @@ AddStr(char *str, int strlength, int mderef)
 		trail->next = newnode;
 	}
 	return newnode;
-}
-
-
-
-/*
- *	index_register() -- record an index that has been set up for building
- *						later.
- *
- *		At bootstrap time, we define a bunch of indices on system catalogs.
- *		We postpone actually building the indices until just before we're
- *		finished with initialization, however.	This is because more classes
- *		and indices may be defined, and we want to be sure that all of them
- *		are present in the index.
- */
-void
-index_register(char *heap,
-			   char *ind,
-			   int natts,
-			   AttrNumber *attnos,
-			   uint16 nparams,
-			   Datum *params,
-			   FuncIndexInfo *finfo,
-			   PredInfo *predInfo)
-{
-	Datum	   *v;
-	IndexList  *newind;
-	int			len;
-	MemoryContext oldcxt;
-
-	/*
-	 * XXX mao 10/31/92 -- don't gc index reldescs, associated info at
-	 * bootstrap time.	we'll declare the indices now, but want to create
-	 * them later.
-	 */
-
-	if (nogc == NULL)
-		nogc = AllocSetContextCreate((MemoryContext) NULL,
-									 "BootstrapNoGC",
-									 ALLOCSET_DEFAULT_MINSIZE,
-									 ALLOCSET_DEFAULT_INITSIZE,
-									 ALLOCSET_DEFAULT_MAXSIZE);
-
-	oldcxt = MemoryContextSwitchTo((MemoryContext) nogc);
-
-	newind = (IndexList *) palloc(sizeof(IndexList));
-	newind->il_heap = pstrdup(heap);
-	newind->il_ind = pstrdup(ind);
-	newind->il_natts = natts;
-
-	if (PointerIsValid(finfo))
-		len = FIgetnArgs(finfo) * sizeof(AttrNumber);
-	else
-		len = natts * sizeof(AttrNumber);
-
-	newind->il_attnos = (AttrNumber *) palloc(len);
-	memmove(newind->il_attnos, attnos, len);
-
-	if ((newind->il_nparams = nparams) > 0)
-	{
-		v = newind->il_params = (Datum *) palloc(2 * nparams * sizeof(Datum));
-		nparams *= 2;
-		while (nparams-- > 0)
-		{
-			*v = (Datum) palloc(strlen((char *) (*params)) + 1);
-			strcpy((char *) *v++, (char *) *params++);
-		}
-	}
-	else
-		newind->il_params = (Datum *) NULL;
-
-	if (finfo != (FuncIndexInfo *) NULL)
-	{
-		newind->il_finfo = (FuncIndexInfo *) palloc(sizeof(FuncIndexInfo));
-		memmove(newind->il_finfo, finfo, sizeof(FuncIndexInfo));
-	}
-	else
-		newind->il_finfo = (FuncIndexInfo *) NULL;
-
-	if (predInfo != NULL)
-	{
-		newind->il_predInfo = (PredInfo *) palloc(sizeof(PredInfo));
-		newind->il_predInfo->pred = predInfo->pred;
-		newind->il_predInfo->oldPred = predInfo->oldPred;
-	}
-	else
-		newind->il_predInfo = NULL;
-
-	newind->il_next = ILHead;
-
-	ILHead = newind;
-
-	MemoryContextSwitchTo(oldcxt);
-}
-
-void
-build_indices()
-{
-	Relation	heap;
-	Relation	ind;
-
-	for (; ILHead != (IndexList *) NULL; ILHead = ILHead->il_next)
-	{
-		heap = heap_openr(ILHead->il_heap, NoLock);
-		Assert(heap);
-		ind = index_openr(ILHead->il_ind);
-		Assert(ind);
-		index_build(heap, ind, ILHead->il_natts, ILHead->il_attnos,
-				 ILHead->il_nparams, ILHead->il_params, ILHead->il_finfo,
-					ILHead->il_predInfo);
-
-                 heap_close(heap, NoLock);
-                 index_close(ind);
-
-		/*
-		 * All of the rest of this routine is needed only because in
-		 * bootstrap processing we don't increment xact id's.  The normal
-		 * DefineIndex code replaces a pg_class tuple with updated info
-		 * including the relhasindex flag (which we need to have updated).
-		 * Unfortunately, there are always two indices defined on each
-		 * catalog causing us to update the same pg_class tuple twice for
-		 * each catalog getting an index during bootstrap resulting in the
-		 * ghost tuple problem (see heap_update).	To get around this we
-		 * change the relhasindex field ourselves in this routine keeping
-		 * track of what catalogs we already changed so that we don't
-		 * modify those tuples twice.  The normal mechanism for updating
-		 * pg_class is disabled during bootstrap.
-		 *
-		 * -mer
-		 */
-		if (!BootstrapAlreadySeen(RelationGetRelid(heap)))
-			UpdateStats(RelationGetRelid(heap), 0);
-
-		/* XXX Probably we ought to close the heap and index here? */
-	}
 }

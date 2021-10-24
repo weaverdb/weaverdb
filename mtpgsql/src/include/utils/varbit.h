@@ -1,7 +1,7 @@
 #ifndef VARBIT_H
 #define VARBIT_H
 
-#include <math.h>
+/*#include <math.h>*/
 
 #ifdef HAVE_LIMITS_H
 #include <limits.h>

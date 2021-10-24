@@ -1,4 +1,4 @@
-%.jnilib: %.o
+%.dylib: %.o
 	$(LD) -bundle -o $@ $<
 PG_HOME=${SRCDIR}
 MK_NO_LORDER=true

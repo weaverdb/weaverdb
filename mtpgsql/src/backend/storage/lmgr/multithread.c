@@ -238,7 +238,7 @@ InitThread(ThreadType tt)
 	 */
         memset(&newthread,0x00,sizeof(ThreadId));
         newthread.proc = getpid();
-        newthread.thread = GetEnv()->eid;
+        newthread.thread = GetEnv()->owner;
         memcpy(&env->thread->tid,&newthread,sizeof(ThreadId));
 	
         DTRACE_PROBE4(mtpg,thread__create,tt,ProcGlobal->created,ProcGlobal->alloc,ProcGlobal->free);
@@ -326,7 +326,7 @@ ThreadReleaseLocks(bool isCommit)
   *    in the thread sleep loop!
   */
 	if ( GetOffWaitqueue(tenv->thread) ) {
-            elog(DEBUG,"got off wait queue tid: %lu",pthread_self());
+            elog(DEBUG,"got off wait queue tid: %ld",(long)pthread_self());
         }
 	LockReleaseAll(HEAP_LOCKMETHOD, tenv->thread,
 				   !isCommit, xid);

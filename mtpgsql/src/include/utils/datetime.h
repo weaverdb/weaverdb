@@ -17,7 +17,7 @@
 #define DATETIME_H
 
 #include <time.h>
-#include <math.h>
+/* #include <math.h> */
 #include <limits.h>
 #include "utils/timestamp.h"
 

@@ -20,12 +20,13 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "os.h"
-
-#include <stdint.h>
 
 #ifndef POSTGRES_EXT_H
 #define POSTGRES_EXT_H
+
+#include "os.h"
+
+#include <stdint.h>
 
 /*
 typedef u_int32_t uint32_t;

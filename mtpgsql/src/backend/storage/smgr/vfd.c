@@ -41,6 +41,9 @@ static long     log_pos;
 #define SEGMENT_MAGIC  0xABCDEF0123456789
 #define INDEX_MAGIC  0x9876543210FEDCBA
 
+#ifdef MACOSX
+#define O_LARGEFILE 0x0
+#endif
 
 static union  logbuffer {
     struct {
@@ -667,10 +670,7 @@ vfdbeginlog() {
 
 int
 vfdlog(SmgrInfo info,BlockNumber block, char* buffer) {
-/*
-    int32 put = BLCKSZ;
-*/
-    ulong put = BLCKSZ;
+    long put = BLCKSZ;
     
     if ( SegmentStore.header.count == max_blocks ) {
         _vfddumplogtodisk();

@@ -99,10 +99,10 @@ TransComputeBlockNumber(Relation relation,		/* relation to test */
 	absoluteBlocks = ((unsigned long)((transactionId) / itemsPerBlock));
 	compublock = (absoluteBlocks - blocksToRemove);
 	if ((absoluteBlocks - blocksToRemove) < 0 ) {
-		elog(FATAL,"transaction id %lu block number %lu",(transactionId),compublock);
+		elog(FATAL,"transaction id %llu block number %lu",(transactionId),compublock);
 	}
 	if ( compublock > 8192 ) {
-		elog(NOTICE,"Transaction Log is very large vacuum all databases soon. transaction id %lu block number %lu",(transactionId),compublock);
+		elog(NOTICE,"Transaction Log is very large vacuum all databases soon. transaction id %llu block number %lu",(transactionId),compublock);
         }
 /*        printf("id: %d block: %d\n",transactionId,compublock);     */
         return compublock;

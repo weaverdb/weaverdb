@@ -349,8 +349,8 @@ TransRecover(Relation logrelation)
 	mark = lowwater;
 	
 	
-	elog(DEBUG,"xid is %lu",ctid);
-	elog(DEBUG,"low water is %lu\n",lowwater);
+	elog(DEBUG,"xid is %llu",ctid);
+	elog(DEBUG,"low water is %llu\n",lowwater);
 	
 	while (mark < ctid) {
 	
@@ -374,7 +374,7 @@ TransRecover(Relation logrelation)
 		} else if ( TransactionIdDidSoftCommit(mark) ) {
 			TransBlockSetXidStatus(block, mark, XID_ABORT);
 			WriteNoReleaseBuffer(logrelation,buffer);
-			elog(DEBUG,"soft to abort %lu",mark);
+			elog(DEBUG,"soft to abort %llu",mark);
 		/*  
 		
 		don't do this for now and see how it goes

@@ -42,10 +42,10 @@ include $(SRCDIR)/Makefile.global
 
 DIRS =  access catalog commands executor lib libpq \
 	parser nodes optimizer regex rewrite \
-	storage tcop utils env postmaster
+	storage tcop utils env 
 
          
-ifeq ($(PORTNAME),macosx)
+ifeq ($(PORTNAME),darwin)
 #  we removed dlopen functionality for now to support java
 #DIRS += dlcompat
 else
@@ -55,7 +55,7 @@ endif
 OBJS = $(DIRS:%=%/SUBSYS.o)
 ifeq ($(PORTNAME), qnx4)
 # This file chrashes wlink and is therefore not in bootstrap/SUBSYS.o.
-OBJS1 = bootstrap/bootstrap.o
+OBJS1 = bootstrap/bootstrap.o postmaster/postmaster.o
 endif
 
 VERSIONOBJ = $(SRCDIR)/utils/version.o
@@ -67,7 +67,7 @@ CFLAGS+= $(KRBFLAGS)
 LDFLAGS+= $(KRBLIBS)
 endif
 
-ifneq ($(PORTNAME), macosx)
+ifneq ($(PORTNAME), darwin)
 all: postgres libmtpg.a \
 	$(POSTGRES_IMP) global1.bki.source local1_template1.bki.source \
 	global1.description local1_template1.description
@@ -77,8 +77,8 @@ all:  postgres libmtpg.a $(POSTGRES_IMP) global1.bki.source \
 	local1_template1.description
 endif
 
-postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o bootstrap/SUBSYS.o
-	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o \
+postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o
+	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o \
 -lmtpg $(LDFLAGS) $(LIBS)
 
 #.PHONY: postgres
@@ -107,7 +107,7 @@ catalog/global1.description catalog/local1_template1.description:
 postgres.o: $(OBJS)
 	$(CC) $(LDREL) $(LDOUT) postgres.o $(OBJS) $(OBJS1) $(LDFLAGS)
 	
-main/SUBSYS.o:
+main/SUBSYS.o: 
 	$(MAKE) -C $(SRCDIR)/backend/main all
 
 bootstrap/SUBSYS.o:
@@ -130,6 +130,11 @@ libmtpg.a: ${OBJS} mtpg.o
 else
 ifeq ($(PORTNAME),solaris)
 #	${LD} -r ${LDFLAGS} -M$(SRCDIR)/backend/mapfile.txt 
+libmtpg.a: ${OBJS} mtpg.o
+	${LD} -r ${LDFLAGS} \
+	${OBJS} ${VERSIONOBJ} mtpg.o \
+	-o libmtpg.a
+else ifeq ($(PORTNAME),darwin)
 libmtpg.a: ${OBJS} mtpg.o
 	${LD} -r ${LDFLAGS} \
 	${OBJS} ${VERSIONOBJ} mtpg.o \

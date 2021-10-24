@@ -405,7 +405,7 @@ ActivateFile(Vfd* vfdP) {
     if (vfdP->seekPos != 0L) {
         off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
         if (check != vfdP->seekPos) {
-            elog(NOTICE, "bad file activation during seek filename:%s, current: %ld, seeked: %ld", vfdP->fileName, vfdP->seekPos, check);
+            elog(NOTICE, "bad file activation during seek filename:%s, current: %ld, seeked: %lld", vfdP->fileName, vfdP->seekPos, check);
         }
     }
 
@@ -767,7 +767,7 @@ OpenTemporaryFile(void) {
      * transaction
      */
     snprintf(tempfilename, sizeof (tempfilename),
-            "pg_sorttemp%d.%d.%ld", MyProcPid, (int) pthread_self(), tempFileCounter++);
+            "pg_sorttemp%d.%ld.%ld", MyProcPid, (long)pthread_self(), tempFileCounter++);
 
     /* Open the file */
 

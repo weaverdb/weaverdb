@@ -15,6 +15,7 @@
 #include <limits.h>
 #include <ctype.h>
 #include <locale.h>
+#include <math.h>
 #include "postgres.h"
 
 #include "miscadmin.h"

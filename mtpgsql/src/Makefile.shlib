@@ -167,7 +167,7 @@ ifeq ($(PORTNAME), solaris_sparc)
   CFLAGS			+= $(CFLAGS_SL)
 endif
 
-ifeq ($(PORTNAME), macosx)
+ifeq ($(PORTNAME), darwin)
   install-shlib-dep	:= install-shlib
   shlib				:= 
   LDFLAGS_SL		:= -G
@@ -223,7 +223,7 @@ all: lib$(NAME).a $(shlib)
 ifneq ($(PORTNAME), win)
 
 lib$(NAME).a: $(OBJS)
-ifeq ($(PORTNAME),macosx)
+ifeq ($(PORTNAME),darwin)
 	ld  -r -o libpq.o ${OBJS}
 	libtool -o libpq.a libpq.o
 else
@@ -284,7 +284,7 @@ install-lib: lib$(NAME).a
 	$(INSTALL) $(INSTL_LIB_OPTS) lib$(NAME).a $(LIBDIR)/lib$(NAME).a
 
 install-shlib: $(shlib)
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 	$(INSTALL) $(INSTL_SHLIB_OPTS) $(shlib) $(LIBDIR)/$(shlib)
 ifneq ($(PORTNAME), win)
 	if [ "$(shlib)" != "lib$(NAME)$(DLSUFFIX).$(SO_MAJOR_VERSION)" ]; then \

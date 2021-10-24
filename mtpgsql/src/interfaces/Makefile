@@ -25,7 +25,7 @@ include $(SRCDIR)/Makefile.global
 .DEFAULT all install clean dep depend distclean:
 	$(MAKE) -C libpq $@
 #	$(MAKE) -C ecpg $@
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 ifeq ($(HAVE_Cplusplus), true)
 	$(MAKE) -C libpq++ $@
 else

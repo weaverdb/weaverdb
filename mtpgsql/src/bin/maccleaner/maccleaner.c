@@ -4,6 +4,7 @@ this should clean shared memory on mac systems
 
 */
 #include <unistd.h>
+#include <stdio.h>
 #include <sys/shm.h>
 #include <sys/semaphore.h>
 
@@ -19,7 +20,7 @@ main(int argc, char *argv[])
 
         snprintf(name,sizeof(name),"gate%i",groupcount);
         item = sem_open(name,0);
-        if ( (int)item != SEM_FAILED ) {
+        if ( item != SEM_FAILED ) {
             if ( sem_close(item) != 0 ) {
                 perror("gates:");
             } else {
@@ -27,15 +28,10 @@ main(int argc, char *argv[])
                 sem_unlink(name);
             }
             printf("cleaned out gate%i\n",groupcount);
-        } else {
-/*
-            printf("no item at gate%i\n",groupcount);
-
-*/
         }
     }
     item = sem_open("pipeline",0);
-    if ( (int)item != SEM_FAILED ) {
+    if ( item != SEM_FAILED ) {
         if ( sem_close(item) != 0 ) {
             perror("pipeline:");
         } else {

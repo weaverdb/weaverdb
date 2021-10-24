@@ -14,7 +14,7 @@
 #define TIMESTAMP_H
 
 #include <time.h>
-#include <math.h>
+/* #include <math.h> */
 #include <limits.h>
 
 /*

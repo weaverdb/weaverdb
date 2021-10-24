@@ -11,12 +11,8 @@
 SRCDIR=../mtpgsql/src
 include ${SRCDIR}/Makefile.global
 
-ifeq ($(PORTNAME), macosx)
-JAVA_HOME=/Library/Java/Home
-else
 ifndef JAVA_HOME
 JAVA_HOME=/usr/jdk/latest
-endif
 endif
 
 CFLAGS += -Wno-unused-variable -Wno-unused-function
@@ -24,7 +20,7 @@ CFLAGS += -Wno-unused-variable -Wno-unused-function
 ifeq ($(CC), CC)
 SHARED=-G -Mmapfile.txt
 else
-SHARED=-shared
+SHARED=-shared -fvisibility=hidden -exported_symbols_list mac_mapfile.txt
 endif
 
 MYINC=\
@@ -55,14 +51,14 @@ MACOSPATH=\
 -L${SRCDIR}/backend \
 -L${JAVA_HOME}/lib \
 
-all: java_bits libweaver.so weaver 
 # think about using malloc mtmalloc as memory management libs
 java_bits:
 	${JAVA_HOME}/bin/javac -g driver/weaver/*.java
 	# ${JAVA_HOME}/bin/javac driver/weaver/*.java driver/weaver/jdbc/*.java
 	${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class 
 	# ${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class driver/weaver/jdbc/*.class
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
+all: java_bits libweaver.so weaver
 weaver: libweaver.so
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
 	${MYINC} ${MYPATH} ${MYLIBS} -L. \
@@ -78,22 +74,22 @@ libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c 
 	WeaverValueExtractor.c 	\
 	-o libweaver.so -lmtpg
 else
-all: libweaver.jnilib weaver 
+all: java_bits libweaver.dylib weaver
 weaver: 
-	g++ ${CFLAGS} -DWEAVER_JAVA \
-	${MACOSINC} ${MACOSPATH} -lpthread -framework JavaVM -lobjc \
+	${CC} ${CFLAGS} -DWEAVER_JAVA \
+	${MACOSINC} ${MACOSPATH} -lpthread -L${JAVA_HOME}/lib/server/ -ljli -lobjc \
 	main.c \
 	-o weaver
-libweaver.jnilib:
-	g++ ${CFLAGS} -bundle -DMACOSX -DWEAVER_JAVA \
+libweaver.dylib:
+	${CC} ${CFLAGS} ${SHARED}  -DWEAVER_JAVA \
 	${MACOSINC} ${MACOSPATH} ${MACOSLIBS} -lmtpg \
 	BaseWeaverConnection.c \
 	WeaverValueExtractor.c \
 	WeaverStmtManager.c \
-	-o libweaver.jnilib
+	-o libweaver.dylib
 endif
 
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 clean_java:
 	rm driver/weaver/*.class
 	rm weaver.jar
@@ -107,11 +103,11 @@ clean_legacy:
 	rm pgjava
 else
 clean:
-	rm libweaver.jnilib
+	rm libweaver.dylib
 	rm weaver
 endif
 
-ifneq ($(PORTNAME),macosx)
+ifneq ($(PORTNAME),darwin)
 install: all
 	cp libweaver.so ${POSTGRESDIR}/lib/libweaver.so
 	cp weaver ${POSTGRESDIR}/bin/weaver
@@ -123,7 +119,7 @@ install_legacy: legacy
 	ln -s pgjava ${POSTGRESDIR}/bin/pgjava_server
 else
 install: all
-	cp libweaver.jnilib ${POSTGRESDIR}/lib/libweaver.jnilib
+	cp libweaver.dylib ${POSTGRESDIR}/lib/libweaver.dylib
 	cp weaver ${POSTGRESDIR}/bin/weaver
 	ln -s weaver ${POSTGRESDIR}/bin/weaver_server
 endif
