@@ -12,6 +12,8 @@ SRCDIR = ../../..
 include ../../../Makefile.global
 
 CFLAGS += -I../..
+CFLAGS += -Wno-unused-but-set-variable
+
 
 OBJS = buf_table.o buf_init.o bufmgr.o freelist.o localbuf.o m_lock.o
 

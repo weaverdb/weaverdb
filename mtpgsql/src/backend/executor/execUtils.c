@@ -230,10 +230,12 @@ void
 ExecAssignResultTypeFromTL(Plan *node, CommonState *commonstate)
 {
 	List	   *targetList;
-	int			i;
+//	int			i;
 	int			len;
 	List	   *tl;
+#ifdef SETS_FIXED
 	TargetEntry *tle;
+#endif
 	List	   *fjtl;
 	TupleDesc	origTupDesc;
 
@@ -243,17 +245,21 @@ ExecAssignResultTypeFromTL(Plan *node, CommonState *commonstate)
 
 	fjtl = NIL;
 	tl = targetList;
-	i = 0;
+//	i = 0;
 	while (tl != NIL || fjtl != NIL)
 	{
 		if (fjtl != NIL)
 		{
+#ifdef SETS_FIXED
 			tle = lfirst(fjtl);
+#endif
 			fjtl = lnext(fjtl);
 		}
 		else
 		{
+#ifdef SETS_FIXED
 			tle = lfirst(tl);
+#endif
 			tl = lnext(tl);
 		}
 #ifdef SETS_FIXED
@@ -266,7 +272,7 @@ ExecAssignResultTypeFromTL(Plan *node, CommonState *commonstate)
 			tle = fj->fj_innerNode;
 		}
 #endif
-		i++;
+//		i++;
 	}
 
 	if (len > 0)

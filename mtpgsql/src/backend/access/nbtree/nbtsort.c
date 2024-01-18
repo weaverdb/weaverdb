@@ -199,9 +199,7 @@ static void
 _bt_blnewpage(Relation index, Buffer * buf, Page * page, int flags)
 {
 	BTPageOpaque    opaque;
-/*
-        if ( BufferIsValid(*buf) ) LockBuffer(index,*buf,BUFFER_LOCK_NOTCRITICAL);
-*/
+
 	*buf = _bt_getbuf(index, P_NEW, BT_READYWRITE);
 	*page = BufferGetPage(*buf);
 
@@ -379,7 +377,6 @@ _bt_buildadd(Relation index, BTPageState * state, BTItem bti)
 		BTItem          obti;
 
 		/* Create new page */
-                LockBuffer(index,obuf,BUFFER_LOCK_NOTCRITICAL);
                 _bt_blnewpage(index, &nbuf, &npage,
 			      (state->btps_level > 0) ? 0 : BTP_LEAF);
 

@@ -491,7 +491,7 @@ btgettuple(IndexScanDesc scan, ScanDirection dir) {
     if (res) {
         ((BTScanOpaque) scan->opaque)->curHeapIptr = scan->xs_ctup.t_self;
         LockBuffer((rel), ((BTScanOpaque) scan->opaque)->btso_curbuf,
-                BUFFER_LOCK_UNLOCK);
+                BT_NONE);
     }
 
     return res;
@@ -691,7 +691,6 @@ btrecoverpage(Relation rel, BlockNumber block) {
     opaque = (BTPageOpaque) PageGetSpecialPointer(page);
     
     if ( PageIsNew(page) ) {
-        LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
         _bt_pageinit(page,BufferGetPageSize(buffer));
         opaque->btpo_flags |= BTP_REAPED;
         _bt_wrtbuf(rel, buffer);
@@ -738,7 +737,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
                 if (!BufferIsValid(heapbuffer)) {
                     deleteit = true;
                 } else {
-                    LockBuffer(heaprel, heapbuffer, BUFFER_LOCK_SHARE);
+                    LockBuffer(heaprel, heapbuffer, BT_READ);
                     Page heapPage = BufferGetPage(heapbuffer);
 
                     if (ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(heapPage)) {
@@ -749,17 +748,15 @@ btrecoverpage(Relation rel, BlockNumber block) {
                     } else {
                         deleteit = true;
                     }
-                    LockBuffer(heaprel, heapbuffer, BUFFER_LOCK_UNLOCK);
+                    LockBuffer(heaprel, heapbuffer, BT_NONE);
                     ReleaseBuffer(heaprel, heapbuffer);
                 }
 
                 if (deleteit) {
-                    LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
                     PageIndexTupleDelete(page, current);
                     elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
                     current = OffsetNumberPrev(current);
                     changed = true;
-                    LockBuffer(rel,buffer,BUFFER_LOCK_NOTCRITICAL);
                 } else {
                     /*
                                     elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
@@ -802,11 +799,9 @@ btrecoverpage(Relation rel, BlockNumber block) {
                 }
 
                 if (deleteit) {
-                    LockBuffer(rel,buffer,BUFFER_LOCK_CRITICAL);
                     PageIndexTupleDelete(page, current);
                     current = OffsetNumberPrev(current);
                     changed = true;                  
-                    LockBuffer(rel,buffer,BUFFER_LOCK_NOTCRITICAL);
                 } else {
                     /*
                                     elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
@@ -836,7 +831,7 @@ btrecoverpage(Relation rel, BlockNumber block) {
 Datum
 btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
     long tuples_removed;
-    long num_index_tuples;
+//    long num_index_tuples;
     IndexScanDesc scan;
     BTScanOpaque so;
     ItemPointer current;
@@ -844,7 +839,7 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
     long used_pages = 0;
 
     tuples_removed = 0;
-    num_index_tuples = 0;
+//    num_index_tuples = 0;
 
     /*  array is seq scan so ItemPointers are in order */
     /* maybe just make sure  */
@@ -910,8 +905,8 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
                  */
                 IncrBufferRefCount(rel, buf);
                 used_pages++;
-                LockBuffer((rel), buf, BUFFER_LOCK_UNLOCK);
-                LockBuffer((rel), buf, BUFFER_LOCK_REF_EXCLUSIVE);
+                LockBuffer((rel), buf, BT_NONE);
+                LockBuffer((rel), buf, BT_EXCLUSIVE);
 
                 lockedbuf = buf;
                 /*
@@ -950,7 +945,7 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
                  */
                 ItemPointerSetUnchecked(current, BufferGetBlockNumber(lockedbuf), (offnum - 1));
             } else {
-                num_index_tuples += 1;
+//                num_index_tuples += 1;
             }
 
             if (tuples_removed == delcount) {
@@ -961,7 +956,7 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
                  *  1 hr later...check that, modified btendscan instead,
                  *  makes more sense
                  */
-                LockBuffer((rel), buf, BUFFER_LOCK_UNLOCK);
+                LockBuffer((rel), buf, BT_NONE);
                 buf = InvalidBuffer;
             } else {
                 if (_bt_step(scan, ForwardScanDirection)) {
@@ -1103,7 +1098,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
     topaque = (BTPageOpaque) PageGetSpecialPointer(tpage);
     
     if ( PageIsNew(tpage) ) {
-        LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+        LockBuffer(rel,tbuffer,BT_WRITE);
         _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
         ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
         _bt_wrtbuf(rel, tbuffer);
@@ -1149,11 +1144,11 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_flags |= BTP_ROOT;
                 ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_parent = BTREE_METAPAGE;
 
-                LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
+                LockBuffer(rel,metabuf,BT_WRITE);
                 metad->btm_root = lblock;
-                LockBuffer(rel,metabuf,BUFFER_LOCK_NOTCRITICAL);
+                LockBuffer(rel,metabuf,BT_NONE);
 
-                LockBuffer(rel,rootbuf,BUFFER_LOCK_CRITICAL);
+                LockBuffer(rel,rootbuf,BT_WRITE);
                 ((BTPageOpaque)PageGetSpecialPointer(rootpg))->btpo_flags |= BTP_REAPED;
 
                 _bt_wrtbuf(rel,rootbuf);
@@ -1174,15 +1169,15 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
         Page npage = BufferGetPage(nbuffer);
         BTPageOpaque nopaque = (BTPageOpaque) PageGetSpecialPointer(npage);
         nopaque->btpo_prev = 0;
-        LockBuffer(rel,nbuffer,BUFFER_LOCK_NOTCRITICAL);
-        LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+        LockBuffer(rel,nbuffer,BT_NONE);
+        LockBuffer(rel,tbuffer,BT_WRITE);
         ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
         _bt_wrtbuf(rel, nbuffer);
         _bt_wrtbuf(rel, tbuffer);
     } else if ( P_RIGHTMOST(topaque) ) {
         _bt_relbuf(rel, tbuffer);
     } else if ( PageGetPageSize(tpage) != BufferGetPageSize(tbuffer) ) {
-        LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+        LockBuffer(rel,tbuffer,BT_WRITE);
         _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
         ((BTPageOpaque)PageGetSpecialPointer(tbuffer))->btpo_flags |= BTP_REAPED;
         _bt_wrtbuf(rel, tbuffer);
@@ -1195,7 +1190,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
             if (nopaque->btpo_prev == topaque->btpo_prev && P_ISSPLIT(nopaque)) {
                 nopaque->btpo_parent = topaque->btpo_parent;
                 nopaque->btpo_flags &= ~(BTP_SPLIT);
-                LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+                LockBuffer(rel,tbuffer,BT_WRITE);
                 memmove(tpage, npage, PageGetPageSize(npage));
                 _bt_pageinit(npage,PageGetPageSize(npage));
                 ((BTPageOpaque)PageGetSpecialPointer(npage))->btpo_flags |= BTP_REAPED;
@@ -1205,7 +1200,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 Assert(_bt_empty(npage));
                 reap = BufferGetBlockNumber(nbuffer);
                 ((BTPageOpaque)PageGetSpecialPointer(npage))->btpo_flags |= BTP_REAPED;
-                LockBuffer(rel,nbuffer,BUFFER_LOCK_NOTCRITICAL);
+                LockBuffer(rel,nbuffer,BT_NONE);
                 if ( !P_RIGHTMOST(nopaque) ) {
                     Buffer sbuffer = _bt_getbuf(rel, nopaque->btpo_next, BT_READYWRITE);
                     Page spage = BufferGetPage(sbuffer);
@@ -1213,7 +1208,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                     sopaque->btpo_prev = target;
                     _bt_wrtbuf(rel, sbuffer);
                 }
-                LockBuffer(rel,tbuffer,BUFFER_LOCK_CRITICAL);
+                LockBuffer(rel,tbuffer,BT_NONE);
                 topaque->btpo_next = nopaque->btpo_next;
                 _bt_wrtbuf(rel, nbuffer);
                 _bt_wrtbuf(rel, tbuffer);

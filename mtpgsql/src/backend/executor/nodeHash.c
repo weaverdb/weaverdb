@@ -51,7 +51,7 @@ static int	hashFunc(Datum key, int len, bool byVal);
 TupleTableSlot *
 ExecHash(Hash *node)
 {
-	EState	   *estate;
+//	EState	   *estate;
 	HashState  *hashstate;
 	Plan	   *outerNode;
 	Var		   *hashkey;
@@ -67,7 +67,7 @@ ExecHash(Hash *node)
 	 */
 
 	hashstate = node->hashstate;
-	estate = node->plan.state;
+//	estate = node->plan.state;
 	outerNode = outerPlan(node);
 
 	hashtable = hashstate->hashtable;

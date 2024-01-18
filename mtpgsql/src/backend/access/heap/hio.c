@@ -61,7 +61,6 @@ RelationPutHeapTuple(Relation relation,
 	len = MAXALIGN(tuple->t_len);		/* be conservative */
 	
         Assert(len <= PageGetFreeSpace(pageHeader));
-        Assert(BufferIsCritical(buffer));
         
 	offnum = PageAddItem((Page) pageHeader, (Item) tuple->t_data,
 						 tuple->t_len, InvalidOffsetNumber, LP_USED);
@@ -153,7 +152,6 @@ manager may be old and incorrect.   MKS 12.31.2001
                 satisfied = true;
             }
             if ( satisfied ) {
-                Assert(BufferIsCritical(buffer));
                 offnum = PageAddItem( pageHeader, (Item) tuple->t_data,
                                  tuple->t_len, InvalidOffsetNumber, LP_USED);
 

@@ -1330,7 +1330,7 @@ bool
 LockClassinfoForUpdate(Oid relid, HeapTuple rtup, bool confirmCommitted)
 {
 	HeapTuple	classTuple;
-	Form_pg_class pgcform;
+//	Form_pg_class pgcform;
 	bool		test;
 	Relation	relationRelation;
         Buffer          buffer;
@@ -1340,7 +1340,7 @@ LockClassinfoForUpdate(Oid relid, HeapTuple rtup, bool confirmCommitted)
 	if (!HeapTupleIsValid(classTuple))
 		return false;
 	rtup->t_self = classTuple->t_self;
-	pgcform = (Form_pg_class) GETSTRUCT(classTuple);
+//	pgcform = (Form_pg_class) GETSTRUCT(classTuple);
 
 	relationRelation = heap_openr(RelationRelationName, RowShareLock);
 

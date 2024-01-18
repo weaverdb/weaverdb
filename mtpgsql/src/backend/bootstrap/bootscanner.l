@@ -49,7 +49,8 @@
 
 #define			YY_NO_UNPUT
 #define YY_NO_INPUT
-
+#define YY_DECL int yylex \
+               (YYSTYPE * yylval_param , void* scanner)
 /* some versions of lex define this as a macro */
 #if defined(yywrap)
 #undef yywrap

@@ -12,8 +12,9 @@ SRCDIR = ../../..
 include ../../../Makefile.global
 
 CFLAGS += -I../..
+CFLAGS += -Wno-unused-but-set-variable
 
-OBJS = smgr.o smgrtype.o vfd.o 
+OBJS = smgr.o smgrtype.o vfd.o
 # mmd.o mm.o 
 
 all: SUBSYS.o

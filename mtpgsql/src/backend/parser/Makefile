@@ -13,7 +13,7 @@ include ../../Makefile.global
 
 #CFLAGS += -I.. 
 
-CFLAGS+= -Wno-unused-variable
+CFLAGS+= -Wno-unused-variable -Wno-unused-but-set-variable 
 
 OBJS= analyze.o gram.o keywords.o parser.o parse_agg.o parse_clause.o \
       parse_expr.o parse_func.o parse_node.o parse_oper.o parse_relation.o \

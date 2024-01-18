@@ -15,7 +15,7 @@ endif
 ifeq ($(ARCH),Darwin)
 OS=MACOSX
 PORTNAME=darwin
-YACC=/usr/local/opt/bison/bin/bison
+YACC=/usr/local/bin/bison
 CC=clang
 endif
 
@@ -27,6 +27,11 @@ endif
 ifeq ($(PROC),x86_64)
 CPU=amd64
 ENDIAN=LITTLE_ENDIAN
+endif
+
+ifeq ($(PROC),arm)
+CPU=arm64
+ENDIAN=BIG_ENDIAN
 endif
 
 ifeq ($(PROC),sparc)

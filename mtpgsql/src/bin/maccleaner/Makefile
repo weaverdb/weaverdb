@@ -17,16 +17,16 @@ OBJS= maccleaner.o
 all: maccleaner
 
 maccleaner: $(OBJS)
-	$(CC) -o clean $(OBJS) $(LDFLAGS)
+	$(CC) -o macclean $(OBJS) $(LDFLAGS)
 
 install: maccleaner
-	$(INSTALL) $(INSTL_EXE_OPTS) clean $(BINDIR)/clean
+	$(INSTALL) $(INSTL_EXE_OPTS) macclean $(BINDIR)/macclean
 
 depend dep:
 	$(CC) -MM $(CFLAGS) *.c >depend
 
 clean:
-	rm -f clean $(OBJS)
+	rm -f macclean $(OBJS)
 
 ifeq (depend,$(wildcard depend))
 include depend

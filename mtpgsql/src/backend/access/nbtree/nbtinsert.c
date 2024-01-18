@@ -154,7 +154,7 @@ top:;
 	stack = _bt_search(rel, natts, itup_scankey, &buf, BT_WRITE);
 
 	/* trade in our read lock for a write lock */
-	LockBuffer((rel), buf, BUFFER_LOCK_UNLOCK);
+	LockBuffer((rel), buf, BT_NONE);
 	LockBuffer((rel), buf, BT_WRITE);
 
 	/*
@@ -653,9 +653,9 @@ _bt_insertuple(Relation rel, Buffer buf,
 	Page		page = BufferGetPage(buf);
 	BTPageOpaque lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
         Assert(lpageop->btpo_parent != InvalidBlockNumber);
-        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
+        LockBuffer(rel,buf,BT_WRITE);
 	_bt_pgaddtup(rel, page, itemsz, btitem, newitemoff, "page");
-        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,buf,BT_WRITE);
 }
 
 /*
@@ -693,7 +693,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 				rightoff;
 	OffsetNumber maxoff;
 	OffsetNumber i;
-	BTItem		lhikey;
+//	BTItem		lhikey;
 
 	rbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
 
@@ -712,8 +712,8 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
         
         memmove(orig_rightpage,leftpage,PageGetPageSize(orig_rightpage));
         WriteNoReleaseBuffer(rel,rbuf);
-        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
-        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,rbuf,BT_NONE);
+        LockBuffer(rel,buf,BT_NONE);
 
 	_bt_pageinit(leftpage, BufferGetPageSize(buf));
 	_bt_pageinit(rightpage, BufferGetPageSize(rbuf));
@@ -779,7 +779,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 		itemsz = ItemIdGetLength(itemid);
 		item = (BTItem) PageGetItem(orig_leftpage, itemid);
 	}
-	lhikey = item;
+//	lhikey = item;
                        
 	if (PageAddItem(leftpage, (Item) item, itemsz, leftoff,
 					LP_USED) == InvalidOffsetNumber)
@@ -885,13 +885,13 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * page always be clean, and the most efficient way to guarantee this
 	 * is just to compact the data by reinserting it into a new left page.
 	 */
-        LockBuffer(rel,buf,BUFFER_LOCK_CRITICAL);
+        LockBuffer(rel,buf,BT_WRITE);
 	PageRestoreTempPage(leftpage, orig_leftpage);
-        LockBuffer(rel,buf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,buf,BT_NONE);
         
-        LockBuffer(rel,rbuf,BUFFER_LOCK_CRITICAL);
+        LockBuffer(rel,rbuf,BT_WRITE);
 	PageRestoreTempPage(rightpage, orig_rightpage);
-        LockBuffer(rel,rbuf,BUFFER_LOCK_NOTCRITICAL);
+        LockBuffer(rel,rbuf,BT_NONE);
         /* write and release the old right sibling */
 	if (BufferIsValid(sbuf))
 		_bt_wrtbuf(rel, sbuf);
@@ -1265,7 +1265,6 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	 * is the rightmost page on its level so there is no "high key" in it;
 	 * the two items will go into positions P_HIKEY and P_FIRSTKEY.
 	 */
-        LockBuffer(rel,rootbuf,BUFFER_LOCK_CRITICAL);
 	if (PageAddItem(rootpage, (Item) new_item, itemsz, P_HIKEY, LP_USED) == InvalidOffsetNumber)
 		elog(FATAL, "btree: failed to add leftkey to new root page");
 	pfree(new_item);
@@ -1286,7 +1285,6 @@ _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf)
 	if (PageAddItem(rootpage, (Item) new_item, itemsz, P_FIRSTKEY, LP_USED) == InvalidOffsetNumber)
 		elog(FATAL, "btree: failed to add rightkey to new root page");
 	pfree(new_item);
-        LockBuffer(rel,rootbuf,BUFFER_LOCK_NOTCRITICAL);
 
 	metapg = BufferGetPage(metabuf);
 	metad = BTPageGetMeta(metapg);
@@ -1980,7 +1978,7 @@ _bt_isequal(TupleDesc itupdesc, Page page, OffsetNumber offnum,
 		if (entry->sk_flags & SK_ISNULL || isNull)
 			return false;
 
-		result = DatumGetInt32((*fmgr_faddr(&entry->sk_func)) (entry->sk_argument,datum));
+		result = DatumGetInt32(fmgr_ptr(&entry->sk_func,entry->sk_argument,datum));
 
 		if (result != 0)
 			return false;

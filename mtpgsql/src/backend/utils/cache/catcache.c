@@ -636,7 +636,7 @@ InitSysCache(char *relname,
 			 int id,
 			 int nkeys,
 			 int *key,
-			 HeapTuple (*iScanfuncP) ())
+			 HeapTuple (*iScanfuncP) (Relation, ...))
 {
 	CatCache   *        cp;
 	int                 i;

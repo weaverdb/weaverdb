@@ -1676,7 +1676,7 @@ get_const_expr(Const *constval, deparse_context *context)
 	}
 
 	fmgr_info(typeStruct->typoutput, &finfo_output);
-	extval = (char *) (*fmgr_faddr(&finfo_output)) (constval->constvalue,
+	extval = fmgr_ptr(&finfo_output, constval->constvalue,
 													typeStruct->typelem,
 													-1);
 

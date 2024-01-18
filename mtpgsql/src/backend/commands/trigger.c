@@ -1287,7 +1287,7 @@ deferredTriggerInvokeEvents(bool immediate_only)
 	List	   *el;
 	DeferredTriggerEvent event;
 	int			still_deferred_ones;
-	int			eventno = -1;
+//	int			eventno = -1;
 	int			i;
         TriggerInfo*            info = GetTriggerInfo();
 
@@ -1302,7 +1302,7 @@ deferredTriggerInvokeEvents(bool immediate_only)
 	 */
 	foreach(el, info->deftrig_events)
 	{
-		eventno++;
+//		eventno++;
 
 		/* ----------
 		 * Get the event and check if it is completely done.

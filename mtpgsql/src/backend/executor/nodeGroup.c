@@ -450,7 +450,7 @@ execTuplesMatch(HeapTuple tuple1,
 
 		/* Apply the type-specific equality function */
 
-		equal = (Datum) (*fmgr_faddr(&eqfunctions[i])) (attr1, attr2);
+		equal = PointerGetDatum(fmgr_ptr(&eqfunctions[i], attr1, attr2));
 
 		if (DatumGetInt32(equal) == 0)
 			return FALSE;

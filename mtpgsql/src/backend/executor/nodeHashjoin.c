@@ -43,20 +43,20 @@ TupleTableSlot *				/* return: a tuple or NULL */
 ExecHashJoin(HashJoin *node)
 {
 	HashJoinState *hjstate;
-	EState	   *estate;
+//	EState	   *estate;
 	Plan	   *outerNode;
 	Hash	   *hashNode;
 	List	   *hjclauses;
 	Expr	   *clause;
 	List	   *qual;
-	ScanDirection dir;
+//	ScanDirection dir;
 	TupleTableSlot *inntuple;
 	Var		   *outerVar;
 	ExprContext *econtext;
 	HashJoinTable hashtable;
 	HeapTuple	curtuple;
 	TupleTableSlot *outerTupleSlot;
-	TupleTableSlot *innerTupleSlot;
+//	TupleTableSlot *innerTupleSlot;
 	Var		   *innerhashkey;
 	int			i;
 	bool		hashPhaseDone;
@@ -68,13 +68,13 @@ ExecHashJoin(HashJoin *node)
 	hjstate = node->hashjoinstate;
 	hjclauses = node->hashclauses;
 	clause = lfirst(hjclauses);
-	estate = node->join.state;
+//	estate = node->join.state;
 	qual = node->join.qual;
 	hashNode = (Hash *) innerPlan(node);
 	outerNode = outerPlan(node);
 	hashPhaseDone = node->hashdone;
 
-	dir = estate->es_direction;
+//	dir = estate->es_direction;
 
 	/* -----------------
 	 * get information from HashJoin state
@@ -120,7 +120,7 @@ ExecHashJoin(HashJoin *node)
 			 * ----------------
 			 */
 			hashNode->hashstate->hashtable = hashtable;
-			innerTupleSlot = ExecProcNode((Plan *) hashNode);
+			ExecProcNode((Plan *) hashNode);
 		}
 		node->hashdone = true;
 		/* ----------------

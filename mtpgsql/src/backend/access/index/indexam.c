@@ -362,7 +362,7 @@ index_getnext(IndexScanDesc scan,
 	 *	have the am's gettuple proc do all the work.
 	 * ----------------
 	 */
-	result = DatumGetChar((*fmgr_faddr(&scan->fn_getnext)) (scan, direction));
+	result = DatumGetChar(fmgr_ptr(&scan->fn_getnext, PointerGetDatum(scan), direction));
 
 	return result;
 }

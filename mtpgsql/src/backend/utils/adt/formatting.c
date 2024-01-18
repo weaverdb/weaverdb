@@ -121,7 +121,7 @@ typedef struct
 	char	   *name;			/* keyword			*/
 	/* action for keyword		*/
 	int			len,			/* keyword length		*/
-				(*action) (),
+				(*action) (int, char*, int, int, void*),
 				id;				/* keyword id			*/
 } KeyWord;
 
@@ -371,9 +371,9 @@ static struct tm _tm, *tm = &_tm;
  *			KeyWords definition & action
  *****************************************************************************/
 
-static int	dch_global(int arg, char *inout, int suf, int flag, FormatNode *node);
-static int	dch_time(int arg, char *inout, int suf, int flag, FormatNode *node);
-static int	dch_date(int arg, char *inout, int suf, int flag, FormatNode *node);
+static int	dch_global(int arg, char *inout, int suf, int flag, void *node);
+static int	dch_time(int arg, char *inout, int suf, int flag, void *node);
+static int	dch_date(int arg, char *inout, int suf, int flag, void *node);
 
 /* ----------
  * Suffixes:
@@ -570,7 +570,7 @@ static KeyWord DCH_keywords[] = {
 	{"A.M.", 4, dch_time, DCH_A_M},
 	{"AD", 2, dch_date, DCH_AD},
 	{"AM", 2, dch_time, DCH_AM},
-	{"B.C.", 4, dch_date, DCH_B_C},		/* B */
+    {"B.C.", 4, dch_date, DCH_B_C},		/* B */
 	{"BC", 2, dch_date, DCH_BC},
 	{"CC", 2, dch_date, DCH_CC},/* C */
 	{"DAY", 3, dch_date, DCH_DAY},		/* D */
@@ -797,9 +797,9 @@ static char *str_tolower(char *buff);
 
 /* static int is_acdc(char *str, int *len); */
 static int	seq_search(char *name, char **array, int type, int max, int *len);
-static int	dch_global(int arg, char *inout, int suf, int flag, FormatNode *node);
-static int	dch_time(int arg, char *inout, int suf, int flag, FormatNode *node);
-static int	dch_date(int arg, char *inout, int suf, int flag, FormatNode *node);
+static int	dch_global(int arg, char *inout, int suf, int flag, void *node);
+static int	dch_time(int arg, char *inout, int suf, int flag, void *node);
+static int	dch_date(int arg, char *inout, int suf, int flag, void *node);
 static char *fill_str(char *str, int c, int max);
 static FormatNode *NUM_cache(int len, NUMDesc *Num, char *pars_str, int *flag);
 static char *int_to_roman(int number);
@@ -1506,7 +1506,7 @@ dump_index(KeyWord *k, int *index)
  * ----------
  */
 static int
-dch_global(int arg, char *inout, int suf, int flag, FormatNode *node)
+dch_global(int arg, char *inout, int suf, int flag, void *node)
 {
 	switch (arg)
 	{
@@ -1525,7 +1525,7 @@ dch_global(int arg, char *inout, int suf, int flag, FormatNode *node)
  * ----------
  */
 static int
-dch_time(int arg, char *inout, int suf, int flag, FormatNode *node)
+dch_time(int arg, char *inout, int suf, int flag, void *node)
 {
 	char	   *p_inout = inout;
 
@@ -1726,7 +1726,7 @@ dch_time(int arg, char *inout, int suf, int flag, FormatNode *node)
  * ----------
  */
 static int
-dch_date(int arg, char *inout, int suf, int flag, FormatNode *node)
+dch_date(int arg, char *inout, int suf, int flag, void *node)
 {
 	char		buff[DCH_CACHE_SIZE],*p_inout;
 	int			i,

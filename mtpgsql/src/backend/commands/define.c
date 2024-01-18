@@ -259,7 +259,7 @@ CreateFunction(ProcedureStmt *stmt, CommandDest dest)
 
 	/* The function returns a set of values, as opposed to a singleton. */
 
-	bool		lanisPL = false;
+//	bool		lanisPL = false;
 
 	/*
 	 * The following are optional user-supplied attributes of the
@@ -333,7 +333,7 @@ CreateFunction(ProcedureStmt *stmt, CommandDest dest)
 				 languageName);
 		}
 
-		lanisPL = true;
+//		lanisPL = true;
 	}
 
 	compute_return_type(stmt->returnType, &prorettype, &returnsSet);

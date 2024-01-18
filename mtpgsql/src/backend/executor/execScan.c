@@ -47,16 +47,16 @@
  */
 TupleTableSlot *
 ExecScan(Scan *node,
-		 TupleTableSlot *(*accessMtd) ())/* function returning a * tuple */
+		 TupleTableSlot *(*accessMtd) (Scan*))/* function returning a * tuple */
 {
 	CommonScanState *scanstate;
-	EState	   *estate;
+//	EState	   *estate;
 	List	   *qual;
 	bool		isDone;
 
 	TupleTableSlot *slot;
 	TupleTableSlot *resultSlot;
-	HeapTuple	newTuple;
+//	HeapTuple	newTuple;
 
 	ExprContext *econtext;
 	ProjectionInfo *projInfo;
@@ -66,10 +66,10 @@ ExecScan(Scan *node,
 	 *	initialize misc variables
 	 * ----------------
 	 */
-	newTuple = NULL;
+//	newTuple = NULL;
 	slot = NULL;
 
-	estate = node->plan.state;
+//	estate = node->plan.state;
 	scanstate = node->scanstate;
 
 	/* ----------------

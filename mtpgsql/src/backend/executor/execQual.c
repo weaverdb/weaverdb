@@ -541,7 +541,7 @@ GetAttributeByName(TupleTableSlot * slot, char *attname, bool * isNull, bool * f
 	AttrNumber      attrno;
 	TupleDesc       tupdesc;
 	Datum           retval;
-	int             natts;
+//	int             natts;
 	int             i;
 
 	if (attname == NULL)
@@ -555,7 +555,7 @@ GetAttributeByName(TupleTableSlot * slot, char *attname, bool * isNull, bool * f
 		return (char *) NULL;
 	}
 	tupdesc = slot->ttc_tupleDescriptor;
-	natts = slot->val->t_data->t_natts;
+//	natts = slot->val->t_data->t_natts;
 
 	attrno = InvalidAttrNumber;
 	for (i = 0; i < tupdesc->natts; i++) {

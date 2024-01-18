@@ -90,20 +90,20 @@ fmgr_c(FmgrInfo *finfo,
 {
 	char	   *returnValue = (char *) NULL;
 	int		n_arguments = finfo->fn_nargs;
-	func_ptr	user_fn = fmgr_faddr(finfo);
+	func_ptr_varg	user_fn = (func_ptr_varg)fmgr_faddr(finfo);
 
 	/*
 	 * If finfo contains a PL handler for this function, call that
 	 * instead.
 	 */
 
-	if (user_fn == (func_ptr) NULL)
+	if (user_fn == NULL)
 		elog(ERROR, "Internal error: fmgr_c received NULL function pointer.");
 
 	switch (n_arguments)
 	{
 		case 0:
-			returnValue = (*user_fn) ();
+			returnValue = (*fmgr_faddr(finfo)) ();
 			break;
 		case 1:
 			/* NullValue() uses isNull to check if args[0] is NULL */
@@ -670,16 +670,16 @@ fmgr_ptr(FmgrInfo *finfo,...)
 	FmgrValues	values;
 	bool		isNull = false;
 
-	local_finfo->fn_addr = finfo->fn_addr;
-	local_finfo->fn_oid = finfo->fn_oid;
+	local_finfo.fn_addr = finfo->fn_addr;
+	local_finfo.fn_oid = finfo->fn_oid;
 
 	va_start(pvar, finfo);
 	n_arguments = va_arg(pvar, int);
-	local_finfo->fn_nargs = n_arguments;
+	local_finfo.fn_nargs = n_arguments;
 	if (n_arguments > FUNC_MAX_ARGS)
 	{
-		elog(ERROR, "fmgr_ptr: function %u: too many arguments (%d > %d)",
-			 func_id, n_arguments, FUNC_MAX_ARGS);
+		elog(ERROR, "fmgr_ptr: function %lu: too many arguments (%d > %d)",
+			 finfo->fn_oid, n_arguments, FUNC_MAX_ARGS);
 	}
 	for (i = 0; i < n_arguments; ++i)
 		values.data[i] = va_arg(pvar, char *);

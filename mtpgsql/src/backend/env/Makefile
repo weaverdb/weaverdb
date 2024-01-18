@@ -13,7 +13,7 @@ include ../../Makefile.global
 
 INCLUDE_OPT = -I.. 
 
-CFLAGS+=$(INCLUDE_OPT) -Wno-unused-variable -Wno-unused-function
+CFLAGS+=$(INCLUDE_OPT) -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable
 ifeq ($(CC), gcc) 
 CFLAGS+= -Wno-unused-but-set-variable 
 endif

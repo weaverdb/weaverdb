@@ -383,7 +383,7 @@ DolHeapDelegation(Delegate arg) {
     HeapTuple  htup;
     BlockNumber blk = InvalidBlockNumber;
     int TransferMax = DelegatedGetTransferMax();
-    int buf_count = 0;
+//    int buf_count = 0;
     BufferTrigger       trigger;
 
 
@@ -413,7 +413,7 @@ DolHeapDelegation(Delegate arg) {
                 if it is  
             */
             if ( ItemPointerGetBlockNumber(&htup->t_self) != blk ) {
-                buf_count++;
+//                buf_count++;
                 blk = ItemPointerGetBlockNumber(&htup->t_self);
                 BiasBuffer(rel, scan->rs_cbuf);
             }
@@ -431,7 +431,7 @@ DolHeapDelegation(Delegate arg) {
             }
 
             scan_args->counter = 0;
-            buf_count = 0;
+  //          buf_count = 0;
         }
     }
 

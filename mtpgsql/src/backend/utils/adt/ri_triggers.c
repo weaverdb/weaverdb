@@ -3324,6 +3324,6 @@ ri_AttributesEqual(Oid typeid, Datum oldvalue, Datum newvalue)
 	 * ----------
 	 */
 	fmgr_info(entry->oprfnid, &(entry->oprfmgrinfo));
-	result = (Datum) (*fmgr_faddr(&(entry->oprfmgrinfo))) (oldvalue, newvalue);
+	result = PointerGetDatum(fmgr_ptr(&entry->oprfmgrinfo, oldvalue, newvalue));
 	return (bool) result;
 }

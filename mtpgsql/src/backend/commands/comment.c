@@ -236,13 +236,13 @@ DeleteComments(Oid oid)
 {
 
 	Relation	description;
-	TupleDesc	tupDesc;
+//	TupleDesc	tupDesc;
 	ScanKeyData entry;
 	HeapScanDesc scan;
 	HeapTuple	searchtuple;
 
 	description = heap_openr(DescriptionRelationName, RowExclusiveLock);
-	tupDesc = description->rd_att;
+//	tupDesc = description->rd_att;
 
 	/*** Now, open pg_description and attempt to find the old tuple ***/
 
@@ -399,8 +399,8 @@ CommentDatabase(char *database, char *comment)
 	HeapScanDesc scan;
 	Oid			oid;
 	bool		superuser;
-	int4		dba,
-				userid;
+//	int4		dba,
+	int4			userid;
 	char	   *username;
 
 	/*** First find the tuple in pg_database for the database ***/
@@ -415,7 +415,7 @@ CommentDatabase(char *database, char *comment)
 
 	if (!HeapTupleIsValid(dbtuple))
 		elog(ERROR, "database '%s' does not exist", database);
-	dba = ((Form_pg_database) GETSTRUCT(dbtuple))->datdba;
+//	dba = ((Form_pg_database) GETSTRUCT(dbtuple))->datdba;
 	oid = dbtuple->t_data->t_oid;
 
 	/*** Now, fetch user information ***/

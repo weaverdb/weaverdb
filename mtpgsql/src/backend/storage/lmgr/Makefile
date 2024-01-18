@@ -11,7 +11,7 @@
 SRCDIR = ../../..
 include ../../../Makefile.global
 
-CFLAGS += -I../..
+CFLAGS += -I../.. -Wno-unused-but-set-variable
 
 OBJS = lmgr.o lock.o multithread.o
 

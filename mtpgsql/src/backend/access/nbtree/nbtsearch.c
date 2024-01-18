@@ -348,9 +348,7 @@ _bt_compare(Relation rel,
 		}
 		else
 		{
-			result = DatumGetInt32((*fmgr_faddr(&entry->sk_func)) (
-												 entry->sk_argument,
-												 datum));
+			result = DatumGetInt32(fmgr_ptr(&entry->sk_func,entry->sk_argument,datum));
 		}
 
 		/* if the keys are unequal, return the difference */
@@ -667,7 +665,7 @@ _bt_first(IndexScanDesc scan, ScanDirection dir)
                         }
 			if (!_bt_step(scan, BackwardScanDirection))
 			{
-                            pfree(scankeys);
+                pfree(scankeys);
                             return false;
                         } else {
                             buf = so->btso_curbuf;

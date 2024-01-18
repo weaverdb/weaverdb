@@ -343,7 +343,7 @@ static void
 Async_UnlistenAll()
 {
 	Relation	lRel;
-	TupleDesc	tdesc;
+//	TupleDesc	tdesc;
 	HeapScanDesc sRel;
 	HeapTuple	lTuple;
 	ScanKeyData key[1];
@@ -351,7 +351,7 @@ Async_UnlistenAll()
 /*MACOSX	TPRINTF(TRACE_NOTIFY, "Async_UnlistenAll"); */
 
 	lRel = heap_openr(ListenerRelationName, AccessExclusiveLock);
-	tdesc = RelationGetDescr(lRel);
+//	tdesc = RelationGetDescr(lRel);
 
 	/* Find and delete all entries with my listenerPID */
 	ScanKeyEntryInitialize(&key[0], 0,

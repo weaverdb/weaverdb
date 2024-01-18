@@ -143,11 +143,11 @@ static LocalInvalid RollbackStack = EmptyLocalInvalid;
 */
 
 static InvalidationEntry InvalidationEntryAllocate(uint16 size);
-static void LocalInvalidInvalidate(LocalInvalid invalid, void (*function) (), bool freemember);
+static void LocalInvalidInvalidate(LocalInvalid invalid, void (*function) (void*), bool freemember);
 static LocalInvalid LocalInvalidRegister(LocalInvalid invalid,
 					 InvalidationEntry entry);
 static void DiscardInvalidStack(LocalInvalid *invalid);
-static void InvalidationMessageRegisterSharedInvalid(InvalidationMessage message);
+static void InvalidationMessageRegisterSharedInvalid(void* message);
 
 
 /* ----------------------------------------------------------------
@@ -200,7 +200,7 @@ LocalInvalidRegister(LocalInvalid invalid,
  * --------------------------------
  */
 static void
-LocalInvalidInvalidate(LocalInvalid invalid, void (*function) (), bool freemember)
+LocalInvalidInvalidate(LocalInvalid invalid, void (*function) (void*), bool freemember)
 {
 	InvalidationEntryData *entryDataP;
 
@@ -231,7 +231,7 @@ DiscardInvalidStack(LocalInvalid *invalid)
 	locinv = *invalid;
 	*invalid = EmptyLocalInvalid;
 	if (locinv)
-		LocalInvalidInvalidate(locinv, (void (*) ()) NULL, true);
+		LocalInvalidInvalidate(locinv, (void (*) (void*)) NULL, true);
 }
 
 /* ----------------------------------------------------------------
@@ -626,10 +626,11 @@ elog(DEBUG,\
 #endif	 /* INVALIDDEBUG */
 
 static void
-InvalidationMessageRegisterSharedInvalid(InvalidationMessage message)
+InvalidationMessageRegisterSharedInvalid(void* pointer)
 {
-	Assert(PointerIsValid(message));
+        InvalidationMessage message = (InvalidationMessage)pointer;
 
+	Assert(PointerIsValid(message));
 	switch (message->kind)
 	{
 		case 'c':				/* cached system catalog tuple */
@@ -676,10 +677,11 @@ elog(DEBUG, "InvalidationMessageCacheInvalidate(c, %d, %d, [%d, %d])",\
 #endif	 /* defined(INVALIDDEBUG) */
 
 static void
-InvalidationMessageCacheInvalidate(InvalidationMessage message)
+InvalidationMessageCacheInvalidate(void* pointer)
 {
-	Assert(PointerIsValid(message));
+        InvalidationMessage message = (InvalidationMessage)pointer;
 
+	Assert(PointerIsValid(message));
 	switch (message->kind)
 	{
 		case 'c':				/* cached system catalog tuple */
@@ -711,7 +713,7 @@ InvalidationMessageCacheInvalidate(InvalidationMessage message)
 static void
 RelationInvalidateRelationCache(Relation relation,
 								HeapTuple tuple,
-								void (*function) ())
+								void (*function) (Oid, Oid))
 {
 	Oid			relationId;
 	Oid			objectId;

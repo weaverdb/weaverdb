@@ -216,8 +216,7 @@ printtup(HeapTuple tuple, TupleDesc typeinfo, DestReceiver *self)
 			val_is_copy = TRUE;
                     }
 
-                    outputstr = (char *) (*fmgr_faddr(&thisState->finfo))
-                            (attr, thisState->typelem, typeinfo->attrs[i]->atttypmod);
+                    outputstr = (char *) fmgr_ptr(&thisState->finfo, Int16GetDatum(attr), thisState->typelem, typeinfo->attrs[i]->atttypmod);
                     pq_sendcountedtext(&buf, outputstr, strlen(outputstr));
                     pfree(outputstr);
 

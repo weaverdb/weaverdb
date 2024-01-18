@@ -64,7 +64,6 @@
 						fflush(stdout); \
 				 }
 
-extern int Int_yylex();
 
 int num_tuples_read = 0;
 static Oid objectid;

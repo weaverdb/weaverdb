@@ -189,7 +189,6 @@ _bt_tryroot(Relation rel, bool create)
                         root = BufferGetBlockNumber(rootbuf);
 
 			/* NO ELOG(ERROR) till meta is updated */
-                        LockBuffer(rel,metabuf,BUFFER_LOCK_CRITICAL);
 			metad->btm_root = root;
 			metad->btm_level = 1;
 
@@ -243,7 +242,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	}
 	else
 	{
-		Page		page;     
+		Page		page;
                 BTPageOpaque opaque;
                 BTPageOpaqueData init = {
                     BTP_REAPED,
@@ -268,8 +267,8 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
                         elog(ERROR,"error creating new index page for index %s",RelationGetRelationName(rel));
                     }                    
                     
-                    page = BufferGetPage(buf);
-                    opaque = (BTPageOpaque)PageGetSpecialPointer(page);
+                   page = BufferGetPage(buf);
+                   opaque = (BTPageOpaque)PageGetSpecialPointer(page);
 
                     /* Initialize the new page before returning it */
                     if ( !BufferPrivateCheck(rel, buf, _bt_buffer_reaped_check) ) {
@@ -308,7 +307,7 @@ _bt_buffer_reaped_check(Relation rel, Buffer buf) {
 void
 _bt_relbuf(Relation rel, Buffer buf)
 {
-	LockBuffer((rel),  buf, BUFFER_LOCK_UNLOCK);
+	LockBuffer((rel),  buf, BT_NONE);
 	ReleaseBuffer(rel, buf);
 }
 
@@ -328,7 +327,7 @@ _bt_relbuf(Relation rel, Buffer buf)
 void
 _bt_wrtbuf(Relation rel, Buffer buf)
 {
-	LockBuffer((rel),  buf, BUFFER_LOCK_UNLOCK);
+	LockBuffer((rel),  buf, BT_NONE);
 	WriteBuffer(rel, buf);
 }
 

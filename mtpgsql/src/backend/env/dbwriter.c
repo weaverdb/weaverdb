@@ -110,6 +110,7 @@ struct writegroups {
     Oid                                 VarId;
     
     char*                               snapshot;
+    long                                generation;
     
     WriteGroup				next;
 };
@@ -178,12 +179,13 @@ static int MergeWriteGroups(WriteGroup target, WriteGroup src);
 static int ResetThreadState(THREAD*  t);
 
 static int TakeFileSystemSnapshot(char* cmd);
+static Block AdvanceBuffer(long generation, BufferDesc* bufHdr);
 
 extern bool     TransactionSystemInitialized;
 
 static WriteGroup log_group;
 static WriteGroup sync_group;   /*  a holder for buffers that need to be synced */
-int    sync_buffers = 0; 
+static int    sync_buffers = 0;
 
 static pthread_attr_t writerprops;
 
@@ -362,6 +364,8 @@ WriteGroup CreateWriteGroup(int trans, int buffers) {
     cart->VarId = RelOid_pg_variable;
     
     cart->LastSoftXid = InvalidTransactionId;
+    
+    cart->generation = 0;
     
     return cart;
 }
@@ -705,6 +709,7 @@ void AdvanceWriteGroupQueue(WriteGroup cart) {
             ) {
         cart->next->currstate = NOT_READY;
         cart->next->LastSoftXid = cart->LastSoftXid;
+        cart->next->generation = cart->generation + 1;
     } else {
         elog(FATAL, "DB write group in the wrong state");
     }
@@ -1055,38 +1060,39 @@ int LogBuffers(WriteGroup list) {
         
         
         if ( CheckBufferId(bufHdr,
-                list->descriptions[i].blockNum,
-                list->descriptions[i].relId.relId,
-                list->descriptions[i].relId.dbId) ) {
+                           list->descriptions[i].blockNum,
+                           list->descriptions[i].relId.relId,
+                           list->descriptions[i].relId.dbId) ) {
             
             if (list->descriptions[i].relId.relId == list->LogId ||
-                    list->descriptions[i].relId.relId == list->VarId) {
+                list->descriptions[i].relId.relId == list->VarId) {
                 /* skip these, they do not belong in the
-             log and we don't want them replayed
+                 log and we don't want them replayed
                  */
                 continue;
             }
 
             iostatus = LogBufferIO(bufHdr);
             if ( iostatus ) {
-                PageInsertChecksum((Page)(bufHdr->data));
+                Block blk = AdvanceBuffer(list->generation, bufHdr);
+                PageInsertChecksum((Page)blk);
                 buffer_hits++;
                 if ( SM_FAIL == smgrlog(
-                        DEFAULT_SMGR,
-                        bufHdr->blind.dbname,
-                        bufHdr->blind.relname,
-                        list->descriptions[i].relId.dbId,
-                        list->descriptions[i].relId.relId,
-                        bufHdr->tag.blockNum,
-                        bufHdr->kind,
-                        (char *)(bufHdr->data)
-                    )
-                ) {
+                                        DEFAULT_SMGR,
+                                        bufHdr->blind.dbname,
+                                        bufHdr->blind.relname,
+                                        list->descriptions[i].relId.dbId,
+                                        list->descriptions[i].relId.relId,
+                                        bufHdr->tag.blockNum,
+                                        bufHdr->kind,
+                                        blk
+                                        )
+                    ) {
                     ErrorBufferIO(iostatus,bufHdr);
                 } else {
                     TerminateBufferIO(iostatus,bufHdr);
                 }
-            } 
+            }
         } else {
             iostatus = LogBufferIO(bufHdr);
             
@@ -1113,7 +1119,7 @@ int LogBuffers(WriteGroup list) {
             }
         }
     }
-    
+
     smgrcommitlog();
     
     DTRACE_PROBE3(mtpg, dbwriter__loggedbuffers, buffer_hits, releasecount, freecount);
@@ -1179,7 +1185,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 if (iostatus) {
                     Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
                     
-                    status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, (char *)(bufHdr->data));
+                    status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, AdvanceBuffer(list->generation, bufHdr));
                     written = true;
                     
                     if (status == SM_FAIL) {
@@ -1215,9 +1221,10 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     
                     buffer_hits++;
                     cache->commit = true;
-                    PageInsertChecksum((Page)(bufHdr->data));
+                    Block blk = AdvanceBuffer(list->generation, bufHdr);
+                    PageInsertChecksum((Page)blk);
                     
-                    if (bufHdr->data == 0)
+                    if (blk == 0)
                         elog(FATAL, "[DBWriter]bad buffer block in buffer sync");
                     
                     if ( cache == NULL ) {
@@ -1225,7 +1232,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     }
                     
                     status = smgrwrite(cache->smgrinfo, bufHdr->tag.blockNum,
-                            (char *)(bufHdr->data));
+                            blk);
                     written = true;
                     
                     if ( status == SM_FAIL ) {
@@ -1601,3 +1608,18 @@ long
 GetFlushTime() {
     return flush_time;
 }
+
+static Block AdvanceBuffer(long generation, BufferDesc* bufHdr) {
+    pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
+    if (generation == bufHdr->generation) {
+        memmove(bufHdr->data, bufHdr->shadow, BLCKSZ);
+        bufHdr->generation = 0;
+    }
+    pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
+    return (Block)bufHdr->data;
+}
+
+long GetBufferGeneration() {
+    return GetCurrentWriteGroup(false)->generation;
+}
+

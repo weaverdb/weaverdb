@@ -776,7 +776,7 @@ AddNewRelationTuple(Relation pg_class_desc,
 static void
 AddNewRelationType(char *typeName, Oid new_rel_oid)
 {
-	Oid			new_type_oid;
+//	Oid			new_type_oid;
 
 	/*
 	 * The sizes are set to oid size because it makes implementing sets
@@ -788,7 +788,7 @@ AddNewRelationType(char *typeName, Oid new_rel_oid)
 	 * true makes sets much easier, and it isn't used by anything else.
 	 * Note the assumption that OIDs are the same size as int4s.
 	 */
-	new_type_oid = TypeCreate(typeName, /* type name */
+	TypeCreate(typeName, /* type name */
 							  new_rel_oid,		/* relation oid */
 							  typeLen(typeidType(OIDOID)),		/* internal size */
 							  typeLen(typeidType(OIDOID)),		/* external size */
@@ -980,7 +980,7 @@ RelationRemoveInheritance(Relation relation, bool schemadelete)
 	HeapTuple	tuple;
 	HeapScanDesc    scan;
 	ScanKeyData     entry;
-	bool		found = false;
+//	bool		found = false;
 	/* ----------------
 	 *	open pg_inherits
 	 * ----------------
@@ -1023,7 +1023,7 @@ RelationRemoveInheritance(Relation relation, bool schemadelete)
 	while (HeapTupleIsValid(tuple = heap_getnext(scan)))
 	{
             heap_delete(catalogRelation, &tuple->t_self, NULL, NULL);
-            found = true;
+ //           found = true;
 	}
 	heap_endscan(scan);
         
@@ -2241,7 +2241,7 @@ AddRelationStorageDirectives(Relation rel, List *rawConstraints)
                 HeapTuple	reltup;
                 HeapTuple	atttup;
                 Relation    extstore;
-                Form_pg_class     reldata;
+//                Form_pg_class     reldata;
                 Form_pg_attribute attdata;
                 Form_pg_extstore  extdata;
                 Relation	relidescs[Num_pg_extstore_indices];
@@ -2267,7 +2267,7 @@ AddRelationStorageDirectives(Relation rel, List *rawConstraints)
                             PointerGetDatum(cdef->cooked_expr),PointerGetDatum(NULL),PointerGetDatum(NULL));
                 
                 attdata = (Form_pg_attribute)GETSTRUCT(atttup);
-                reldata = (Form_pg_class)GETSTRUCT(reltup);
+//                reldata = (Form_pg_class)GETSTRUCT(reltup);
                 
                 extdata = palloc(sizeof(FormData_pg_extstore));
                 extdata->extrelid = RelationGetRelid(rel);

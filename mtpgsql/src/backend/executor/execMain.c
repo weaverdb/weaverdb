@@ -1576,7 +1576,7 @@ ExecReplace(TupleTableSlot *slot,
 	int			result;
 	int			numIndices;
         TransactionInfo* t_info = GetTransactionInfo();
-        int loops = 0;
+  //      int loops = 0;
 	/*
 	 * abort the operation if not running transactions
 	 */
@@ -1655,7 +1655,7 @@ lreplace:;
 					*tupleid = ctid;
 					tuple = ExecRemoveJunk(estate->es_junkFilter, epqslot);
 					slot = ExecStoreTuple(tuple, slot,false);
-                                        loops++;
+//                                        loops++;
 					goto lreplace;
 				}
 			}

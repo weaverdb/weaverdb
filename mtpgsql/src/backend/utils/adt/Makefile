@@ -11,7 +11,7 @@
 SRCDIR = ../../..
 include ../../../Makefile.global
 
-CFLAGS += -I../.. -Wno-unused-variable
+CFLAGS += -I../.. -Wno-unused-variable -Wno-unused-but-set-variable
 ifeq ($(CC), gcc)
 CFLAGS += -Wno-format-overflow 
 endif

@@ -171,14 +171,14 @@ clean:
 	    global1.bki.source local1_template1.bki.source \
 	    global1.description local1_template1.description \
 	    libpostgres.o libmtpg.a taoclient omniclient pgtao pgomni \
-	    *.o 
+	    *.o postmaster/postmaster.o
 ifeq ($(PORTNAME), win)
 ifeq ($(MAKE_DLL), true)
 	rm -f postgres.dll postgres.def libpostgres.a
 endif
 endif
 	for i in $(DIRS); do $(MAKE) -C $$i clean;  done; $(MAKE) -Cmain clean; $(MAKE) -Cbootstrap clean;
-
+        
 .DEFAULT:
 	for i in $(DIRS); do $(MAKE) -C $$i $@; done
 

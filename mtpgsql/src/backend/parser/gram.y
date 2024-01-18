@@ -1,4 +1,4 @@
-%define api.pure true
+%define api.pure
 %param {void* yyparser}
 %{
 
@@ -75,6 +75,7 @@
 /*  #define __YYSCLASS  */
 #define YYLEX_PARAM  yyscanner
 #define YYPARSE_PARAM  yyscanner
+#define YYLEX_IS_DECLARED
 
 extern void yylex_init(void* scanner);
 extern int yylex(void* stype,void* scanner);
@@ -96,7 +97,6 @@ static void doNegateFloat(Value *v);
 #undef yywrap
 #endif /* yywrap */
 %}
-
 
 %union
 {

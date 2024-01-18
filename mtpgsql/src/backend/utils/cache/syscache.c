@@ -45,8 +45,6 @@
 #include "utils/syscache.h"
 #include "catalog/indexing.h"
 
-typedef HeapTuple (*ScanFunc) ();
-
 
 typedef struct syscachemem {
 	CatCache**		SysCache;   
@@ -142,7 +140,7 @@ static struct cachedesc cacheinfo[] = {
 		},
 		sizeof(FormData_pg_amop),
 		AccessMethodStrategyIndex,
-	(ScanFunc) AccessMethodStrategyIndexScan},
+                AccessMethodStrategyIndexScan},
 	{AttributeRelationName,		/* ATTNAME */
 		2,
 		{
@@ -164,7 +162,7 @@ static struct cachedesc cacheinfo[] = {
 		},
 		ATTRIBUTE_TUPLE_SIZE,
 		AttributeRelidNumIndex,
-	(ScanFunc) AttributeRelidNumIndexScan},
+                AttributeRelidNumIndexScan},
 	{OperatorClassRelationName, /* CLADEFTYPE */
 		1,
 		{
@@ -285,7 +283,7 @@ static struct cachedesc cacheinfo[] = {
 		},
 		sizeof(FormData_pg_operator),
 		OperatorNameIndex,
-	(ScanFunc) OperatorNameIndexScan},
+                OperatorNameIndexScan},
 	{OperatorRelationName,		/* OPEROID */
 		1,
 		{
@@ -307,7 +305,7 @@ static struct cachedesc cacheinfo[] = {
 		},
 		offsetof(FormData_pg_proc, prosrc),
 		ProcedureNameIndex,
-	(ScanFunc) ProcedureNameIndexScan},
+                ProcedureNameIndexScan},
 	{ProcedureRelationName,		/* PROCOID */
 		1,
 		{
@@ -395,7 +393,7 @@ static struct cachedesc cacheinfo[] = {
 		},
 		offsetof(FormData_pg_statistic, stacommonval),
 		StatisticRelidAttnumIndex,
-	(ScanFunc) StatisticRelidAttnumIndexScan},
+                StatisticRelidAttnumIndexScan},
 	{TypeRelationName,			/* TYPENAME */
 		1,
 		{

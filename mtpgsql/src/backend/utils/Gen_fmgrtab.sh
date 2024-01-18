@@ -162,7 +162,10 @@ extern FmgrInfo        *fmgr_pl_finfo;
 ( \
 	(func_ptr)(finfo)->fn_addr \
 )
-
+#define fmgr_faddr_varg(finfo) \
+( \
+    (func_ptr_varg)(finfo)->fn_addr \
+)
 #ifdef TRACE_FMGR_PTR
 #define	FMGR_PTR2(FINFO, ARG1, ARG2) \
 	fmgr_ptr(FINFO, 2, ARG1, ARG2)
@@ -170,7 +173,7 @@ extern FmgrInfo        *fmgr_pl_finfo;
 #define	FMGR_PTR2(FINFO, ARG1, ARG2) \
 ( \
 	((FINFO)->fn_addr) ? \
-		(*(fmgr_faddr(FINFO)))(ARG1, ARG2) \
+		(*(fmgr_faddr_varg(FINFO)))(ARG1, ARG2) \
 	: \
 		fmgr((FINFO)->fn_oid, ARG1, ARG2) \
 )

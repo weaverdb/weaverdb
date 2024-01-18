@@ -1751,15 +1751,15 @@ comparetup_heap(Tuplesortstate *state, const void *a, const void *b)
 			return -1;
 		else if (scanKey->sk_flags & SK_COMMUTE)
 		{
-			if (!(result = -DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (rattr, lattr))))
-				result = DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (lattr, rattr));
+			if (!(result = -DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(rattr), DatumGetPointer(lattr)))))
+				result = DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(lattr), DatumGetPointer(rattr)));
 			if (result)
 				return result;
 		}
 		else
 		{
-			if (!(result = -DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (lattr, rattr))))
-				result = DatumGetInt32((*fmgr_faddr(&scanKey->sk_func)) (rattr, lattr));
+			if (!(result = -DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(lattr), DatumGetPointer(rattr)))))
+				result = DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(rattr), DatumGetPointer(lattr)));
 			if (result)
 				return result;
 		}
@@ -1998,10 +1998,8 @@ comparetup_datum(Tuplesortstate *state, const void *a, const void *b)
 	{
 		int			result;
 
-		if (!(result = -DatumGetInt32((*fmgr_faddr(&state->sortOpFn)) (ltup->val,
-															 rtup->val))))
-			result = DatumGetInt32((*fmgr_faddr(&state->sortOpFn)) (rtup->val,
-															ltup->val));
+		if (!(result = -DatumGetInt32((*fmgr_faddr_varg(&state->sortOpFn)) (DatumGetPointer(ltup->val),DatumGetPointer(rtup->val)))))
+			result = DatumGetInt32((*fmgr_faddr_varg(&state->sortOpFn)) (DatumGetPointer(rtup->val),DatumGetPointer(ltup->val)));
 		return result;
 	}
 }

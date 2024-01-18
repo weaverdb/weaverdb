@@ -71,8 +71,6 @@
 
 pthread_t lockowner;
 
-extern SPINLOCK BufMgrLock;
-
 static BufferDesc *BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr);
 static bool SyncShadowPage(BufferDesc* bufHdr);
 
@@ -933,22 +931,6 @@ UnlockBuffers(void) {
     }
 }
 
-bool
-BufferIsCritical(Buffer buffer) {
-    BufferDesc*  buf;
-    bool crit = false;
-    
-    if (BufferIsLocal(buffer))
-        return true;
-
-    buf = &(BufferDescriptors[buffer - 1]);
-
-    pthread_mutex_lock(&(buf->cntx_lock.guard));
-    crit = buf->locflags & (BM_CRITICAL);
-    pthread_mutex_unlock(&(buf->cntx_lock.guard));
-    return crit;
-}
-
 int
 LockBuffer(Relation rel, Buffer buffer, int mode) {
     BufferDesc     *buf;
@@ -972,7 +954,6 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
         case BUFFER_LOCK_UNLOCK:
             if ( rel == NULL ) {
                 buflock |= BL_R_LOCK;
-                buf->locflags &= ~(BM_WRITEIO);
                 if ( buf->r_waiting ) pthread_cond_broadcast(&buf->cntx_lock.gate);
             }
             buflock = UnlockIndividualBuffer(buflock, buf);
@@ -993,35 +974,6 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
             }
             buf->locflags |= BM_EXCLUSIVEMASK;
             buflock |= (BL_W_LOCK);
-            break;
-        case BUFFER_LOCK_FLUSHIO:
-/*  if the owner of this write lock is blocked and waiting for a
- *  write so buffers can be freed then there is no danger of changing the 
- *  buffer during a write.  if that is not the case just do what SHARE lock does
- */
-            Assert((rel == NULL));
-            if ( (buf->locflags & BM_CRITICALMASK) == BM_CRITICALMASK )  {
-               locking_error = BL_NOLOCK;
-            } else {
-                (buf->r_locks)++;
-                buflock |= BL_R_LOCK;
-            }
-            break;            
-        case BUFFER_LOCK_WRITEIO:
-/*  if the owner of this write lock is blocked and waiting for a
- *  write so buffers can be freed then there is no danger of changing the 
- *  buffer during a write.  if that is not the case just do what SHARE lock does
- */
-            Assert((rel == NULL));
-                /* only wait for a write lock to finish, anything else would be problematic due to the test above  */
-            while( (buf->locflags & BM_CRITICALMASK) == BM_CRITICALMASK )  {
-                buf->r_waiting++;
-                pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
-                buf->r_waiting--;
-            }
-            (buf->r_locks)++;
-            buf->locflags |= BM_WRITEIO;
-            buflock |= BL_R_LOCK;
             break;
         case BUFFER_LOCK_SHARE:
             /*  don't wait for e_waiting b/c it is useless unless pins wait for buf->e-waiting  */
@@ -1046,27 +998,8 @@ LockBuffer(Relation rel, Buffer buffer, int mode) {
                 buf->w_waiting--;
             }
             buf->w_owner = GetEnv()->eid;
-            if ( mode == BUFFER_LOCK_EXCLUSIVE ) buf->locflags |= BM_CRITICALMASK;
-            else buf->locflags |= (BM_WRITELOCK);
+            buf->locflags |= (BM_WRITELOCK);
             buflock |= (BL_W_LOCK);
-            break;
-        case BUFFER_LOCK_NOTCRITICAL:
-            Assert((BL_W_LOCK & buflock));
-            Assert((buf->w_owner == GetEnv()->eid));
-            buf->locflags &= ~(BM_CRITICAL);
-            if ( buf->r_waiting ) {
-                pthread_cond_broadcast(&buf->cntx_lock.gate);
-            }
-            break;
-        case BUFFER_LOCK_CRITICAL:
-            Assert((BL_W_LOCK & buflock));
-            Assert((buf->w_owner == GetEnv()->eid));
-            while ( buf->locflags & BM_WRITEIO ) {
-                buf->r_waiting++;
-                pthread_cond_wait(&(buf->cntx_lock.gate), &(buf->cntx_lock.guard));
-                buf->r_waiting--;
-            }
-            buf->locflags |= (BM_CRITICAL);
             break;                  
         default:
             elog(ERROR, "LockBuffer: unknown lock mode %d", mode);
@@ -1207,10 +1140,6 @@ IOStatus
 LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     int dirty = 0;
     IOStatus  iostatus = BL_NOLOCK;
-    
-    if ( 0 == LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_WRITEIO) ) {
-        iostatus = BL_R_LOCK;
-    }
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1220,9 +1149,6 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 
     if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        if ( iostatus & BL_R_LOCK ) {
-            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-        }
         iostatus = 0;
         return iostatus;
     }
@@ -1239,9 +1165,6 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     DTRACE_PROBE4(mtpg,buffer__logbufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
     
     if ( !dirty ) {
-        if ( iostatus & BL_R_LOCK ) {
-            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-        }
         iostatus = 0;
     }
     
@@ -1251,15 +1174,7 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 IOStatus
 WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  */
     int dirty = 0;
-    IOStatus  iostatus = BL_NOLOCK;
-    
-    iostatus = LockBuffer(NULL,BufferDescriptorGetBuffer(buf),( mode == WRITE_COMMIT ) ?  BUFFER_LOCK_WRITEIO : BUFFER_LOCK_FLUSHIO);
-
-    if ( iostatus == BL_NOLOCK ) {
-        return iostatus;
-    }
-
-    iostatus = BL_R_LOCK;
+    IOStatus  iostatus = 0;
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1269,9 +1184,6 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
 
     if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        if ( iostatus == BL_R_LOCK) {
-            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-        }
         iostatus = 0;
         return iostatus;
     }
@@ -1305,13 +1217,6 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
     
     DTRACE_PROBE4(mtpg,buffer__writebufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
-    
-    if ( !dirty ) {
-        if ( iostatus & BL_R_LOCK) {
-            LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-        }
-        iostatus = 0;
-    }
     
     return iostatus;
 }
@@ -1471,7 +1376,23 @@ Block BufferGetBlock(Buffer buffer) {
     if ( BufferIsLocal(buffer) ) {
         return (Block) (GetLocalBufferDescriptor((-buffer) - 1)->data);
     } else {
-        return (Block) (BufferDescriptors[(buffer) - 1].data);
+        BufferDesc* bufHdr = &BufferDescriptors[buffer - 1];
+        pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
+        Block data = (Block)((bufHdr->generation > 0) ? (bufHdr->shadow) : (bufHdr->data));
+        long gen = GetBufferGeneration();
+        if (gen > bufHdr->generation) {
+            Assert(bufHdr->generation || gen == bufHdr->generation + 1);
+            if (bufHdr->generation == 0) {
+                memmove(bufHdr->shadow, data, BLCKSZ);
+            } else {
+                memmove(bufHdr->data, data, BLCKSZ);
+            }
+            bufHdr->generation = gen;
+        } else if (gen == 0) {
+        // .do nothing
+        }
+        pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
+        return data;
     }
 }
 

@@ -73,7 +73,7 @@ static void IpcConfigTip(void);
 
 static struct ONEXIT
 {
-	void		(*function) ();
+	void		(*function) (int, caddr_t);
 	caddr_t		arg;
 }			on_proc_exit_list[MAX_ON_EXITS], on_shmem_exit_list[MAX_ON_EXITS];
 
