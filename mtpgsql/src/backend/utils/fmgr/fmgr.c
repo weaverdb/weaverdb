@@ -89,61 +89,59 @@ fmgr_c(FmgrInfo *finfo,
 	   bool *isNull)
 {
 	char	   *returnValue = (char *) NULL;
-	int		n_arguments = finfo->fn_nargs;
-	func_ptr_varg	user_fn = (func_ptr_varg)fmgr_faddr(finfo);
 
 	/*
 	 * If finfo contains a PL handler for this function, call that
 	 * instead.
 	 */
 
-	if (user_fn == NULL)
+	if (finfo->fn_addr == NULL)
 		elog(ERROR, "Internal error: fmgr_c received NULL function pointer.");
 
-	switch (n_arguments)
+	switch (finfo->fn_nargs)
 	{
 		case 0:
 			returnValue = (*fmgr_faddr(finfo)) ();
 			break;
 		case 1:
 			/* NullValue() uses isNull to check if args[0] is NULL */
-			returnValue = (*user_fn) (values->data[0], isNull);
+			returnValue = (*fmgr_faddr_1(finfo)) (values->data[0]);
 			break;
 		case 2:
-			returnValue = (*user_fn) (values->data[0], values->data[1]);
+			returnValue = (*fmgr_faddr_2(finfo)) (values->data[0], values->data[1]);
 			break;
 		case 3:
-			returnValue = (*user_fn) (values->data[0], values->data[1],
+			returnValue = (*fmgr_faddr_3(finfo)) (values->data[0], values->data[1],
 									  values->data[2]);
 			break;
 		case 4:
-			returnValue = (*user_fn) (values->data[0], values->data[1],
+			returnValue = (*fmgr_faddr_4(finfo)) (values->data[0], values->data[1],
 									  values->data[2], values->data[3]);
 			break;
 		case 5:
-			returnValue = (*user_fn) (values->data[0], values->data[1],
+			returnValue = (*fmgr_faddr_5(finfo)) (values->data[0], values->data[1],
 									  values->data[2], values->data[3],
 									  values->data[4]);
 			break;
 		case 6:
-			returnValue = (*user_fn) (values->data[0], values->data[1],
+			returnValue = (*fmgr_faddr_6(finfo)) (values->data[0], values->data[1],
 									  values->data[2], values->data[3],
 									  values->data[4], values->data[5]);
 			break;
 		case 7:
-			returnValue = (*user_fn) (values->data[0], values->data[1],
+			returnValue = (*fmgr_faddr_7(finfo)) (values->data[0], values->data[1],
 									  values->data[2], values->data[3],
 									  values->data[4], values->data[5],
 									  values->data[6]);
 			break;
 		case 8:
-			returnValue = (*user_fn) (values->data[0], values->data[1],
+			returnValue = (*fmgr_faddr_8(finfo)) (values->data[0], values->data[1],
 									  values->data[2], values->data[3],
 									  values->data[4], values->data[5],
 									  values->data[6], values->data[7]);
 			break;
 		case 9:
-			returnValue = (*user_fn) (values->data[0], values->data[1],
+			returnValue = (*fmgr_faddr_9(finfo)) (values->data[0], values->data[1],
 									  values->data[2], values->data[3],
 									  values->data[4], values->data[5],
 									  values->data[6], values->data[7],
@@ -490,7 +488,7 @@ fmgr_c(FmgrInfo *finfo,
 #endif
 		default:
 			elog(ERROR, "fmgr_c: function %lu: too many arguments (%d > %d)",
-				 finfo->fn_oid, n_arguments, FUNC_MAX_ARGS);
+				 finfo->fn_oid, finfo->fn_nargs, FUNC_MAX_ARGS);
 			break;
 	}
 	return returnValue;
@@ -642,7 +640,7 @@ fmgr(Oid procedureId,...)
             va_start(pvar, procedureId);
 
             for (i = 0; i < pronargs; ++i)
-                    values.data[i] = va_arg(pvar, char *);
+                    values.data[i] = va_arg(pvar, Datum);
 
             va_end(pvar);
             return fmgr_c(&finfo, &values, &isNull);
@@ -661,32 +659,25 @@ fmgr(Oid procedureId,...)
 #ifdef TRACE_FMGR_PTR
 
 char *
-fmgr_ptr(FmgrInfo *finfo,...)
+fmgr_ptr(FmgrInfo *finfo, ...)
 {
 	va_list		pvar;
 	int			i;
-	int			n_arguments;
-	FmgrInfo	local_finfo;
 	FmgrValues	values;
 	bool		isNull = false;
 
-	local_finfo.fn_addr = finfo->fn_addr;
-	local_finfo.fn_oid = finfo->fn_oid;
-
 	va_start(pvar, finfo);
-	n_arguments = va_arg(pvar, int);
-	local_finfo.fn_nargs = n_arguments;
-	if (n_arguments > FUNC_MAX_ARGS)
+	if (finfo->fn_nargs > FUNC_MAX_ARGS)
 	{
 		elog(ERROR, "fmgr_ptr: function %lu: too many arguments (%d > %d)",
-			 finfo->fn_oid, n_arguments, FUNC_MAX_ARGS);
+			 finfo->fn_oid, finfo->fn_nargs, FUNC_MAX_ARGS);
 	}
-	for (i = 0; i < n_arguments; ++i)
-		values.data[i] = va_arg(pvar, char *);
+	for (i = 0; i < finfo->fn_nargs; ++i)
+		values.data[i] = va_arg(pvar, Datum);
 	va_end(pvar);
 
 	/* XXX see WAY_COOL_ORTHOGONAL_FUNCTIONS */
-	return fmgr_c(&local_finfo, &values, &isNull);
+	return fmgr_c(finfo, &values, &isNull);
 }
 
 #endif

@@ -1751,15 +1751,15 @@ comparetup_heap(Tuplesortstate *state, const void *a, const void *b)
 			return -1;
 		else if (scanKey->sk_flags & SK_COMMUTE)
 		{
-			if (!(result = -DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(rattr), DatumGetPointer(lattr)))))
-				result = DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(lattr), DatumGetPointer(rattr)));
+			if (!(result = -DatumGetInt32((*fmgr_faddr_2(&scanKey->sk_func)) (rattr, lattr))))
+				result = DatumGetInt32((*fmgr_faddr_2(&scanKey->sk_func)) (lattr, rattr));
 			if (result)
 				return result;
 		}
 		else
 		{
-			if (!(result = -DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(lattr), DatumGetPointer(rattr)))))
-				result = DatumGetInt32((*fmgr_faddr_varg(&scanKey->sk_func)) (DatumGetPointer(rattr), DatumGetPointer(lattr)));
+			if (!(result = -DatumGetInt32((*fmgr_faddr_2(&scanKey->sk_func)) (lattr, rattr))))
+				result = DatumGetInt32((*fmgr_faddr_2(&scanKey->sk_func)) (rattr, lattr));
 			if (result)
 				return result;
 		}
@@ -1998,8 +1998,8 @@ comparetup_datum(Tuplesortstate *state, const void *a, const void *b)
 	{
 		int			result;
 
-		if (!(result = -DatumGetInt32((*fmgr_faddr_varg(&state->sortOpFn)) (DatumGetPointer(ltup->val),DatumGetPointer(rtup->val)))))
-			result = DatumGetInt32((*fmgr_faddr_varg(&state->sortOpFn)) (DatumGetPointer(rtup->val),DatumGetPointer(ltup->val)));
+		if (!(result = -DatumGetInt32((*fmgr_faddr_2(&state->sortOpFn)) (ltup->val,rtup->val))))
+			result = DatumGetInt32((*fmgr_faddr_2(&state->sortOpFn)) (rtup->val,ltup->val));
 		return result;
 	}
 }
@@ -2090,8 +2090,8 @@ ApplySortFunction(FmgrInfo *sortFunction, SortFunctionKind kind,
 {
 	FmgrValues args;
 	bool	isNull;
-	args.data[0] = (char*)datum1;
-	args.data[1] = (char*)datum2;
+	args.data[0] = datum1;
+	args.data[1] = datum2;
 
 	switch (kind)
 	{
@@ -2106,8 +2106,8 @@ ApplySortFunction(FmgrInfo *sortFunction, SortFunctionKind kind,
 				return -1;
 			if (DatumGetChar(fmgr_c(sortFunction, &args,&isNull)))
 				return -1;		/* a < b */
-			args.data[0] = (char*)datum2;
-			args.data[1] = (char*)datum1;
+			args.data[0] = datum2;
+			args.data[1] = datum1;
 			if (DatumGetChar(fmgr_c(sortFunction, &args,&isNull)))
 				return 1;		/* a > b */
 			return 0;
@@ -2124,8 +2124,8 @@ ApplySortFunction(FmgrInfo *sortFunction, SortFunctionKind kind,
 				return 1;
 			if (DatumGetChar(fmgr_c(sortFunction, &args,&isNull)))
 				return -1;		/* a < b */
-			args.data[0] = (char*)datum2;
-			args.data[1] = (char*)datum1;
+			args.data[0] = datum2;
+			args.data[1] = datum1;
 			if (DatumGetChar(fmgr_c(sortFunction, &args,&isNull)))
 				return 1;		/* a > b */
 			return 0;

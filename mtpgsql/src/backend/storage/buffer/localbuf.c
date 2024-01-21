@@ -84,11 +84,13 @@ LocalBufferSpecialAlloc(Relation reln, BlockNumber blockNum) {
 	{
 		MemoryContext oldcxt = MemoryContextSwitchTo(MemoryContextGetTopContext());
 		char	   *data = (char *) palloc(BLCKSZ);
+		char	   *shadow = (char *) palloc(BLCKSZ);
 
 		bufHdr->data = data;
+		bufHdr->shadow = shadow;
+                bufHdr->generation = 0;
 		MemoryContextSwitchTo(oldcxt);
 	}
-
 	return bufHdr;
 }
 
@@ -194,11 +196,12 @@ LocalBufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr)
 	{
 		MemoryContext oldcxt = MemoryContextSwitchTo(MemoryContextGetTopContext());
 		char	   *data = (char *) palloc(BLCKSZ);
+		char	   *shadow = (char *) palloc(BLCKSZ);
 
 		bufHdr->data = data;
+		bufHdr->shadow = shadow;
 		MemoryContextSwitchTo(oldcxt);
 	}
-
 	*foundPtr = FALSE;
 	return bufHdr;
 }

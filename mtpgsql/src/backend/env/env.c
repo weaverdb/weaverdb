@@ -113,10 +113,7 @@ Env* InitSystem(bool  isPrivate) {
     	for (counter=0;counter<GetMaxBackends();counter++) {
      	   envmap[counter] = NULL;
     	}
-        
-#ifdef MACOSX
-
-#else   
+          
         pthread_mutexattr_init(&process_mutex_attr);
         pthread_condattr_init(&process_cond_attr);
         if ( isPrivate ) {
@@ -126,7 +123,6 @@ Env* InitSystem(bool  isPrivate) {
         	pthread_condattr_setpshared(&process_cond_attr,PTHREAD_PROCESS_SHARED);
         	pthread_mutexattr_setpshared(&process_mutex_attr,PTHREAD_PROCESS_SHARED);
         }
-#endif	
          
         counter = pthread_key_create(&envkey,NULL);
                 

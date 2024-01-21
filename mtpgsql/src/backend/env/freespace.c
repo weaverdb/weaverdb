@@ -92,7 +92,7 @@ static FreeSpace* FindFreespace(Relation rel,char* dbname,bool create);
 static int FindEndSpace(Relation rel, BlockNumber nblocks,int recommended);
 static int AllocatePagesViaSmgr(Relation rel,char* sdata, int ssize, int count);
 static int RecommendAllocation(Relation rel,FreeSpace* space);
-static BlockNumber PerformAllocation(Relation rel, FreeSpace* free, BlockNumber nblocks, char* sdata, int ssize, int size);
+static BlockNumber PerformAllocation(Relation rel, FreeSpace* free, char* sdata, int ssize, int size);
 static bool LookupExtentForRelation(Relation rel, FreeSpace* free);
 static void SetExtentForRelation(Relation rel, int count,bool percentage);
 static void RemoveExtentForRelation(Relation rel);
@@ -365,7 +365,12 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
     int         recommend   = 0;
     int 	space = request;
 
-    Assert(rel->rd_rel->relkind == RELKIND_RELATION || IsBootstrapProcessingMode());
+    if (IsBootstrapProcessingMode()) {
+        return rel->rd_nblocks - 1;
+    }
+
+    Assert(rel->rd_rel->relkind == RELKIND_RELATION);
+    
     entry = FindFreespace(rel,NULL,true);	
     if ( entry ) {
         int p = 0;
@@ -465,7 +470,7 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
         pthread_mutex_unlock(&entry->accessor);
 
         if ( allocate ) {                        
-            check = PerformAllocation(rel,entry, check, NULL, 0, recommend);
+            check = PerformAllocation(rel,entry, NULL, 0, recommend);
         } else if ( scan ) {
             AddFreespaceScanRequest(RelationGetRelationName(rel),GetDatabaseName(),RelationGetRelid(rel),GetDatabaseId());
 	}
@@ -658,7 +663,7 @@ AllocateMoreSpace(Relation rel, char* sdata, int ssize) {
     BlockNumber nb = InvalidBlockNumber;
 
     if ( freespace == NULL ) {
-        return PerformAllocation(rel, freespace, nb, sdata, ssize, 1);
+        return PerformAllocation(rel, freespace, sdata, ssize, 1);
     }
 /*  if not recommending a value, then the extender is not set and need to get an extension value  */
     pthread_mutex_lock(&freespace->accessor);
@@ -680,7 +685,7 @@ AllocateMoreSpace(Relation rel, char* sdata, int ssize) {
     
     pthread_mutex_unlock(&freespace->accessor);
     if ( recommend > 0 ) {
-        nb = PerformAllocation(rel, freespace, nb, sdata, ssize, recommend);
+        nb = PerformAllocation(rel, freespace, sdata, ssize, recommend);
     } 
     
     return nb;
@@ -722,42 +727,32 @@ TruncateHeapRelation(Relation rel, BlockNumber new_rel_pages) {
     return new_rel_pages;
 }
 
-BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, BlockNumber nblocks, char* sdata, int ssize, int size) {
+BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, char* sdata, int ssize, int size) {
     int             found = 0,allocated = 0;
-    BlockNumber     firstfree = InvalidBlockNumber;
+    BlockNumber     nblock = smgrnblocks(rel->rd_smgr);
     
     if ( freespace == NULL ) {
         allocated = AllocatePagesViaSmgr(rel,sdata,ssize,size);
         return rel->rd_nblocks - allocated;
     }
-    
     Assert(pthread_equal(freespace->extender,pthread_self()));
     
-    if ( nblocks > 0 && !freespace->end_scanned ) {
-        found = FindEndSpace(rel,nblocks,size);
+    if ( nblock > 0 && !freespace->end_scanned ) {
+        found = FindEndSpace(rel,nblock,size);
         freespace->end_scanned = true;
         if ( found > 0 ) {
-            nblocks -= found;
+            nblock -= found;
+            size = 0;
         }
     }
-
-    if ( found == 0 ) allocated = AllocatePagesViaSmgr(rel,sdata,ssize,size);
-    else rel->rd_nblocks = smgrnblocks(rel->rd_smgr);
+    allocated = AllocatePagesViaSmgr(rel,sdata,ssize,size);
 
     pthread_mutex_lock(&freespace->accessor);
+    Assert(nblock+found+allocated == rel->rd_nblocks);
     
-    Assert(nblocks+found == freespace->relsize);
-    
-    freespace->relsize = nblocks;
-
-    if ( found+ allocated + freespace->relsize != rel->rd_nblocks ) {
-        elog(FATAL,"file extension inconsistent %ld %ld",found + freespace->relsize,rel->rd_nblocks);
-        freespace->relsize = rel->rd_nblocks - found;
-    }
+    freespace->relsize = nblock;
 
     if ( found + allocated > 0  ) {
-        firstfree = freespace->relsize;
-        
         if ( freespace->relkind == RELKIND_RELATION || freespace->relkind == RELKIND_INDEX ) {
             Size                total = (BLCKSZ - sizeof(PageHeaderData));
             int                 counter = 0;
@@ -798,7 +793,7 @@ BlockNumber PerformAllocation(Relation rel, FreeSpace* freespace, BlockNumber nb
     pthread_cond_broadcast(&freespace->creator);
     pthread_mutex_unlock(&freespace->accessor);
 
-    return firstfree;
+    return nblock;
 }
 
 int AllocatePagesViaSmgr(Relation rel,char* sdata, int ssize, int create) {

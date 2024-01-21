@@ -102,7 +102,7 @@ cat > $HFILE <<FuNkYfMgRsTuFf
 #define FMGR_H
 
 typedef struct {
-    char *data[FUNC_MAX_ARGS];
+    Datum data[FUNC_MAX_ARGS];
 } FmgrValues;
 
 typedef struct {
@@ -158,22 +158,24 @@ extern FmgrInfo        *fmgr_pl_finfo;
 	(func_ptr)(finfo)->fn_addr \
 )
 #endif
-#define fmgr_faddr(finfo) \
-( \
-	(func_ptr)(finfo)->fn_addr \
-)
-#define fmgr_faddr_varg(finfo) \
-( \
-    (func_ptr_varg)(finfo)->fn_addr \
-)
+#define fmgr_faddr(finfo) ( (func_ptr)(finfo)->fn_addr )
+#define fmgr_faddr_1(finfo) ( (func_ptr_1)(finfo)->fn_addr )
+#define fmgr_faddr_2(finfo) ( (func_ptr_2)(finfo)->fn_addr )
+#define fmgr_faddr_3(finfo) ( (func_ptr_3)(finfo)->fn_addr )
+#define fmgr_faddr_4(finfo) ( (func_ptr_4)(finfo)->fn_addr )
+#define fmgr_faddr_5(finfo) ( (func_ptr_5)(finfo)->fn_addr )
+#define fmgr_faddr_6(finfo) ( (func_ptr_6)(finfo)->fn_addr )
+#define fmgr_faddr_7(finfo) ( (func_ptr_7)(finfo)->fn_addr )
+#define fmgr_faddr_8(finfo) ( (func_ptr_8)(finfo)->fn_addr )
+#define fmgr_faddr_9(finfo) ( (func_ptr_9)(finfo)->fn_addr )
 #ifdef TRACE_FMGR_PTR
 #define	FMGR_PTR2(FINFO, ARG1, ARG2) \
-	fmgr_ptr(FINFO, 2, ARG1, ARG2)
+	fmgr_ptr(FINFO, ARG1, ARG2)
 #else
 #define	FMGR_PTR2(FINFO, ARG1, ARG2) \
 ( \
 	((FINFO)->fn_addr) ? \
-		(*(fmgr_faddr_varg(FINFO)))(ARG1, ARG2) \
+		(*(fmgr_faddr_2(FINFO)))(ARG1, ARG2) \
 	: \
 		fmgr((FINFO)->fn_oid, ARG1, ARG2) \
 )

@@ -419,7 +419,7 @@ _bt_orderkeys(IndexScanDesc scan)
 		if (init[j])
 		{
 			/* yup, keep the more restrictive value */
-			test = DatumGetChar(fmgr_ptr(&cur->sk_func, cur->sk_argument,
+			test = DatumGetChar((*fmgr_faddr_2(&cur->sk_func))(cur->sk_argument,
 								 xform[j].sk_argument));
 			if (test)
 				xform[j].sk_argument = cur->sk_argument;
@@ -538,9 +538,9 @@ _bt_checkkeys(IndexScanDesc scan, IndexTuple tuple,
 		}
 
 		if (key->sk_flags & SK_COMMUTE)
-			test = DatumGetChar(fmgr_ptr(&key->sk_func, key->sk_argument, datum));
+			test = DatumGetChar((*fmgr_faddr_2(&key->sk_func))(key->sk_argument, datum));
 		else
-			test = DatumGetChar(fmgr_ptr(&key->sk_func, datum, key->sk_argument));
+			test = DatumGetChar((*fmgr_faddr_2(&key->sk_func))(datum, key->sk_argument));
 
 		if (test == !!(key->sk_flags & SK_NEGATE))
 		{

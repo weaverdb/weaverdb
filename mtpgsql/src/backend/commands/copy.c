@@ -500,7 +500,7 @@ CopyTo(Relation rel, bool binary, bool oids, FILE *fp, char *delim, char *null_p
 #endif	 /* _DROP_COLUMN_HACK__ */
 				if (!isnull)
 				{
-					string = DatumGetPointer(fmgr_ptr(&out_functions[i], value, elements[i], typmod[i]));
+					string = DatumGetPointer((*fmgr_faddr_3(&out_functions[i]))(value, elements[i], typmod[i]));
 					CopyAttributeOut(fp, string, delim);
 					pfree(string);
 				}
@@ -807,7 +807,7 @@ CopyFrom(StringInfo attribute_buf,Relation rel, bool binary, bool oids, FILE *fp
 					done = 1;
 				else
 				{
-					values[i] = PointerGetDatum(fmgr_ptr(&in_functions[i], PointerGetDatum(string),
+					values[i] = PointerGetDatum((*fmgr_faddr_3(&in_functions[i]))(PointerGetDatum(string),
 															 elements[i],
 															  typmod[i]));
 

@@ -201,6 +201,7 @@ AddMoreBuffers(int count) {
             if ( buf->locflags & BM_RETIRED ) {
                 activate += 1;
                 buf->data = LockedAlloc(buffer_cxt,BLCKSZ);
+                buf->shadow = LockedAlloc(buffer_cxt,BLCKSZ);
                 buf->locflags &= ~(BM_RETIRED);
                 buf->freeNext = INVALID_DESCRIPTOR;
                 if ( head == NULL ) {
@@ -226,6 +227,7 @@ AddMoreBuffers(int count) {
             pthread_mutex_lock(&buf->cntx_lock.guard);
             buf->locflags &= ~(BM_RETIRED);
             buf->data = LockedAlloc(buffer_cxt,BLCKSZ);
+            buf->shadow = LockedAlloc(buffer_cxt,BLCKSZ);
             pthread_mutex_unlock(&buf->cntx_lock.guard);
             Assert(buf->data != NULL);
         }
@@ -251,7 +253,9 @@ RetireBuffers(int start, int count) {
         buf->locflags |= ( BM_RETIRED ) ;
         buf->locflags &= ~( BM_VALID ) ;
         if ( buf->data < BufferBlocks || buf->data > BufferBlocks + ( BLCKSZ * SBuffers ) ) pfree(buf->data);
+        if ( buf->shadow < BufferBlocks || buf->shadow > BufferBlocks + ( BLCKSZ * SBuffers ) ) pfree(buf->shadow);
         buf->data = NULL;
+        buf->shadow = NULL;
         pthread_mutex_unlock(&buf->cntx_lock.guard);
     }
     
@@ -277,8 +281,11 @@ InitializeBuffers(int start, int count, char* block) {
                 if ( block ) {
                     buf->data = block;
                     block += BLCKSZ;
+                    buf->shadow = block;
+                    block += BLCKSZ;
                 } else {
                     buf->data = LockedAlloc(buffer_cxt,BLCKSZ);
+                    buf->shadow = LockedAlloc(buffer_cxt,BLCKSZ);
                 }
                 Assert(buf->data != NULL);
             }

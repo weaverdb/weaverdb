@@ -888,9 +888,11 @@ int LogTransactions(WriteGroup cart) {
             if (buffer != InvalidBuffer) {
                 FlushBuffer(LogRelation,buffer);
             }
-            buffer = ReadBuffer(LogRelation, localblock);
-            if (!BufferIsValid(buffer))
-                elog(ERROR, "[DBWriter]bad buffer read in transaction logging");
+            buffer = ReadBuffer(LogRelation, localblock == LogRelation->rd_nblocks ? P_NEW : localblock);
+            if (!BufferIsValid(buffer)) {
+                elog(FATAL, "[DBWriter]bad buffer read in transaction logging");
+                return -1;
+            }
             
             block = BufferGetBlock(buffer);
         }
@@ -911,9 +913,9 @@ int LogTransactions(WriteGroup cart) {
 }
 
 
-void RegisterBufferWrite(BufferDesc * bufHdr, bool release) {
+long RegisterBufferWrite(BufferDesc * bufHdr, bool release) {
     WriteGroup     cart = GetCurrentWriteGroup(false);
-    
+    long generation = cart->generation;
     /*
      * if this is the first time we write to this buffer we have to self
      * pin so someone else doesn't free the buffer before we have had a
@@ -960,6 +962,7 @@ void RegisterBufferWrite(BufferDesc * bufHdr, bool release) {
     if (release) {
         ManualUnpin(bufHdr, true);
     }
+    return generation;
 }
  
 void CommitDBBufferWrites(TransactionId xid, int setstate) {
@@ -1073,7 +1076,7 @@ int LogBuffers(WriteGroup list) {
             }
 
             iostatus = LogBufferIO(bufHdr);
-            if ( iostatus ) {
+            if ( iostatus == IO_SUCCESS ) {
                 Block blk = AdvanceBuffer(list->generation, bufHdr);
                 PageInsertChecksum((Page)blk);
                 buffer_hits++;
@@ -1092,11 +1095,13 @@ int LogBuffers(WriteGroup list) {
                 } else {
                     TerminateBufferIO(iostatus,bufHdr);
                 }
+            } else {
+                ErrorBufferIO(iostatus,bufHdr);
             }
         } else {
             iostatus = LogBufferIO(bufHdr);
             
-            if (iostatus) {
+            if (iostatus == IO_SUCCESS) {
                 elog(NOTICE, "log buffers - this should not happen");
                 elog(NOTICE, "dbid:%ld relid:%ld blk:%ld\n",
                         list->descriptions[i].relId.dbId,
@@ -1116,6 +1121,7 @@ int LogBuffers(WriteGroup list) {
                     list->release[i]--;
                     releasecount++;
                 }
+                ErrorBufferIO(iostatus,bufHdr);
             }
         }
     }
@@ -1182,10 +1188,11 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                  */
                 if ( !forcommit ) continue;
                 iostatus = WriteBufferIO(bufHdr, WRITE_FLUSH);
-                if (iostatus) {
+                if (iostatus == IO_SUCCESS) {
                     Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
-                    
-                    status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, AdvanceBuffer(list->generation, bufHdr));
+                    Block blk = AdvanceBuffer(list->generation, bufHdr);
+                    PageInsertChecksum((Page)blk);
+                    status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, blk);
                     written = true;
                     
                     if (status == SM_FAIL) {
@@ -1198,6 +1205,8 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     }
                     
                     RelationClose(target);
+                } else {
+                    ErrorBufferIO(iostatus, bufHdr);
                 }
             } else {
                 PathCache*   cache = NULL;
@@ -1216,9 +1225,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 }
 
                 iostatus = WriteBufferIO(bufHdr, iomode);
-                if ( iostatus ) {
-                    if ( iostatus == BL_NOLOCK ) continue;
-                    
+                if ( iostatus == IO_SUCCESS) {                    
                     buffer_hits++;
                     cache->commit = true;
                     Block blk = AdvanceBuffer(list->generation, bufHdr);
@@ -1242,11 +1249,13 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     } else {
                         TerminateBufferIO(iostatus, bufHdr);
                     }
-                } 
+                } else {
+                    ErrorBufferIO(iostatus, bufHdr);
+                }
             }
         } else {
             iostatus = WriteBufferIO(bufHdr, WRITE_FLUSH);
-            if (iostatus) {
+            if (iostatus == IO_SUCCESS) {
                 elog(NOTICE, "already out dbid:%ld relid:%ld blk:%ld\n",
                         list->descriptions[i].relId.dbId,
                         list->descriptions[i].relId.relId,
@@ -1254,6 +1263,8 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 elog(NOTICE, "now dbid:%ld relid:%ld blk:%ld\n",
                         bufHdr->tag.relId.dbId, bufHdr->tag.relId.relId, bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus, bufHdr);
+            } else {
+                ErrorBufferIO(iostatus, bufHdr);
             }
         }
         
@@ -1611,15 +1622,22 @@ GetFlushTime() {
 
 static Block AdvanceBuffer(long generation, BufferDesc* bufHdr) {
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-    if (generation == bufHdr->generation) {
-        memmove(bufHdr->data, bufHdr->shadow, BLCKSZ);
-        bufHdr->generation = 0;
+    if (bufHdr->generation <= generation) {
+        memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
+        bufHdr->generation = generation;
     }
     pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
     return (Block)bufHdr->data;
 }
 
 long GetBufferGeneration() {
-    return GetCurrentWriteGroup(false)->generation;
+    if (db_inited) {
+        WriteGroup w = GetCurrentWriteGroup(false);
+        long gen = w->generation;
+        UnlockWriteGroup(w);
+        return gen;
+    } else {
+        return 0;
+    }
 }
 

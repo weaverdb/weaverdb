@@ -120,7 +120,7 @@ smgrinit() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_init) {
-            if ((*(smgrsw[i].smgr_init)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_init)) () != SM_SUCCESS)
                 elog(FATAL, "initialization failed on %s", smgrout(i));
         }
     }
@@ -137,7 +137,7 @@ smgrshutdown(void) {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_shutdown) {
-            if ((*(smgrsw[i].smgr_shutdown)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_shutdown)) () != SM_SUCCESS)
                 elog(FATAL, "shutdown failed on %s", smgrout(i));
         }
     }
@@ -178,7 +178,7 @@ int
 smgrunlink(SmgrInfo info) {
     int status;
 
-    if ((status = (*(smgrsw[info->which].smgr_unlink)) (info)) == SM_FAIL)
+    if ((status = (*(smgrsw[info->which].smgr_unlink)) (info))  != SM_SUCCESS)
         elog(NOTICE, "cannot unlink %s-%s", NameStr(info->relname), NameStr(info->dbname));
 
     pfree(info);
@@ -196,7 +196,7 @@ long
 smgrextend(SmgrInfo info, char *buffer, int count) {
     int status = (*(smgrsw[info->which].smgr_extend)) (info, buffer, count);
 
-    if (status == SM_FAIL) {
+    if (status  != SM_SUCCESS) {
         elog(NOTICE, "%s-%s: cannot extend.  Check free disk space.",
                 NameStr(info->relname), NameStr(info->dbname));
         return -1;
@@ -225,7 +225,7 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
         info->relid = relid;
         info->dbid = dbid;        
         
-	while ((*(smgrsw[which].smgr_open)) (info) == SM_FAIL) {
+	while ((*(smgrsw[which].smgr_open)) (info) != SM_SUCCESS) {
 		elog(NOTICE, "cannot open %s-%s", relname, dbname);
                 perror("SMGR open:");
                 if ( count ++ > 3 ) {
@@ -251,7 +251,7 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
  */
 int
 smgrclose(SmgrInfo info) {
-    if ((*(smgrsw[info->which].smgr_close)) (info) == SM_FAIL)
+    if ((*(smgrsw[info->which].smgr_close)) (info) != SM_SUCCESS)
         elog(NOTICE, "cannot close %s-%s", NameStr(info->relname), NameStr(info->dbname));
 
     pfree(info);
@@ -278,7 +278,6 @@ smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer) {
     if (status != SM_SUCCESS) {
         elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
                 blocknum, NameStr(info->relname), NameStr(info->dbname), status);
-        status = SM_FAIL;
     }
 
     return status;
@@ -298,10 +297,10 @@ smgrwrite(SmgrInfo info, BlockNumber blocknum, char *buffer) {
 
     status = (*(smgrsw[info->which].smgr_write)) (info, blocknum, buffer);
 
-    if (status == SM_FAIL)
+    if (status != SM_SUCCESS) {
         elog(NOTICE, "cannot write block %ld of %s-%s",
             blocknum, NameStr(info->relname), NameStr(info->dbname));
-
+    }
     return status;
 }
 
@@ -314,9 +313,10 @@ smgrflush(SmgrInfo info, BlockNumber blocknum, char *buffer) {
 
     status = (*(smgrsw[info->which].smgr_flush)) (info, blocknum, buffer);
 
-    if (status == SM_FAIL)
+    if (status != SM_SUCCESS) {
         elog(NOTICE, "cannot flush block %ld of %s-%s to stable store",
             blocknum, NameStr(info->relname), NameStr(info->dbname));
+    }
 
     return status;
 }
@@ -337,7 +337,7 @@ smgrmarkdirty(SmgrInfo info, BlockNumber blkno) {
 
     status = (*(smgrsw[info->which].smgr_markdirty)) (info, blkno);
 
-    if (status == SM_FAIL)
+    if (status != SM_SUCCESS)
         elog(NOTICE, "cannot mark block %ld of %s:%s",
             blkno, NameStr(info->relname), NameStr(info->dbname));
 
@@ -392,7 +392,7 @@ smgrcommit() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_commit) {
-            if ((*(smgrsw[i].smgr_commit)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_commit)) () != SM_SUCCESS)
                 elog(FATAL, "transaction commit failed on %s", smgrout(i));
         }
     }
@@ -406,7 +406,7 @@ smgrabort() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_abort) {
-            if ((*(smgrsw[i].smgr_abort)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_abort)) () != SM_SUCCESS)
                 elog(FATAL, "transaction abort failed on %s", smgrout(i));
         }
     }
@@ -430,7 +430,7 @@ smgrbeginlog(void) {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_beginlog) {
-            if ((*(smgrsw[i].smgr_beginlog)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_beginlog)) () != SM_SUCCESS)
                 elog(FATAL, "begin log failed on %s", smgrout(i));
         }
     }
@@ -451,7 +451,7 @@ smgrlog(int which, char *dbname, char *relname,
     data.relkind = relkind;
 
     if (smgrsw[which].smgr_log) {
-        if ((*(smgrsw[which].smgr_log)) (&data, number, buffer) == SM_FAIL)
+        if ((*(smgrsw[which].smgr_log)) (&data, number, buffer) != SM_SUCCESS)
             elog(FATAL, "log failed on %s for %s-%s block number: %ld", smgrout(which), NameStr(data.relname),
                 NameStr(data.dbname), number);
     }
@@ -465,7 +465,7 @@ smgrcommitlog() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_commitlog) {
-            if ((*(smgrsw[i].smgr_commitlog)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_commitlog)) () != SM_SUCCESS)
                 elog(FATAL, "commit log failed on %s", smgrout(i));
         }
     }
@@ -481,7 +481,7 @@ smgrreplaylogs() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_replaylogs) {
-            if ((*(smgrsw[i].smgr_replaylogs)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_replaylogs)) () != SM_SUCCESS)
                 elog(FATAL, "replay logs failed on %s", smgrout(i));
         }
     }
@@ -495,7 +495,7 @@ smgrexpirelogs() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_expirelogs) {
-            if ((*(smgrsw[i].smgr_expirelogs)) () == SM_FAIL)
+            if ((*(smgrsw[i].smgr_expirelogs)) () != SM_SUCCESS)
                 elog(FATAL, "expire logs failed on %s", smgrout(i));
         }
     }

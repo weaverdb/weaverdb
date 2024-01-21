@@ -883,8 +883,8 @@ compute_minimal_stats(AnalyzeAttrStats * stats,
 		for (j = 0; j < track_cnt; j++) {
 			FmgrValues      args;
 			bool            isNull;
-			args.data[0] = (char *) value;
-			args.data[1] = (char *) track[j].value;
+			args.data[0] = value;
+			args.data[1] = track[j].value;
 
 			if (DatumGetChar(fmgr_c(&stats->f_cmpeq, &args, &isNull))) {
 				match = true;

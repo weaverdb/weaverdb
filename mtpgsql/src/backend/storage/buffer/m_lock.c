@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -84,14 +85,19 @@ void
 m_unlock(slock_t *lock)
 {
 	if ( pthread_mutex_unlock(lock) ) {
-		perror("M_LOCK (LOCK):");
+		perror("M_LOCK (UNLOCK):");
 	}
 }
 
 void 
 m_init(slock_t *lock)
 {
-        pthread_mutex_init(lock,&process_mutex_attr);
+        int result = pthread_mutex_init(lock,&process_mutex_attr);
+        if (result) {
+		perror("M_LOCK (INIT):");
+                fprintf(stdout, "\nResult: %d\n", result);
+                elog(FATAL, "result: %d", result);
+        }
 }
 
 void 

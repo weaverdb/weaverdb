@@ -113,7 +113,7 @@ _openlogfile(char* logfile_path, bool replay) {
 #endif      
     file = PathNameOpenFile(path, fileflags , 0600);
      if ( file < 0 ) {
-        elog(FATAL,"unable to access %s",logfile_path);
+        return file;
     }
     if ( !replay && GetBoolProperty("vfdoptimize_log") ) {
            FileOptimize(file);  
@@ -420,6 +420,7 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
                     if ( seekpos > checkpos ) {
                         elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
                     }
+                    status = SM_FAIL_EOF;
                 } else {
                     if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
                         elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
@@ -771,8 +772,10 @@ vfdreplaylogs() {
         strncpy(newname + len,".old",4);
     
         logfile = _openlogfile(newname,true);
-        _vfdreplaylogfile(logfile,true);
-        FileClose(logfile);
+        if (logfile >= 0) {
+            _vfdreplaylogfile(logfile,true);
+            FileClose(logfile);
+        }
     }
     
     return SM_SUCCESS;

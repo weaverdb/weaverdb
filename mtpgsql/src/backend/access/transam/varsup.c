@@ -52,7 +52,7 @@ static pthread_mutex_t	oid_access;
 
 static Oid VariableRelationGetNextOid(void);
 static TransactionId VariableRelationGetNextXid(void);
-
+static Relation InitVariableRelation(void);
 
 /* ---------------------
  *		spin lock for oid generation
@@ -82,7 +82,7 @@ VariableRelationGetNextXid(void)
 {
 	Buffer		buf;
 	VariableRelationContents var;
-	Relation	VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+	Relation	VariableRelation = InitVariableRelation();
 	TransactionId	xid;
 
 
@@ -135,7 +135,7 @@ VariableRelationPutNextXid(TransactionId xid)
 {
 	Buffer		buf;
 	VariableRelationContents var;
-	Relation	VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+	Relation	VariableRelation = InitVariableRelation();
 
 	/* ----------------
 	 * We assume that a spinlock has been acquire to guarantee
@@ -182,7 +182,7 @@ VariableRelationGetNextOid(void)
 {
 	Buffer		buf;
 	VariableRelationContents var;
-	Relation	VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+	Relation	VariableRelation = InitVariableRelation();
 	Oid  oid_ret;
 	/* ----------------
 	 * We assume that a spinlock has been acquire to guarantee
@@ -386,7 +386,7 @@ InitTransactionLowWaterMark()
 	Relation 		datar;
 */	
 	Header*			header;
-	Relation		VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+	Relation		VariableRelation = InitVariableRelation();
 
 
 /*	LockRelation(VariableRelation,ExclusiveLock);   */
@@ -422,7 +422,9 @@ InitTransactionLowWaterMark()
 */
 
 	first = ReadBuffer(VariableRelation, 0);
-    if (!BufferIsValid(first) ) elog(ERROR,"bad buffer read in variable logging");
+        if (!BufferIsValid(first) ) {
+            elog(ERROR,"bad buffer read in variable logging");
+        }
 
 	var = (VariableRelationContents) BufferGetBlock(first);
 
@@ -476,10 +478,10 @@ GetTransactionRecoveryCheckpoint()
 	Header*			theader;
 	TransactionId  recover;
 
-	Relation		VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+	Relation		VariableRelation = InitVariableRelation();
 
 	header = ReadBuffer(VariableRelation,1);
-                if (!BufferIsValid(header) ) elog(ERROR,"bad buffer read in variable logging");
+        if (!BufferIsValid(header) ) elog(ERROR,"bad buffer read in variable logging");
 	LockBuffer((VariableRelation),header,BUFFER_LOCK_EXCLUSIVE);
         
 	hb = BufferGetBlock(header);
@@ -501,7 +503,7 @@ SetTransactionRecoveryCheckpoint(TransactionId recover)
 	Block 			hb;
 	Header*			theader;
 
-	Relation		VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+	Relation		VariableRelation = InitVariableRelation();
 
 	header = ReadBuffer(VariableRelation,1);
                 if (!BufferIsValid(header) ) elog(ERROR,"bad buffer read in variable logging");
@@ -528,7 +530,7 @@ SetTransactionLowWaterMark(TransactionId lowwater)
 	Header*			theader;
 	Oid  dbid = GetDatabaseId();
 
-	Relation		VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+	Relation		VariableRelation = InitVariableRelation();
 	
 /*	MasterWriteLock();	*/
 /*	LockRelation(VariableRelation,ExclusiveLock);     */
@@ -599,8 +601,8 @@ VacuumTransactionLog()
 	
 	Header*			header;
 	
-	Relation		VariableRelation =  RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
-	Relation		LogRelation =  RelationNameGetRelation(LogRelationName,DEFAULTDBOID);
+	Relation		VariableRelation =  InitVariableRelation();
+	Relation		LogRelation  = RelationNameGetRelation(LogRelationName,DEFAULTDBOID);
 
 	
 	
@@ -679,3 +681,20 @@ VacuumTransactionLog()
 	RelationClose(VariableRelation);
 	RelationClose(LogRelation);
 }
+
+static Relation InitVariableRelation() {
+    Relation VariableRelation = RelationNameGetRelation(VariableRelationName,DEFAULTDBOID);
+    if (VariableRelation->rd_nblocks != 2) {
+        VariableRelation->rd_nblocks = smgrnblocks(VariableRelation->rd_smgr);
+        if (VariableRelation->rd_nblocks != 2) {
+            union {
+                double align;
+                char	data[BLCKSZ];
+            } buffer;
+            memset(buffer.data,0x00,BLCKSZ);
+            VariableRelation->rd_nblocks = smgrextend(VariableRelation->rd_smgr, buffer.data, 2);
+        }
+    }
+    return VariableRelation;
+}
+

@@ -303,7 +303,7 @@ finalize_aggregate(AggStatePerAgg peraggstate,
 			{
 				Datum		equal;
 
-				equal = PointerGetDatum(fmgr_ptr(&peraggstate->equalfn, oldVal,
+				equal = PointerGetDatum(FMGR_PTR2(&peraggstate->equalfn, oldVal,
 																 newVal));
 				if (DatumGetInt32(equal) != 0)
 				{

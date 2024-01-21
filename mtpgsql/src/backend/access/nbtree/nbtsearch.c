@@ -348,7 +348,7 @@ _bt_compare(Relation rel,
 		}
 		else
 		{
-			result = DatumGetInt32(fmgr_ptr(&entry->sk_func,entry->sk_argument,datum));
+			result = DatumGetInt32((*fmgr_faddr_2(&entry->sk_func))(entry->sk_argument,datum));
 		}
 
 		/* if the keys are unequal, return the difference */

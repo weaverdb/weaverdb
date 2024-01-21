@@ -64,6 +64,7 @@
 						fflush(stdout); \
 				 }
 
+extern int Int_yylex(void* stype, void* scanner);
 
 int num_tuples_read = 0;
 static Oid objectid;

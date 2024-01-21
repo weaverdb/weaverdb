@@ -306,11 +306,9 @@ TransBlockNumberSetXidStatus(Relation relation,TransactionId xid,XidStatus xstat
 /*  why lock this buffer, transaction ops should be atomic, we are only checking 2 bits  */
 	block = BufferGetBlock(buffer);
 
-/*	LockBuffer((relation), buffer, BUFFER_LOCK_EXCLUSIVE);   */
 
 	TransBlockSetXidStatus(block, xid, xstatus);
 
-/*	LockBuffer((relation),buffer, BUFFER_LOCK_UNLOCK);       */
         if ( !IsMultiuser() ) {
             FlushBuffer(relation,buffer);	
         } else {

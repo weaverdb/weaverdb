@@ -72,7 +72,6 @@
 pthread_t lockowner;
 
 static BufferDesc *BufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr);
-static bool SyncShadowPage(BufferDesc* bufHdr);
 
 static void UnpinBuffer(BufferCxt cxt, BufferDesc *buf);
 static int PinBuffer(BufferCxt cxt, BufferDesc *buf);
@@ -91,7 +90,7 @@ static bool InboundBufferIO(BufferDesc* header);
 static bool CancelInboundBufferIO(BufferDesc* header);
 static bool ClearBufferIO(BufferDesc* header);
 static void ShowBufferIO(int id, int io);
-static bool DirtyBufferIO(BufferDesc* header);
+static bool DirtyBufferIO(BufferDesc* header, long generation);
 static bool WaitBufferIO(bool write_mode, BufferDesc *buf);
 
 static SectionId   buffer_section_id = SECTIONID("BMGR");
@@ -155,9 +154,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
             double align;
             char   data[BLCKSZ];
         } buffer;
-        
-        Assert ( reln->rd_rel->relkind != RELKIND_RELATION && reln->rd_rel->relkind != RELKIND_UNCATALOGED );
-        
+
         MemSet(buffer.data, 0x00, BLCKSZ);
         PageInit((Page)buffer.data, BLCKSZ, 0);
         PageInsertChecksum((Page)buffer.data);
@@ -194,7 +191,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     
     if ( !isLocalBuf ) {
         iostatus = ReadBufferIO(bufHdr);
-        if ( !iostatus )  {
+        if ( iostatus == IO_FAIL)  {
             elog(DEBUG, "read buffer failed in io start bufid:%d dbid:%ld relid:%ld blk:%ld\n",
                 bufHdr->buf_id,
                 bufHdr->tag.relId.dbId,
@@ -202,11 +199,13 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                 bufHdr->tag.blockNum);
            InvalidateBuffer(bufenv,bufHdr);
            UnpinBuffer(bufenv, bufHdr);
+           ErrorBufferIO(iostatus, bufHdr);
            return InvalidBuffer;
         }
     }
     
     status = smgrread(reln->rd_smgr, blockNum, (char *) (bufHdr->data));
+    bufHdr->generation = 0;
     
     if ( !isLocalBuf && status == SM_SUCCESS ) {
         if ( reln->rd_rel->relkind == RELKIND_INDEX ) {
@@ -251,7 +250,6 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     }
     
     /* copy read in data to shadow page */
-    SyncShadowPage(bufHdr);
     if ( !isLocalBuf ) {
     /* If anyone was waiting for IO to complete, wake them up now */
         TerminateBufferIO(iostatus,bufHdr);
@@ -433,8 +431,6 @@ WriteBuffer(Relation rel, Buffer buffer) {
     /* doing this processing in RegisterBufferWrite code so we only have to grab the
         io mutex once
      */
-
-    Assert ( DirtyBufferIO(bufHdr) );
     
     /*  we are manually unpinning the buffer by decrementing PrivateRefCount by one.
      *	if PrivateRefCount hits zero, past control of unpinning the shared ref count to
@@ -446,7 +442,7 @@ WriteBuffer(Relation rel, Buffer buffer) {
         b/c the Register command locks the buffer on its own
      */
 
-    RegisterBufferWrite(bufHdr, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
+    DirtyBufferIO(bufHdr, RegisterBufferWrite(bufHdr, bufenv->PrivateRefCount[bufHdr->buf_id] == 1));
     bufenv->PrivateRefCount[bufHdr->buf_id]--;
     bufenv->total_pins--;
     
@@ -502,22 +498,23 @@ we don't have to lock  */
          * see comments in BufferSync().
          */
         iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
-        if ( iostatus ) {
+        if ( iostatus == IO_SUCCESS) {
+            Block data = bufHdr->data;
             if ( rel->rd_rel->relkind != RELKIND_SPECIAL )  {
-                PageInsertChecksum((Page)(bufHdr->data));
+                PageInsertChecksum((Page)data);
             }
 
-            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, (char *)(bufHdr->data));
-
+            status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, data);
             if (status == SM_FAIL) {
                 ErrorBufferIO(iostatus,bufHdr);
                 elog(NOTICE, "FlushBuffer: cannot flush block %lu of the relation %s",
                 bufHdr->tag.blockNum, bufHdr->blind.relname);
             } else {
                 /* copy new page to shadow */
-                SyncShadowPage(bufHdr);
                 TerminateBufferIO(iostatus,bufHdr);
             }
+        } else {
+            ErrorBufferIO(iostatus,bufHdr);
         }
         
         UnpinBuffer(bufenv,bufHdr);
@@ -546,16 +543,14 @@ WriteNoReleaseBuffer(Relation rel, Buffer buffer) {
     
     /*   See WriterBuffer for why we did this   */
     /*  mark this dirty in the RegisterBufferWrite code so we only have to grab the
-        mutex once  */
-    
-    DirtyBufferIO(bufHdr);
-    
+        mutex once  */    
     /*
         unlock the io guard before registering the write
         b/c the Register command locks the buffer on its own
      */
-    RegisterBufferWrite(bufHdr, false);
     
+    DirtyBufferIO(bufHdr, RegisterBufferWrite(bufHdr, false));
+
     return STATUS_OK;
 }
 
@@ -905,7 +900,7 @@ SetBufferCommitInfoNeedsSave(Buffer buffer) {
     
     bufHdr = &BufferDescriptors[buffer - 1];
     
-    DirtyBufferIO(bufHdr);
+    DirtyBufferIO(bufHdr, 0);
 }
 
 
@@ -1114,7 +1109,7 @@ CancelInboundBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 
 IOStatus
 ReadBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
-    IOStatus iostatus = BL_NOLOCK;
+    IOStatus iostatus = IO_SUCCESS;
     
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 	/* we would not be reading in the buffer is some other io is occuring */
@@ -1126,7 +1121,7 @@ ReadBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
         buf->ioflags &= ~( BM_INBOUND );
         buf->ioflags |= (BM_READ_IN_PROGRESS);
     } else {
-        iostatus = 0;
+        iostatus = IO_FAIL;
     }
     
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
@@ -1139,7 +1134,7 @@ ReadBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 IOStatus
 LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     int dirty = 0;
-    IOStatus  iostatus = BL_NOLOCK;
+    IOStatus  iostatus = IO_SUCCESS;
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1149,7 +1144,7 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 
     if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        iostatus = 0;
+        iostatus = IO_FAIL;
         return iostatus;
     }
 
@@ -1165,7 +1160,7 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     DTRACE_PROBE4(mtpg,buffer__logbufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
     
     if ( !dirty ) {
-        iostatus = 0;
+        iostatus = IO_FAIL;
     }
     
     return iostatus;
@@ -1174,7 +1169,7 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
 IOStatus
 WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  */
     int dirty = 0;
-    IOStatus  iostatus = 0;
+    IOStatus  iostatus = IO_SUCCESS;
 
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
@@ -1184,7 +1179,7 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
 
     if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        iostatus = 0;
+        iostatus = IO_FAIL;
         return iostatus;
     }
 
@@ -1222,7 +1217,7 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
 }
 
 bool
-DirtyBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
+DirtyBufferIO(BufferDesc *buf, long generation) {  /*  clears the inbound flag  */
     bool dirty = false;
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
     
@@ -1258,11 +1253,6 @@ ErrorBufferIO(IOStatus iostatus, BufferDesc *buf) {
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
 
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-
-    if ( iostatus & BL_R_LOCK ) {
-        Assert(iostatus == BL_R_LOCK);
-        LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-    }
 }
 
 bool 
@@ -1311,13 +1301,7 @@ TerminateBufferIO(IOStatus iostatus, BufferDesc *buf) {
         buf->ioflags &= ~(BM_IOOP_MASK);
         pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
     }
-  
-    pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-    
-    if ( iostatus & BL_R_LOCK ) {
-        Assert(iostatus == BL_R_LOCK);
-        LockBuffer(NULL,BufferDescriptorGetBuffer(buf),BUFFER_LOCK_UNLOCK);
-    }    
+    pthread_mutex_unlock(&buf->io_in_progress_lock.guard);  
 }
 
 void 
@@ -1355,15 +1339,6 @@ CheckBufferId(BufferDesc* buf, BlockNumber block, Oid relid, Oid dbid) {
     
     return valid;
 }
-
-bool
-SyncShadowPage(BufferDesc* bufHdr) {
-    /*  copy into shadow */
-#ifdef USE_SHADOW_PAGES
-#endif
-return TRUE;
-}
-
 /*
  * BufferGetBlock
  *		Returns a reference to a disk page image associated with a buffer.
@@ -1376,23 +1351,15 @@ Block BufferGetBlock(Buffer buffer) {
     if ( BufferIsLocal(buffer) ) {
         return (Block) (GetLocalBufferDescriptor((-buffer) - 1)->data);
     } else {
+        long generation = GetBufferGeneration();
         BufferDesc* bufHdr = &BufferDescriptors[buffer - 1];
         pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-        Block data = (Block)((bufHdr->generation > 0) ? (bufHdr->shadow) : (bufHdr->data));
-        long gen = GetBufferGeneration();
-        if (gen > bufHdr->generation) {
-            Assert(bufHdr->generation || gen == bufHdr->generation + 1);
-            if (bufHdr->generation == 0) {
-                memmove(bufHdr->shadow, data, BLCKSZ);
-            } else {
-                memmove(bufHdr->data, data, BLCKSZ);
-            }
-            bufHdr->generation = gen;
-        } else if (gen == 0) {
-        // .do nothing
+        if (generation > bufHdr->generation) {
+            memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
+            bufHdr->generation = generation;
         }
         pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
-        return data;
+        return bufHdr->data;
     }
 }
 

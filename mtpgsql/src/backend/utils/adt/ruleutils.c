@@ -1676,9 +1676,9 @@ get_const_expr(Const *constval, deparse_context *context)
 	}
 
 	fmgr_info(typeStruct->typoutput, &finfo_output);
-	extval = fmgr_ptr(&finfo_output, constval->constvalue,
+	extval = DatumGetPointer((*fmgr_faddr_3(&finfo_output))(constval->constvalue,
 													typeStruct->typelem,
-													-1);
+													-1));
 
 	switch (constval->consttype)
 	{

@@ -78,9 +78,10 @@ all:  postgres libmtpg.a $(POSTGRES_IMP) global1.bki.source \
 endif
 
 postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o
-	$(CC) $(CFLAGS) -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o \
--lmtpg $(LDFLAGS) $(LIBS)
+	$(CC) $(CFLAGS) -Wl -ld_classic -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o \
+ -lmtpg $(LDFLAGS) $(LIBS)
 
+# -fuse-ld=/Library/Developer/CommandLineTools/usr/bin/ld-classic
 #.PHONY: postgres
 
 $(OBJS): $(DIRS:%=%.dir)

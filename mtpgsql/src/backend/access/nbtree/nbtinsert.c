@@ -653,9 +653,7 @@ _bt_insertuple(Relation rel, Buffer buf,
 	Page		page = BufferGetPage(buf);
 	BTPageOpaque lpageop = (BTPageOpaque) PageGetSpecialPointer(page);
         Assert(lpageop->btpo_parent != InvalidBlockNumber);
-        LockBuffer(rel,buf,BT_WRITE);
 	_bt_pgaddtup(rel, page, itemsz, btitem, newitemoff, "page");
-        LockBuffer(rel,buf,BT_WRITE);
 }
 
 /*
@@ -1978,7 +1976,7 @@ _bt_isequal(TupleDesc itupdesc, Page page, OffsetNumber offnum,
 		if (entry->sk_flags & SK_ISNULL || isNull)
 			return false;
 
-		result = DatumGetInt32(fmgr_ptr(&entry->sk_func,entry->sk_argument,datum));
+		result = DatumGetInt32((*fmgr_faddr_2(&entry->sk_func))(entry->sk_argument,datum));
 
 		if (result != 0)
 			return false;

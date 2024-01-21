@@ -82,7 +82,7 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
 {
 	Buffer		buffer = InvalidBuffer;
 	Page		pageHeader;
-	BlockNumber     lastblock;
+	BlockNumber     lastblock = -1;
 	OffsetNumber    offnum;
 	Size		len;
 	ItemId		itemId;
@@ -125,52 +125,54 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
                 elog(NOTICE,"Invalid limit for heap io");
             }
             
-            lastblock = GetFreespace(relation,len,limit);
+            if (lastblock + 1 == relation->rd_nblocks) {
+                lastblock = P_NEW;
+            } else {
+                lastblock = GetFreespace(relation,len,limit);
+            }
 
             buffer = ReadBuffer(relation,lastblock);
 
             if ( !BufferIsValid(buffer) ) {
                 DeactivateFreespace(relation,lastblock,0);
-                continue;
-            }
-
-            LockBuffer(relation, buffer, BUFFER_LOCK_EXCLUSIVE);
-            pageHeader = (Page) BufferGetPage(buffer);	
-            pageSize = PageGetFreeSpace(pageHeader);
-/* 
+            } else {
+                LockBuffer(relation, buffer, BUFFER_LOCK_EXCLUSIVE);
+                pageHeader = (Page) BufferGetPage(buffer);	
+                pageSize = PageGetFreeSpace(pageHeader);
+                lastblock = BufferGetBlockNumber(buffer);
+/*      
 have to check the size b/c Updates try and 
 put tuples on the same page as the
 one it replaces, the number held by the freespace
 manager may be old and incorrect.   MKS 12.31.2001
 */	
-            if ( BufferHasError(buffer) ) {
-                pageSize = 0;
-            } else if ( pageSize < MAXALIGN(len) ) { 
-                DTRACE_PROBE2(mtpg,freespace__miss,len,pageSize);
-            } else {
-                DTRACE_PROBE2(mtpg,freespace__hit,len,pageSize);
-                satisfied = true;
-            }
-            if ( satisfied ) {
-                offnum = PageAddItem( pageHeader, (Item) tuple->t_data,
-                                 tuple->t_len, InvalidOffsetNumber, LP_USED);
-
-                if ( offnum == InvalidOffsetNumber ) {
-                    elog(FATAL,"Invalid offset");
+                if ( BufferHasError(buffer) ) {
+                    pageSize = 0;
+                } else if ( pageSize < MAXALIGN(len) ) { 
+                    DTRACE_PROBE2(mtpg,freespace__miss,len,pageSize);
+                } else {
+                    DTRACE_PROBE2(mtpg,freespace__hit,len,pageSize);
+                    satisfied = true;
                 }
-	
-                itemId = PageGetItemId((Page) pageHeader, offnum);
-                item = PageGetItem((Page) pageHeader, itemId);
-        
-                ItemPointerSet(&((HeapTupleHeader)item)->t_ctid, lastblock, offnum);
-                ItemPointerSet(&tuple->t_self, lastblock, offnum);	
-                ItemPointerSet(&tuple->t_data->t_ctid, lastblock, offnum);	
-            }
-            
-            LockBuffer(relation, buffer, BUFFER_LOCK_UNLOCK);
-        }
+                if ( satisfied ) {
+                    offnum = PageAddItem( pageHeader, (Item) tuple->t_data,
+                                     tuple->t_len, InvalidOffsetNumber, LP_USED);
 
-        lastblock = BufferGetBlockNumber(buffer);
+                    if ( offnum == InvalidOffsetNumber ) {
+                        elog(FATAL,"Invalid offset");
+                    }
+
+                    itemId = PageGetItemId((Page) pageHeader, offnum);
+                    item = PageGetItem((Page) pageHeader, itemId);
+
+                    ItemPointerSet(&((HeapTupleHeader)item)->t_ctid, lastblock, offnum);
+                    ItemPointerSet(&tuple->t_self, lastblock, offnum);	
+                    ItemPointerSet(&tuple->t_data->t_ctid, lastblock, offnum);	
+                }
+
+                LockBuffer(relation, buffer, BUFFER_LOCK_UNLOCK);
+            }
+        }
 
         WriteBuffer(relation, buffer);
         return lastblock;
