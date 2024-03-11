@@ -41,21 +41,7 @@ TransBlockGetXidStatus(Block tblock,TransactionId transactionId);
  */
 
 
-bool            AMI_OVERRIDE;
 SPINLOCK	XidSetLockId;
-
-/* --------------------------------
- *		AmiTransactionOverride
- *
- *		This function is used to manipulate the bootstrap flag.
- * --------------------------------
- */
-
-void
-AmiTransactionOverride(bool flag)
-{
-	AMI_OVERRIDE = flag;
-}
 
 /* --------------------------------
  *		TransComputeBlockNumber
@@ -104,7 +90,6 @@ TransComputeBlockNumber(Relation relation,		/* relation to test */
 	if ( compublock > 8192 ) {
 		elog(NOTICE,"Transaction Log is very large vacuum all databases soon. transaction id %llu block number %lu",(transactionId),compublock);
         }
-/*        printf("id: %d block: %d\n",transactionId,compublock);     */
         return compublock;
 }
 

@@ -30,7 +30,6 @@
 
 
 extern TransactionId NullTransactionId;
-extern TransactionId DisabledTransactionId;
 extern TransactionId AmiTransactionId;
 extern TransactionId FirstTransactionId;
 

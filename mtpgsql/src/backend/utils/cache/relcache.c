@@ -1766,7 +1766,8 @@ RelationRegisterRelation(Relation relation) {
      * created during a transaction and does the necessary clean up at the
      * end of the transaction.)				- ay 3/95
      */
-    oldcxt = MemoryContextSwitchTo(MemoryContextGetEnv()->TopTransactionContext);
+    oldcxt = MemoryContextSwitchTo(MemoryContextGetEnv()->TopTransactionContext != NULL ? MemoryContextGetEnv()->TopTransactionContext :
+        MemoryContextGetEnv()->QueryContext);
 
     relation->rd_myxactonly = TRUE;
     rglobal->newlyCreatedRelns = lcons(relation, rglobal->newlyCreatedRelns);

@@ -32,7 +32,7 @@
 
 #include "config.h"
 #include "miscadmin.h"
-#include "storage/buf_internals.h"
+#include "storage/localbuf.h"
 #include "storage/block.h"
 #include "storage/bufmgr.h"
 #include "storage/smgr.h"
@@ -870,17 +870,19 @@ int LogTransactions(WriteGroup cart) {
    
     if (cart->numberOfTrans == 0)
         return 0;
+    if (IsBootstrapProcessingMode()) {
+        return 0;
+    }
      
     LogRelation = RelationIdGetRelation(cart->LogId,DEFAULTDBOID);
     
     for (i = 0; i < cart->numberOfTrans; i++) {
         BlockNumber     localblock = InvalidBlockNumber;
         
-        if (cart->transactions[i] == DisabledTransactionId)
-            continue;
         if (cart->transactions[i] == 0) {
             elog(FATAL, "zero transaction id");
         }
+
         DTRACE_PROBE1(mtpg, dbwriter__commit, cart->transactions[i]);
         localblock = TransComputeBlockNumber(LogRelation, cart->transactions[i]);
         
@@ -888,7 +890,7 @@ int LogTransactions(WriteGroup cart) {
             if (buffer != InvalidBuffer) {
                 FlushBuffer(LogRelation,buffer);
             }
-            buffer = ReadBuffer(LogRelation, localblock == LogRelation->rd_nblocks ? P_NEW : localblock);
+            buffer = ReadBuffer(LogRelation, localblock);
             if (!BufferIsValid(buffer)) {
                 elog(FATAL, "[DBWriter]bad buffer read in transaction logging");
                 return -1;
@@ -993,7 +995,7 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
         SignalDBWriter(cart);
         
         /* no need to wait around if we are aborting */
-        if ( AMI_OVERRIDE || IsTransactionSystemDisabled() || (setstate == XID_COMMIT && IsTransactionCareful()) ) {
+        if ( IsTransactionSystemDisabled() || (setstate == XID_COMMIT && IsTransactionCareful()) ) {
             cart->WaitingThreads[position] = GetMyThread();
             cart->wait_for_sync[position] = !IsLoggable();
             Assert(GetMyThread()->state == TRANS_COMMIT);
@@ -1289,6 +1291,10 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
 }
 
 bool FlushAllDirtyBuffers(bool wait) {
+    if (!db_inited) {
+        return false;
+    }
+
     WriteGroup          cart =  GetCurrentWriteGroup(false);
     int                 releasecount = 0;
     bool iflushed = false;

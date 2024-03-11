@@ -88,7 +88,6 @@ TransactionId FirstTransactionId = (TransactionId) 514;
 
 int			RecoveryCheckingEnableState = 0;
 
-
 /* ------------------
  *		spinlock for oid generation
  * -----------------
@@ -452,7 +451,7 @@ InitializeTransactionLog(void)
 	 *	  don't do anything during bootstrapping
 	 * ----------------
 	 */
-	if (AMI_OVERRIDE)
+	if (IsBootstrapProcessingMode())
 		return false;
 
 
@@ -505,7 +504,7 @@ of the pg_log for commits
 		 */
 		if ( IsMultiuser() ) 
 			elog(FATAL,"this should not be happening");
-		
+		elog(DEBUG,"inititalizing transaction system");
 		TransactionLogUpdate(AmiTransactionId, XID_COMMIT);
 		info->cachedTestXid = AmiTransactionId;
 		info->cachedTestXidStatus = XID_COMMIT;
@@ -533,7 +532,6 @@ of the pg_log for commits
 	InitTransactionLowWaterMark();
         VacuumTransactionLog();
         
-	TransactionSystemInitialized  = true;
 	SpinRelease(OidGenLockId);
 
 
@@ -575,7 +573,7 @@ bool							/* true if given transaction committed */
 TransactionIdDidCommit(TransactionId transactionId)
 {
 	TransactionInfo* info = GetTransactionInfo();
-	if (AMI_OVERRIDE)
+	if (!TransactionSystemInitialized)
 		return true;
 
 	return (TransactionLogTest(info,transactionId, XID_COMMIT_TEST));
@@ -593,7 +591,7 @@ bool							/* true if given transaction aborted */
 TransactionIdDidAbort(TransactionId transactionId)
 {
 	TransactionInfo* info = GetTransactionInfo();
-	if (AMI_OVERRIDE)
+	if (!TransactionSystemInitialized)
             return false;
 
 	return TransactionLogTest(info,transactionId, XID_ABORT_TEST);
@@ -614,7 +612,7 @@ bool
 TransactionIdDidSoftCommit(TransactionId transactionId)
 {
 	TransactionInfo* info = GetTransactionInfo();
-    if (AMI_OVERRIDE)
+    if (!TransactionSystemInitialized)
 		return false;
 
 	return TransactionLogTest(info,transactionId, XID_SOFT_COMMIT_TEST);
@@ -635,7 +633,7 @@ bool
 TransactionIdDidHardCommit(TransactionId transactionId)
 {
 	TransactionInfo* info = GetTransactionInfo();
-	if (AMI_OVERRIDE)
+	if (!TransactionSystemInitialized)
 		return false;
 
 	return (TransactionLogTest(info,transactionId,XID_HARD_COMMIT_TEST));
@@ -655,7 +653,7 @@ bool
 TransactionIdDidCrash(TransactionId transactionId)
 {
 	TransactionInfo* info = GetTransactionInfo();
-	if (AMI_OVERRIDE)
+	if (!TransactionSystemInitialized)
 		return false;
 
 	if (TransactionLogTest(info,transactionId,XID_INPROGRESS_TEST)) {

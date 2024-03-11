@@ -175,7 +175,7 @@ HeapTupleSatisfiesItself(HeapTupleHeader tuple)
 bool
 HeapTupleSatisfiesNow(void* e ,HeapTupleHeader tuple)
 {
-	if (AMI_OVERRIDE)
+	if (IsBootstrapProcessingMode())
 		return true;
 
 	if (!(tuple->t_infomask & HEAP_XMIN_COMMITTED))
@@ -268,7 +268,7 @@ HeapTupleSatisfiesUpdate(void* env,HeapTuple tuple, Snapshot snapshot)
 {
 	HeapTupleHeader th = tuple->t_data;
 
-	if (AMI_OVERRIDE)
+	if (IsBootstrapProcessingMode())
 		return HeapTupleMayBeUpdated;
 
 	if (!(th->t_infomask & HEAP_XMIN_COMMITTED))
@@ -368,7 +368,7 @@ HeapTupleSatisfiesDirty(void* e,HeapTupleHeader tuple, Snapshot snapshot)
 	snapshot->xmin = snapshot->xmax = InvalidTransactionId;
 	ItemPointerSetInvalid(&(env->SnapshotDirty->tid));
 
-	if (AMI_OVERRIDE)
+	if (IsBootstrapProcessingMode())
 		return true;
 
 	if (!(tuple->t_infomask & HEAP_XMIN_COMMITTED))
@@ -469,8 +469,7 @@ HeapTupleSatisfiesSnapshot(void* e,HeapTupleHeader tuple, Snapshot snapshot)
 {
 	SnapshotHolder* env = (SnapshotHolder*)e;
 
-
-	if (AMI_OVERRIDE)
+	if (IsBootstrapProcessingMode())
 		return true;
 
 	if ( env && env->ReferentialIntegritySnapshotOverride )

@@ -226,7 +226,17 @@ WriteLocalBuffer(Buffer buffer, bool release)
         if ( bufid == 0 ) {
             elog(ERROR,"tried to write a read only buffer");
         } else {
-            env->LocalBufferDescriptors[bufid].ioflags |= BM_DIRTY;
+            BufferDesc* bufHdr = &env->LocalBufferDescriptors[bufid];
+            Relation	bufrel = RelationIdCacheGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
+            Assert(bufrel != NULL);
+
+            bufHdr->ioflags &= ~BM_DIRTY;
+            if ( bufrel->rd_rel->relkind != RELKIND_SPECIAL )  
+                PageInsertChecksum((Page)(bufHdr->data));
+
+            smgrwrite(bufrel->rd_smgr, bufHdr->tag.blockNum,
+                              (char *)(bufHdr->data));
+		RelationDecrementReferenceCount(bufrel);
         }
 
 	if (release)

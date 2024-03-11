@@ -270,7 +270,7 @@ GetNewTransactionId(void)
 	 *	bootstrap transaction id.
 	 * ----------------
 	 */
-	if (AMI_OVERRIDE)
+	if (ShmemVariableCache == NULL || IsBootstrapProcessingMode())
 	{
 		return AmiTransactionId;
 	}
@@ -318,7 +318,7 @@ ReadNewTransactionId(void)
 	 *	bootstrap transaction id
 	 * ----------------
 	 */
-	if (AMI_OVERRIDE)
+	if (ShmemVariableCache == NULL || IsBootstrapProcessingMode())
 	{
 		return AmiTransactionId;
 	}

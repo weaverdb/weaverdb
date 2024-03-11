@@ -309,8 +309,6 @@ LIB_EXTERN bool initweaverbackend(char* vars)
 
 	if ( master ) StartupXLOG();
 
-	AmiTransactionOverride(IsBootstrapProcessingMode());
-
 	LockDisable(true);
         smgrinit();
 	RelationInitialize(); 

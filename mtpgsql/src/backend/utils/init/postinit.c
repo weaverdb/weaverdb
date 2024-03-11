@@ -319,7 +319,6 @@ InitPostgres(const char *dbname)
 	 * cache. Note we have to make certain the lock manager is off while
 	 * we do this.
 	 */
-	AmiTransactionOverride(IsBootstrapProcessingMode());
 	LockDisable(true);
 
 	/*

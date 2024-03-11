@@ -68,7 +68,7 @@ _bt_metapinit(Relation rel)
 	if (RelationGetNumberOfBlocks(rel) != 0)
 		elog(ERROR, "Cannot initialize non-empty btree %s",
 			 RelationGetRelationName(rel));
-
+        
 	buf = _bt_getbuf(rel,BTREE_METAPAGE,BT_READYWRITE);
         if (!BufferIsValid(buf) ) 
                     elog(ERROR,"bad buffer read while scanning btree %s",RelationGetRelationName(rel));
@@ -227,8 +227,7 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 {
 	Buffer		buf = InvalidBuffer;
 
-	if (blkno != P_NEW)
-	{
+	if (blkno != P_NEW) {
 		/* Read an existing block of the relation */
             Assert(blkno == BTREE_METAPAGE || blkno < RelationGetNumberOfBlocks(rel));
 		buf = ReadBuffer(rel, blkno);

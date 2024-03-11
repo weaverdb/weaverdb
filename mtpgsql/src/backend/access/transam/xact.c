@@ -157,6 +157,7 @@
 
 #include "storage/multithread.h"
 #include "storage/sinval.h"
+#include "storage/localbuf.h"
 #include "utils/temprel.h"
 #include "utils/inval.h"
 #include "utils/portal.h"
@@ -241,8 +242,6 @@ int			XactIsoLevel;
  *			   V1 transaction system.  -cim 3/18/90
  * ----------------
  */
-TransactionId DisabledTransactionId = (TransactionId) -1;
-
 CommandId	DisabledCommandId = (CommandId) -1;
 
 AbsoluteTime DisabledStartTime = (AbsoluteTime) BIG_ABSTIME;	/* 1073741823; */
@@ -310,7 +309,7 @@ GetCurrentTransactionId(void)
 	 * ----------------
 	 */
 	if (TransactionSystemDisabled) {
-		return DisabledTransactionId;
+		return AmiTransactionId;
 	}
 
 	/* ----------------
@@ -338,8 +337,6 @@ GetCurrentCommandId()
 	if (TransactionSystemDisabled)
 		return (CommandId) DisabledCommandId;
 
-	if (AMI_OVERRIDE)
-		return (CommandId) DisabledCommandId;
 
 	return s->commandId;
 }
@@ -389,12 +386,10 @@ GetCurrentTransactionStartTime()
 bool
 TransactionIdIsCurrentTransactionId(TransactionId xid)
 {
-	TransactionState s = GetTransactionInfo()->CurrentTransactionState;
-
-	if (AMI_OVERRIDE)
+	if (TransactionSystemDisabled)
 		return false;
 
-	return (bool)(xid == s->transactionIdData);
+	return GetTransactionInfo()->CurrentTransactionState->transactionIdData == xid;
 }
 
 
@@ -405,26 +400,19 @@ TransactionIdIsCurrentTransactionId(TransactionId xid)
 bool
 CommandIdIsCurrentCommandId(CommandId cid)
 {
-	TransactionInfo* info = GetTransactionInfo();
-	TransactionState s = info->CurrentTransactionState;
-
-	if (AMI_OVERRIDE)
+	if (TransactionSystemDisabled)
 		return false;
 
-	return (cid == s->commandId) ? true : false;
+	return (cid == GetTransactionInfo()->CurrentTransactionState->commandId);
 }
 
 bool
 CommandIdGEScanCommandId(CommandId cid)
 {
-	TransactionInfo* info = GetTransactionInfo();
-	
-	TransactionState s = info->CurrentTransactionState;
-
-	if (AMI_OVERRIDE)
+	if (TransactionSystemDisabled)
 		return false;
 
-	return (cid >= s->scanCommandId) ? true : false;
+	return (cid >= GetTransactionInfo()->CurrentTransactionState->scanCommandId);
 }
 
 
@@ -436,15 +424,13 @@ CommandIdGEScanCommandId(CommandId cid)
 void
 CommandCounterIncrement()
 {
-        TransactionInfo* info = GetTransactionInfo();
-	
-	TransactionState trans = info->CurrentTransactionState;
 
 	if (TransactionSystemDisabled)
 		return;
 
-	if (AMI_OVERRIDE)
-		return;
+        TransactionInfo* info = GetTransactionInfo();
+	
+	TransactionState trans = info->CurrentTransactionState;
 
         if ( trans->state != TRANS_INPROGRESS ) {
             elog(ERROR,"Transaction not started");
@@ -484,8 +470,7 @@ SetScanCommandId(CommandId savedId)
 void
 InitializeTransactionSystem()
 {
-	InitializeTransactionLog();
-        TransactionSystemDisabled = false;
+	TransactionSystemDisabled = !InitializeTransactionLog();
 }
 
 /* ----------------------------------------------------------------
@@ -598,6 +583,7 @@ RecordTransactionCommit()
             CommitDBBufferWrites(xid,XID_COMMIT);
             return 1;
 	} else {
+            LocalBufferSync();
             ThreadTransactionReset();
         }
 	return 0;
@@ -702,6 +688,7 @@ RecordTransactionAbort()
 	if (GetTransactionInfo()->SharedBufferChanged ) {
             CommitDBBufferWrites(xid,XID_ABORT);
         } else {
+            LocalBufferSync();
             ThreadTransactionReset();
         }
 	/*
@@ -943,13 +930,13 @@ CommitTransaction()
 	AtCommit_Locks();
 	AtCommit_Memory();
 	AtEOXact_Files();
-/*
-        ResetLocalBufferPool();
-*/
+
 #ifdef  USE_ASSERT_CHECKING  
         if ( BufferPoolCheckLeak() ) {
            ResetBufferPool(true); 
         }
+#else
+        ResetLocalBufferPool();
 #endif
 
 	/* ----------------
@@ -1028,9 +1015,8 @@ AbortTransaction()
 	AtAbort_Locks();
 	AtAbort_Memory();
 	AtEOXact_Files();
-/*
+
         ResetLocalBufferPool();
-*/
 
 	/* ----------------
 	 *	done with abort processing, set current transaction
@@ -1278,6 +1264,8 @@ CloseSubTransaction() {
         if ( BufferPoolCheckLeak() ) {
            ResetBufferPool(true); 
         }
+#else
+        ResetLocalBufferPool();
 #endif
 	/* ----------------
 	 *	done with commit processing, set current transaction

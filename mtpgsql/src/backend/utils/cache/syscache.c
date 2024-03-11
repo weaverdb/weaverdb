@@ -464,7 +464,7 @@ InitCatalogCache()
         sglobal->SysCache = palloc(sizeof(CatCache*) * SysCacheSize);
         memset(sglobal->SysCache,0,sizeof(CatCache*) * SysCacheSize);
 #endif
-	if (!AMI_OVERRIDE)
+	if (IsBootstrapProcessingMode())
 	{
 		for (cacheId = 0; cacheId < SysCacheSize; cacheId += 1)
 		{

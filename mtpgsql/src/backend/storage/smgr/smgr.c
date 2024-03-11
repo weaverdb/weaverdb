@@ -176,10 +176,12 @@ smgrcreate(int16 which, char* dbname, char* relname, Oid dbid, Oid relid) {
  */
 int
 smgrunlink(SmgrInfo info) {
-    int status;
+    IOStatus status;
 
-    if ((status = (*(smgrsw[info->which].smgr_unlink)) (info))  != SM_SUCCESS)
-        elog(NOTICE, "cannot unlink %s-%s", NameStr(info->relname), NameStr(info->dbname));
+    if ((status = (*(smgrsw[info->which].smgr_unlink)) (info))  != SM_SUCCESS) {
+        elog(NOTICE, "cannot unlink %s-%s code: %d", NameStr(info->relname), NameStr(info->dbname), status);
+        status = SM_FAIL;
+    }
 
     pfree(info);
 
@@ -251,8 +253,11 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
  */
 int
 smgrclose(SmgrInfo info) {
-    if ((*(smgrsw[info->which].smgr_close)) (info) != SM_SUCCESS)
+    IOStatus status = SM_SUCCESS;
+    if ((*(smgrsw[info->which].smgr_close)) (info) != SM_SUCCESS) {
         elog(NOTICE, "cannot close %s-%s", NameStr(info->relname), NameStr(info->dbname));
+        status = SM_FAIL;
+    }
 
     pfree(info);
 
@@ -271,13 +276,18 @@ smgrclose(SmgrInfo info) {
  */
 int
 smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer) {
-    int status;
+    IOStatus status = SM_SUCCESS;
 
     status = (*(smgrsw[info->which].smgr_read)) (info, blocknum, buffer);
 
     if (status != SM_SUCCESS) {
-        elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
-                blocknum, NameStr(info->relname), NameStr(info->dbname), status);
+        if (status == SM_FAIL_EOF && info->nblocks == blocknum) {
+            status = SM_SUCCESS;
+        } else {
+            elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
+                    blocknum, NameStr(info->relname), NameStr(info->dbname), status);
+            status = SM_FAIL;
+        }
     }
 
     return status;
@@ -293,13 +303,14 @@ smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer) {
  */
 int
 smgrwrite(SmgrInfo info, BlockNumber blocknum, char *buffer) {
-    int status;
+    IOStatus status = SM_SUCCESS;
 
     status = (*(smgrsw[info->which].smgr_write)) (info, blocknum, buffer);
 
     if (status != SM_SUCCESS) {
         elog(NOTICE, "cannot write block %ld of %s-%s",
             blocknum, NameStr(info->relname), NameStr(info->dbname));
+        status = SM_FAIL;
     }
     return status;
 }
@@ -309,13 +320,14 @@ smgrwrite(SmgrInfo info, BlockNumber blocknum, char *buffer) {
  */
 int
 smgrflush(SmgrInfo info, BlockNumber blocknum, char *buffer) {
-    int status;
+    IOStatus status = SM_SUCCESS;
 
     status = (*(smgrsw[info->which].smgr_flush)) (info, blocknum, buffer);
 
     if (status != SM_SUCCESS) {
         elog(NOTICE, "cannot flush block %ld of %s-%s to stable store",
             blocknum, NameStr(info->relname), NameStr(info->dbname));
+        status = SM_FAIL;
     }
 
     return status;
@@ -333,13 +345,15 @@ smgrflush(SmgrInfo info, BlockNumber blocknum, char *buffer) {
  */
 int
 smgrmarkdirty(SmgrInfo info, BlockNumber blkno) {
-    int status;
+    IOStatus status = SM_SUCCESS;
 
     status = (*(smgrsw[info->which].smgr_markdirty)) (info, blkno);
 
-    if (status != SM_SUCCESS)
+    if (status != SM_SUCCESS) {
         elog(NOTICE, "cannot mark block %ld of %s:%s",
             blkno, NameStr(info->relname), NameStr(info->dbname));
+        status = SM_FAIL;
+    }   
 
     return status;
 }
@@ -353,7 +367,7 @@ smgrmarkdirty(SmgrInfo info, BlockNumber blkno) {
  */
 long
 smgrnblocks(SmgrInfo info) {
-    if (((*(smgrsw[info->which].smgr_nblocks)) (info)) < 0)
+    if (((*(smgrsw[info->which].smgr_nblocks)) (info)) != SM_SUCCESS)
         elog(NOTICE, "cannot count blocks for %s-%s",
             NameStr(info->relname), NameStr(info->dbname));
 
@@ -374,7 +388,7 @@ smgrtruncate(SmgrInfo info, long nblocks) {
 
     newblks = nblocks;
     if (smgrsw[info->which].smgr_truncate) {
-        if ((newblks = (*(smgrsw[info->which].smgr_truncate)) (info, nblocks)) < 0)
+        if ((newblks = (*(smgrsw[info->which].smgr_truncate)) (info, nblocks)) != SM_SUCCESS)
             elog(NOTICE, "cannot truncate %s-%s to %ld blocks",
                 NameStr(info->relname), NameStr(info->dbname), nblocks);
     }
@@ -392,8 +406,9 @@ smgrcommit() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_commit) {
-            if ((*(smgrsw[i].smgr_commit)) () != SM_SUCCESS)
+            if ((*(smgrsw[i].smgr_commit)) () != SM_SUCCESS) {
                 elog(FATAL, "transaction commit failed on %s", smgrout(i));
+            }
         }
     }
 
@@ -406,8 +421,9 @@ smgrabort() {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_abort) {
-            if ((*(smgrsw[i].smgr_abort)) () != SM_SUCCESS)
+            if ((*(smgrsw[i].smgr_abort)) () != SM_SUCCESS) {
                 elog(FATAL, "transaction abort failed on %s", smgrout(i));
+            }
         }
     }
 
@@ -416,12 +432,15 @@ smgrabort() {
 
 int
 smgrsync(SmgrInfo info) {
+    IOStatus status = SM_SUCCESS;
     if (smgrsw[info->which].smgr_sync) {
-        if (((*(smgrsw[info->which].smgr_sync)) (info)) < 0)
+        if (((*(smgrsw[info->which].smgr_sync)) (info)) != SM_SUCCESS) {
             elog(NOTICE, "cannot sync %s-%s",
                 NameStr(info->relname), NameStr(info->dbname));
+            status = SM_FAIL;
+        }
     }
-    return 0;
+    return status;
 }
 
 int
@@ -430,8 +449,9 @@ smgrbeginlog(void) {
 
     for (i = 0; i < NSmgr; i++) {
         if (smgrsw[i].smgr_beginlog) {
-            if ((*(smgrsw[i].smgr_beginlog)) () != SM_SUCCESS)
+            if ((*(smgrsw[i].smgr_beginlog)) () != SM_SUCCESS) {
                 elog(FATAL, "begin log failed on %s", smgrout(i));
+            }
         }
     }
 
@@ -442,6 +462,7 @@ int
 smgrlog(int which, char *dbname, char *relname,
         Oid dbid, Oid relid, BlockNumber number, char relkind, char* buffer) {
     SmgrData data;
+    IOStatus status = SM_SUCCESS;
 
     data.which = which;
     namestrcpy(&data.dbname, dbname);
@@ -451,12 +472,14 @@ smgrlog(int which, char *dbname, char *relname,
     data.relkind = relkind;
 
     if (smgrsw[which].smgr_log) {
-        if ((*(smgrsw[which].smgr_log)) (&data, number, buffer) != SM_SUCCESS)
+        if ((*(smgrsw[which].smgr_log)) (&data, number, buffer) != SM_SUCCESS) {
             elog(FATAL, "log failed on %s for %s-%s block number: %ld", smgrout(which), NameStr(data.relname),
                 NameStr(data.dbname), number);
+            status = SM_FAIL;
+        }
     }
 
-    return SM_SUCCESS;
+    return status;
 }
 
 int
