@@ -8,7 +8,6 @@ package driver.weaver;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.WritableByteChannel;
-import java.sql.SQLException;
 import java.util.Date;
 
 /**
@@ -23,7 +22,7 @@ public class BoundOutput<T> extends Bound<T> {
     private Object value;
     private boolean isnull = true;
 
-    protected BoundOutput(BaseWeaverConnection fc, long link, int index, Class<T> type) throws SQLException {
+    protected BoundOutput(BaseWeaverConnection fc, long link, int index, Class<T> type) throws ExecutionException {
         owner = fc;
         this.link = link;
         setTypeClass(type);
@@ -32,7 +31,7 @@ public class BoundOutput<T> extends Bound<T> {
         fc.getOutput(link,index,getTypeId(),this);
     } 
 
-    private void bind() throws SQLException {
+    private void bind() throws ExecutionException {
         Class<T> type = getTypeClass();
         if (type.equals(String.class)) {
            setType(Types.String);
@@ -74,7 +73,7 @@ public class BoundOutput<T> extends Bound<T> {
         this.value = value;
     }
 
-    public T get() throws SQLException {
+    public T get() throws ExecutionException {
 //        if ( !isActive() ) {
 //            throw new SQLException("output variable is orphaned");
 //        }
@@ -104,7 +103,7 @@ public class BoundOutput<T> extends Bound<T> {
                     return getTypeClass().cast(value);
             }
         } catch (ClassCastException exp) {
-            throw new SQLException("type cast exception", exp);
+            throw new ExecutionException("type cast exception", exp);
         }
         return null;
     }

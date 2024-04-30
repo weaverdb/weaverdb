@@ -30,7 +30,7 @@ static int PassOutValue(StmtMgr , int , void* , int , void* , void*  );
 
 javacache*  CreateCache(JNIEnv* env) {
 	/* exceptions  */
-        CachedClasses.exception = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/sql/SQLException"));
+        CachedClasses.exception = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/ExecutionException"));
         CachedClasses.truncation = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BinaryTruncation"));
         /*  boundary objects */
         CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BaseWeaverConnection"));
@@ -145,30 +145,7 @@ int PassInValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject data) {
     }
     return 0;
 }
-/*
-jfieldID
-GetFieldId(JNIEnv* env,jobject target,jstring slot,const char* signature) {
-    char        name[64];
-    jclass      bindclass;
-    jsize       slotsize = 0;
-    jfieldID    field;
-    
-    bindclass = (*env)->GetObjectClass(env,target);
-    slotsize = (*env)->GetStringLength(env,slot);
-    
-    (*env)->GetStringUTFRegion(env,slot,0, slotsize, name); 	
-    name[slotsize] = 0;
-    return (*env)->GetFieldID(env,bindclass,name,signature);
-}
 
-jmethodID
-GetMethodID(JNIEnv* env,jobject target,const char* name,const char* signature) {
-    jclass      bindclass;
-    
-    bindclass = (*env)->GetObjectClass(env,target);
-    return (*env)->GetMethodID(env,bindclass,name,signature);
-}
-*/
 void
 ExtractIntValue(JNIEnv* env,StmtMgr mgr,char* name, short type, jobject target) {
     if ((*env)->IsInstanceOf(env,target,Cache->inttype)) {
@@ -283,28 +260,6 @@ ExtractDateValue(JNIEnv* env,StmtMgr mgr, char* name, short type, jobject target
 
 void
 ExtractByteArrayValue(JNIEnv* env,StmtMgr mgr,char* name, short type,jobject target) {
-/*
-    jclass clacla = (*env)->FindClass(env,"java/lang/Class");
-    jclass clazz = (*env)->GetObjectClass(env,target);
-    jmethodID check = (*env)->GetMethodID(env,clacla,"isArray","()Z");
-    jboolean array = (*env)->CallBooleanMethod(env,clazz,check);
-    if ( array ) {
-        jmethodID compcheck = (*env)->GetMethodID(env,clacla,"getComponentType","()Ljava/lang/Class;");
-        jclass comp = (jclass)(*env)->CallObjectMethod(env,clazz,compcheck);
-        jmethodID prim = (*env)->GetMethodID(env,clacla,"isPrimative","()Z");
-        if ( (*env)->CallBooleanMethod(env,comp,prim) ) {
-            char        namebuf[256];
-            jmethodID namecheck = (*env)->GetMethodID(env,clacla,"getName","()Ljava/lang/String;");
-            jstring name = (*env)->CallObjectMethod(env,comp,namecheck);
-            jsize len = (*env)->GetStringLength(env,name);
-            (*env)->GetStringUTFRegion(env,name,0,len,namebuf);
-            namebuf[len] = 0x00;
-            if ( strcmp(namebuf,"byte") == 0 ) {
-                ExtractBytes(env,mgr,bound,(jbyteArray)target);
-            }
-        }
-    }
-*/
     ExtractBytes(env,mgr,name,type,(jbyteArray)target);
 }
 
@@ -345,9 +300,6 @@ static jobject CreateBinaryField(char* var, int length, JNIEnv* env) {
     return (jobject)jb;
 }
 static jobject CreateDoubleField(jdouble* var, JNIEnv* env) {
-/*
-    jdouble nval = (*env)->CallStaticDoubleMethod(env,Cache->doubletype,Cache->longtodouble,*var);
-*/
     return (*env)->NewObject(env,Cache->doubletype,Cache->createdouble,var);
 }
 

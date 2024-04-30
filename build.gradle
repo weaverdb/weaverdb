@@ -1,0 +1,16 @@
+
+plugins {
+    id 'org.javacc.javacc' version '3.0.2' apply false
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+}
+
+description = 'weaver db system'

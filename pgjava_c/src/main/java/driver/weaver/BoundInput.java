@@ -5,11 +5,8 @@
  */
 package driver.weaver;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.sql.SQLException;
 import java.io.InputStream;
 import java.nio.channels.ReadableByteChannel;
 
@@ -24,7 +21,7 @@ public class BoundInput<T> extends Bound<T> {
     private String name;
     private Object stream_holder;
 
-    protected BoundInput(BaseWeaverConnection fc, long id,String name, Class<T> type) throws SQLException {
+    protected BoundInput(BaseWeaverConnection fc, long id,String name, Class<T> type) throws ExecutionException {
         owner = fc;
         link = id;
         setTypeClass(type);
@@ -33,7 +30,7 @@ public class BoundInput<T> extends Bound<T> {
     }  
    
 
-    private void bind() throws SQLException {
+    private void bind() throws ExecutionException {
         Class<T> type = getTypeClass();
         if (type.equals(String.class)) {
             setType(Types.String);
@@ -66,9 +63,9 @@ public class BoundInput<T> extends Bound<T> {
         return owner;
     }
 
-    public void set(T value) throws SQLException {
+    public void set(T value) throws ExecutionException {
 //        if ( !isActive() ) {
-//            throw new SQLException("output variable is orphaned");
+//            throw new ExecutionException("output variable is orphaned");
 //        }
         if ( value == null ) {
             owner.setInput(link,name, getTypeId(), value);
@@ -97,7 +94,7 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), value);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for BLOB from " + name);
+                    throw new ExecutionException("invalid type conversion for BLOB from " + name);
                 }
                 break;
             case Direct:
@@ -114,7 +111,7 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), (Character) value);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for Character from " + name);
+                    throw new ExecutionException("invalid type conversion for Character from " + name);
                 }
                 break;
             case Binary:
@@ -138,7 +135,7 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), (byte[]) value);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for Binary from " + name);
+                    throw new ExecutionException("invalid type conversion for Binary from " + name);
                 }
                 break;
             case String:
@@ -152,7 +149,7 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), (sb.intValue() != 0));
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for Boolean from " + name);
+                    throw new ExecutionException("invalid type conversion for Boolean from " + name);
                 }
                 break;
             case Integer:
@@ -163,7 +160,7 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), value);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for Integer from " + name);
+                    throw new ExecutionException("invalid type conversion for Integer from " + name);
                 }
                 break;
             case Date:
@@ -171,7 +168,7 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), value);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for Date from " + name);
+                    throw new ExecutionException("invalid type conversion for Date from " + name);
                 }
                 break;
             case Long:
@@ -179,7 +176,7 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), value);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for Long from " + name);
+                    throw new ExecutionException("invalid type conversion for Long from " + name);
                 }
                 break;
             case Java:
@@ -191,22 +188,22 @@ public class BoundInput<T> extends Bound<T> {
                     owner.setInput(link,name, getTypeId(), value);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new SQLException("invalid type conversion for Date from " + name);
+                    throw new ExecutionException("invalid type conversion for Date from " + name);
                 }
                 break;
             default:
             {
                 String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                throw new SQLException("invalid type conversion for " + getType().toString() + " from " + name);
+                throw new ExecutionException("invalid type conversion for " + getType().toString() + " from " + name);
             }
         }
     }
 
-    public void setObject(Object obj) throws SQLException {
+    public void setObject(Object obj) throws ExecutionException {
         try {
             set(getTypeClass().cast(obj));
         } catch (ClassCastException cast) {
-            throw new SQLException(cast);
+            throw new ExecutionException(cast);
         }
     }
 

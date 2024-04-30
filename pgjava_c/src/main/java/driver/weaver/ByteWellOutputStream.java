@@ -13,7 +13,6 @@ import java.io.*;
  */
 public class ByteWellOutputStream extends ByteArrayOutputStream {
     
-    /** Creates a new instance of ByteWellInputStream */
     public ByteWellOutputStream() {
         super(32568);
     }

@@ -3,7 +3,6 @@ package driver.weaver;
 import java.util.*;
 import java.io.*;
 
-import java.sql.SQLException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -44,13 +43,13 @@ public class BaseWeaverConnection implements AutoCloseable {
         logging = parent;
     }
 
-    private boolean convertString(String connect) throws SQLException {
+    private boolean convertString(String connect) throws ExecutionException {
         if ( connect == null ) return false;
         if ( connect.startsWith("@") ) connect = "/" + connect;
         int userbr = connect.indexOf('/');
-         if ( userbr < 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
+         if ( userbr < 0 ) throw new ExecutionException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
         int passbr = connect.indexOf('@',userbr);
-        if ( passbr < 0 ) throw new SQLException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
+        if ( passbr < 0 ) throw new ExecutionException("Connect string is improperly formatted.  Use <username>/<password>@<server>");
 
         String name = connect.substring(0, userbr);
         String password = connect.substring(userbr+1, passbr);
@@ -60,17 +59,17 @@ public class BaseWeaverConnection implements AutoCloseable {
         return ( nativePointer != 0 );
     }
 
-    public boolean connect(String connString) throws SQLException {
+    public boolean connect(String connString) throws ExecutionException {
         creationPath = new Throwable();
         return convertString(connString);
     }
 
     @Override
-    public void close() throws SQLException {
+    public void close() throws ExecutionException {
         dispose();
     }
 
-    public synchronized void dispose() throws SQLException {
+    public synchronized void dispose() throws ExecutionException {
         if ( nativePointer != 0 ) {
             dispose(nativePointer);
             nativePointer = 0;
@@ -88,7 +87,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
 
-    public BaseWeaverConnection spawnHelper() throws SQLException {
+    public BaseWeaverConnection spawnHelper() throws ExecutionException {
         BaseWeaverConnection cloned = new BaseWeaverConnection();
         cloned.nativePointer = cloned.connectSubConnection();
         return cloned;
@@ -103,13 +102,13 @@ public class BaseWeaverConnection implements AutoCloseable {
         clearBinds();
     }
     
-    public Statement statement(String statement) throws SQLException {
+    public Statement statement(String statement) throws ExecutionException {
         return new Statement(statement);
     }
 
     HashMap<Integer,BoundOutput> outputs = new HashMap<Integer,BoundOutput>();
     
-    public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws SQLException {
+    public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws ExecutionException {
         BoundOutput bo = outputs.get(index);
         if ( bo != null ) {
             if ( bo.isSameType(type) ) return bo;
@@ -123,7 +122,7 @@ public class BaseWeaverConnection implements AutoCloseable {
 
     HashMap<String,BoundInput> inputs = new HashMap<String,BoundInput>();
 
-    public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws SQLException {
+    public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws ExecutionException {
         BoundInput bi = inputs.get(name);
         if ( bi != null ) {
             if ( bi.isSameType(type) ) return bi;
@@ -142,21 +141,21 @@ public class BaseWeaverConnection implements AutoCloseable {
         outputs.clear();
     }
 
-    public long parse(String stmt) throws SQLException {
+    public long parse(String stmt) throws ExecutionException {
         clearBinds();
         return parseStatement(stmt);
     }
 
-    public long begin() throws SQLException {
+    public long begin() throws ExecutionException {
         clearBinds();
         return beginTransaction();
     }
 
-    public void prepare() throws SQLException {
+    public void prepare() throws ExecutionException {
         prepareTransaction();
     }
 
-    public void cancel() throws SQLException {
+    public void cancel() throws ExecutionException {
         cancelTransaction();
     }
 
@@ -164,58 +163,58 @@ public class BaseWeaverConnection implements AutoCloseable {
         clearBinds();
         try {
             abortTransaction();
-        } catch ( SQLException exp ) {
+        } catch ( ExecutionException exp ) {
             throw new RuntimeException(exp);
         }
     }
 
-    public void commit() throws SQLException {
+    public void commit() throws ExecutionException {
         clearBinds();
         commitTransaction();
     }
 
-    public void start() throws SQLException {
+    public void start() throws ExecutionException {
         clearBinds();
         beginProcedure();
     }
 
-    public void end() throws SQLException {
+    public void end() throws ExecutionException {
         clearBinds();
         endProcedure();
     }
 
-    public long execute() throws SQLException {
+    public long execute() throws ExecutionException {
         return executeStatement(nativePointer);
     }
 
-    public boolean fetch() throws SQLException {
+    public boolean fetch() throws ExecutionException {
         return fetchResults(nativePointer);
     }
     
-    private native long grabConnection(String name, String password, String connect) throws SQLException;
-    private native long connectSubConnection() throws SQLException;
+    private native long grabConnection(String name, String password, String connect) throws ExecutionException;
+    private native long connectSubConnection() throws ExecutionException;
     private native void dispose(long link);
 
-    private native long prepareStatement(String theStatement) throws SQLException;
-    private native long parseStatement(String theStatement) throws SQLException;
-    private native long executeStatement(long link) throws SQLException;
-    private native boolean fetchResults(long link) throws SQLException;
+    private native long prepareStatement(String theStatement) throws ExecutionException;
+    private native long parseStatement(String theStatement) throws ExecutionException;
+    private native long executeStatement(long link) throws ExecutionException;
+    private native boolean fetchResults(long link) throws ExecutionException;
 
-    native void setInput(long link, String name, int type, Object value) throws SQLException;
-    native void getOutput(long link, int index, int type, BoundOutput test) throws SQLException;
+    native void setInput(long link, String name, int type, Object value) throws ExecutionException;
+    native void getOutput(long link, int index, int type, BoundOutput test) throws ExecutionException;
 
-    private native void prepareTransaction() throws SQLException;
+    private native void prepareTransaction() throws ExecutionException;
     private native void cancelTransaction();
-    private native long beginTransaction() throws SQLException;
-    private native void commitTransaction() throws SQLException;
-    private native void abortTransaction() throws SQLException;
-    private native void beginProcedure() throws SQLException;
-    private native void endProcedure() throws SQLException;
+    private native long beginTransaction() throws ExecutionException;
+    private native void commitTransaction() throws ExecutionException;
+    private native void abortTransaction() throws ExecutionException;
+    private native void beginProcedure() throws ExecutionException;
+    private native void endProcedure() throws ExecutionException;
 
     public native long getTransactionId();
     public native long getCommandId();
 
-    public native void streamExec(String statement) throws SQLException;
+    public native void streamExec(String statement) throws ExecutionException;
 
     protected void pipeOut(byte[] data) throws IOException {
         os.write(data);
@@ -258,7 +257,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         private long  link;
         private final Throwable statementPath;
         
-        Statement(String statement) throws SQLException {
+        Statement(String statement) throws ExecutionException {
             link = prepareStatement(statement);
             statementPath = new Throwable(creationPath);
         }
@@ -270,7 +269,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         HashMap<Integer,BoundOutput> outputs = new HashMap<Integer,BoundOutput>();
         HashMap<String,BoundInput> inputs = new HashMap<String,BoundInput>();
     
-        public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws SQLException {
+        public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws ExecutionException {
             BoundOutput bo = outputs.get(index);
             if ( bo != null ) {
                 if ( bo.isSameType(type) ) return bo;
@@ -282,7 +281,7 @@ public class BaseWeaverConnection implements AutoCloseable {
             return bo;
         }
         
-        public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws SQLException {
+        public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws ExecutionException {
             BoundInput bi = inputs.get(name);
             if ( bi != null ) {
                 if ( bi.isSameType(type) ) return bi;
@@ -294,11 +293,11 @@ public class BaseWeaverConnection implements AutoCloseable {
             return bi;
         }
         
-        public boolean fetch() throws SQLException {
+        public boolean fetch() throws ExecutionException {
             return fetchResults(link);
         }        
         
-        public long execute() throws SQLException {
+        public long execute() throws ExecutionException {
             return executeStatement(link);
         }
 
