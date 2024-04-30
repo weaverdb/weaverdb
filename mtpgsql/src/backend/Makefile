@@ -168,7 +168,7 @@ utils/fmgr.h:
 
 #############################################################################
 clean:
-	rm -f postgres$(X) $(POSTGRES_IMP) ../include/fmgr.h parse.h \
+	rm -f postgres$(X) $(POSTGRES_IMP) ../include/fmgr.h ../include/env/timestamp.h parse.h \
 	    global1.bki.source local1_template1.bki.source \
 	    global1.description local1_template1.description \
 	    libpostgres.o libmtpg.a taoclient omniclient pgtao pgomni \

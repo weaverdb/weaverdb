@@ -53,12 +53,10 @@ MACOSPATH=\
 
 # think about using malloc mtmalloc as memory management libs
 java_bits:
-	${JAVA_HOME}/bin/javac -g driver/weaver/*.java
-	# ${JAVA_HOME}/bin/javac driver/weaver/*.java driver/weaver/jdbc/*.java
-	${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class 
-	# ${JAVA_HOME}/bin/jar cvf weaver.jar  driver/weaver/*.class driver/weaver/jdbc/*.class
+	../gradlew build
+
 ifneq ($(PORTNAME),darwin)
-all: java_bits libweaver.so weaver
+all: libweaver.so weaver
 weaver: libweaver.so
 	${CC} ${CFLAGS} ${CFLAGS_SL} -DWEAVER_JAVA \
 	${MYINC} ${MYPATH} ${MYLIBS} -L. \
@@ -89,10 +87,9 @@ libweaver.dylib:
 	-o libweaver.dylib
 endif
 
-ifneq ($(PORTNAME),darwin)
 clean_java:
-	rm driver/weaver/*.class
-	rm weaver.jar
+	../gradlew clean
+ifneq ($(PORTNAME),darwin)
 clean: clean_java
 	rm libweaver.so
 	rm weaver
@@ -102,7 +99,7 @@ clean_legacy:
 	rm PostgresFrameConnection.o
 	rm pgjava
 else
-clean:
+clean: clean_java
 	rm libweaver.dylib
 	rm weaver
 endif
@@ -112,7 +109,7 @@ install: all
 	cp libweaver.so ${POSTGRESDIR}/lib/libweaver.so
 	cp weaver ${POSTGRESDIR}/bin/weaver
 	ln -s weaver ${POSTGRESDIR}/bin/weaver_server
-	cp weaver.jar ${POSTGRESDIR}/lib/weaver.jar
+	cp build/libs/pgjava_c.jar ${POSTGRESDIR}/lib/weaver.jar
 install_legacy: legacy
 	cp libmtpgjava.so ${POSTGRESDIR}/lib/
 	cp pgjava ${POSTGRESDIR}/bin/
@@ -122,4 +119,5 @@ install: all
 	cp libweaver.dylib ${POSTGRESDIR}/lib/libweaver.dylib
 	cp weaver ${POSTGRESDIR}/bin/weaver
 	ln -s weaver ${POSTGRESDIR}/bin/weaver_server
+	cp build/libs/pgjava_c.jar ${POSTGRESDIR}/lib/weaver.jar
 endif

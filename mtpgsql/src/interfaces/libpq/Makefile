@@ -99,7 +99,7 @@ install-headers: libpq-fe.h libpq-int.h
 .PHONY: clean
 
 clean: clean-shlib
-	rm -f lib$(NAME).a $(OBJS)
+	rm -f lib$(NAME).a $(OBJS) libpq.o
 	rm -f dllist.c snprintf.c inet_aton.c common.c wchar.c conv.c big5.c
 
 depend dep:
