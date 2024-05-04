@@ -3,3 +3,4 @@ gradle/
 build/
 mtpgsql/src/include/env/timestamp.h
 mtpgsql/src/include/fmgr.h
+*.o

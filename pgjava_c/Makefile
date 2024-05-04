@@ -52,8 +52,6 @@ MACOSPATH=\
 -L${JAVA_HOME}/lib \
 
 # think about using malloc mtmalloc as memory management libs
-java_bits:
-	../gradlew build
 
 ifneq ($(PORTNAME),darwin)
 all: libweaver.so weaver
@@ -72,7 +70,7 @@ libweaver.so: WeaverStmtManager.c BaseWeaverConnection.c WeaverValueExtractor.c 
 	WeaverValueExtractor.c 	\
 	-o libweaver.so -lmtpg
 else
-all: java_bits libweaver.dylib weaver
+all: libweaver.dylib weaver
 weaver: 
 	${CC} ${CFLAGS} -DWEAVER_JAVA \
 	${MACOSINC} ${MACOSPATH} -lpthread -L${JAVA_HOME}/lib/server/ -ljli -lobjc \
@@ -87,10 +85,8 @@ libweaver.dylib:
 	-o libweaver.dylib
 endif
 
-clean_java:
-	../gradlew clean
 ifneq ($(PORTNAME),darwin)
-clean: clean_java
+clean: 
 	rm libweaver.so
 	rm weaver
 clean_legacy:
@@ -99,7 +95,7 @@ clean_legacy:
 	rm PostgresFrameConnection.o
 	rm pgjava
 else
-clean: clean_java
+clean: 
 	rm libweaver.dylib
 	rm weaver
 endif

@@ -1,1 +1,9 @@
-description = 'c driver'
+plugins {
+   id 'java'
+}
+
+description = 'pg connector'
+
+jar {
+    archiveBaseName = 'weaver'
+}

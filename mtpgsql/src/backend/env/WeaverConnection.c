@@ -82,12 +82,6 @@ static int ExpandSlots(PreparedPlan* connection,slot_type type);
 
 static SectionId   connection_section_id = SECTIONID("CONN");
 
-/*
-static WConn SetupConnection(OpaqueWConn conn);
-static long ReleaseConnection(WConn comm);
-static bool ReadyConnection(WConn connection);
- */
-
 #define SETUP(target) (WConn)target
 
 #define READY(target, err)  \
@@ -129,8 +123,8 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     memset(connection, 0x00, sizeof (struct Connection));
 
     connection->validFlag = -1;
-    connection->password = pstrdup(pass);
-    connection->name = pstrdup(tName);
+    connection->password = pass == NULL ? NULL : pstrdup(pass);
+    connection->name = tName == NULL ? NULL : pstrdup(tName);
     connection->connect = pstrdup(conn);
 
     connection->memory = AllocSetContextCreate(GetEnvMemoryContext(),
@@ -184,7 +178,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
         HeapTuple ht = NULL;
         char isNull = true;
 
-        if (strlen(tName) > 0) {
+        if (tName != NULL && strlen(tName) > 0) {
             ht = SearchSysCacheTuple(SHADOWNAME, PointerGetDatum(tName), 0, 0, 0);
             if (HeapTupleIsValid(ht)) {
                 Datum dpass = SysCacheGetAttr(SHADOWNAME, ht, Anum_pg_shadow_passwd, &isNull);

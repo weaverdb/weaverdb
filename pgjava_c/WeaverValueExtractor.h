@@ -37,14 +37,19 @@ typedef struct javacache {
     jfieldID                        eText;
     jfieldID                        eState;
     /*  BoundOutput fields */
-    jfieldID                        value;
-    jfieldID                        nullfield;
+    jfieldID                        oindex;
+    jfieldID                        ovalue;
+    jfieldID                        onullfield;
+    /*  BoundInput fields */
+    jfieldID                        iname;
+    jfieldID                        ivalue;
     /*  BoundOutput/BoundInput methods */
     jmethodID                        pipein;
     jmethodID                        pipeout;
     jmethodID                        infoin;
     jmethodID                        infoout;
-    jmethodID                        typeid;
+    jmethodID                        itypeid;
+    jmethodID                        otypeid;
 
     jmethodID                        charvalue;   
     jmethodID                        createchar;   
@@ -64,8 +69,8 @@ typedef struct javacache {
 
 javacache* CreateCache(JNIEnv* env);
 javacache* DropCache(JNIEnv* env);
-int PassInValue(JNIEnv* env,StmtMgr mgr,char* name,short type,jobject object);
-int PassResults(JNIEnv* env, StmtMgr mgr);
+int PassInValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name,short type,jobject object);
+int PassResults(JNIEnv* env, ConnMgr conn, StmtMgr mgr);
 
 #ifdef	__cplusplus
 }

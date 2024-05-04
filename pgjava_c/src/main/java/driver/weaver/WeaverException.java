@@ -8,30 +8,30 @@ package driver.weaver;
  *
  * @author myronscott
  */
-public class ExecutionException extends Exception {
+public class WeaverException extends Exception {
 
     /**
-     * Creates a new instance of <code>ExecutionException</code> without detail
+     * Creates a new instance of <code>WeaverException</code> without detail
      * message.
      */
-    public ExecutionException() {
+    public WeaverException() {
     }
 
     /**
-     * Constructs an instance of <code>ExecutionException</code> with the
+     * Constructs an instance of <code>WeaverException</code> with the
      * specified detail message.
      *
      * @param msg the detail message.
      */
-    public ExecutionException(String msg) {
+    public WeaverException(String msg) {
         super(msg);
     }
 
-    public ExecutionException(String message, Throwable cause) {
+    public WeaverException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public ExecutionException(Throwable cause) {
+    public WeaverException(Throwable cause) {
         super(cause);
     }
 }

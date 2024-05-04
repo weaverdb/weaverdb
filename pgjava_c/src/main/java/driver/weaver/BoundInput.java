@@ -16,12 +16,12 @@ import java.nio.channels.ReadableByteChannel;
  */
 public class BoundInput<T> extends Bound<T> {
 
-    private BaseWeaverConnection owner;
-    private long  link;
-    private String name;
-    private Object stream_holder;
+    private final BaseWeaverConnection owner;
+    private final long  link;
+    private final String name;
+    private Object value;
 
-    protected BoundInput(BaseWeaverConnection fc, long id,String name, Class<T> type) throws ExecutionException {
+    protected BoundInput(BaseWeaverConnection fc, long id,String name, Class<T> type) throws WeaverException {
         owner = fc;
         link = id;
         setTypeClass(type);
@@ -29,8 +29,7 @@ public class BoundInput<T> extends Bound<T> {
         bind();
     }  
    
-
-    private void bind() throws ExecutionException {
+    private void bind() throws WeaverException {
         Class<T> type = getTypeClass();
         if (type.equals(String.class)) {
             setType(Types.String);
@@ -63,12 +62,9 @@ public class BoundInput<T> extends Bound<T> {
         return owner;
     }
 
-    public void set(T value) throws ExecutionException {
-//        if ( !isActive() ) {
-//            throw new ExecutionException("output variable is orphaned");
-//        }
+    public void set(T value) throws WeaverException {        
         if ( value == null ) {
-            owner.setInput(link,name, getTypeId(), value);
+            this.value = null;
             return;
         }
         
@@ -86,32 +82,26 @@ public class BoundInput<T> extends Bound<T> {
                         }
                     } catch (IOException ioe) {
                     }
-                    owner.setInput(link,name, getTypeId(), out.toByteArray());
-                } else if (value instanceof ByteArrayOutputStream) {
-                    ByteArrayOutputStream is = (ByteArrayOutputStream) value;
-                    owner.setInput(link,name, getTypeId(), is.toByteArray());
+                    this.value = out.toByteArray();
+                } else if (value instanceof ByteArrayOutputStream is) {
+                    this.value = is.toByteArray();
                 } else if (value instanceof byte[]) {
-                    owner.setInput(link,name, getTypeId(), value);
+                    this.value = value;
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for BLOB from " + name);
+                    throw new WeaverException("invalid type conversion for BLOB from " + name);
                 }
                 break;
             case Direct:
             case Stream:
-                this.stream_holder = value;
-                if ( value != null ) {
-                    owner.setInput(link,name, getTypeId(), this);
-                } else {
-                    owner.setInput(link,name, getTypeId(), null);
-                }
+                this.value = value;
                 break;
             case Character:
                 if (value instanceof Character) {
-                    owner.setInput(link,name, getTypeId(), (Character) value);
+                    this.value = (Character) value;
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for Character from " + name);
+                    throw new WeaverException("invalid type conversion for Character from " + name);
                 }
                 break;
             case Binary:
@@ -127,100 +117,100 @@ public class BoundInput<T> extends Bound<T> {
                         }
                     } catch (IOException ioe) {
                     }
-                    owner.setInput(link,name, getTypeId(), out.toByteArray());
+                    this.value = out.toByteArray();
                 } else if (value instanceof ByteArrayOutputStream) {
                     ByteArrayOutputStream is = (ByteArrayOutputStream) value;
-                    owner.setInput(link,name, getTypeId(), is.toByteArray());
+                    this.value = is.toByteArray();
                 } else if (value instanceof byte[]) {
-                    owner.setInput(link,name, getTypeId(), (byte[]) value);
+                    this.value = value;
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for Binary from " + name);
+                    throw new WeaverException("invalid type conversion for Binary from " + name);
                 }
                 break;
             case String:
-                owner.setInput(link,name, getTypeId(), value);
+                this.value = value;
                 break;
             case Boolean:
                 if (value instanceof Boolean) {
-                    owner.setInput(link,name, getTypeId(), value);
+                    this.value = value;
                 } else if (value instanceof Integer) {
                     Integer sb = (Integer) value;
-                    owner.setInput(link,name, getTypeId(), (sb.intValue() != 0));
+                    this.value = (sb.intValue() != 0);
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for Boolean from " + name);
+                    throw new WeaverException("invalid type conversion for Boolean from " + name);
                 }
                 break;
             case Integer:
                 if (value instanceof Boolean) {
                     Boolean sb = (Boolean) value;
-                    owner.setInput(link,name, getTypeId(), (sb) ? 1 : 0);
+                    this.value = (sb) ? 1 : 0;
                 } else if (value instanceof Integer) {
-                    owner.setInput(link,name, getTypeId(), value);
+                    this.value = value;
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for Integer from " + name);
+                    throw new WeaverException("invalid type conversion for Integer from " + name);
                 }
                 break;
             case Date:
                 if (value instanceof java.util.Date) {
-                    owner.setInput(link,name, getTypeId(), value);
+                    this.value = value;
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for Date from " + name);
+                    throw new WeaverException("invalid type conversion for Date from " + name);
                 }
                 break;
             case Long:
                 if (value instanceof java.lang.Long) {
-                    owner.setInput(link,name, getTypeId(), value);
+                    this.value = value;
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for Long from " + name);
+                    throw new WeaverException("invalid type conversion for Long from " + name);
                 }
                 break;
             case Java:
                 byte[] binary = JavaConverter.java_in(value);
-                owner.setInput(link,name, getTypeId(), binary);
+                this.value = binary;
                 break;
             case Double:
                 if (value instanceof Double) {
-                    owner.setInput(link,name, getTypeId(), value);
+                    this.value = value;
                 } else {
                     String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new ExecutionException("invalid type conversion for Date from " + name);
+                    throw new WeaverException("invalid type conversion for Date from " + name);
                 }
                 break;
             default:
             {
                 String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                throw new ExecutionException("invalid type conversion for " + getType().toString() + " from " + name);
+                throw new WeaverException("invalid type conversion for " + getType().toString() + " from " + name);
             }
         }
     }
 
-    public void setObject(Object obj) throws ExecutionException {
+    public void setObject(Object obj) throws WeaverException {
         try {
             set(getTypeClass().cast(obj));
         } catch (ClassCastException cast) {
-            throw new ExecutionException(cast);
+            throw new WeaverException(cast);
         }
     }
 
     protected int pipeIn(byte[] data) throws IOException {
-        InputStream os = (InputStream) stream_holder;
+        InputStream os = (InputStream)value;
         return os.read(data);
     }
 
     protected int pipeIn(java.nio.ByteBuffer data) throws IOException {
-        if (stream_holder instanceof ReadableByteChannel) {
-            return ((ReadableByteChannel) stream_holder).read(data);
+        if (value instanceof ReadableByteChannel) {
+            return ((ReadableByteChannel) value).read(data);
         } else {
             if ( data.hasArray() ) {
-                 return ((InputStream) stream_holder).read(data.array(),data.arrayOffset() + data.position(),data.remaining());
+                 return ((InputStream) value).read(data.array(),data.arrayOffset() + data.position(),data.remaining());
             } else {
                 byte[] open = new byte[data.limit()];
-                int count = ((InputStream) stream_holder).read(open);
+                int count = ((InputStream) value).read(open);
                 if ( count > 0 ) data.put(open,0,count);
                 return count;
             }

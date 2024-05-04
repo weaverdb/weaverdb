@@ -16,22 +16,21 @@ import java.util.Date;
  */
 public class BoundOutput<T> extends Bound<T> {
 
-    private BaseWeaverConnection owner;
-    private long link;
-    private int index;
+    private final BaseWeaverConnection owner;
+    private final long link;
+    private final int index;
     private Object value;
     private boolean isnull = true;
 
-    protected BoundOutput(BaseWeaverConnection fc, long link, int index, Class<T> type) throws ExecutionException {
+    protected BoundOutput(BaseWeaverConnection fc, long link, int index, Class<T> type) throws WeaverException {
         owner = fc;
         this.link = link;
         setTypeClass(type);
         this.index = index;
         bind();
-        fc.getOutput(link,index,getTypeId(),this);
     } 
 
-    private void bind() throws ExecutionException {
+    private void bind() throws WeaverException {
         Class<T> type = getTypeClass();
         if (type.equals(String.class)) {
            setType(Types.String);
@@ -58,7 +57,6 @@ public class BoundOutput<T> extends Bound<T> {
         } else {
             setType(Types.Java);
         }
-/*        owner.output(index, this, settype.getId());  */
     }
 
     protected BaseWeaverConnection getOwner() {
@@ -73,11 +71,8 @@ public class BoundOutput<T> extends Bound<T> {
         this.value = value;
     }
 
-    public T get() throws ExecutionException {
-//        if ( !isActive() ) {
-//            throw new SQLException("output variable is orphaned");
-//        }
-        if (isnull) {
+    public T get() throws WeaverException {
+        if (value == null) {
             return null;
         }
         try {
@@ -103,7 +98,7 @@ public class BoundOutput<T> extends Bound<T> {
                     return getTypeClass().cast(value);
             }
         } catch (ClassCastException exp) {
-            throw new ExecutionException("type cast exception", exp);
+            throw new WeaverException("type cast exception", exp);
         }
         return null;
     }
@@ -117,7 +112,9 @@ public class BoundOutput<T> extends Bound<T> {
     protected void pipeOut(java.nio.ByteBuffer data) throws IOException {
         if ( value == null ) throw new IOException("pipe not connected");
         if (value instanceof WritableByteChannel) {
-            ((WritableByteChannel) value).write(data);
+            while (data.hasRemaining()) {
+                ((WritableByteChannel) value).write(data);
+            }
         } else {
             if ( data.hasArray() ) {
                 ((OutputStream) value).write(data.array(),data.position() + data.arrayOffset(),data.remaining());

@@ -33,66 +33,67 @@ typedef struct WeaverConnectionManager* ConnMgr;
 typedef struct WeaverStmtManager* StmtMgr;
 
 typedef int (*outputfunc)(StmtMgr , int type, void* value, int length, void* userarg, void* funcarg);
-typedef int (*usercleanup)(StmtMgr , int type, void* userarg);
+typedef int (*inputfunc)(StmtMgr , int type, void* userarg);
 
 ConnMgr CreateWeaverConnection(const char* name, const char * paslong, const char* connect);
-ConnMgr GetWeaverConnection(StmtMgr );
 void DestroyWeaverConnection( ConnMgr );
+
 StmtMgr CreateWeaverStmtManager(ConnMgr connection);
+void DestroyWeaverStmtManager(ConnMgr,  StmtMgr );
+
 short  IsValid(ConnMgr mgr);
-short  IsStmtValid(StmtMgr mgr);
 
-StmtMgr  CreateSubConnection(StmtMgr );
-ConnMgr DestroyWeaverStmtManager( StmtMgr );
+ConnMgr  CreateSubConnection(ConnMgr );
 
-short Begin( StmtMgr );
-short Rollback( StmtMgr );
-short Commit( StmtMgr );
-long  GetTransactionId( StmtMgr );
+short Begin( ConnMgr );
+short Rollback( ConnMgr );
+short Commit( ConnMgr );
+long  GetTransactionId( ConnMgr );
 long  GetCommandId( StmtMgr );
 
-short Exec( StmtMgr );
-short Cancel( StmtMgr );
+short Exec(ConnMgr, StmtMgr );
+short Cancel( ConnMgr );
 
-short Prepare( StmtMgr );
-short BeginProcedure( StmtMgr );
-short EndProcedure( StmtMgr );
+short Prepare( ConnMgr );
+short BeginProcedure( ConnMgr );
+short EndProcedure( ConnMgr );
 
-short UserLock(StmtMgr , const char* grouptolock,uint32_t val,char lock);
+short UserLock(ConnMgr, StmtMgr , const char* grouptolock,uint32_t val,char lock);
 
-short	Init(StmtMgr ,usercleanup input,usercleanup output);
+Pipe     PipeConnect(ConnMgr ,StmtMgr , void* args, pipefunc func);
+void*    PipeDisconnect(ConnMgr ,StmtMgr , Pipe comm);
+void     ConnectStdIO(ConnMgr ,void* args,pipefunc pipein,pipefunc pipeout);
+void     DisconnectStdIO(ConnMgr );
 
-Pipe     PipeConnect(StmtMgr , void* args, pipefunc func);
-void*    PipeDisconnect(StmtMgr , Pipe comm);
-void     ConnectStdIO(StmtMgr ,void* args,pipefunc pipein,pipefunc pipeout);
-void     DisconnectStdIO(StmtMgr );
+short StreamExec(ConnMgr ,char* statement);
 
-short StreamExec(StmtMgr ,char* statement);
-
-short ParseStatement( StmtMgr ,const char* statement);
-short Fetch( StmtMgr  );
+short ParseStatement(ConnMgr, StmtMgr ,const char* statement);
+short Fetch( ConnMgr, StmtMgr  );
 long Count( StmtMgr  );
 
-Input SetInputValue(StmtMgr , const char * vari, short type, void* value, int length);
-Output SetOutputValue(StmtMgr , int index, short type, void* value, int length);
+Input SetInputValue(ConnMgr, StmtMgr , const char * vari, short type, void* value, int length);
+Output SetOutputValue(ConnMgr, StmtMgr , int index, short type, void* value, int length);
 
-void* SetUserspace(StmtMgr , Bound bound, void* user);
+void* SetUserspace(Bound bound, void* user);
 
-Output OutputLink(StmtMgr , int index, short type);
+Output OutputLink(ConnMgr, StmtMgr , int index, short type);
 short GetOutputs(StmtMgr , void* funcargs, outputfunc func);
 
+short DisconnectPipes(ConnMgr, StmtMgr);
 void ClearData(StmtMgr );
 
-short SetStatementSpaceSize(StmtMgr ,long size);
-short SetStatementBlobSize(StmtMgr ,long size);
+short SetStatementSpaceSize(ConnMgr, StmtMgr ,long size);
+short SetStatementBlobSize(ConnMgr, StmtMgr ,long size);
 long  GetStatementSpaceSize(StmtMgr );
 long  GetStatementBlobSize(StmtMgr );
 
 short DelegateError(StmtMgr ,const char* state,const char* text,int code);
-short CheckForErrors(StmtMgr );
+short CheckForErrors(ConnMgr, StmtMgr );
 
-long GetErrorCode(StmtMgr );
-const char* GetErrorText(StmtMgr );
-const char* GetErrorState(StmtMgr );
+long ReportError(ConnMgr, StmtMgr, const char** text, const char** state);
+
+long GetErrorCode(ConnMgr, StmtMgr );
+const char* GetErrorText(ConnMgr, StmtMgr );
+const char* GetErrorState(ConnMgr, StmtMgr );
 #endif
 
