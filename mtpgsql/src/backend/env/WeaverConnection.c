@@ -65,22 +65,20 @@ typedef enum {
     CONNECTION_MEMORY
 } mem_type;
 
-typedef enum {
-    INPUT,
-            OUTPUT  
-} slot_type;
-
 /* buffer flusher for external world */
 
 static long WDisposeConnection(OpaqueWConn conn);
 
-static int FillExecArgs(PreparedPlan* plan);
+static int TransferExecArgs(PreparedPlan* plan);
 static PreparedPlan *ParsePlan(PreparedPlan * plan);
 static void SetError(WConn connection, int sqlError, char* state, char* err);
 static void* AllocMemory(WConn connection, mem_type type, size_t size);
-static int ExpandSlots(PreparedPlan* connection,slot_type type);
+static int ExpandSlots(PreparedPlan* connection,TransferType type);
+static short CheckThreadContext(WConn);
 
 static SectionId   connection_section_id = SECTIONID("CONN");
+
+#define GETERROR(conn) conn->CDA.rc
 
 #define SETUP(target) (WConn)target
 
@@ -389,14 +387,11 @@ OpaquePreparedStatement
 WPrepareStatement(OpaqueWConn conn, const char *smt) {
     WConn connection = SETUP(conn);
     long err = 0;
+    int k = 0;
     PreparedPlan* plan;
     MemoryContext plan_cxt,old;
 
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
+    if (CheckThreadContext(conn)) {
         return NULL;
     }
     /* If begin was not called, call it  */
@@ -428,13 +423,12 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     plan->statement = pstrdup(smt);
     plan->plan_cxt = plan_cxt;
     plan->owner = connection;
-    plan->input_slots = START_ARGS;
-    plan->output_slots = START_ARGS;
-    plan->input = palloc(sizeof(Binder) * START_ARGS);
-    plan->output = palloc(sizeof(Output) * START_ARGS);
-    memset(plan->input, 0, sizeof (Binder) * START_ARGS);
-    memset(plan->output, 0, sizeof (Output) * START_ARGS);
-    plan->input_count = 0;
+    plan->slots = START_ARGS;
+    plan->slot = palloc(sizeof(InputOutput) * START_ARGS);
+    memset(plan->slot, 0, sizeof (InputOutput) * START_ARGS);
+    for (k=0;k<START_ARGS;k++) {
+        plan->slot[k].type = TFREE;
+    }
 
     plan->tupdesc = NULL;
     plan->state = NULL;
@@ -484,16 +478,13 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
 }
 
 long
-WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, int varType, short *ind, int *clength) {
+WOutputTransfer(OpaquePreparedStatement plan, short pos, int type, void* userenv, transferfunc func) {
     WConn connection = SETUP(plan->owner);
     long err;
+    int index;
 
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
 
     READY(connection, err);
@@ -503,18 +494,19 @@ WOutputLink(OpaquePreparedStatement plan, short pos, void *varAdd, int varSize, 
     }
 
     if (pos > MAX_ARGS || pos <= 0) {
-                coded_elog(ERROR, 101, "bad value - index must be greater than 0 and less than %d", MAX_ARGS);
-    } else if ( pos >= plan->output_slots ) {
-        ExpandSlots(plan,OUTPUT);
-    } 
-    
-    plan->output[pos - 1].index = pos;
-    plan->output[pos - 1].target = varAdd;
-    plan->output[pos - 1].size = varSize;
-    plan->output[pos - 1].type = varType;
-    plan->output[pos - 1].notnull = ind;
-    plan->output[pos - 1].freeable = NULL;
-    plan->output[pos - 1].length = clength;
+        coded_elog(ERROR, 101, "bad value - index must be greater than 0 and less than %d", MAX_ARGS);
+    }
+    /* find the right binder */
+    for (index = 0; index < plan->slots; index++) {
+        if (plan->slot[index].type == TFREE || plan->slot[index].index == pos)
+            break;
+    }
+
+    plan->slot[index].type = TOUTPUT;
+    plan->slot[index].index = pos;
+    plan->slot[index].varType = type;
+    plan->slot[index].userargs = userenv;
+    plan->slot[index].transfer = func;
 
     RELEASE(connection);
 
@@ -531,14 +523,9 @@ WExec(OpaquePreparedStatement plan) {
     Plan *plantree = NULL;
     Query *querytree = NULL;
 
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
-    }
-    
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
+    }    
     if ( connection->stage == TRAN_ABORTONLY ) {
         err = 456;
         SetError(connection, err, "CONTEXT", "context not valid, an error has already occured");
@@ -585,9 +572,8 @@ WExec(OpaquePreparedStatement plan) {
         } else {
             plan->state = CreateExecutorState();
             
-            if (plan->input_count > 0) {
-                FillExecArgs(plan);
-            } else {
+            if (TransferExecArgs(plan) == 0) {
+                pfree(plan->state->es_param_list_info);
                 plan->state->es_param_list_info = NULL;
             }
 
@@ -653,14 +639,9 @@ WFetch(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
     long err;
 
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
-
     READY(connection, err);
 
     int pos = 0;
@@ -694,40 +675,40 @@ WFetch(OpaquePreparedStatement plan) {
    } else {
         HeapTuple tuple = slot->val;
         TupleDesc tdesc = slot->ttc_tupleDescriptor;
+        int pos = 0;
 
-        while (plan->output[pos].index != 0 && pos < plan->output_slots) {
-            Datum val = (Datum) NULL;
-            char isnull = 0;
+        for (pos=0;pos<plan->slots;pos++) {
+            if (plan->slot[pos].type == TOUTPUT) {
+                Datum val = (Datum) NULL;
+                char isnull = 0;
 
-            if (tuple->t_data->t_natts < plan->output[pos].index || plan->output[pos].index <= 0) {
-                coded_elog(ERROR, 104, "no attribute");
-            }
-            if (tuple->t_data->t_natts < pos || pos < 0) {
-                coded_elog(ERROR, 107, "wrong number of attributes");
-            }
-
-            val = HeapGetAttr(tuple, plan->output[pos].index, tdesc, &isnull);
-
-            if (!isnull) {
-                plan->output[pos].freeable = NULL;
-                if (!TransferValue(&plan->output[pos], tdesc->attrs[pos], val)) {
-                    /* field was not transfered, try and coerce to see if it should someday  */
-                    if (can_coerce_type(1, &tdesc->attrs[pos]->atttypid, &plan->output[pos].type)) {
-                        coded_elog(ERROR, 105, "Types are compatible but conversion not implemented link type: %d result type: %d",
-                                plan->output[pos].type, tdesc->attrs[pos]->atttypid);
-                        break;
-                    } else {
-                        coded_elog(ERROR, 106, "Types do not match, no type conversion . position: %d type: %d result type: %d",
-                                pos + 1, plan->output[pos].type, tdesc->attrs[pos]->atttypid);
-                        break;
-                    }
+                if (tuple->t_data->t_natts < plan->slot[pos].index || plan->slot[pos].index <= 0) {
+                    coded_elog(ERROR, 104, "no attribute");
                 }
-                if (plan->output[pos].freeable != NULL) *plan->output[pos].notnull = 2;
-                else *plan->output[pos].notnull = 1; /*  the value is not null */
-            } else {
-                *plan->output[pos].notnull = 0; /*  the value is null */
+                if (tuple->t_data->t_natts < plan->slot[pos].index || plan->slot[pos].index < 0) {
+                    coded_elog(ERROR, 107, "wrong number of attributes");
+                }
+
+                val = HeapGetAttr(tuple, plan->slot[pos].index, tdesc, &isnull);
+
+                if (!isnull) {
+                    if (!TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index], val)) {
+                        Oid vType = plan->slot[pos].varType;
+                        /* field was not transfered, try and coerce to see if it should someday  */
+                        if (can_coerce_type(1, &tdesc->attrs[pos]->atttypid, &vType)) {
+                            coded_elog(ERROR, 105, "Types are compatible but conversion not implemented link type: %d result type: %d",
+                                    plan->slot[pos].varType, tdesc->attrs[plan->slot[pos].index]->atttypid);
+                            break;
+                        } else {
+                            coded_elog(ERROR, 106, "Types do not match, no type conversion . position: %d type: %d result type: %d",
+                                    pos + 1, plan->slot[pos].type, tdesc->attrs[plan->slot[pos].index]->atttypid);
+                            break;
+                        }
+                    }
+                } else {
+                    TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index], PointerGetDatum(NULL));
+                }
             }
-            pos++;
         }
         ExecClearTuple(slot);
         plan->state->es_processed++;
@@ -751,12 +732,9 @@ long
 WPrepare(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
     READY(connection, err);
     if (CheckForCancel()) {
@@ -770,12 +748,9 @@ long
 WCommit(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err;
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
     READY(connection, err);
 
@@ -816,14 +791,9 @@ WRollback(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err;
 
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
-
     READY(connection, err);
 
     if (connection->stage == TRAN_INVALID) {
@@ -849,33 +819,25 @@ WRollback(OpaqueWConn conn) {
 }
 
 int
-ExpandSlots(PreparedPlan* plan, slot_type type) {
-    if ( type == INPUT ) {
-        plan->input = repalloc(plan->input, sizeof(Binder) * plan->input_slots * 2);
-        memset(plan->input + (plan->input_slots),0x00,(sizeof(Binder) * plan->input_slots));
-        plan->input_slots *= 2;
-        return plan->input_slots;
-    } else {
-        plan->output = repalloc(plan->output, sizeof(Output) * plan->output_slots * 2);
-        memset(plan->output + (plan->output_slots),0x00,(sizeof(Output) * plan->output_slots));
-        plan->output_slots *= 2;
-        return plan->output_slots;
+ExpandSlots(PreparedPlan* plan, TransferType type) {
+    int x=plan->slots;
+    plan->slot = repalloc(plan->slot, sizeof(InputOutput) * plan->slots * 2);
+    memset(plan->slot + (plan->slots),0x00,(sizeof(InputOutput) * plan->slots));
+    for (x=plan->slots;x<plan->slots * 2;x++) {
+        plan->slot[x].type = TFREE;
     }
+    plan->slots *= 2;
+    return plan->slots;
 }
 
 long
-WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSize, short *indAdd, int varType, int cType) {
+WBindTransfer(OpaquePreparedStatement plan, const char* var, int type, void* userenv, transferfunc func) {
     WConn connection = SETUP(plan->owner);
     long err = 0;
 
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
-
     READY(connection, err);
 
     /*  remove the marker flag of the named parameter if there is one */
@@ -892,32 +854,29 @@ WBindLink(OpaquePreparedStatement plan, const char *var, void *varAdd, int varSi
     }
 
     /* find the right binder */
-    for (index = 0; index < plan->input_slots; index++) {
-        if (plan->input[index].index == 0 || strcmp(var, plan->input[index].name) == 0)
+    for (index = 0; index < plan->slots; index++) {
+        if (plan->slot[index].type == TFREE || strcmp(var, plan->slot[index].name) == 0)
             break;
     }
 
-    if (index == plan->input_slots) {
-        ExpandSlots(plan,INPUT);
+    if (index == plan->slots) {
+        ExpandSlots(plan,TFREE);
     }
         
-    if ( plan->input[index].index == 0 ) plan->input_count = index+1;
 /*  if the input is now different, we need to re-parse the statement */
-    if ( plan->node_cxt && (plan->input[index].index == 0 || plan->input[index].type != varType) ) {
+    if ( plan->node_cxt && plan->slot[index].index == TFREE ) {
             MemoryContextDelete(plan->node_cxt);
             plan->node_cxt = NULL;
             plan->plantreelist = NULL;
             plan->querytreelist = NULL;
     }
-    plan->input[index].index = index + 1;
-    if ( plan->input[index].name == NULL ) {
-        plan->input[index].name = MemoryContextStrdup(plan->plan_cxt,var);
+    if ( plan->slot[index].name == NULL ) {
+        plan->slot[index].name = MemoryContextStrdup(plan->plan_cxt,var);
     }
-    plan->input[index].varSize = varSize;
-    plan->input[index].type = varType;
-    plan->input[index].ctype = cType;
-    plan->input[index].target = varAdd;
-    plan->input[index].isNotNull = indAdd;
+    plan->slot[index].type = TINPUT;
+    plan->slot[index].varType = type;
+    plan->slot[index].userargs = userenv;
+    plan->slot[index].transfer = func;
     
     RELEASE(connection);
 
@@ -1010,14 +969,9 @@ WGetTransactionId(OpaqueWConn conn) {
     long err = 0;
     long xid = -1;
 
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
-
     READY(connection, err);
 
     if (CheckForCancel()) {
@@ -1039,12 +993,9 @@ WGetCommandId(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
     long cid = -1;
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
     READY(connection, err);
 
@@ -1066,13 +1017,11 @@ long
 WBeginProcedure(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
+
     READY(connection, err);
 
     if (CheckForCancel()) {
@@ -1093,12 +1042,9 @@ long
 WEndProcedure(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     long err = 0;
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
-        char msg[256];
-        err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
-        SetError(connection, err, "CONTEXT", msg);
-        return err;
+
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
     }
     READY(connection, err);
 
@@ -1118,7 +1064,6 @@ WEndProcedure(OpaqueWConn conn) {
 
 void*
 WAllocConnectionMemory(OpaqueWConn conn, size_t size) {
-    
     return AllocMemory(conn, CONNECTION_MEMORY, size);
 }
 
@@ -1289,7 +1234,7 @@ WGetErrorState(OpaqueWConn conn) {
 }
 
 void
-WConnectStdIO(OpaqueWConn conn, void* args, pipefunc in, pipefunc out) {
+WConnectStdIO(OpaqueWConn conn, void* args, transferfunc in, transferfunc out) {
     WConn connection = SETUP(conn);
     long err;
     MemoryContext cxt;
@@ -1346,40 +1291,6 @@ WStreamExec(OpaqueWConn conn, char *statement) {
     WResetQuery(connection,false);
     SetEnv(NULL);
     return err;
-}
-
-Pipe WPipeConnect(OpaqueWConn conn, void* args, pipefunc func) {
-    WConn connection = SETUP(conn);
-    MemoryContext cxt;
-    long err = 0;
-    Pipe pipe = NULL;
-
-    READY(connection, err);
-    cxt = MemoryContextSwitchTo(GetEnvMemoryContext());
-    pipe = ConnectCommBuffer(args, func);
-    MemoryContextSwitchTo(cxt);
-    RELEASE(connection);
-
-    return pipe;
-}
-
-void*
-WPipeDisconnect(OpaqueWConn conn, Pipe pipe) {
-    WConn connection = SETUP(conn);
-    void* userargs;
-    long err = 0;
-
-    READY(connection, err);
-
-    userargs = DisconnectCommBuffer(pipe);
-
-    RELEASE(connection);
-    return userargs;
-}
-
-int
-WPipeSize(OpaqueWConn conn) {
-    return sizeof (CommBuffer);
 }
 
 static void
@@ -1462,11 +1373,10 @@ WResetExecutor(PreparedPlan * plan) {
     plan->fetch_cxt = NULL;    
     plan->stage = STMT_EMPTY;
 }
-
-/* create copies in case underlying buffer goes away  */
 static int
-FillExecArgs(PreparedPlan* plan) {
+TransferExecArgs(PreparedPlan* plan) {
     int k = 0;
+    int inputs = 0;
     MemoryContext old,bind_cxt;
     ParamListInfo paramLI;
 
@@ -1475,85 +1385,62 @@ FillExecArgs(PreparedPlan* plan) {
     bind_cxt = SubSetContextCreate(plan->exec_cxt, "StatementArgumentContext");
     old = MemoryContextSwitchTo(bind_cxt);
 
-    paramLI = (ParamListInfo) palloc((plan->input_count + 1) * sizeof (ParamListInfoData));
+    paramLI = (ParamListInfo) palloc((plan->slots + 1) * sizeof (ParamListInfoData));
 
     plan->state->es_param_list_info = paramLI;
-    for (k = 0; k < plan->input_count; k++) {
-        paramLI->kind = PARAM_NAMED;
-        paramLI->name = plan->input[k].name;
-        paramLI->id = plan->input[k].index;
-        paramLI->type = plan->input[k].type;
-        paramLI->isnull = !(*plan->input[k].isNotNull);
-
-        if (paramLI->isnull) {
-            paramLI->length = 0;
-        } else switch (plan->input[k].ctype) {
+    for (k = 0; k < plan->slots; k++) {
+        if (plan->slot[k].type == TINPUT) {
+            inputs += 1;
+            paramLI->kind = PARAM_NAMED;
+            paramLI->name = plan->slot[k].name;
+            paramLI->id = plan->slot[k].index;
+            
+            switch (plan->slot[k].varType) {
                 case CHAROID:
-                    paramLI->length = 1;
-                    paramLI->value = *(char *) plan->input[k].target;
+                case BOOLOID: {
+                    char value;
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
+                    paramLI->value = CharGetDatum(value);
                     break;
-                case BOOLOID:
-                    paramLI->length = 1;
-                    paramLI->value = *(char *) plan->input[k].target;
+                }
+                case INT4OID: {
+                    int32 value;
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
+                    paramLI->value = Int32GetDatum(value);
                     break;
-                case INT4OID:
-                    paramLI->length = 4;
-                    paramLI->value = *(int *) plan->input[k].target;
-                    break;
+                }
                 case TIMESTAMPOID:
-                    paramLI->length = 8;
-                    paramLI->value = (Datum) PointerGetDatum(plan->input[k].target);
-                    break;
                 case FLOAT8OID:
-                    paramLI->length = 8;
-                    paramLI->value = (Datum) PointerGetDatum(plan->input[k].target);
+                case INT8OID: {
+                    long* value = palloc(8);
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
+                    paramLI->value = PointerGetDatum(value);
                     break;
-                case INT8OID:
-                    paramLI->length = 8;
-                    paramLI->value = (Datum) PointerGetDatum(plan->input[k].target);
+                }
+                case STREAMINGOID: {
+                    CommBuffer* value = ConnectCommBuffer(plan->slot[k].userargs, plan->slot[k].transfer);
+                    paramLI->length = sizeof(CommBuffer);
+                    paramLI->value = PointerGetDatum(value);
                     break;
-                case STREAMINGOID:
-                    paramLI->length = sizeof (CommBuffer); /* -1 == variable size slot */
-                    paramLI->value = (Datum) PointerGetDatum(plan->input[k].target);
-                    break;
+                }
                 case VARCHAROID:
                 case BYTEAOID:
                 case TEXTOID:
                 case BLOBOID:
                 case JAVAOID:
-                default:
-                    /*  EXPERIMENTAL!!! try with no copying  */
-                    if (*(int *) plan->input[k].target < 0) {
-                        paramLI->value = PointerGetDatum(*(void**) ((char*) plan->input[k].target + 4));
-                    } else {
-                        if (*(int *) plan->input[k].target > plan->input[k].varSize) {
-                            strncpy(plan->owner->env->errortext, "binary truncation on input", 255);
-                            longjmp(plan->owner->env->errorContext, 103);
-                        }
-                        paramLI->value = PointerGetDatum(plan->input[k].target);
-                    }
-                    /*
-                     * need to create data copies here b/c the buffer
-                     * holding data may go away after exec
-                     */
-                    /*
-                     * paramLI->value =
-                     * (Datum)connection->input[k].target;
-                     */
-                    /*
-                                    paramLI->value = (Datum) palloc(connection->input[k].varSize + 4);
-                                    memcpy((char *) paramLI->value, connection->input[k].target, connection->input[k].varSize + 4);
-                     */
-                    paramLI->length = (Size) (-1); /* -1 == variable size slot */ /* (*(int*)input[k].targe
-                                                 * t) + 4;  */
+                default: {
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,-1);
+                    char* value = palloc(paramLI->length);
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,paramLI->length);
                     break;
+                }
             }
-        paramLI++;
-
+            paramLI++;
+        }
     }
     paramLI->kind = PARAM_INVALID;
     MemoryContextSwitchTo(old);
-    return 0;
+    return inputs;
 }
 
 static PreparedPlan *
@@ -1562,7 +1449,7 @@ ParsePlan(PreparedPlan* plan) {
     List* plantree_list = NULL;
     Oid*    targs = NULL;
     char**  names = NULL;
-    int x;
+    int count = 0;
 
     MemoryContext old;
     /* parse out a new query and setup plan  */
@@ -1573,15 +1460,20 @@ ParsePlan(PreparedPlan* plan) {
 						  ALLOCSET_DEFAULT_INITSIZE,
 						  ALLOCSET_DEFAULT_MAXSIZE);
         old = MemoryContextSwitchTo(plan->node_cxt);
-        if ( plan->input_count > 0 ) {
-            targs = palloc(sizeof(Oid) * plan->input_count);
-            names = palloc(sizeof(char*) * plan->input_count);
-            for (x=0;x<plan->input_count;x++) {
-                targs[x] = plan->input[x].type;
-                names[x] = plan->input[x].name;
+        if ( plan->slots > 0 ) {
+            int k = 0;
+            targs = palloc(sizeof(Oid) * plan->slots);
+            names = palloc(sizeof(char*) * plan->slots);
+
+            for (k=0;k<plan->slots;k++) {
+                if (plan->slot[k].type == TINPUT) {
+                    targs[count] = plan->slot[k].varType;
+                    names[count] = plan->slot[k].name;
+                    count += 1;
+                }
             }
         }
-        querytree_list = pg_parse_and_rewrite(plan->statement, targs, names, plan->input_count, FALSE);
+        querytree_list = pg_parse_and_rewrite(plan->statement, targs, names, count, FALSE);
         if (!querytree_list) {
             elog(ERROR, "parsing error");
         }  
@@ -1606,4 +1498,16 @@ ParsePlan(PreparedPlan* plan) {
         MemoryContextSwitchTo(old);
     }
     return plan;
+}
+
+short CheckThreadContext(WConn connection) {
+    long err;
+    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
+        char msg[256];
+        err = 454;
+        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
+        SetError(connection, err, "CONTEXT", msg);
+        return 1;
+    }
+    return 0;
 }

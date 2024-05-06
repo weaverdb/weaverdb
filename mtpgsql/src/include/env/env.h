@@ -182,10 +182,9 @@ typedef struct commbuffer {
 /*  allows us to set the buffer information as indirect if passing around as Datum  */
     int                 header;   
     void*                args;
-    int			(*pipe)(void* args,char* buffer,int start,int run);
+    int			(*pipe)(void* args,int varType, void* buffer,int run);
 } CommBuffer;
-/* defined in env.c  */
-typedef int (*commfunc)(void*, char*, int, int);
+
 #define COMM_ERROR  -2
 
 extern pthread_condattr_t	process_cond_attr;
@@ -257,7 +256,7 @@ void ptimeout(struct timespec* ts,int to);
 
 void user_log(char* pattern, ...);
 
-CommBuffer* ConnectCommBuffer(void* args,commfunc mover);
+CommBuffer* ConnectCommBuffer(void* args,int (*mover)(void*, int, void*, int));
 void* DisconnectCommBuffer(CommBuffer* buffer);
 
 #ifdef __cplusplus

@@ -32,26 +32,20 @@
 #include "utils/palloc.h"
 #include "utils/portal.h"
 
-typedef struct output {
-	short   index;
-	void*   target;
-	int	 size;
-	Oid	 type;
-        void*    freeable;
-	short*  notnull;
-	int*	length;
-} Output;
+typedef enum ttype {
+    TFREE,
+    TINPUT,
+    TOUTPUT
+} TransferType;
 
-typedef struct input {
-	short 	index;
-	char*	name;
-	int 	varSize;
-	Oid 	type;
-	int 	ctype;
-	short*  isNotNull;
-	void*	target;
-} Binder;
-
+typedef struct inout {
+    TransferType type;
+    int     index;
+    char*   name;
+    int     varType;
+    void*   userargs;
+    transferfunc  transfer;
+} InputOutput;
 
 typedef enum stage {
 	TRAN_BEGIN,
@@ -111,12 +105,9 @@ typedef struct preparedplan {
         QueryDesc*	qdesc;
         int             processed;
 
-        short            input_count;
-        short            input_slots;
-        short            output_slots;
-        
-    Binder*		input;
-    Output*		output;
+        short           slots;
+
+    InputOutput*        slot;
 
     OpaquePreparedStatement   next;
 } PreparedPlan;
@@ -129,7 +120,7 @@ LIB_EXTERN void  WResetExecutor(PreparedPlan* plan);
 LIB_EXTERN void WResetQuery(WConn conn,bool err);
 
 LIB_EXTERN bool
-TransferValue(Output* output, Form_pg_attribute desc, Datum value);
+TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value);
 #ifdef __cplusplus
 }
 #endif

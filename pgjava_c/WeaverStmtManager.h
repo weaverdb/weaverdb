@@ -32,9 +32,6 @@ typedef struct bindObj * Input;
 typedef struct WeaverConnectionManager* ConnMgr;
 typedef struct WeaverStmtManager* StmtMgr;
 
-typedef int (*outputfunc)(StmtMgr , int type, void* value, int length, void* userarg, void* funcarg);
-typedef int (*inputfunc)(StmtMgr , int type, void* userarg);
-
 ConnMgr CreateWeaverConnection(const char* name, const char * paslong, const char* connect);
 void DestroyWeaverConnection( ConnMgr );
 
@@ -60,9 +57,7 @@ short EndProcedure( ConnMgr );
 
 short UserLock(ConnMgr, StmtMgr , const char* grouptolock,uint32_t val,char lock);
 
-Pipe     PipeConnect(ConnMgr ,StmtMgr , void* args, pipefunc func);
-void*    PipeDisconnect(ConnMgr ,StmtMgr , Pipe comm);
-void     ConnectStdIO(ConnMgr ,void* args,pipefunc pipein,pipefunc pipeout);
+void     ConnectStdIO(ConnMgr ,void* args,transferfunc pipein,transferfunc pipeout);
 void     DisconnectStdIO(ConnMgr );
 
 short StreamExec(ConnMgr ,char* statement);
@@ -71,21 +66,8 @@ short ParseStatement(ConnMgr, StmtMgr ,const char* statement);
 short Fetch( ConnMgr, StmtMgr  );
 long Count( StmtMgr  );
 
-Input SetInputValue(ConnMgr, StmtMgr , const char * vari, short type, void* value, int length);
-Output SetOutputValue(ConnMgr, StmtMgr , int index, short type, void* value, int length);
-
-void* SetUserspace(Bound bound, void* user);
-
-Output OutputLink(ConnMgr, StmtMgr , int index, short type);
-short GetOutputs(StmtMgr , void* funcargs, outputfunc func);
-
-short DisconnectPipes(ConnMgr, StmtMgr);
-void ClearData(StmtMgr );
-
-short SetStatementSpaceSize(ConnMgr, StmtMgr ,long size);
-short SetStatementBlobSize(ConnMgr, StmtMgr ,long size);
-long  GetStatementSpaceSize(StmtMgr );
-long  GetStatementBlobSize(StmtMgr );
+Input LinkInput(ConnMgr conn, StmtMgr mgr, const char* var, short type, void* data, transferfunc func);
+Output LinkOutput(ConnMgr conn, StmtMgr mgr, int index, short type, void* data, transferfunc func);
 
 short DelegateError(StmtMgr ,const char* state,const char* text,int code);
 short CheckForErrors(ConnMgr, StmtMgr );

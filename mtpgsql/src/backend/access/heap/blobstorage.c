@@ -891,12 +891,11 @@ span_buffered_blob(Relation rel, HeapTuple tuple)
                 Relation storerel = find_storage_relation(rel,tuple,atts->attrs[c]->attnum);
                 LockRelation(storerel,AccessShareLock);
 
-                com = palloc(sizeof(CommBuffer));
-                memcpy(com,DatumGetPointer(blob),sizeof(CommBuffer));
+                com = *(CommBuffer**)DatumGetPointer(blob);
                 append = palloc(bufsz);
 
                 Datum write = open_write_pipeline_blob(storerel);
-                while ( (len=com->pipe(com->args,VARDATA(append),0,bufsz - VARHDRSZ)) >= 0 ) {
+                while ( (len=com->pipe(com->args,atts->attrs[c]->atttypid,VARDATA(append),bufsz - VARHDRSZ)) >= 0 ) {
                     if ( len > 0 ) {
                         SETVARSIZE(append,len + VARHDRSZ);
                         write_pipeline_segment_blob(write,append);

@@ -30,7 +30,6 @@ all:
 	$(MAKE) -C backend all
 	$(MAKE) -C interfaces all
 	$(MAKE) -C bin all
-	$(MAKE) -C ../../pgjava_c all
 	@if test $@. = all. -o $@. = .; then \
 	echo All of PostgreSQL is successfully made.  Ready to install. ;\
         fi
@@ -43,7 +42,6 @@ install: installdirs
 	$(MAKE) -C interfaces install
 	$(MAKE) -C bin install
 	$(MAKE) -C scripts install
-	$(MAKE) -C ../../pgjava_c install
 	tar cvf $(POSTGRESDIR).tar $(POSTGRESDIR)
 	bzip2 $(POSTGRESDIR).tar
 
@@ -55,7 +53,6 @@ clean:
 	$(MAKE) -C backend clean
 	$(MAKE) -C interfaces clean
 	$(MAKE) -C bin clean
-	$(MAKE) -C ../../pgjava_c clean
 	rm -Rf tools
 	rm -rf $(POSTGRESDIR)
 	rm $(POSTGRESDIR).tar.bz2
@@ -71,7 +68,6 @@ installclean:
 	$(MAKE) -C backend $@
 	$(MAKE) -C interfaces $@
 	$(MAKE) -C bin $@
-	$(MAKE) -C ../../pgjava_c $@
 	@if test $@. = all. -o $@. = .; then \
 	echo All of PostgreSQL is successfully made.  Ready to install. ;\
         fi

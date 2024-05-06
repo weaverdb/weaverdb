@@ -69,8 +69,8 @@ typedef struct javacache {
 
 javacache* CreateCache(JNIEnv* env);
 javacache* DropCache(JNIEnv* env);
-int PassInValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name,short type,jobject object);
-int PassResults(JNIEnv* env, ConnMgr conn, StmtMgr mgr);
+int PassInValue(JNIEnv* env,short type,jobject object,void* data, int length);
+int PassOutValue(JNIEnv* env,short type,jobject object,void* data, int length);
 
 #ifdef	__cplusplus
 }

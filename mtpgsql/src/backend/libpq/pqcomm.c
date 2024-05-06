@@ -87,7 +87,7 @@ typedef struct commcursor {
         int                     end;
         int                     size;
         void*                   args;
-        int                     (*datamove)(void*, char*, int, int);    
+        int                     (*datamove)(void*, int, void*, int);    
         char                    buffer[PQ_BUFFER_SIZE];
 } CommCursor;
 
@@ -226,7 +226,7 @@ pq_recvbuf(void)
     {
         int			r;
 
-        r = cursor->datamove(cursor->args,cursor->buffer,cursor->end,cursor->size - cursor->end);
+        r = cursor->datamove(cursor->args, 0, cursor->buffer + cursor->end,cursor->size - cursor->end);
 
 
         if (r < 0)
@@ -404,7 +404,7 @@ pq_flush(void)
         Env* env = GetEnv();
 	CommCursor* cursor = (CommCursor*)env->pipeout;
 	if ( cursor == NULL ) return -1;
-        cursor->datamove(cursor->args,cursor->buffer,cursor->ptr,cursor->end - cursor->ptr);
+        cursor->datamove(cursor->args, 0, cursor->buffer + cursor->ptr,cursor->end - cursor->ptr);
         cursor->ptr = 0;
         cursor->end = 0;
 	return 0;
@@ -473,7 +473,7 @@ pq_endcopyout(bool errorAbort)
 	SetCopyout(false);
 }
 
-extern void ConnectIO(void* args, commfunc infunc,commfunc outfunc) {
+extern void ConnectIO(void* args, int (*infunc)(void*, int, void*, int),int (*outfunc)(void*, int, void*, int)) {
     Env*     env = GetEnv();
     
     if ( env->pipein != NULL || env->pipeout != NULL ) {
@@ -503,7 +503,7 @@ extern void* DisconnectIO() {
     if ( env->pipein != NULL ) {
         CommCursor* comm = (CommCursor*)env->pipein;
         if (comm->ptr < comm->end) {
-            if ( comm->datamove(comm->args, comm->buffer, comm->ptr, comm->end - comm->ptr) == COMM_ERROR ) {
+            if ( comm->datamove(comm->args, 0, comm->buffer + comm->ptr,comm->end - comm->ptr) == COMM_ERROR ) {
                 elog(ERROR,"piping error occurred");
             }
         }
@@ -513,7 +513,7 @@ extern void* DisconnectIO() {
     if ( env->pipeout != NULL ) {
         CommCursor* comm = (CommCursor*)env->pipeout;
         if (comm->ptr < comm->end) {
-            if ( comm->datamove(comm->args, comm->buffer, comm->ptr, comm->end - comm->ptr) == COMM_ERROR ) {
+            if ( comm->datamove(comm->args, 0, comm->buffer + comm->ptr, comm->end - comm->ptr) == COMM_ERROR ) {
                 elog(ERROR,"piping error occurred");
             }
         }

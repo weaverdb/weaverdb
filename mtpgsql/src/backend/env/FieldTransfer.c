@@ -23,8 +23,7 @@
 #include "parser/parserinfo.h"
 
 static void
-StreamOutValue(Output* output,Datum val) {
-    CommBuffer* pipe = output->target;
+StreamOutValue(InputOutput* dest, Datum val, Oid type) {
     if ( ISINDIRECT(val) ) {
         int buf_sz = (sizeof_max_tuple_blob() * 5);
         void* buffer = palloc(buf_sz);
@@ -33,144 +32,107 @@ StreamOutValue(Output* output,Datum val) {
         Datum pointer = open_read_pipeline_blob(val,false);
         while (read_pipeline_segment_blob(pointer,buffer,&length,buf_sz) ) {
             Assert(length > 0);
-            if ( pipe->pipe(pipe->args,buffer,0,length) == COMM_ERROR) {
+            if ( dest->transfer(dest->userargs,type,buffer,length) == COMM_ERROR) {
                 elog(ERROR,"piping error occurred");
             }
         }
         close_read_pipeline_blob(pointer);
         pfree(buffer);
     } else {
-        if ( pipe->pipe(pipe->args,VARDATA((bytea*)val),0,VARSIZE((bytea*)val) - VARHDRSZ)  ==COMM_ERROR ) {
+        if ( dest->transfer(dest->userargs,type,VARDATA((bytea*)val),VARSIZE((bytea*)val) - VARHDRSZ)  ==COMM_ERROR ) {
             elog(ERROR,"piping error occurred");
         }
     }    
 }
 
 static void
-ConvertValueToText(Output* output,Oid type,int4 typmod, Datum val) {
+ConvertValueToText(InputOutput* output,Oid type,int4 typmod, Datum val) {
         Oid             foutoid,
                         typelem;
         char           *texto;
-        int             textlen;
-        char*           target = output->target;
 
         if (!getTypeOutAndElem(type, &foutoid, &typelem)) {
             coded_elog(ERROR,108,"type conversion error");
         }
         texto = (char *) (fmgr(foutoid, val, typelem,typmod));
 
-        textlen = strlen(texto);
-        if (textlen > output->size) {
-            output->freeable = palloc(textlen);
-            *(void**)output->target = output->freeable;
-            target = output->freeable;
-        } 
-        *output->length = textlen;
-        memcpy(target, texto, textlen);
+        output->transfer(output->userargs, type,texto,strlen(texto));
 }
 
 static void
-BinaryCopyOutValue(Output* output, Form_pg_attribute desc, Datum value) {
-    char* target = output->target;
-    
+BinaryCopyOutValue(InputOutput* output, Form_pg_attribute desc, Datum value) {
     if (desc->attlen > 0) {
-        if (desc->attlen > output->size) {
-            output->freeable = palloc(desc->attlen);
-            *(void**)output->target = output->freeable;
-            target = output->freeable;
-        }
         if (desc->attbyval) {
-                *output->length = desc->attlen;
-                memcpy(target, (void *)&(value), desc->attlen);
+            output->transfer(output->userargs, desc->atttypid, (void *)&(value), desc->attlen);
         } else {
-                *output->length = desc->attlen;
-                memcpy(target, (void *)DatumGetPointer(value), desc->attlen);
+            output->transfer(output->userargs, desc->atttypid, (void *)DatumGetPointer(value), desc->attlen);
         }
     } else {
         if ( ISINDIRECT(value) ) {
             int size = sizeof_indirect_blob(value);
             int length = 0;
             int moved = 0;
-
-            if (size > output->size ) {
-                output->freeable = palloc(size);
-                *(void**)output->target = output->freeable;
-                target = output->freeable;
-            } 
+            int buf_sz = (sizeof_max_tuple_blob() * 5);
+            void* buffer = palloc(buf_sz);
 
             Datum pointer = open_read_pipeline_blob(value,false);
-            while (read_pipeline_segment_blob(pointer,target,&length,output->size - moved) ) {
+            char* target = palloc(size);
+            while (read_pipeline_segment_blob(pointer,buffer,&length,buf_sz) ) {
                 Assert(length > 0);
-                moved += length;
-                target += length;
+                output->transfer(output->userargs, desc->atttypid, buffer, length);
             }
-
             close_read_pipeline_blob(pointer);
-      /* last iteration of pipeline read needs to be added to length */
-            *output->length = moved + length;
+            pfree(buffer);
         } else {
-            if (VARSIZE(value) - 4 > output->size) {
-                output->freeable = palloc(VARSIZE(value) - 4);
-                *(void**)output->target = output->freeable;
-                target = output->freeable;
-            }
-            *output->length = VARSIZE(value) - 4;
-            memcpy(target, VARDATA(value), VARSIZE(value) - 4);
+            output->transfer(output->userargs, desc->atttypid, VARDATA(value), VARSIZE(value) - 4);
         }
     }
 }
 
 static void
-DirectIntCopyValue(Output* output, Datum value) {
-    *(int32_t*)output->target = DatumGetInt32(value);
-    *output->length = 4;
+DirectIntCopyValue(InputOutput* output, Datum value) {
+    int32 val = DatumGetInt32(value);
+    output->transfer(output->userargs, INT4OID, &val, 4);
 }
 
 static void
-DirectFloatCopyValue(Output* output, Datum value) {
-    *(float32*)output->target = DatumGetFloat32(value);
-    *output->length = 4;
+DirectFloatCopyValue(InputOutput* output, Datum value) {
+    float32 val = DatumGetFloat32(value);
+    output->transfer(output->userargs, FLOAT4OID, &val, 4);
 }
 
 static void
-DirectCharCopyValue(Output* output, Datum value) {
-    *(char*)output->target = DatumGetChar(value);
-    *output->length = 1;
+DirectCharCopyValue(InputOutput* output, Datum value) {
+    char val = DatumGetChar(value);
+    output->transfer(output->userargs, CHAROID, &val, 1);
 }
  
 static void
-IndirectLongCopyValue(Output* output, Datum value) {
-    *(int64_t *) output->target = *(int64_t *)DatumGetPointer(value);
-    *output->length = 8;
+IndirectLongCopyValue(InputOutput* output, Datum value) {
+    output->transfer(output->userargs, INT8OID, DatumGetPointer(value), 8);
 }
 
 static void
-DirectLongCopyValue(Output* output,long value) {
-    *(int64_t*) output->target = value;
-    *output->length = 8;
+DirectLongCopyValue(InputOutput* output,long value) {
+    output->transfer(output->userargs, INT8OID, &value, 8);
 }
 
 static void
-IndirectDoubleCopyValue(Output* output, Datum value) {
-    *(double *) output->target = *(double *)DatumGetPointer(value);
-    *output->length = 8;
+IndirectDoubleCopyValue(InputOutput* output, Datum value) {
+    output->transfer(output->userargs, FLOAT8OID, DatumGetPointer(value), 8);
 }
 
 static void
-DirectDoubleCopyValue(Output* output, double value) {
-    *(double *) output->target = value;
-    *output->length = 8;
+DirectDoubleCopyValue(InputOutput* output, double value) {
+    output->transfer(output->userargs, FLOAT8OID, &value, 8);
 }
 
 bool
-TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
-    if ( *output->notnull < 0 ) {
-        elog(ERROR,"Output variable is no longer valid");
-    }
+TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value) {
     if (desc->atttypid != output->type) {
-        switch (output->type) {
+        switch (output->varType) {
             case STREAMINGOID:
-                StreamOutValue(output,value);
+                StreamOutValue(output,value,desc->atttypid);
                 break;
             case CHAROID:
             case VARCHAROID:
@@ -236,7 +198,7 @@ TransferValue(Output* output, Form_pg_attribute desc, Datum value) {
                 BinaryCopyOutValue(output,desc,value);
                 break;
             case STREAMINGOID: 
-                StreamOutValue(output,value);
+                StreamOutValue(output,value,desc->atttypid);
                 break;
             default:
                 return false;

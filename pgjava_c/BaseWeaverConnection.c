@@ -62,10 +62,12 @@ typedef struct commargs {
     jobject  target;
 } CommArgs;
 
-static int pipeout(void* args,char* buff,int start,int run);
-static int pipein(void* args,char* buff,int start,int run);
-static int direct_pipeout(void* args,char* buff,int start,int run);
-static int direct_pipein(void* args,char* buff,int start,int run);
+static int transferin(void* arg,int type, void* buff,int run);
+static int transferout(void* arg,int type, void* buff,int run);
+static int pipeout(void* args,int type,void* buff,int run);
+static int pipein(void* args,int type, void* buff,int run);
+static int direct_pipeout(void* args,int type,void* buff,int run);
+static int direct_pipein(void* args,int type,void* buff,int run);
 
 #define GETSTMT(pointer) ((StmtMgr)pointer)
 
@@ -76,8 +78,8 @@ static void  checkError(JNIEnv* env,jobject talker,StmtMgr link);
 static jint  reportError(JNIEnv* env,jobject talker,jlong code, const char* text, const char* state);
 static int   translateType(jint type);
 
-static void setInputLink(JNIEnv* env, jobject talker, jlong link, jobject boundInput);
-static void setOutputLink(JNIEnv* env, jobject talker, jlong link, jobject boundOutput);
+static void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace);
+static void setOutputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace);
 
 static ConnMgr allocateWeaver(JNIEnv* env,jstring username,jstring password,jstring database);
 
@@ -198,18 +200,17 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
         return (jlong)base;
 }
 
-void setInputLink(JNIEnv *env, jobject talkerObject, jlong linkid, jobject boundIn)
+void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace)
 {
  	char        var[64];
         jsize       varsize = 0;
-        Input        bound;
-        short       type = translateType((*env)->CallIntMethod(env, boundIn, Cache->itypeid));
+        short       type = translateType((*env)->CallIntMethod(env, userspace->target, Cache->itypeid));
 
         ConnMgr        conn = getConnMgr(env, talkerObject);
         StmtMgr        base = GETSTMT(linkid);
-        
-        jstring theVar = (*env)->GetObjectField(env, boundIn, Cache->iname);
-        jobject value = (*env)->GetObjectField(env, boundIn, Cache->ivalue);
+//  don't need a local ref
+//  root object is held
+        jstring theVar = (*env)->GetObjectField(env, userspace->target, Cache->iname);
     
 	varsize = (*env)->GetStringLength(env,theVar);	
 	if ( varsize > 63 ) {
@@ -220,38 +221,22 @@ void setInputLink(JNIEnv *env, jobject talkerObject, jlong linkid, jobject bound
 	(*env)->GetStringUTFRegion(env,theVar,0, varsize, var); 		
 	var[varsize] = 0;
         
-        if ( (*env)->IsSameObject(env,value,NULL) ) {
-            bound = SetInputValue(conn, base,var,type,NULL,0);
-        } else if ( type == STREAMTYPE ) {
-            Pipe pipe = PipeConnect(conn,base,boundIn,direct_pipein);
-            bound = SetInputValue(conn, base,var,type,pipe, -1); /*  -1 length means use the maxlength for the type */
-            SetUserspace(InputToBound(bound),pipe);
-        } else {
-            PassInValue(env,conn, base,var,type,value);
-        }
+        LinkInput(conn,base,var,type,userspace,transferin);
 //  report errors
 	checkError(env,talkerObject,base);
 }
 
-void setOutputLink(JNIEnv *env, jobject talkerObject, jlong linkid, jobject boundOut)
+void setOutputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace)
 {
-    Output bound = NULL;
-    short type = translateType((*env)->CallIntMethod(env, boundOut, Cache->otypeid));
+    short type = translateType((*env)->CallIntMethod(env, userspace->target, Cache->otypeid));
     //	get proper agent
-    jint index = (*env)->GetIntField(env, boundOut, Cache->oindex);
+    jint index = (*env)->GetIntField(env, userspace->target, Cache->oindex);
 
     ConnMgr        conn = getConnMgr(env, talkerObject);
     StmtMgr base = GETSTMT(linkid);
     
-// check for valid link
-        if ( type == STREAMTYPE ) {
-            Pipe pipe = PipeConnect(conn,base,boundOut,direct_pipeout);
-            bound = SetOutputValue(conn,base,index,type,pipe,-1);
-            SetUserspace(OutputToBound(bound),pipe);
-        } else {
-            bound = OutputLink(conn, base,index,type);
-            SetUserspace(OutputToBound(bound),boundOut);
-        }
+    LinkOutput(conn,base,index,type,userspace,transferout);
+
 //  report errors
 	checkError(env,talkerObject,base);
 }
@@ -264,17 +249,18 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_executeStatement
 //	get proper agent	
     ConnMgr conn = getConnMgr(env, talkerObject);
     StmtMgr ref = GETSTMT(linkid);
-             
+    
      jsize inSize = (*env)->GetArrayLength(env, inputs);
+     CommArgs callData[inSize];
      for (x=0;x<inSize;x++) {
         jobject instep = (*env)->GetObjectArrayElement(env, inputs, x);
-        setInputLink(env, talkerObject, linkid, instep);
+        callData[x].env = env;
+        callData[x].target = instep;
+        setInputLink(env, talkerObject, linkid, &callData[x]);
      }     
 // exec
     short result = Exec(conn, ref);
     
-    DisconnectPipes(conn, ref);
-
     if ( result ) {
 // report errors
         checkError(env,talkerObject,ref);
@@ -294,18 +280,19 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
     StmtMgr ref = GETSTMT(linkid);
 
      jsize inSize = (*env)->GetArrayLength(env, outputs);
+     CommArgs callData[inSize];
      for (x=0;x<inSize;x++) {
-        jobject step = (*env)->GetObjectArrayElement(env, outputs, x);
-        setOutputLink(env, talkerObject, linkid, step);
-     }     
+        jobject instep = (*env)->GetObjectArrayElement(env, outputs, x);
+        callData[x].env = env;
+        callData[x].target = instep;
+        setOutputLink(env, talkerObject, linkid, &callData[x]);
+    }
 
     short result = Fetch(conn, ref);
 
 //	fetch        
 //  pass results to java if there are no errors
-    if ( !result ) {
-        PassResults(env, conn, ref);
-    } else {
+    if ( result ) {
 // report errors
         if ( GetErrorCode(conn, ref) != 0 ) {
             if ( GetErrorCode(conn, ref) == 102 ) {
@@ -316,7 +303,6 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
         }
     }
 
-    DisconnectPipes(conn, ref);
     return (!result) ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -505,7 +491,7 @@ static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
 }
 
 
-static int direct_pipeout(void* arg,char* buff,int start,int run)
+static int direct_pipeout(void* arg,int type, void* buff,int run)
 {
     JNIEnv*  env = NULL;
     jobject target = arg;
@@ -517,7 +503,7 @@ static int direct_pipeout(void* arg,char* buff,int start,int run)
         return PIPING_ERROR;
     }
 
-    jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
+    jobject jb = (*env)->NewDirectByteBuffer(env,buff,run);
     
     if ( jb != NULL ) {
     	(*env)->CallVoidMethod(env,target,Cache->pipeout,jb);
@@ -534,7 +520,55 @@ static int direct_pipeout(void* arg,char* buff,int start,int run)
     }
 }
 
-static int direct_pipein(void* arg,char* buff,int start,int run)
+static int transferin(void* arg,int type, void* buff,int run)
+{
+    CommArgs* comm = arg;
+    JNIEnv*  env = comm->env;
+    jobject target = comm->target;
+        
+    (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
+    
+    if ((*env)->IsSameObject(env,target,NULL)) {
+        return PIPING_ERROR;
+    }
+    jobject value = (*env)->GetObjectField(env, target, Cache->ivalue);
+
+    if ((*env)->IsSameObject(env,target,NULL)) {
+        return 0;
+    }
+
+    if (type == STREAMTYPE) {
+        return direct_pipein(arg,type,buff,run);
+    } else {
+        return PassInValue(env,type,value,buff, run);
+    }
+}
+
+static int transferout(void* arg,int type, void* buff,int run)
+{
+    CommArgs* comm = arg;
+    JNIEnv*  env = comm->env;
+    jobject target = comm->target;
+        
+    (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
+    
+    if ((*env)->IsSameObject(env,target,NULL)) {
+        return PIPING_ERROR;
+    }
+
+    jobject value = (*env)->GetObjectField(env, target, Cache->ovalue);
+
+    if ((*env)->IsSameObject(env,target,NULL)) {
+        return 0;
+    }
+    if (type == STREAMTYPE) {
+        return direct_pipeout(arg,type,buff,run);
+    } else {
+        return PassOutValue(env,type,value,buff, run);
+    }
+}
+
+static int direct_pipein(void* arg,int type, void* buff,int run)
 {
     JNIEnv*  env = NULL;
     jobject target = arg;
@@ -546,7 +580,7 @@ static int direct_pipein(void* arg,char* buff,int start,int run)
         return PIPING_ERROR;
     }
 
-    jobject jb = (*env)->NewDirectByteBuffer(env,buff + start,run);
+    jobject jb = (*env)->NewDirectByteBuffer(env,buff,run);
 
     if ( jb != NULL ) {
     	jint count = (*env)->CallIntMethod(env,target,Cache->pipein,jb);
@@ -564,7 +598,7 @@ static int direct_pipein(void* arg,char* buff,int start,int run)
     }
 }
 
-static int pipeout(void* args,char* buff,int start,int run)
+static int pipeout(void* args,int type, void* buff,int run)
 {
     CommArgs*  commargs = args;
     JNIEnv*    env = commargs->env;
@@ -579,7 +613,7 @@ static int pipeout(void* args,char* buff,int start,int run)
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
     if ( jb != NULL ) {
-    	(*env)->SetByteArrayRegion(env,jb,0,run,(jbyte*)(buff + start));
+    	(*env)->SetByteArrayRegion(env,jb,0,run,(jbyte*)(buff));
     	(*env)->CallVoidMethod(env,target,Cache->infoout,jb);
         if ( (*env)->ExceptionOccurred(env) ) {
             return PIPING_ERROR;
@@ -594,7 +628,7 @@ static int pipeout(void* args,char* buff,int start,int run)
     }
 }
 
-static int pipein(void* args,char* buff,int start,int run)
+static int pipein(void* args,int type, void* buff,int run)
 {
     CommArgs*  commargs = args;
     JNIEnv*    env = commargs->env;
@@ -614,7 +648,7 @@ static int pipein(void* args,char* buff,int start,int run)
             return PIPING_ERROR;
         }
         if ( count > 0 ) {
-            (*env)->GetByteArrayRegion(env,jb,0,count,(jbyte*)(buff + start));
+            (*env)->GetByteArrayRegion(env,jb,0,count,(jbyte*)(buff));
         }
     	return count;
     } else {

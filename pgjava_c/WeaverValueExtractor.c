@@ -17,16 +17,16 @@ static javacache CachedClasses;
 
 static javacache*  Cache = &CachedClasses;
 
-static void ExtractIntValue(JNIEnv* env, ConnMgr conn, StmtMgr mgr,char* name, short type,  jobject target);
-static void ExtractStringValue(JNIEnv* env, ConnMgr conn, StmtMgr mgr,char* name, short type, jobject target);
-static void ExtractCharacterValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name, short type, jobject target);
-static void ExtractBooleanValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name, short type, jobject target);
-static void ExtractDoubleValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name, short type, jobject target);
-static void ExtractLongValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name, short type, jobject target);
-static void ExtractDateValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type, jobject target);
-static void ExtractByteArrayValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name, short type,jobject target);
-static void ExtractBytes(JNIEnv* env, ConnMgr conn, StmtMgr mgr,char* name, short type,jbyteArray target);
-static int PassOutValue(StmtMgr , int , void* , int , void* , void*  );
+static int ExtractIntValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractStringValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractCharacterValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractBooleanValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractDoubleValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractLongValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractDateValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractByteArrayValue(JNIEnv* env, short type,  jobject target, void* data, int len);
+static int ExtractBytes(JNIEnv* env,short type,jbyteArray target, void* data, int len);
+static int MoveData(void* dest, const void* src, int len);
 
 javacache*  CreateCache(JNIEnv* env) {
 	/* exceptions  */
@@ -107,43 +107,44 @@ javacache*  DropCache(JNIEnv* env) {
         return &CachedClasses;
 }
 
-int PassInValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type, jobject data) {
+int PassInValue(JNIEnv* env,short type,jobject object,void* data, int length) {
     if ( (*env)->IsSameObject(env,NULL,data) ) {
-        SetInputValue(conn, mgr,name,type,NULL,0);
+        return 0;
     } else {
 	switch( type )
 	{
             case INT4TYPE:
-                ExtractIntValue(env,conn, mgr,name,type,data);
+                return ExtractIntValue(env,type,object,data,length);
                 break;
             case VARCHARTYPE:
-                ExtractStringValue(env,conn, mgr,name,type,data);
+                return ExtractStringValue(env,type,object,data,length);
                 break;
             case CHARTYPE:
-                ExtractCharacterValue(env,conn, mgr,name,type,data);
+                return ExtractCharacterValue(env,type,object,data,length);
                 break;
             case BOOLTYPE:
-                ExtractBooleanValue(env,conn, mgr,name,type,data);
+                return ExtractBooleanValue(env,type,object,data,length);
                 break;
             case BYTEATYPE:
-                ExtractByteArrayValue(env,conn, mgr,name,type,data);
+                return ExtractByteArrayValue(env,type,object,data,length);
                 break;
             case TIMESTAMPTYPE:
-                ExtractDateValue(env,conn, mgr,name,type,data);
+                return ExtractDateValue(env,type,object,data,length);
                 break;
             case DOUBLETYPE:
-                ExtractDoubleValue(env,conn, mgr,name,type,data);
+                return ExtractDoubleValue(env,type,object,data,length);
                 break;
             case LONGTYPE:
-                ExtractLongValue(env,conn, mgr,name,type,data);
+                return ExtractLongValue(env,type,object,data,length);
                 break;
             case BLOBTYPE:
             case TEXTTYPE:
             case SLOTTYPE:
             case JAVATYPE:
-                ExtractByteArrayValue(env,conn, mgr,name,type,data);
+                return ExtractByteArrayValue(env,type,object,data,length);
                 break;
             case STREAMTYPE:
+                /* should not get here */
                 break;
             default:
                 break;
@@ -152,22 +153,24 @@ int PassInValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type, j
     return 0;
 }
 
-void
-ExtractIntValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name, short type, jobject target) {
+int
+ExtractIntValue(JNIEnv* env,short type, jobject target, void* data, int len) {
     if ((*env)->IsInstanceOf(env,target,Cache->inttype)) {
         union {
             char    buffer[4];
             jint    val;
         }   convert;
         convert.val = (*env)->CallIntMethod(env,target,Cache->intvalue);
-        SetInputValue(conn, mgr, name, type, convert.buffer,4);
+        MoveData(data,convert.buffer,4);
+        return 4;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Number");    
     }
+    return 0;
 }
 
-void
-ExtractStringValue(JNIEnv* env, ConnMgr conn, StmtMgr mgr,char* name, short type,jobject data) {
+int
+ExtractStringValue(JNIEnv* env,short type, jobject target, void* data, int max) {
     jsize           len = 0;
     jstring         value;
     const char*          buffer;
@@ -179,44 +182,50 @@ ExtractStringValue(JNIEnv* env, ConnMgr conn, StmtMgr mgr,char* name, short type
 
         len = (*env)->GetStringUTFLength(env,value);
         buffer = (*env)->GetStringUTFChars(env,(jstring)data,&copy);
-        SetInputValue(conn, mgr,name,type,(void*)buffer,len);
+        MoveData(data,buffer,len);
 
         (*env)->ReleaseStringUTFChars(env,data,buffer);    
+        return len;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a String");    
     }
+    return 0;
 }
 
-void
-ExtractCharacterValue(JNIEnv* env, ConnMgr conn, StmtMgr mgr, char* name, short type, jobject target) {
+int
+ExtractCharacterValue(JNIEnv* env,short type, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->chartype) ) {
         union {
             char buffer[1];
             jchar value;
         } convert;
         convert.value = (*env)->CallCharMethod(env,target,Cache->charvalue);
-        SetInputValue(conn, mgr,name,type,convert.buffer,1);
+        MoveData(data,convert.buffer,1);
+        return 1;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Character");    
     }
+    return 0;
 }
 
-void
-ExtractBooleanValue(JNIEnv* env, ConnMgr conn, StmtMgr mgr, char* name, short type,jobject target) {
+int
+ExtractBooleanValue(JNIEnv* env,short type, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->booltype) ) {
         union {
             char    buffer[1];
             jboolean    val;
         }   convert;
         convert.val = (*env)->CallBooleanMethod(env,target,Cache->boolvalue);
-        SetInputValue(conn, mgr,name,type,convert.buffer,1);
+        MoveData(data,convert.buffer,1);
+        return 1;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Boolean");    
     }
+    return 0;
 }
 
-void
-ExtractDoubleValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type,jobject target) {
+int
+ExtractDoubleValue(JNIEnv* env,short type, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->doubletype) ) {
         union {
             char    buffer[8];
@@ -224,29 +233,33 @@ ExtractDoubleValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type
         }   convert;
 
         convert.val = (*env)->CallDoubleMethod(env,target,Cache->doublevalue);            
-        SetInputValue(conn, mgr,name,type,convert.buffer,8);
+        MoveData(data,convert.buffer,8);
+        return 8;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Double");    
     }
+    return 0;
 }
 
-void
-ExtractLongValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type,jobject target) {
+int
+ExtractLongValue(JNIEnv* env,short type, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->longtype) ) {
         union {
             char    buffer[8];
             jlong   val;
         }   convert;
         convert.val = (*env)->CallLongMethod(env,target,Cache->longvalue);
-        SetInputValue(conn, mgr,name,type,convert.buffer,8);
+        MoveData(data,convert.buffer,8);
+        return 8;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Long");    
     }
+    return 0;
 }
 
 
-void
-ExtractDateValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type, jobject target) {
+int
+ExtractDateValue(JNIEnv* env,short type, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->datetype) ) {
         union {
             char    buffer[8];
@@ -257,26 +270,35 @@ ExtractDateValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr, char* name, short type, 
         convert.val /= 1000;
         convert.val -= (10957 * 86400);
 
-        SetInputValue(conn, mgr,name,type,convert.buffer,8);
+        MoveData(data,convert.buffer,8);
+        return 8;
     } else if (!(*env)->ExceptionOccurred(env) ) {
             (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Date");    
     }
+    return 0;
 }
 
 
-void
-ExtractByteArrayValue(JNIEnv* env,ConnMgr conn, StmtMgr mgr,char* name, short type,jobject target) {
-    ExtractBytes(env,conn, mgr,name,type,(jbyteArray)target);
+int
+ExtractByteArrayValue(JNIEnv* env,short type, jobject target, void* data, int len) {
+    return ExtractBytes(env,type,(jbyteArray)target,data,len);
 }
 
-static void ExtractBytes(JNIEnv* env, ConnMgr conn, StmtMgr mgr,char* name, short type,jbyteArray target) {
+static int ExtractBytes(JNIEnv* env,short type,jbyteArray target,void* data, int len) {
     jsize       length = (*env)->GetArrayLength(env,target);
     jboolean    copy;
     jbyte*      buffer;
 
     buffer = (*env)->GetByteArrayElements(env,target,&copy);
-    SetInputValue(conn,mgr,name,type,buffer,length);
+    MoveData(data,buffer,length);
     (*env)->ReleaseByteArrayElements(env,target,buffer,JNI_ABORT);
+    return length;
+}
+
+static int MoveData(void* dest, const void* src, int len) {
+    if (src == NULL || dest == NULL) return 0;
+    memmove(dest, src, len);
+    return len;
 }
 
 static jobject CreateIntField(jint* var, JNIEnv* env) {
@@ -319,56 +341,54 @@ static jobject CreateLongField(jlong* var, JNIEnv* env) {
     return (*env)->NewObject(env,Cache->longtype,Cache->createlong,*var);
 }
 
-static int PassOutValue(StmtMgr mgr, int type, void* value, int length, void* userspace, void* funcargs ) {
-    JNIEnv*   env = funcargs;
-    jobject      target = userspace;
+int PassOutValue(JNIEnv* env,short type,jobject object,void* data, int length) {
+    jobject      target = object;
     jobject setval = NULL;
 
-        if (target == NULL ) return 0;
+    if (target == NULL ) return 0;
     if ( (*env)->IsSameObject(env,target,NULL)) return 0;
-        if (type == STREAMTYPE ) return 0;
 
-        if ( value == NULL ) {
-            (*env)->SetBooleanField(env,target,Cache->onullfield,JNI_TRUE);
-            return 0;
-        } else {
-            (*env)->SetBooleanField(env,target,Cache->onullfield,JNI_FALSE);
-        }
+    if ( length == 0 ) {
+        (*env)->SetBooleanField(env,target,Cache->onullfield,JNI_TRUE);
+        return 0;
+    } else {
+        (*env)->SetBooleanField(env,target,Cache->onullfield,JNI_FALSE);
+    }
 
         switch(type)
         {
             case INT4TYPE:
-                setval = CreateIntField(value,env);
+                setval = CreateIntField(data,env);
                 break;
             case VARCHARTYPE:
-                setval = CreateStringField(value,length,env);
+                setval = CreateStringField(data,length,env);
                 break;
             case CHARTYPE:
-                setval = CreateCharField(value,env);
+                setval = CreateCharField(data,env);
                 break;
             case BOOLTYPE:
-                setval = CreateBooleanField(value,env);
+                setval = CreateBooleanField(data,env);
                 break;
             case DOUBLETYPE:
-                setval = CreateDoubleField(value,env);
+                setval = CreateDoubleField(data,env);
                 break;
             case BYTEATYPE:
             case BLOBTYPE:
             case TEXTTYPE:
             case JAVATYPE:
-                setval = CreateBinaryField(value,length,env);
+                setval = CreateBinaryField(data,length,env);
                 break;
             case TIMESTAMPTYPE:
-                setval = CreateDateField(value,env);
+                setval = CreateDateField(data,env);
                 break;
             case LONGTYPE:
-                setval = CreateLongField(value,env);
+                setval = CreateLongField(data,env);
                 break;
             case STREAMTYPE:
+                /* should never get here */
                 break;
-                /* do nothing passing done though stream already */
             default:
-                DelegateError(mgr,"PASSING","results no passed, type error",745);
+                return 745;
                 break;
         }
 
@@ -377,12 +397,4 @@ static int PassOutValue(StmtMgr mgr, int type, void* value, int length, void* us
             (*env)->DeleteLocalRef(env,setval);
         }
         return 0;
-}
-
-int PassResults(JNIEnv* env, ConnMgr conn, StmtMgr mgr)
-{
-        
-        GetOutputs(mgr,env,PassOutValue);
-        
-	return CheckForErrors(conn, mgr);
 }

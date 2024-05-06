@@ -92,9 +92,6 @@ PG_EXTERN Datum ExecEvalVar(Var * variable, ExprContext * econtext,
 PG_EXTERN Datum ExecEvalParam(Param *expression, ExprContext *econtext,
 			  bool *isNull);
 
-PG_EXTERN char *GetAttributeByNum(TupleTableSlot *slot, AttrNumber attrno,
-				  bool *isNull,bool *freeable);
-PG_EXTERN char *GetAttributeByName(TupleTableSlot *slot, char *attname, bool *isNull,bool *freeable);
 PG_EXTERN Datum ExecEvalExpr(Node *expression, ExprContext *econtext, bool *isNull,
 			 bool *isDone);
 PG_EXTERN bool ExecQual(List *qual, ExprContext *econtext, bool resultForNull);
