@@ -29,7 +29,6 @@ typedef struct indirect {
 
 struct bound {
     short type;
-    int maxlength;
     IndirectCaller indirect;
 };
 
@@ -47,7 +46,7 @@ typedef struct WeaverConnectionManager {
     OpaqueWConn theConn;
     long transactionId;
     int refCount;
-    StmtMgr statements[256];
+    StmtMgr statements[MAX_STATEMENTS];
     pthread_mutex_t control;
 } WeaverConnectionManager;
 
@@ -96,29 +95,30 @@ CreateWeaverStmtManager(ConnMgr connection) {
 
     pthread_mutex_lock(&connection->control);
     if (WIsValidConnection(connection->theConn)) {
+        if (connection->refCount < MAX_STATEMENTS) {
+            mgr = (StmtMgr) WAllocConnectionMemory(connection->theConn, sizeof (WeaverStmtManager));
+            if (mgr != NULL) {
+                connection->statements[connection->refCount++] = mgr;
 
-        mgr = (StmtMgr) WAllocConnectionMemory(connection->theConn, sizeof (WeaverStmtManager));
-        if (mgr != NULL) {
-            connection->statements[connection->refCount++] = mgr;
+                mgr->statement = NULL;
 
-            mgr->statement = NULL;
+                mgr->errorlevel = 0;
+                memset(&mgr->errordelegate, 0x00, sizeof (Error));
 
-            mgr->errorlevel = 0;
-            memset(&mgr->errordelegate, 0x00, sizeof (Error));
+                mgr->log_count = MAX_FIELDS;
 
-            mgr->log_count = MAX_FIELDS;
-
-            if (mgr->log_count > 0) {
-                mgr->inputLog = WAllocConnectionMemory(connection->theConn, sizeof (inputDef) * mgr->log_count);
-                mgr->outputLog = WAllocConnectionMemory(connection->theConn, sizeof (outputDef) * mgr->log_count);
-                /*  zero statement structures */
-                for (counter = 0; counter < mgr->log_count; counter++) {
-                    memset(&mgr->outputLog[counter], 0, sizeof (outputDef));
-                    memset(&mgr->inputLog[counter], 0, sizeof (inputDef));
+                if (mgr->log_count > 0) {
+                    mgr->inputLog = WAllocConnectionMemory(connection->theConn, sizeof (inputDef) * mgr->log_count);
+                    mgr->outputLog = WAllocConnectionMemory(connection->theConn, sizeof (outputDef) * mgr->log_count);
+                    /*  zero statement structures */
+                    for (counter = 0; counter < mgr->log_count; counter++) {
+                        memset(&mgr->outputLog[counter], 0, sizeof (outputDef));
+                        memset(&mgr->inputLog[counter], 0, sizeof (inputDef));
+                    }
+                } else {
+                    mgr->inputLog = NULL;
+                    mgr->outputLog = NULL;
                 }
-            } else {
-                mgr->inputLog = NULL;
-                mgr->outputLog = NULL;
             }
         }
     }
@@ -139,10 +139,12 @@ void DestroyWeaverConnection(ConnMgr mgr) {
          *  destroying thread so to a cancel/join for
          *  safety's sake.
          */
-        WCancelAndJoin(mgr->theConn);
+        WCancelAndJoin(connection);
         pthread_mutex_destroy(&mgr->control);
         
         WDestroyConnection(connection);
+        mgr->theConn = NULL;
+        memset(mgr, 0x00, sizeof(WeaverConnectionManager));
     } else {
         pthread_mutex_unlock(&mgr->control);
     }
@@ -284,21 +286,6 @@ short UserLock(ConnMgr conn, StmtMgr mgr, const char* grouptolock, uint32_t val,
     return CheckForErrors(conn, mgr);
 }
 
-long GetErrorCode(ConnMgr conn, StmtMgr mgr) {
-    if (mgr->errorlevel == 2) return mgr->errordelegate.rc;
-    return WGetErrorCode(conn->theConn);
-}
-
-const char* GetErrorText(ConnMgr conn, StmtMgr mgr) {
-    if (mgr->errorlevel == 2) return mgr->errordelegate.text;
-    return WGetErrorText(conn->theConn);
-}
-
-const char* GetErrorState(ConnMgr conn, StmtMgr mgr) {
-    if (mgr->errorlevel == 2) return mgr->errordelegate.state;
-    return WGetErrorState(conn->theConn);
-}
-
 long ReportError(ConnMgr conn, StmtMgr mgr, const char** text, const char** state) {
     if (mgr != NULL && mgr->errorlevel == 2) {
         *text = mgr->errordelegate.text;
@@ -322,50 +309,6 @@ short ParseStatement(ConnMgr conn, StmtMgr mgr, const char* statement) {
 Input AddBind(ConnMgr conn, StmtMgr mgr, Input bind) {
 
     Bound base = InputToBound(bind);
-
-    switch (base->type) {
-        case INT4TYPE:
-            base->maxlength = 4;
-            break;
-        case VARCHARTYPE:
-            base->maxlength = (128 + 4);
-            break;
-        case CHARTYPE:
-            base->maxlength = 1;
-            break;
-        case BOOLTYPE:
-            base->maxlength = 1;
-            break;
-        case BYTEATYPE:
-            base->maxlength = (128 + 4);
-            break;
-        case BLOBTYPE:
-        case TEXTTYPE:
-        case JAVATYPE:
-            base->maxlength = (512);
-            break;
-        case TIMESTAMPTYPE:
-            base->maxlength = 8;
-            break;
-        case DOUBLETYPE:
-            base->maxlength = 8;
-            break;
-        case LONGTYPE:
-            base->maxlength = 8;
-            break;
-        case FUNCTIONTYPE:
-            break;
-        case SLOTTYPE:
-            base->maxlength = (512 + 4);
-            break;
-        case STREAMTYPE:
-            base->maxlength = -1;
-            break;
-        default:
-            break;
-    }
-
-    /*  if the dataStack has been moved, all the pointers need to be reset  */
 
     WBindTransfer(mgr->statement, bind->binder, base->type, &base->indirect, IndirectToDirect); 
     return bind;
@@ -448,45 +391,6 @@ Output GetLink(ConnMgr conn, StmtMgr mgr, int index, short type) {
 
 Output AddLink(ConnMgr conn, StmtMgr mgr, Output link) {
     Bound base = OutputToBound(link);
-
-    switch (base->type) {
-        case INT4TYPE:
-            base->maxlength = 4;
-            break;
-        case VARCHARTYPE:
-            base->maxlength = (128 + 4);
-            break;
-        case CHARTYPE:
-            base->maxlength = 1;
-            break;
-        case BOOLTYPE:
-            base->maxlength = 1;
-            break;
-        case BYTEATYPE:
-            base->maxlength = (128 + 4);
-            break;
-        case JAVATYPE:
-        case BLOBTYPE:
-        case TEXTTYPE:
-            base->maxlength = (512 + 4);
-            break;
-        case TIMESTAMPTYPE:
-            base->maxlength = 8;
-            break;
-        case DOUBLETYPE:
-            base->maxlength = 8;
-            break;
-        case LONGTYPE:
-            base->maxlength = 8;
-            break;
-        case FUNCTIONTYPE:
-            base->maxlength = 8;
-            break;
-        case STREAMTYPE:
-            base->maxlength = -1;
-        default:
-            break;
-    }
 
     WOutputTransfer(mgr->statement, link->index, base->type, &base->indirect, IndirectToDirect);
     return link;
@@ -581,4 +485,3 @@ void DisconnectStdIO(ConnMgr conn) {
     if (!IsValid(conn)) return;
     WDisconnectStdIO(conn->theConn);
 }
-

@@ -60,6 +60,8 @@ extern int                      DebugLvl;
 typedef struct commargs {
     JNIEnv*  env;
     jobject  target;
+    int bindType;
+    int linkType;
 } CommArgs;
 
 static int transferin(void* arg,int type, void* buff,int run);
@@ -73,9 +75,9 @@ static int direct_pipein(void* args,int type,void* buff,int run);
 
 static ConnMgr getConnMgr(JNIEnv* env, jobject talker);
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt);
-static jint  clearError(JNIEnv* env,jobject talker);
-static void  checkError(JNIEnv* env,jobject talker,StmtMgr link);
-static jint  reportError(JNIEnv* env,jobject talker,jlong code, const char* text, const char* state);
+static jlong  clearError(JNIEnv* env,jobject talker);
+static jlong  checkError(JNIEnv* env,jobject talker,StmtMgr link);
+static jlong  reportError(JNIEnv* env,jobject talker,jlong code, const char* text, const char* state);
 static int   translateType(jint type);
 
 static void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace);
@@ -168,6 +170,16 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
         }
 }
 
+JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_disposeConnection
+  (JNIEnv * env, jclass clazz, jlong linkid) 
+{
+	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
+        
+        if (linkid != 0L) {
+            DestroyWeaverConnection((ConnMgr)linkid); 
+        }
+}
+
 JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_beginTransaction(JNIEnv *env, jobject talkerObject)
 {
     ConnMgr ref = getConnMgr(env,talkerObject);
@@ -191,12 +203,21 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
             (*env)->ThrowNew(env,Cache->exception,"no statement");
             return 0;
         }
-        
+
         StmtMgr base = CreateWeaverStmtManager(conn);
-        pass_stmt = (*env)->GetStringUTFChars(env,statement,NULL);
-        ParseStatement(conn, base,pass_stmt);
-        (*env)->ReleaseStringUTFChars(env,statement,pass_stmt);
-	
+
+        if (base != NULL) {
+            pass_stmt = (*env)->GetStringUTFChars(env,statement,NULL);
+            short result = ParseStatement(conn, base,pass_stmt);
+            (*env)->ReleaseStringUTFChars(env,statement,pass_stmt);
+            if (result) {
+                DestroyWeaverStmtManager(conn, base);
+                base = NULL;
+            }
+            checkError(env,talkerObject,base);
+        } else {
+            (*env)->ThrowNew(env,Cache->exception,"statement space exhusted");
+        }
         return (jlong)base;
 }
 
@@ -204,7 +225,6 @@ void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* use
 {
  	char        var[64];
         jsize       varsize = 0;
-        short       type = translateType((*env)->CallIntMethod(env, userspace->target, Cache->itypeid));
 
         ConnMgr        conn = getConnMgr(env, talkerObject);
         StmtMgr        base = GETSTMT(linkid);
@@ -221,24 +241,23 @@ void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* use
 	(*env)->GetStringUTFRegion(env,theVar,0, varsize, var); 		
 	var[varsize] = 0;
         
-        LinkInput(conn,base,var,type,userspace,transferin);
+        LinkInput(conn,base,var,userspace->linkType,userspace,userspace->linkType == STREAMTYPE ? direct_pipein : transferin);
 //  report errors
 	checkError(env,talkerObject,base);
 }
 
 void setOutputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace)
 {
-    short type = translateType((*env)->CallIntMethod(env, userspace->target, Cache->otypeid));
-    //	get proper agent
+        //	get proper agent
     jint index = (*env)->GetIntField(env, userspace->target, Cache->oindex);
 
     ConnMgr        conn = getConnMgr(env, talkerObject);
     StmtMgr base = GETSTMT(linkid);
     
-    LinkOutput(conn,base,index,type,userspace,transferout);
+    LinkOutput(conn,base,index,userspace->linkType,userspace,userspace->linkType == STREAMTYPE ? direct_pipeout : transferout);
 
 //  report errors
-	checkError(env,talkerObject,base);
+    checkError(env,talkerObject,base);
 }
 
 
@@ -256,6 +275,8 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_executeStatement
         jobject instep = (*env)->GetObjectArrayElement(env, inputs, x);
         callData[x].env = env;
         callData[x].target = instep;
+        callData[x].bindType = (*env)->CallIntMethod(env, instep, Cache->itypeid);
+        callData[x].linkType = translateType(callData[x].bindType);
         setInputLink(env, talkerObject, linkid, &callData[x]);
      }     
 // exec
@@ -285,6 +306,8 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
         jobject instep = (*env)->GetObjectArrayElement(env, outputs, x);
         callData[x].env = env;
         callData[x].target = instep;
+        callData[x].bindType = (*env)->CallIntMethod(env, instep, Cache->otypeid);
+        callData[x].linkType = translateType(callData[x].bindType);
         setOutputLink(env, talkerObject, linkid, &callData[x]);
     }
 
@@ -294,16 +317,11 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
 //  pass results to java if there are no errors
     if ( result ) {
 // report errors
-        if ( GetErrorCode(conn, ref) != 0 ) {
-            if ( GetErrorCode(conn, ref) == 102 ) {
-                (*env)->ThrowNew(env,Cache->truncation,GetErrorText(conn, ref));
-            } else {
-                checkError(env,talkerObject,ref);
-            }
-        }
+        checkError(env,talkerObject,ref);
+        return JNI_FALSE;
+    } else {
+        return JNI_TRUE;
     }
-
-    return (!result) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_cancelTransaction
@@ -440,7 +458,7 @@ static ConnMgr getConnMgr(JNIEnv* env, jobject talker) {
     return ref;
 }
 
-static jint clearError(JNIEnv* env,jobject talkerObject)
+static jlong clearError(JNIEnv* env,jobject talkerObject)
 {
         if ( (*env)->ExceptionOccurred(env) ) return 2;
         
@@ -449,15 +467,15 @@ static jint clearError(JNIEnv* env,jobject talkerObject)
 	return 0;
 }
 
-static void checkError(JNIEnv* env,jobject talkerObject,StmtMgr base)
+static jlong checkError(JNIEnv* env,jobject talkerObject,StmtMgr base)
 {
         const char* errtxt;
         const char* statetxt;
         jlong code = ReportError(getConnMgr(env, talkerObject), base, &errtxt, &statetxt);
-        reportError(env, talkerObject, code, errtxt, statetxt);
+        return reportError(env, talkerObject, code, errtxt, statetxt);
 }
 
-static jint reportError(JNIEnv* env,jobject talkerObject,jlong code, const char* errtxt, const char* statetxt)
+static jlong reportError(JNIEnv* env,jobject talkerObject,jlong code, const char* errtxt, const char* statetxt)
 {
         if ( (*env)->ExceptionOccurred(env) ) {
             (*env)->ExceptionDescribe(env);
@@ -482,7 +500,7 @@ static jint reportError(JNIEnv* env,jobject talkerObject,jlong code, const char*
             (*env)->ThrowNew(env,Cache->exception,combo);
         }
 	
-	return 0;
+	return code;
 }
 
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
@@ -533,15 +551,15 @@ static int transferin(void* arg,int type, void* buff,int run)
     }
     jobject value = (*env)->GetObjectField(env, target, Cache->ivalue);
 
-    if ((*env)->IsSameObject(env,target,NULL)) {
+    if ((*env)->IsSameObject(env,value,NULL)) {
         return 0;
     }
 
-    if (type == STREAMTYPE) {
-        return direct_pipein(arg,type,buff,run);
-    } else {
-        return PassInValue(env,type,value,buff, run);
+    int checkTrunc = PassInValue(env,comm->bindType,comm->linkType,type,value,buff, run);
+    if (checkTrunc < 0) {
+        (*env)->ThrowNew(env,Cache->truncation,"binary truncation");
     }
+    return checkTrunc;
 }
 
 static int transferout(void* arg,int type, void* buff,int run)
@@ -556,16 +574,7 @@ static int transferout(void* arg,int type, void* buff,int run)
         return PIPING_ERROR;
     }
 
-    jobject value = (*env)->GetObjectField(env, target, Cache->ovalue);
-
-    if ((*env)->IsSameObject(env,target,NULL)) {
-        return 0;
-    }
-    if (type == STREAMTYPE) {
-        return direct_pipeout(arg,type,buff,run);
-    } else {
-        return PassOutValue(env,type,value,buff, run);
-    }
+    return PassOutValue(env,comm->bindType,comm->linkType,type,target, buff, run);
 }
 
 static int direct_pipein(void* arg,int type, void* buff,int run)
@@ -660,9 +669,26 @@ static int pipein(void* args,int type, void* buff,int run)
 }
 
 static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jstring connection) {
-	jsize passlen = (*env)->GetStringUTFLength(env,password);
-	jsize namelen = (*env)->GetStringUTFLength(env,username);
-	jsize connlen = (*env)->GetStringUTFLength(env,connection);
+	char pass[64];
+	char name[64];
+	char conn[64];
+        jsize passlen = 0;
+        jsize namelen = 0;
+        jsize connlen = 0;
+
+        if (!(*env)->IsSameObject(env, username, NULL) && !(*env)->IsSameObject(env, password, NULL)) {
+            jsize passlen = (*env)->GetStringUTFLength(env,password);
+            jsize namelen = (*env)->GetStringUTFLength(env,username);
+            pass[passlen] = 0;
+            name[namelen] = 0;
+            (*env)->GetStringUTFRegion(env,password,0,passlen,pass);
+            (*env)->GetStringUTFRegion(env,username,0,namelen,name);
+        }
+        if (!(*env)->IsSameObject(env, connection, NULL)) {
+            connlen = (*env)->GetStringUTFLength(env,connection);
+            conn[connlen] = 0;
+            (*env)->GetStringUTFRegion(env,connection,0,connlen,conn);
+        }
 
 	if (( passlen > 63 || namelen > 63 || connlen > 63 ) ||
         ( passlen < 0 || namelen < 0 || connlen <= 0 ) )
@@ -672,20 +698,7 @@ static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
             return NULL;
 	}
 
-	char pass[64];
-	char name[64];
-	char conn[64];
-
-	pass[passlen] = 0;
-	name[namelen] = 0;
-	conn[connlen] = 0;
-
-	(*env)->GetStringUTFRegion(env,password,0,passlen,pass);
-	(*env)->GetStringUTFRegion(env,username,0,namelen,name);
-	(*env)->GetStringUTFRegion(env,connection,0,connlen,conn);
-
 	return CreateWeaverConnection(name, pass, conn);
-         
 }
 
 static int translateType(jint type) {

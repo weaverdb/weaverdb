@@ -4,16 +4,16 @@ import java.util.Properties;
 
 public class WeaverInitializer {
     
-    boolean loaded = false;
+    static boolean loaded = false;
     
     public WeaverInitializer() {
         
     }
     
-    public synchronized native void init(String database);
-    public synchronized native void close();
+    private static synchronized native void init(String database);
+    private static synchronized native void close();
     
-    public void initialize(Properties props) throws java.lang.UnsatisfiedLinkError  {
+    public static void initialize(Properties props) throws java.lang.UnsatisfiedLinkError  {
         StringBuilder vars = new StringBuilder();
         
         if ( loaded ) return;
@@ -35,5 +35,9 @@ public class WeaverInitializer {
         }
         
         loaded = true;
+    }
+    
+    public static void close(boolean clean) {
+        close();
     }
 }

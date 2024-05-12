@@ -1,8 +1,14 @@
-/* 
- * File:   WeaverValueExtractor.h
- * Author: mscott
+/*-------------------------------------------------------------------------
  *
- * Created on August 3, 2008, 5:40 PM
+ *	WeaverValueExtractor.h
+
+ *
+ * Portions Copyright (c) 2002-2006, Myron K Scott
+ *
+ *
+ * IDENTIFICATION
+ *
+ *-------------------------------------------------------------------------
  */
 #include <jni.h>
 #include <sys/types.h>
@@ -69,8 +75,8 @@ typedef struct javacache {
 
 javacache* CreateCache(JNIEnv* env);
 javacache* DropCache(JNIEnv* env);
-int PassInValue(JNIEnv* env,short type,jobject object,void* data, int length);
-int PassOutValue(JNIEnv* env,short type,jobject object,void* data, int length);
+int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length);
+int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length);
 
 #ifdef	__cplusplus
 }

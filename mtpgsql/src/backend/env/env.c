@@ -875,7 +875,7 @@ void ptimeout(struct timespec* timeval,int to) {
     timeval->tv_nsec = timeval->tv_nsec % 1000000000;    
 }
 
-CommBuffer* ConnectCommBuffer(void* args,int (*mover)(void*, int, char*, int)) {
+CommBuffer* ConnectCommBuffer(void* args,int (*mover)(void*, int, void*, int)) {
     CommBuffer* comm = palloc(sizeof(CommBuffer));
     comm->args = args;
     comm->pipe = mover;

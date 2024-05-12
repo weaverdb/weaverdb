@@ -20,7 +20,7 @@
 
   
 #define MAX_FIELDS  0
-#define MAX_STMTSIZE  (BLOBSIZE * 32)
+#define MAX_STATEMENTS 512
 
 typedef struct bound *  Bound;
 typedef struct outputObj * Output;
@@ -74,8 +74,5 @@ short CheckForErrors(ConnMgr, StmtMgr );
 
 long ReportError(ConnMgr, StmtMgr, const char** text, const char** state);
 
-long GetErrorCode(ConnMgr, StmtMgr );
-const char* GetErrorText(ConnMgr, StmtMgr );
-const char* GetErrorState(ConnMgr, StmtMgr );
 #endif
 

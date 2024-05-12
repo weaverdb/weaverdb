@@ -1,7 +1,13 @@
 package driver.weaver;
 
-import java.util.*;
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.ref.PhantomReference;
+import java.lang.ref.ReferenceQueue;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.util.logging.Level;
@@ -9,7 +15,7 @@ import java.util.logging.Logger;
 
 public class BaseWeaverConnection implements AutoCloseable {
     
-    private final Logger   logging;
+    private static final Logger   LOGGING = Logger.getLogger("Connection");
     
     private final Throwable creationPath = new Throwable();
 
@@ -33,52 +39,68 @@ public class BaseWeaverConnection implements AutoCloseable {
     private final long nativePointer;
     private final AtomicBoolean isOpen = new AtomicBoolean(true);
     
-    public int resultField = 0;
+    private long transactionId;
+    private boolean auto = false;
+    int resultField = 0;
     String errorText = "";
     String state = "";
     
-    private Statement currentStatement;
-    
-    private BaseWeaverConnection(long nativePointer, Logger logger) {
+    private final Map<Long, StatementRef> liveStatements = new ConcurrentHashMap<>();
+    private static final Map<Long, ConnectionRef> liveConnections = new ConcurrentHashMap<>();
+    private final ReferenceQueue<Statement> statements = new ReferenceQueue<>();
+    private static final ReferenceQueue<BaseWeaverConnection> connections = new ReferenceQueue<>();
+        
+    private BaseWeaverConnection(long nativePointer) {
         this.nativePointer = nativePointer;
-        this.logging = logger;
     }
 
-    private BaseWeaverConnection(String username, String password, String database, Logger parent) {
+    private BaseWeaverConnection(String username, String password, String database) {
         nativePointer = connectToDatabaseWithUsername(username, password, database);
-        logging = parent == null ? Logger.getLogger("BaseWeaverConnection") : parent;
     }
     
-    private BaseWeaverConnection(String db, Logger parent) {
+    private BaseWeaverConnection(String db) {
         nativePointer = connectToDatabaseAnonymously(db);
-        logging = parent == null ? Logger.getLogger("BaseWeaverConnection") : parent;
     }
     
-    public static BaseWeaverConnection connectAnonymously(String db, Logger logger) {
-        BaseWeaverConnection connect = new BaseWeaverConnection(db, logger);
+    public static BaseWeaverConnection connectAnonymously(String db) {
+        closeDiscardedConnections();
+        BaseWeaverConnection connect = new BaseWeaverConnection(db);
         if (connect.isValid()) {
+            liveConnections.put(connect.nativePointer, new ConnectionRef(connect, connections));
             return connect;
         } else {
             try {
                 connect.dispose();
             } catch (WeaverException ee) {
-                logger.log(Level.WARNING, "Error disposing connection", ee);
+                LOGGING.log(Level.WARNING, "Error disposing connection", ee);
             }
             return null;
         }
     }
     
-    public static BaseWeaverConnection connectUser(String username, String password, String database, Logger logger) {
-        BaseWeaverConnection connect = new BaseWeaverConnection(username, password, database, logger);
+    public static BaseWeaverConnection connectUser(String username, String password, String database) {
+        closeDiscardedConnections();
+        BaseWeaverConnection connect = new BaseWeaverConnection(username, password, database);
         if (connect.isValid()) {
+            liveConnections.put(connect.nativePointer, new ConnectionRef(connect, connections));
             return connect;
         } else {
             try {
                 connect.dispose();
             } catch (WeaverException ee) {
-                logger.log(Level.WARNING, "Error disposing connection", ee);
+                LOGGING.log(Level.WARNING, "Error disposing connection", ee);
             }
             return null;
+        }
+    }
+    
+    private static void closeDiscardedConnections() {
+        ConnectionRef ref = (ConnectionRef)connections.poll();
+        while (ref != null) {
+            ref = liveConnections.remove(ref.link);
+            if (ref != null && ref.dispose()) {
+                disposeConnection(ref.link);
+            }
         }
     }
     
@@ -104,27 +126,20 @@ public class BaseWeaverConnection implements AutoCloseable {
 
     @Override
     public void close() throws WeaverException {
-        closeCurrentStatement();
         dispose();
     }
 
-    public synchronized void dispose() throws WeaverException {
+    private synchronized void dispose() throws WeaverException {
         if ( nativePointer != 0 && isOpen.compareAndSet(true, false)) {
-            dispose(nativePointer);
-        }
-    }
-    
-    @Override
-    protected void finalize() throws Throwable {
-        super.finalize();
-        if (isOpen.get()) {
-            logging.log(Level.WARNING, "disposal in finalize ", creationPath);
-            dispose();
+            ConnectionRef ref = liveConnections.remove(nativePointer);
+            if (ref != null && ref.dispose()) {
+                disposeConnection(nativePointer);
+            }
         }
     }
 
     public BaseWeaverConnection spawnHelper() throws WeaverException {
-        return new BaseWeaverConnection(this.connectSubConnection(), this.logging);
+        return new BaseWeaverConnection(this.connectSubConnection());
     }
 
     public String idDatabaseRoots() {
@@ -140,8 +155,9 @@ public class BaseWeaverConnection implements AutoCloseable {
     }
 
     public long begin() throws WeaverException {
-        closeCurrentStatement();
-        return beginTransaction();
+        transactionId = beginTransaction();
+        auto = false;
+        return transactionId;
     }
 
     public void prepare() throws WeaverException {
@@ -157,13 +173,17 @@ public class BaseWeaverConnection implements AutoCloseable {
             abortTransaction();
         } catch ( WeaverException exp ) {
             throw new RuntimeException(exp);
+        } finally {
+            transactionId = 0;
         }
-        closeCurrentStatement();
     }
 
     public void commit() throws WeaverException {
-        commitTransaction();
-        closeCurrentStatement();
+        try {
+            commitTransaction();
+        } finally {
+            transactionId = 0;
+        }
     }
 
     public void start() throws WeaverException {
@@ -174,31 +194,43 @@ public class BaseWeaverConnection implements AutoCloseable {
         endProcedure();
     }
     
-    public long parse(String stmt) throws WeaverException {
-        currentStatement = new Statement(stmt);
-        return 0L;
+    public Statement parse(String stmt) throws WeaverException {
+        if (transactionId == 0) {
+            transactionId = beginTransaction();
+            auto = true;
+        } else if (auto) {
+            commitTransaction();
+            transactionId = beginTransaction();
+        }
+        StatementRef ref = (StatementRef)statements.poll();
+        while (ref != null) {
+            disposeStatement(ref.link);
+            ref = (StatementRef)statements.poll();
+        }
+        
+        Statement s = new Statement(stmt);
+        liveStatements.put(s.link, new StatementRef(s, statements));
+        return s;
     }
     
-    public long execute() throws WeaverException {
-        return currentStatement.execute();
-    }
-
-    public boolean fetch() throws WeaverException {
-        return currentStatement.fetch();
-    }
-    
-    public long getCommandId() {
-        return currentStatement.getCommandId();
-    }
-    
-    private void closeCurrentStatement() {
-        if (currentStatement != null) {
-            currentStatement.close();
-            currentStatement = null;
+    private synchronized void disposeStatement(long link) {
+        if (isValid()) {
+            StatementRef ref = liveStatements.remove(link);
+            if (ref != null && ref.dispose()) {
+                dispose(link);
+            }
         }
     }
+    
+    public Object transaction() {
+        long t = getTransactionId();
+        assert(t == transactionId);
+        return transactionId;
+    }
+    
     private native long grabConnection(String name, String password, String connect) throws WeaverException;
     private native long connectSubConnection() throws WeaverException;
+    private static native void disposeConnection(long link);
     private native void dispose(long link);
 
     private native long prepareStatement(String theStatement) throws WeaverException;
@@ -213,8 +245,8 @@ public class BaseWeaverConnection implements AutoCloseable {
     private native void beginProcedure() throws WeaverException;
     private native void endProcedure() throws WeaverException;
 
-    public native long getTransactionId();
-    public native long getCommandId(long link);
+    private native long getTransactionId();
+    private native long getCommandId(long link);
 
     public native void streamExec(String statement) throws WeaverException;
 
@@ -257,12 +289,11 @@ public class BaseWeaverConnection implements AutoCloseable {
     
     public class Statement implements AutoCloseable {
         private final long  link;
-        private final AtomicBoolean isOpen = new AtomicBoolean(true);
-        private final Throwable statementPath;
+        private final String raw;
         
         Statement(String statement) throws WeaverException {
             link = prepareStatement(statement);
-            statementPath = new Throwable(creationPath);
+            raw = statement;
         }
 
         public BaseWeaverConnection getConnection() {
@@ -308,7 +339,7 @@ public class BaseWeaverConnection implements AutoCloseable {
             return link != 0 && isOpen.get();
         }
         
-        public long getCommandId() {
+        public long command() {
             return BaseWeaverConnection.this.getCommandId(link);
         }
 
@@ -317,19 +348,49 @@ public class BaseWeaverConnection implements AutoCloseable {
             dispose();
         }
 
-        public void dispose() {
-            if (link != 0 && isOpen.compareAndSet(true, false) && BaseWeaverConnection.this.isValid()) {
-                BaseWeaverConnection.this.dispose(link);
+        private void dispose() {
+            if (link != 0) {
+                disposeStatement(link);
             }
         }
         
+        public long getIdentity() {
+            return link;
+        }
+
         @Override
-        protected void finalize() throws Throwable {
-            super.finalize();
-            if (isOpen.get()) {
-                logging.log(Level.WARNING, "disposal in finalize ", statementPath);
-                this.dispose();
-            }
+        public String toString() {
+            return raw;
         }
     }
+    
+    private static class StatementRef extends PhantomReference<Statement> {
+        
+        private final long link;
+        private final AtomicBoolean disposed = new AtomicBoolean(false);
+
+        public StatementRef(Statement referent, ReferenceQueue<? super Statement> q) {
+            super(referent, q);
+            link = referent.link;
+        }
+        
+        public boolean dispose() {
+            return disposed.compareAndSet(false, true);
+        }
+    }
+    
+    private static class ConnectionRef extends PhantomReference<BaseWeaverConnection> {
+        
+        private final long link;
+        private final AtomicBoolean disposed = new AtomicBoolean(false);
+
+        public ConnectionRef(BaseWeaverConnection referent, ReferenceQueue<? super BaseWeaverConnection> q) {
+            super(referent, q);
+            link = referent.nativePointer;
+        }
+        
+        public boolean dispose() {
+            return disposed.compareAndSet(false, true);
+        }
+    }    
 }

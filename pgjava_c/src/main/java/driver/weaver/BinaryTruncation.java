@@ -3,10 +3,8 @@
 
 package driver.weaver;
 
-import java.sql.SQLException;
 
-
-public class BinaryTruncation extends SQLException {
+public class BinaryTruncation extends Exception {
 
     public int maxcount = -1;
     

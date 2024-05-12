@@ -1,4 +1,17 @@
+/*-------------------------------------------------------------------------
+ *
+ *	WeaverValueExtractor.c
+
+ *
+ * Portions Copyright (c) 2002-2006, Myron K Scott
+ *
+ *
+ * IDENTIFICATION
+ *
+ *-------------------------------------------------------------------------
+ */
 #include <jni.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <strings.h>
@@ -17,15 +30,15 @@ static javacache CachedClasses;
 
 static javacache*  Cache = &CachedClasses;
 
-static int ExtractIntValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractStringValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractCharacterValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractBooleanValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractDoubleValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractLongValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractDateValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractByteArrayValue(JNIEnv* env, short type,  jobject target, void* data, int len);
-static int ExtractBytes(JNIEnv* env,short type,jbyteArray target, void* data, int len);
+static int ExtractIntValue(JNIEnv* env, jobject target, void* data, int len);
+static int ExtractStringValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractCharacterValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractBooleanValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractDoubleValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractLongValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractDateValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractByteArrayValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractBytes(JNIEnv* env,jbyteArray target, void* data, int len);
 static int MoveData(void* dest, const void* src, int len);
 
 javacache*  CreateCache(JNIEnv* env) {
@@ -107,41 +120,41 @@ javacache*  DropCache(JNIEnv* env) {
         return &CachedClasses;
 }
 
-int PassInValue(JNIEnv* env,short type,jobject object,void* data, int length) {
+int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length) {
     if ( (*env)->IsSameObject(env,NULL,data) ) {
         return 0;
     } else {
-	switch( type )
+	switch( passType )
 	{
             case INT4TYPE:
-                return ExtractIntValue(env,type,object,data,length);
+                return ExtractIntValue(env,object,data,length);
                 break;
             case VARCHARTYPE:
-                return ExtractStringValue(env,type,object,data,length);
+                return ExtractStringValue(env,object,data,length);
                 break;
             case CHARTYPE:
-                return ExtractCharacterValue(env,type,object,data,length);
+                return ExtractCharacterValue(env,object,data,length);
                 break;
             case BOOLTYPE:
-                return ExtractBooleanValue(env,type,object,data,length);
+                return ExtractBooleanValue(env,object,data,length);
                 break;
             case BYTEATYPE:
-                return ExtractByteArrayValue(env,type,object,data,length);
+                return ExtractByteArrayValue(env,object,data,length);
                 break;
             case TIMESTAMPTYPE:
-                return ExtractDateValue(env,type,object,data,length);
+                return ExtractDateValue(env,object,data,length);
                 break;
             case DOUBLETYPE:
-                return ExtractDoubleValue(env,type,object,data,length);
+                return ExtractDoubleValue(env,object,data,length);
                 break;
             case LONGTYPE:
-                return ExtractLongValue(env,type,object,data,length);
+                return ExtractLongValue(env,object,data,length);
                 break;
             case BLOBTYPE:
             case TEXTTYPE:
             case SLOTTYPE:
             case JAVATYPE:
-                return ExtractByteArrayValue(env,type,object,data,length);
+                return ExtractByteArrayValue(env,object,data,length);
                 break;
             case STREAMTYPE:
                 /* should not get here */
@@ -154,7 +167,7 @@ int PassInValue(JNIEnv* env,short type,jobject object,void* data, int length) {
 }
 
 int
-ExtractIntValue(JNIEnv* env,short type, jobject target, void* data, int len) {
+ExtractIntValue(JNIEnv* env, jobject target, void* data, int len) {
     if ((*env)->IsInstanceOf(env,target,Cache->inttype)) {
         union {
             char    buffer[4];
@@ -170,7 +183,7 @@ ExtractIntValue(JNIEnv* env,short type, jobject target, void* data, int len) {
 }
 
 int
-ExtractStringValue(JNIEnv* env,short type, jobject target, void* data, int max) {
+ExtractStringValue(JNIEnv* env, jobject target, void* data, int max) {
     jsize           len = 0;
     jstring         value;
     const char*          buffer;
@@ -193,7 +206,7 @@ ExtractStringValue(JNIEnv* env,short type, jobject target, void* data, int max) 
 }
 
 int
-ExtractCharacterValue(JNIEnv* env,short type, jobject target, void* data, int len) {
+ExtractCharacterValue(JNIEnv* env, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->chartype) ) {
         union {
             char buffer[1];
@@ -209,7 +222,7 @@ ExtractCharacterValue(JNIEnv* env,short type, jobject target, void* data, int le
 }
 
 int
-ExtractBooleanValue(JNIEnv* env,short type, jobject target, void* data, int len) {
+ExtractBooleanValue(JNIEnv* env, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->booltype) ) {
         union {
             char    buffer[1];
@@ -225,7 +238,7 @@ ExtractBooleanValue(JNIEnv* env,short type, jobject target, void* data, int len)
 }
 
 int
-ExtractDoubleValue(JNIEnv* env,short type, jobject target, void* data, int len) {
+ExtractDoubleValue(JNIEnv* env, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->doubletype) ) {
         union {
             char    buffer[8];
@@ -242,7 +255,7 @@ ExtractDoubleValue(JNIEnv* env,short type, jobject target, void* data, int len) 
 }
 
 int
-ExtractLongValue(JNIEnv* env,short type, jobject target, void* data, int len) {
+ExtractLongValue(JNIEnv* env, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->longtype) ) {
         union {
             char    buffer[8];
@@ -259,7 +272,7 @@ ExtractLongValue(JNIEnv* env,short type, jobject target, void* data, int len) {
 
 
 int
-ExtractDateValue(JNIEnv* env,short type, jobject target, void* data, int len) {
+ExtractDateValue(JNIEnv* env, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->datetype) ) {
         union {
             char    buffer[8];
@@ -280,18 +293,23 @@ ExtractDateValue(JNIEnv* env,short type, jobject target, void* data, int len) {
 
 
 int
-ExtractByteArrayValue(JNIEnv* env,short type, jobject target, void* data, int len) {
-    return ExtractBytes(env,type,(jbyteArray)target,data,len);
+ExtractByteArrayValue(JNIEnv* env, jobject target, void* data, int len) {
+    return ExtractBytes(env,(jbyteArray)target,data,len);
 }
 
-static int ExtractBytes(JNIEnv* env,short type,jbyteArray target,void* data, int len) {
+static int ExtractBytes(JNIEnv* env,jbyteArray target,void* data, int len) {
     jsize       length = (*env)->GetArrayLength(env,target);
     jboolean    copy;
     jbyte*      buffer;
-
-    buffer = (*env)->GetByteArrayElements(env,target,&copy);
-    MoveData(data,buffer,length);
-    (*env)->ReleaseByteArrayElements(env,target,buffer,JNI_ABORT);
+    if (data != NULL) {
+        if (len < length) {
+            return -1;
+        } else {
+            buffer = (*env)->GetByteArrayElements(env,target,&copy);
+            MoveData(data,buffer,length);
+            (*env)->ReleaseByteArrayElements(env,target,buffer,JNI_ABORT);
+        }
+    }
     return length;
 }
 
@@ -341,8 +359,7 @@ static jobject CreateLongField(jlong* var, JNIEnv* env) {
     return (*env)->NewObject(env,Cache->longtype,Cache->createlong,*var);
 }
 
-int PassOutValue(JNIEnv* env,short type,jobject object,void* data, int length) {
-    jobject      target = object;
+int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject target, void* data, int length) {
     jobject setval = NULL;
 
     if (target == NULL ) return 0;
@@ -355,7 +372,7 @@ int PassOutValue(JNIEnv* env,short type,jobject object,void* data, int length) {
         (*env)->SetBooleanField(env,target,Cache->onullfield,JNI_FALSE);
     }
 
-        switch(type)
+        switch(passType)
         {
             case INT4TYPE:
                 setval = CreateIntField(data,env);

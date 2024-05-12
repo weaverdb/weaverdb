@@ -427,7 +427,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     plan->slot = palloc(sizeof(InputOutput) * START_ARGS);
     memset(plan->slot, 0, sizeof (InputOutput) * START_ARGS);
     for (k=0;k<START_ARGS;k++) {
-        plan->slot[k].type = TFREE;
+        plan->slot[k].transferType = TFREE;
     }
 
     plan->tupdesc = NULL;
@@ -498,11 +498,11 @@ WOutputTransfer(OpaquePreparedStatement plan, short pos, int type, void* userenv
     }
     /* find the right binder */
     for (index = 0; index < plan->slots; index++) {
-        if (plan->slot[index].type == TFREE || plan->slot[index].index == pos)
+        if (plan->slot[index].transferType == TFREE || plan->slot[index].index == pos)
             break;
     }
 
-    plan->slot[index].type = TOUTPUT;
+    plan->slot[index].transferType = TOUTPUT;
     plan->slot[index].index = pos;
     plan->slot[index].varType = type;
     plan->slot[index].userargs = userenv;
@@ -678,7 +678,7 @@ WFetch(OpaquePreparedStatement plan) {
         int pos = 0;
 
         for (pos=0;pos<plan->slots;pos++) {
-            if (plan->slot[pos].type == TOUTPUT) {
+            if (plan->slot[pos].transferType == TOUTPUT) {
                 Datum val = (Datum) NULL;
                 char isnull = 0;
 
@@ -692,21 +692,21 @@ WFetch(OpaquePreparedStatement plan) {
                 val = HeapGetAttr(tuple, plan->slot[pos].index, tdesc, &isnull);
 
                 if (!isnull) {
-                    if (!TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index], val)) {
+                    if (!TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1], val)) {
                         Oid vType = plan->slot[pos].varType;
                         /* field was not transfered, try and coerce to see if it should someday  */
                         if (can_coerce_type(1, &tdesc->attrs[pos]->atttypid, &vType)) {
                             coded_elog(ERROR, 105, "Types are compatible but conversion not implemented link type: %d result type: %d",
-                                    plan->slot[pos].varType, tdesc->attrs[plan->slot[pos].index]->atttypid);
+                                    plan->slot[pos].varType, tdesc->attrs[plan->slot[pos].index - 1]->atttypid);
                             break;
                         } else {
                             coded_elog(ERROR, 106, "Types do not match, no type conversion . position: %d type: %d result type: %d",
-                                    pos + 1, plan->slot[pos].type, tdesc->attrs[plan->slot[pos].index]->atttypid);
+                                    plan->slot[pos].index, plan->slot[pos].varType, tdesc->attrs[plan->slot[pos].index - 1]->atttypid);
                             break;
                         }
                     }
                 } else {
-                    TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index], PointerGetDatum(NULL));
+                    TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1], PointerGetDatum(NULL));
                 }
             }
         }
@@ -824,7 +824,7 @@ ExpandSlots(PreparedPlan* plan, TransferType type) {
     plan->slot = repalloc(plan->slot, sizeof(InputOutput) * plan->slots * 2);
     memset(plan->slot + (plan->slots),0x00,(sizeof(InputOutput) * plan->slots));
     for (x=plan->slots;x<plan->slots * 2;x++) {
-        plan->slot[x].type = TFREE;
+        plan->slot[x].transferType = TFREE;
     }
     plan->slots *= 2;
     return plan->slots;
@@ -855,7 +855,7 @@ WBindTransfer(OpaquePreparedStatement plan, const char* var, int type, void* use
 
     /* find the right binder */
     for (index = 0; index < plan->slots; index++) {
-        if (plan->slot[index].type == TFREE || strcmp(var, plan->slot[index].name) == 0)
+        if (plan->slot[index].transferType == TFREE || strcmp(var, plan->slot[index].name) == 0)
             break;
     }
 
@@ -873,7 +873,7 @@ WBindTransfer(OpaquePreparedStatement plan, const char* var, int type, void* use
     if ( plan->slot[index].name == NULL ) {
         plan->slot[index].name = MemoryContextStrdup(plan->plan_cxt,var);
     }
-    plan->slot[index].type = TINPUT;
+    plan->slot[index].transferType = TINPUT;
     plan->slot[index].varType = type;
     plan->slot[index].userargs = userenv;
     plan->slot[index].transfer = func;
@@ -1389,7 +1389,7 @@ TransferExecArgs(PreparedPlan* plan) {
 
     plan->state->es_param_list_info = paramLI;
     for (k = 0; k < plan->slots; k++) {
-        if (plan->slot[k].type == TINPUT) {
+        if (plan->slot[k].transferType == TINPUT) {
             inputs += 1;
             paramLI->kind = PARAM_NAMED;
             paramLI->name = plan->slot[k].name;
@@ -1466,7 +1466,7 @@ ParsePlan(PreparedPlan* plan) {
             names = palloc(sizeof(char*) * plan->slots);
 
             for (k=0;k<plan->slots;k++) {
-                if (plan->slot[k].type == TINPUT) {
+                if (plan->slot[k].transferType == TINPUT) {
                     targs[count] = plan->slot[k].varType;
                     names[count] = plan->slot[k].name;
                     count += 1;

@@ -57,6 +57,14 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_connectSubConnec
 
 /*
  * Class:     driver_weaver_BaseWeaverConnection
+ * Method:    disposeConnection
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_disposeConnection
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     driver_weaver_BaseWeaverConnection
  * Method:    dispose
  * Signature: (J)V
  */

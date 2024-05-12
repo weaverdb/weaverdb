@@ -156,7 +156,8 @@ LIB_EXTERN bool initweaverbackend(char* vars)
         }
 
         if ( start_delay ) {
-            printf("startup delay %d\n",start_delay);
+            printf("startup delay %d on pid:%d\n",start_delay,getpid());
+            fflush(stdout);
             sleep(start_delay);
         }
         

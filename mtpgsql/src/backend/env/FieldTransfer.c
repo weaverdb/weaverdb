@@ -56,7 +56,7 @@ ConvertValueToText(InputOutput* output,Oid type,int4 typmod, Datum val) {
         }
         texto = (char *) (fmgr(foutoid, val, typelem,typmod));
 
-        output->transfer(output->userargs, type,texto,strlen(texto));
+        output->transfer(output->userargs, VARCHAROID,texto,strlen(texto));
 }
 
 static void
@@ -129,7 +129,7 @@ DirectDoubleCopyValue(InputOutput* output, double value) {
 
 bool
 TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value) {
-    if (desc->atttypid != output->type) {
+    if (desc->atttypid != output->varType) {
         switch (output->varType) {
             case STREAMINGOID:
                 StreamOutValue(output,value,desc->atttypid);

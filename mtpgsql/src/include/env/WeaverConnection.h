@@ -39,7 +39,7 @@ typedef enum ttype {
 } TransferType;
 
 typedef struct inout {
-    TransferType type;
+    TransferType transferType;
     int     index;
     char*   name;
     int     varType;

@@ -1,3 +1,4 @@
+
 plugins {
    id 'java'
 }
@@ -6,4 +7,25 @@ description = 'pg connector'
 
 jar {
     archiveBaseName = 'weaver'
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+
+    maxHeapSize = '1G'
+
+    testLogging {
+        events "passed"
+    }
+}
+
+task printClasspath {
+    doLast {
+        configurations.testRuntimeClasspath.each { println it }
+    }
 }

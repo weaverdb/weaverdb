@@ -20,7 +20,7 @@ CFLAGS += -Wno-unused-variable -Wno-unused-function
 ifeq ($(CC), CC)
 SHARED=-G -Mmapfile.txt
 else
-SHARED=-shared -fvisibility=hidden -exported_symbols_list mac_mapfile.txt
+SHARED=-shared -ld_classic -fvisibility=hidden -exported_symbols_list mac_mapfile.txt
 endif
 
 MYINC=\
