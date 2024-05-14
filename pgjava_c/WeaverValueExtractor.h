@@ -27,7 +27,7 @@ typedef struct javacache {
     jclass                          linkid;
     jclass                          boundin;
     jclass                          boundout;
-    
+
     jclass                          chartype;
     jclass                          inttype;
     jclass                          longtype;

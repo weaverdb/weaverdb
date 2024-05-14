@@ -33,9 +33,14 @@ StreamOutValue(InputOutput* dest, Datum val, Oid type) {
         Datum pointer = open_read_pipeline_blob(val,false);
         while (read_pipeline_segment_blob(pointer,buffer,&length,buf_sz) ) {
             Assert(length > 0);
-            result = dest->transfer(dest->userargs,type,buffer,length);
-            if (result != 0) {
-                break;
+            int sent = 0;
+            while (sent < length) {
+                result = dest->transfer(dest->userargs,type,buffer,length);
+                if (result < 0) {
+                    return result;
+                } else {
+                    sent += result;
+                }
             }
         }
         close_read_pipeline_blob(pointer);
@@ -81,14 +86,19 @@ BinaryCopyOutValue(InputOutput* output, Form_pg_attribute desc, Datum value) {
             char* target = palloc(size);
             while (read_pipeline_segment_blob(pointer,buffer,&length,buf_sz) ) {
                 Assert(length > 0);
-                int result = output->transfer(output->userargs, desc->atttypid, buffer, length);
-                if (result != 0) {
-                    break;
+                int sent = 0;
+                while (sent < length) {
+                    int result = output->transfer(output->userargs, desc->atttypid, buffer, length);
+                    if (result < 0) {
+                        return result;
+                    } else {
+                        sent += result;
+                    }   
                 }
             }
             close_read_pipeline_blob(pointer);
             pfree(buffer);
-            return result;
+            return length;
         } else {
             return output->transfer(output->userargs, desc->atttypid, VARDATA(value), VARSIZE(value) - 4);
         }
@@ -217,6 +227,6 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value) {
                 return false;
         }
     }
-    return result == 0;
+    return result >= 0;
 }
 

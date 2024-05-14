@@ -252,17 +252,18 @@ public class BaseWeaverConnection implements AutoCloseable {
 
     public native void streamExec(String statement) throws ExecutionException;
 
-    protected void pipeOut(byte[] data) throws IOException {
+    protected int pipeOut(byte[] data) throws IOException {
         os.write(data);
         os.flush();
+        return data.length;
     }
 
-    protected void pipeOut(java.nio.ByteBuffer data) throws IOException {
+    protected int pipeOut(java.nio.ByteBuffer data) throws IOException {
         byte[] send = (data.hasArray()) ? data.array() : new byte[data.remaining()];
         if (!data.hasArray()) {
             data.get(send);
         }
-        pipeOut(send);
+        return pipeOut(send);
     }
 
     protected int pipeIn(byte[] data) throws IOException {
@@ -318,7 +319,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
         
         public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws ExecutionException {
-            BoundInput bi = inputs.get(name);
+            BoundInput<T> bi = inputs.get(name);
             if ( bi != null ) {
                 if ( bi.isSameType(type) ) return bi;
                 else bi.deactivate();

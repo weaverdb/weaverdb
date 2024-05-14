@@ -509,43 +509,13 @@ static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
 }
 
 
-static int direct_pipeout(void* arg,int type, void* buff,int run)
-{
-    JNIEnv*  env = NULL;
-    jobject target = arg;
-    
-    (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
-
-    target = (*env)->NewLocalRef(env,target);
-    if ((*env)->IsSameObject(env,target,NULL)) {
-        return PIPING_ERROR;
-    }
-
-    jobject jb = (*env)->NewDirectByteBuffer(env,buff,run);
-    
-    if ( jb != NULL ) {
-    	(*env)->CallVoidMethod(env,target,Cache->pipeout,jb);
-        if ( (*env)->ExceptionOccurred(env) ) {
-            return PIPING_ERROR;
-        } else {
-            return 0;
-        }
-    } else {
-        if ( (*env)->ExceptionOccurred(env) ) {
-            return PIPING_ERROR;
-        }
-        return -1;
-    }
-}
 
 static int transferin(void* arg,int type, void* buff,int run)
 {
     CommArgs* comm = arg;
     JNIEnv*  env = comm->env;
     jobject target = comm->target;
-        
-    (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
-    
+
     if ((*env)->IsSameObject(env,target,NULL)) {
         return PIPING_ERROR;
     }
@@ -567,9 +537,7 @@ static int transferout(void* arg,int type, void* buff,int run)
     CommArgs* comm = arg;
     JNIEnv*  env = comm->env;
     jobject target = comm->target;
-        
-    (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
-    
+                
     if ((*env)->IsSameObject(env,target,NULL)) {
         return PIPING_ERROR;
     }
@@ -577,14 +545,43 @@ static int transferout(void* arg,int type, void* buff,int run)
     return PassOutValue(env,comm->bindType,comm->linkType,type,target, buff, run);
 }
 
+static int direct_pipeout(void* arg,int type, void* buff,int run)
+{
+    CommArgs* comm = arg;
+    JNIEnv*  env = comm->env;
+    jobject target = comm->target;
+    
+    if ((*env)->IsSameObject(env,target,NULL)) {
+        return PIPING_ERROR;
+    }
+
+    if (type == METANAMETYPE) {
+        return PassOutValue(env,comm->bindType,comm->linkType,type,target, buff, run);
+    } else {
+        jobject jb = (*env)->NewDirectByteBuffer(env,buff,run);
+
+        if ( jb != NULL ) {
+            int len = (*env)->CallIntMethod(env,target,Cache->pipeout,jb);
+            if ( (*env)->ExceptionCheck(env) ) {
+                return PIPING_ERROR;
+            } else {
+                return len;
+            }
+        } else {
+            if ( (*env)->ExceptionCheck(env) ) {
+                return PIPING_ERROR;
+            }
+            return -1;
+        }
+    }
+}
+
 static int direct_pipein(void* arg,int type, void* buff,int run)
 {
-    JNIEnv*  env = NULL;
-    jobject target = arg;
+    CommArgs* comm = arg;
+    JNIEnv*  env = comm->env;
+    jobject target = comm->target;
         
-    (*jvm)->AttachCurrentThread(jvm, (void **)&env, NULL);
-    
-    target = (*env)->NewLocalRef(env,target);
     if ((*env)->IsSameObject(env,target,NULL)) {
         return PIPING_ERROR;
     }
@@ -593,13 +590,13 @@ static int direct_pipein(void* arg,int type, void* buff,int run)
 
     if ( jb != NULL ) {
     	jint count = (*env)->CallIntMethod(env,target,Cache->pipein,jb);
-        if ( (*env)->ExceptionOccurred(env) ) {
+        if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         }
         
     	return count;
     } else {
-        if ( (*env)->ExceptionOccurred(env) ) {
+        if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         }
 
@@ -612,8 +609,6 @@ static int pipeout(void* args,int type, void* buff,int run)
     CommArgs*  commargs = args;
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
-
-    target = (*env)->NewLocalRef(env,target);
     
     if ((*env)->IsSameObject(env,target,NULL)) {
         return PIPING_ERROR;
@@ -623,14 +618,14 @@ static int pipeout(void* args,int type, void* buff,int run)
 
     if ( jb != NULL ) {
     	(*env)->SetByteArrayRegion(env,jb,0,run,(jbyte*)(buff));
-    	(*env)->CallVoidMethod(env,target,Cache->infoout,jb);
-        if ( (*env)->ExceptionOccurred(env) ) {
+    	int len = (*env)->CallIntMethod(env,target,Cache->infoout,jb);
+        if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         } else {
-            return 0;
+            return len;
         }
     } else {
-        if ( (*env)->ExceptionOccurred(env) ) {
+        if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         }
         return -1;
@@ -643,8 +638,6 @@ static int pipein(void* args,int type, void* buff,int run)
     JNIEnv*    env = commargs->env;
     jobject    target = commargs->target;
 
-    target = (*env)->NewLocalRef(env,target);
-
     if ((*env)->IsSameObject(env,target,NULL)) {
         return PIPING_ERROR;
     }
@@ -653,7 +646,7 @@ static int pipein(void* args,int type, void* buff,int run)
 
     if ( jb != NULL ) {
     	jint count = (*env)->CallIntMethod(env,target,Cache->infoin,jb);
-        if ( (*env)->ExceptionOccurred(env) ) {
+        if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         }
         if ( count > 0 ) {
@@ -661,7 +654,7 @@ static int pipein(void* args,int type, void* buff,int run)
         }
     	return count;
     } else {
-        if ( (*env)->ExceptionOccurred(env) ) {
+        if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         }
         return -1;

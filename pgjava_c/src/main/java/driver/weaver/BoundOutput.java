@@ -82,13 +82,15 @@ public class BoundOutput<T> extends Bound<T> {
         return value == null;
     }
 
-    protected void pipeOut(byte[] data) throws IOException {
+    protected int pipeOut(byte[] data) throws IOException {
         if ( value == null ) throw new IOException("pipe not connected");
         OutputStream os = (OutputStream) value;
         os.write(data);
+        return data.length;
     }
 
-    protected void pipeOut(java.nio.ByteBuffer data) throws IOException {
+    protected int pipeOut(java.nio.ByteBuffer data) throws IOException {
+        int len = data.remaining();
         if ( value == null ) throw new IOException("pipe not connected");
         if (value instanceof WritableByteChannel) {
             while (data.hasRemaining()) {
@@ -103,5 +105,6 @@ public class BoundOutput<T> extends Bound<T> {
                 ((OutputStream) value).write(open);
             }
         }
+        return len;
     }
 }

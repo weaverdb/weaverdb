@@ -65,9 +65,9 @@ javacache*  CreateCache(JNIEnv* env) {
 	CachedClasses.ivalue = (*env)->GetFieldID(env,CachedClasses.boundin,"value","Ljava/lang/Object;");
         
         CachedClasses.pipein = (*env)->GetMethodID(env,CachedClasses.boundin,"pipeIn","(Ljava/nio/ByteBuffer;)I");
-        CachedClasses.pipeout = (*env)->GetMethodID(env,CachedClasses.boundout,"pipeOut","(Ljava/nio/ByteBuffer;)V");
+        CachedClasses.pipeout = (*env)->GetMethodID(env,CachedClasses.boundout,"pipeOut","(Ljava/nio/ByteBuffer;)I");
         CachedClasses.infoin = (*env)->GetMethodID(env,CachedClasses.talker,"pipeIn","([B)I");
-        CachedClasses.infoout = (*env)->GetMethodID(env,CachedClasses.talker,"pipeOut","([B)V");
+        CachedClasses.infoout = (*env)->GetMethodID(env,CachedClasses.talker,"pipeOut","([B)I");
         CachedClasses.itypeid = (*env)->GetMethodID(env,CachedClasses.boundin,"getTypeId","()I");
         CachedClasses.otypeid = (*env)->GetMethodID(env,CachedClasses.boundout,"getTypeId","()I");
         /*  output types */
@@ -382,6 +382,7 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
         setval = CreateStringField(data,length,env);
         (*env)->SetObjectField(env,target,Cache->oname,setval);
         (*env)->DeleteLocalRef(env,setval);
+         return length;
     } else {
         switch(passType) {
             case INT4TYPE:
@@ -427,5 +428,5 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
             (*env)->DeleteLocalRef(env,setval);
         }
     }
-    return 0;
+    return length;
 }

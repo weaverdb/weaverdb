@@ -891,7 +891,7 @@ span_buffered_blob(Relation rel, HeapTuple tuple)
                 Relation storerel = find_storage_relation(rel,tuple,atts->attrs[c]->attnum);
                 LockRelation(storerel,AccessShareLock);
 
-                com = *(CommBuffer**)DatumGetPointer(blob);
+                com = (CommBuffer*)DatumGetPointer(blob);
                 append = palloc(bufsz);
 
                 Datum write = open_write_pipeline_blob(storerel);
@@ -908,7 +908,6 @@ span_buffered_blob(Relation rel, HeapTuple tuple)
                 replaces[c] = 'r';
                 values[c] = close_write_pipeline_blob(write);
                 pfree(append);
-                pfree(com);
                 if ( storerel->rd_id != rel->rd_id ) limit = 0;
 
                 UnlockRelation(storerel,AccessShareLock);

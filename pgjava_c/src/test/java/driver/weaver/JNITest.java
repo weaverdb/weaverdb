@@ -1,7 +1,11 @@
 package driver.weaver;
 
 import driver.weaver.BaseWeaverConnection.Statement;
+import java.io.IOException;
 import java.io.Writer;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.Properties;
 
 /*
@@ -49,7 +53,7 @@ public class JNITest {
         Properties prop = new Properties();
         prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
         prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "1");
+        prop.setProperty("start_delay", "10");
         prop.setProperty("debuglevel", "DEBUG");
         prop.setProperty("stdlog", "TRUE");
         WeaverInitializer.initialize(prop);
@@ -202,6 +206,76 @@ public class JNITest {
                     System.out.println("Marcus=" + id.get());
                 }
             }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testStreaming() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (Statement s = conn.parse("create schema fortune")) {
+                s.execute();
+            }
+            try (Statement s = conn.parse("create table fortune/streamimg (id int4, data blob)")) {
+                s.execute();
+            }
+            try (Statement s = conn.parse("insert into fortune/streamimg (id, data) values ($id, $bin)")) {
+                BoundInput<Integer> id = s.linkInput("id", Integer.class);
+                BoundInput<ReadableByteChannel> name = s.linkInput("bin", ReadableByteChannel.class);
+                id.set(1);
+                name.set(new ReadableByteChannel() {
+                    boolean consumed = false;
+                    @Override
+                    public int read(ByteBuffer dst) throws IOException {
+                        if (consumed) return -1;
+                        consumed = true;
+                        byte[] data = "the quick brown fox".getBytes();
+                        if (dst.remaining() > data.length) {
+                            dst.put(data);
+                        }
+                        return data.length;
+                    }
+
+                    @Override
+                    public boolean isOpen() {
+                        return true;
+                    }
+
+                    @Override
+                    public void close() throws IOException {
+                        
+                    }
+                });
+                s.execute();
+            }
+            try (Statement s = conn.parse("select data from fortune/streamimg where id=$id")) {
+                BoundInput<Integer> id = s.linkInput("id", Integer.class);
+                BoundOutput<WritableByteChannel> data = s.linkOutput(1, WritableByteChannel.class);
+                id.set(1);
+                data.setChannel(new WritableByteChannel() {
+                    boolean consumed = false;
+                    @Override
+                    public int write(ByteBuffer src) throws IOException {
+                        if (consumed) return -1;
+                        byte[] data = new byte[src.remaining()];
+                        src.get(data);
+                        System.out.println(new String(data));
+                        return data.length;
+                    }
+
+                    @Override
+                    public boolean isOpen() {
+                        return true;
+                    }
+
+                    @Override
+                    public void close() throws IOException {
+                        
+                    }
+                });
+                s.execute();
+                s.fetch();
+            }
+            
         }
     }
 }
