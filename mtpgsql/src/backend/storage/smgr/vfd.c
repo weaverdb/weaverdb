@@ -741,10 +741,9 @@ vfdexpirelogs() {
     strncpy(newname + len,".old",4);
     
     FileRename(log_file,newname);
-    newname[len] = 0x00;
     log_file = _openlogfile(newname,false);
 
-    return len;
+    return SM_SUCCESS;
 }
 
 int

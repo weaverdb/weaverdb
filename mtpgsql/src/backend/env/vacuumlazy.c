@@ -2382,9 +2382,7 @@ void  vacuum_log(Relation rel, char* pattern, ...) {
 #ifdef SUNOS
     DTRACE_PROBE3(mtpg,vacuum__msg,msg,RelationGetRelid(rel),GetDatabaseId());  
 #endif
-#ifdef DEBUGLOGS
-    elog(DEBUG,"vacuum:%d/%d %s",RelationGetRelid(rel),GetDatabaseId(),msg); 
-#endif
+    elog(DEBUG,"vacuum:%ld/%ld %s",RelationGetRelid(rel),GetDatabaseId(),msg); 
     va_end(args);
 }
 

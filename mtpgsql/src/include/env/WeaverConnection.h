@@ -121,6 +121,8 @@ LIB_EXTERN void WResetQuery(WConn conn,bool err);
 
 LIB_EXTERN bool
 TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value);
+LIB_EXTERN bool
+TransferColumnName(InputOutput* output, Form_pg_attribute desc);
 #ifdef __cplusplus
 }
 #endif

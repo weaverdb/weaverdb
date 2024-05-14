@@ -71,7 +71,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         } else {
             try {
                 connect.dispose();
-            } catch (WeaverException ee) {
+            } catch (ExecutionException ee) {
                 LOGGING.log(Level.WARNING, "Error disposing connection", ee);
             }
             return null;
@@ -87,7 +87,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         } else {
             try {
                 connect.dispose();
-            } catch (WeaverException ee) {
+            } catch (ExecutionException ee) {
                 LOGGING.log(Level.WARNING, "Error disposing connection", ee);
             }
             return null;
@@ -111,7 +111,7 @@ public class BaseWeaverConnection implements AutoCloseable {
     private long connectToDatabaseAnonymously(String db) {
         try {
             return grabConnection(null, null, db);
-        } catch (WeaverException ee) {
+        } catch (ExecutionException ee) {
             return 0L;
         }
     }
@@ -119,17 +119,17 @@ public class BaseWeaverConnection implements AutoCloseable {
     private long connectToDatabaseWithUsername(String name, String password, String database) {
         try {
             return grabConnection(name, password, database);
-        } catch (WeaverException ee) {
+        } catch (ExecutionException ee) {
             return 0L;
         }
     }
 
     @Override
-    public void close() throws WeaverException {
+    public void close() throws ExecutionException {
         dispose();
     }
 
-    private synchronized void dispose() throws WeaverException {
+    private synchronized void dispose() throws ExecutionException {
         if ( nativePointer != 0 && isOpen.compareAndSet(true, false)) {
             ConnectionRef ref = liveConnections.remove(nativePointer);
             if (ref != null && ref.dispose()) {
@@ -138,7 +138,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
 
-    public BaseWeaverConnection spawnHelper() throws WeaverException {
+    public BaseWeaverConnection spawnHelper() throws ExecutionException {
         return new BaseWeaverConnection(this.connectSubConnection());
     }
 
@@ -150,35 +150,35 @@ public class BaseWeaverConnection implements AutoCloseable {
         resultField = 0;
     }
     
-    public Statement statement(String statement) throws WeaverException {
+    public Statement statement(String statement) throws ExecutionException {
         return new Statement(statement);
     }
 
-    public long begin() throws WeaverException {
+    public long begin() throws ExecutionException {
         transactionId = beginTransaction();
         auto = false;
         return transactionId;
     }
 
-    public void prepare() throws WeaverException {
+    public void prepare() throws ExecutionException {
         prepareTransaction();
     }
 
-    public void cancel() throws WeaverException {
+    public void cancel() throws ExecutionException {
         cancelTransaction();
     }
 
     public void abort() {
         try {
             abortTransaction();
-        } catch ( WeaverException exp ) {
+        } catch ( ExecutionException exp ) {
             throw new RuntimeException(exp);
         } finally {
             transactionId = 0;
         }
     }
 
-    public void commit() throws WeaverException {
+    public void commit() throws ExecutionException {
         try {
             commitTransaction();
         } finally {
@@ -186,15 +186,15 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
 
-    public void start() throws WeaverException {
+    public void start() throws ExecutionException {
         beginProcedure();
     }
 
-    public void end() throws WeaverException {
+    public void end() throws ExecutionException {
         endProcedure();
     }
     
-    public Statement parse(String stmt) throws WeaverException {
+    public Statement parse(String stmt) throws ExecutionException {
         if (transactionId == 0) {
             transactionId = beginTransaction();
             auto = true;
@@ -228,27 +228,27 @@ public class BaseWeaverConnection implements AutoCloseable {
         return transactionId;
     }
     
-    private native long grabConnection(String name, String password, String connect) throws WeaverException;
-    private native long connectSubConnection() throws WeaverException;
+    private native long grabConnection(String name, String password, String connect) throws ExecutionException;
+    private native long connectSubConnection() throws ExecutionException;
     private static native void disposeConnection(long link);
     private native void dispose(long link);
 
-    private native long prepareStatement(String theStatement) throws WeaverException;
-    private native long executeStatement(long link, BoundInput[] args) throws WeaverException;
-    private native boolean fetchResults(long link, BoundOutput[] args) throws WeaverException;
+    private native long prepareStatement(String theStatement) throws ExecutionException;
+    private native long executeStatement(long link, BoundInput[] args) throws ExecutionException;
+    private native boolean fetchResults(long link, BoundOutput[] args) throws ExecutionException;
 
-    private native void prepareTransaction() throws WeaverException;
+    private native void prepareTransaction() throws ExecutionException;
     private native void cancelTransaction();
-    private native long beginTransaction() throws WeaverException;
-    private native void commitTransaction() throws WeaverException;
-    private native void abortTransaction() throws WeaverException;
-    private native void beginProcedure() throws WeaverException;
-    private native void endProcedure() throws WeaverException;
+    private native long beginTransaction() throws ExecutionException;
+    private native void commitTransaction() throws ExecutionException;
+    private native void abortTransaction() throws ExecutionException;
+    private native void beginProcedure() throws ExecutionException;
+    private native void endProcedure() throws ExecutionException;
 
     private native long getTransactionId();
     private native long getCommandId(long link);
 
-    public native void streamExec(String statement) throws WeaverException;
+    public native void streamExec(String statement) throws ExecutionException;
 
     protected void pipeOut(byte[] data) throws IOException {
         os.write(data);
@@ -291,7 +291,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         private final long  link;
         private final String raw;
         
-        Statement(String statement) throws WeaverException {
+        Statement(String statement) throws ExecutionException {
             link = prepareStatement(statement);
             raw = statement;
         }
@@ -303,35 +303,35 @@ public class BaseWeaverConnection implements AutoCloseable {
         private final Map<Integer,BoundOutput> outputs = new HashMap<>();
         private final Map<String,BoundInput> inputs = new HashMap<>();
     
-        public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws WeaverException {
+        public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws ExecutionException {
             BoundOutput<T> bo = outputs.get(index);
             if ( bo != null ) {
                 if ( bo.isSameType(type) ) return bo;
                 else bo.deactivate();
             }
 
-            bo = new BoundOutput<>(BaseWeaverConnection.this,link,index, type);
+            bo = new BoundOutput<>(this,index, type);
             outputs.put(index, bo);
             return bo;
         }
         
-        public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws WeaverException {
+        public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws ExecutionException {
             BoundInput bi = inputs.get(name);
             if ( bi != null ) {
                 if ( bi.isSameType(type) ) return bi;
                 else bi.deactivate();
             }
 
-            bi = new BoundInput<>(BaseWeaverConnection.this,link, name, type);
+            bi = new BoundInput<>(this, name, type);
             inputs.put(name, bi);
             return bi;
         }
         
-        public boolean fetch() throws WeaverException {
+        public boolean fetch() throws ExecutionException {
             return fetchResults(link, outputs.values().toArray(BoundOutput[]::new));
         }        
         
-        public long execute() throws WeaverException {
+        public long execute() throws ExecutionException {
             return executeStatement(link, inputs.values().toArray(BoundInput[]::new));
         }
         

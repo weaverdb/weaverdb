@@ -4,7 +4,7 @@ import java.util.Properties;
 
 public class WeaverInitializer {
     
-    static boolean loaded = false;
+    private static boolean loaded = false;
     
     public WeaverInitializer() {
         

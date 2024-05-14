@@ -126,7 +126,6 @@ static bool IsEmptyQuery = false;
 DLLIMPORT sigjmp_buf Warn_restart;
 
 bool		Warn_restart_ready = false;
-bool		InError = false;
 bool		ExitAfterAbort = false;
 
 static bool EchoQuery = false;	/* default don't echo */
@@ -753,15 +752,7 @@ void
 die(SIGNAL_ARGS)
 {
 	PG_SETMASK(&BlockSig);
-
-	/*
-	 * If ERROR/FATAL is in progress...
-	 */
-	if (InError)
-	{
-		ExitAfterAbort = true;
-		return;
-	}
+        ExitAfterAbort = true;
 	elog(FATAL, "The system is shutting down");
 }
 
@@ -1522,13 +1513,12 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
                     SetAbortOnly();
                 }
                 CommitTransactionCommand();
-		InError = false;
 		if (ExitAfterAbort)
 		{
 			ThreadReleaseLocks(false); /* Just to be sure... */
 			proc_exit(0);
+                }
 
-		}
 	}
 
 	Warn_restart_ready = true;	/* we can now handle elog(ERROR) */

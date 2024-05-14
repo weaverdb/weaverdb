@@ -8,7 +8,6 @@ package driver.weaver;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.WritableByteChannel;
-import java.util.Date;
 
 /**
  *
@@ -16,50 +15,18 @@ import java.util.Date;
  */
 public class BoundOutput<T> extends Bound<T> {
 
-    private final BaseWeaverConnection owner;
-    private final long link;
+    private final BaseWeaverConnection.Statement owner;
     private final int index;
+    private String columnName;
     private Object value;
-    private boolean isnull = true;
 
-    protected BoundOutput(BaseWeaverConnection fc, long link, int index, Class<T> type) throws WeaverException {
+    protected BoundOutput(BaseWeaverConnection.Statement fc, int index, Class<T> type) throws ExecutionException {
+        super(type);
         owner = fc;
-        this.link = link;
-        setTypeClass(type);
         this.index = index;
-        bind();
-    } 
-
-    private void bind() throws WeaverException {
-        Class<T> type = getTypeClass();
-        if (type.equals(String.class)) {
-           setType(Types.String);
-        } else if (type.equals(Double.class)) {
-            setType(Types.Double);
-        } else if (type.equals(Integer.class)) {
-            setType(Types.Integer);
-        } else if (type.equals(byte[].class)) {
-            setType(Types.Binary);
-        } else if (type.equals(java.io.ByteArrayInputStream.class)) {
-            setType(Types.BLOB);
-        } else if (type.equals(Character.class)) {
-            setType(Types.Character);
-        } else if (type.equals(Date.class)) {
-            setType(Types.Date);
-        } else if (type.equals(Long.class)) {
-            setType(Types.Long);
-        } else if (type.equals(Boolean.class)) {
-            setType(Types.Boolean);
-        } else if (java.nio.channels.WritableByteChannel.class.isAssignableFrom(type)) {
-            setType(Types.Direct);
-        } else if (java.io.OutputStream.class.isAssignableFrom(type)) {
-            setType(Types.Stream);
-        } else {
-            setType(Types.Java);
-        }
     }
 
-    protected BaseWeaverConnection getOwner() {
+    protected BaseWeaverConnection.Statement getOwner() {
         return owner;
     }
 
@@ -70,8 +37,16 @@ public class BoundOutput<T> extends Bound<T> {
     public void setChannel(java.nio.channels.WritableByteChannel value) {
         this.value = value;
     }
+    
+    public String getName() {
+        return columnName;
+    }
+    
+    public int getIndex() {
+        return index;
+    }
 
-    public T get() throws WeaverException {
+    public T get() throws ExecutionException {
         if (value == null) {
             return null;
         }
@@ -98,9 +73,13 @@ public class BoundOutput<T> extends Bound<T> {
                     return getTypeClass().cast(value);
             }
         } catch (ClassCastException exp) {
-            throw new WeaverException("type cast exception", exp);
+            throw new ExecutionException("type cast exception", exp);
         }
         return null;
+    }
+    
+    public boolean isNull() {
+        return value == null;
     }
 
     protected void pipeOut(byte[] data) throws IOException {

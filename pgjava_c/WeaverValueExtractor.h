@@ -44,11 +44,15 @@ typedef struct javacache {
     jfieldID                        eState;
     /*  BoundOutput fields */
     jfieldID                        oindex;
+    jfieldID                        oname;
     jfieldID                        ovalue;
     jfieldID                        onullfield;
     /*  BoundInput fields */
     jfieldID                        iname;
     jfieldID                        ivalue;
+
+    jmethodID                        ecstor;
+    jmethodID                        suppressed;
     /*  BoundOutput/BoundInput methods */
     jmethodID                        pipein;
     jmethodID                        pipeout;

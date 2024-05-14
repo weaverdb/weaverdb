@@ -613,7 +613,7 @@ WExec(OpaquePreparedStatement plan) {
                             if ( ExecPut(slot,&tuple_ctid,plan->state) == HeapTupleUpdated ) {
                                 count++;
                             }
-                           break;
+                           break;                            
                         default:
                             elog(DEBUG, "ExecutePlan: unknown operation in queryDesc");
                             break;
@@ -687,6 +687,10 @@ WFetch(OpaquePreparedStatement plan) {
                 }
                 if (tuple->t_data->t_natts < plan->slot[pos].index || plan->slot[pos].index < 0) {
                     coded_elog(ERROR, 107, "wrong number of attributes");
+                }
+
+                if (plan->stage != STMT_FETCH && plan->processed == 0) {
+                    TransferColumnName(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1]);
                 }
 
                 val = HeapGetAttr(tuple, plan->slot[pos].index, tdesc, &isnull);
@@ -1132,6 +1136,18 @@ WFreeMemory(OpaqueWConn conn, void* pointer) {
     RELEASE(connection);
 }
 
+
+void
+WCheckMemory(OpaqueWConn conn) {
+    WConn connection = SETUP(conn);
+    int err;
+
+    READY(connection, err);
+    fprintf(stdout, "memory of connection: %ld\n", MemoryContextStats(conn->memory));    
+   
+    RELEASE(connection);
+}
+
 long
 WUserLock(OpaqueWConn conn, const char *group, uint32_t val, char lockit) {
     WConn connection = SETUP(conn);
@@ -1341,7 +1357,7 @@ WResetQuery(WConn connection,bool err) {
     }
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
 #ifdef MEMORY_STATS
-    fprintf(stderr, "memory at query: %d\n", MemoryContextStats(MemoryContextGetEnv()->QueryContext));
+    fprintf(stderr, "memory at query: %ld\n", MemoryContextStats(MemoryContextGetEnv()->QueryContext));
 #endif
     MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
 }
@@ -1354,7 +1370,7 @@ WResetExecutor(PreparedPlan * plan) {
 
     if ( plan->exec_cxt != NULL ) {
 #ifdef MEMORY_STATS
-        fprintf(stderr, "memory at exec: %d\n", MemoryContextStats(plan->exec_cxt));
+        fprintf(stderr, "memory at exec: %ld\n", MemoryContextStats(plan->exec_cxt));
 #endif
         MemoryContextResetAndDeleteChildren(plan->exec_cxt);
     } else {

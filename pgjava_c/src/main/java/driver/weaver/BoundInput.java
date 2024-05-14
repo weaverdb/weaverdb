@@ -16,53 +16,25 @@ import java.nio.channels.ReadableByteChannel;
  */
 public class BoundInput<T> extends Bound<T> {
 
-    private final BaseWeaverConnection owner;
-    private final long  link;
+    private final BaseWeaverConnection.Statement owner;
     private final String name;
     private Object value;
 
-    protected BoundInput(BaseWeaverConnection fc, long id,String name, Class<T> type) throws WeaverException {
+    protected BoundInput(BaseWeaverConnection.Statement fc, String name, Class<T> type) throws ExecutionException {
+        super(type);
         owner = fc;
-        link = id;
-        setTypeClass(type);
         this.name = name;
-        bind();
     }  
-   
-    private void bind() throws WeaverException {
-        Class<T> type = getTypeClass();
-        if (type.equals(String.class)) {
-            setType(Types.String);
-        } else if (type.equals(Double.class)) {
-            setType(Types.Double);
-        } else if (type.equals(Integer.class)) {
-            setType(Types.Integer);
-        } else if (type.equals(byte[].class)) {
-            setType(Types.Binary);
-        } else if (type.equals(java.io.ByteArrayOutputStream.class)) {
-            setType(Types.BLOB);
-        } else if (type.equals(Character.class)) {
-            setType(Types.Character);
-        } else if (type.equals(java.util.Date.class)) {
-            setType(Types.Date);
-        } else if (type.equals(Long.class)) {
-            setType(Types.Long);
-        } else if (type.equals(Boolean.class)) {
-            setType(Types.Boolean);
-        } else if (java.nio.channels.ReadableByteChannel.class.isAssignableFrom(type)) {
-            setType(Types.Direct);
-        } else if (java.io.InputStream.class.isAssignableFrom(type)) {
-            setType(Types.Stream);
-        } else {
-            setType(Types.Java);
-        }
+  
+    public String getName() {
+        return name;
     }
 
-    protected BaseWeaverConnection getOwner() {
+    protected BaseWeaverConnection.Statement getOwner() {
         return owner;
     }
 
-    public void set(T value) throws WeaverException {        
+    public void set(T value) throws ExecutionException {        
         if ( value == null ) {
             this.value = null;
             return;
@@ -70,8 +42,7 @@ public class BoundInput<T> extends Bound<T> {
         
         switch (getType()) {
             case BLOB:
-                if (value instanceof InputStream) {
-                    InputStream is = (InputStream) value;
+                if (value instanceof InputStream is) {
                     ByteArrayOutputStream out = new ByteArrayOutputStream();
                     byte[] buff = new byte[1024];
                     try {
@@ -88,25 +59,24 @@ public class BoundInput<T> extends Bound<T> {
                 } else if (value instanceof byte[]) {
                     this.value = value;
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for BLOB from " + name);
+                    throw new ExecutionException("invalid type conversion for BLOB from " + value.getClass().getName());
                 }
                 break;
+
             case Direct:
             case Stream:
                 this.value = value;
                 break;
             case Character:
-                if (value instanceof Character) {
-                    this.value = (Character) value;
+                if (value instanceof Character character) {
+                    this.value = character;
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for Character from " + name);
+                    throw new ExecutionException("invalid type conversion for Character from " + value.getClass().getName());
                 }
                 break;
+
             case Binary:
-                if (value instanceof InputStream) {
-                    InputStream is = (InputStream) value;
+                if (value instanceof InputStream is) {
                     ByteArrayOutputStream out = new ByteArrayOutputStream();
                     byte[] buff = new byte[1024];
                     try {
@@ -124,49 +94,44 @@ public class BoundInput<T> extends Bound<T> {
                 } else if (value instanceof byte[]) {
                     this.value = value;
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for Binary from " + name);
+                    throw new ExecutionException("invalid type conversion for Binary from " + value.getClass().getName());
                 }
                 break;
+
             case String:
                 this.value = value;
                 break;
             case Boolean:
                 if (value instanceof Boolean) {
                     this.value = value;
-                } else if (value instanceof Integer) {
-                    Integer sb = (Integer) value;
-                    this.value = (sb.intValue() != 0);
+                } else if (value instanceof Integer sb) {
+                    this.value = (sb != 0);
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for Boolean from " + name);
+                    throw new ExecutionException("invalid type conversion for Boolean from " + value.getClass().getName());
                 }
                 break;
             case Integer:
-                if (value instanceof Boolean) {
-                    Boolean sb = (Boolean) value;
+                if (value instanceof Boolean sb) {
                     this.value = (sb) ? 1 : 0;
                 } else if (value instanceof Integer) {
                     this.value = value;
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for Integer from " + name);
+                    throw new ExecutionException("invalid type conversion for Integer from " + value.getClass().getName());
                 }
                 break;
+
             case Date:
                 if (value instanceof java.util.Date) {
                     this.value = value;
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for Date from " + name);
+                    throw new ExecutionException("invalid type conversion for Date from " + value.getClass().getName());
                 }
                 break;
             case Long:
                 if (value instanceof java.lang.Long) {
                     this.value = value;
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for Long from " + name);
+                    throw new ExecutionException("invalid type conversion for Long from " + value.getClass().getName());
                 }
                 break;
             case Java:
@@ -177,23 +142,21 @@ public class BoundInput<T> extends Bound<T> {
                 if (value instanceof Double) {
                     this.value = value;
                 } else {
-                    String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                    throw new WeaverException("invalid type conversion for Date from " + name);
+                    throw new ExecutionException("invalid type conversion for Date from " + value.getClass().getName());
                 }
                 break;
             default:
             {
-                String name = ( value != null ) ? value.getClass().getName() : "NULL";
-                throw new WeaverException("invalid type conversion for " + getType().toString() + " from " + name);
+                throw new ExecutionException("invalid type conversion for " + getType().toString() + " from " + value.getClass().getName());
             }
         }
     }
 
-    public void setObject(Object obj) throws WeaverException {
+    public void setObject(Object obj) throws ExecutionException {
         try {
             set(getTypeClass().cast(obj));
         } catch (ClassCastException cast) {
-            throw new WeaverException(cast);
+            throw new ExecutionException(cast);
         }
     }
 

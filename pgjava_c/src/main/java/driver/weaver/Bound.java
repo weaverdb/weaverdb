@@ -12,10 +12,49 @@ package driver.weaver;
  */
 public class Bound<T> {
 
-    private Types settype = Types.Null;
-    private Class<T> type = null;
-    private boolean active = true;
+    private final Types settype;
+    private final Class<T> type;
+    private boolean orphaned;
 
+    public Bound(Class<T> type) {
+        this.type = type;
+        this.settype = bind(this.type);
+    }
+    
+    private static Types bind(Class<?> type) {
+        if (type.equals(String.class)) {
+            return Types.String;
+        } else if (type.equals(Double.class)) {
+            return Types.Double;
+        } else if (type.equals(Integer.class)) {
+            return Types.Integer;
+        } else if (type.equals(byte[].class)) {
+            return Types.Binary;
+        } else if (type.equals(java.io.ByteArrayInputStream.class)) {
+            return Types.BLOB;
+        } else if (type.equals(java.io.ByteArrayOutputStream.class)) {
+            return Types.BLOB;
+        } else if (type.equals(Character.class)) {
+            return Types.Character;
+        } else if (type.equals(java.util.Date.class)) {
+            return Types.Date;
+        } else if (type.equals(Long.class)) {
+            return Types.Long;
+        } else if (type.equals(Boolean.class)) {
+            return Types.Boolean;
+        } else if (java.nio.channels.WritableByteChannel.class.isAssignableFrom(type)) {
+            return Types.Direct;
+        } else if (java.nio.channels.ReadableByteChannel.class.isAssignableFrom(type)) {
+            return Types.Direct;
+        } else if (java.io.OutputStream.class.isAssignableFrom(type)) {
+            return Types.Stream;
+        } else if (java.io.InputStream.class.isAssignableFrom(type)) {
+            return Types.Stream;
+        } else {
+            return Types.Java;
+        }
+    }
+    
     protected enum Types {
         String(2,"Ljava/lang/String;"),
         Double(3,"D"),
@@ -34,8 +73,8 @@ public class Bound<T> {
         Direct(43,"<direct>"),
         Null(0,"");
                 
-        private int id;
-        private String signature;
+        private final int id;
+        private final String signature;
         
         Types(int id, String sig) {
             this.id = id;
@@ -51,20 +90,12 @@ public class Bound<T> {
         }
     }
 
-    protected void setTypeClass(Class<T> t) {
-        type = t;
-    }
-
     protected Class<T> getTypeClass() {
         return type;
     }
 
     public boolean isSameType(Class t) {
         return t.equals(type);
-    }
-
-    protected void setType(Types t) {
-        settype = t;
     }
 
     protected Types getType() {
@@ -76,10 +107,10 @@ public class Bound<T> {
     }
 
     public void deactivate() {
-        active = false;
+        orphaned = false;
     }
-
-    public boolean isActive() {
-        return active;
+    
+    public boolean isOrphaned() {
+        return orphaned;
     }
 }

@@ -1773,9 +1773,7 @@ void  analyze_log(Relation rel,const char* pattern, ...) {
 #ifdef SUNOS
     DTRACE_PROBE3(mtpg,analyze__msg,msg,RelationGetRelid(rel),GetDatabaseId());  
 #endif
-#ifdef DEBUGLOGS
-    elog(DEBUG,"analyze: %d/%d %s",RelationGetRelid(rel),GetDatabaseId(),msg);
-#endif
+    elog(DEBUG,"analyze: %ld/%ld %s",RelationGetRelid(rel),GetDatabaseId(),msg);
     va_end(args);
 }
 

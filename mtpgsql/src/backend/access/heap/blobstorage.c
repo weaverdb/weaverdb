@@ -1195,9 +1195,7 @@ void  blob_log(Relation rel, char* pattern, ...) {
 #ifdef SUNOS
     DTRACE_PROBE3(mtpg,blob__msg,msg,RelationGetRelid(rel),GetDatabaseId());  
 #endif
-#ifdef DEBUGLOGS
-    elog(DEBUG,"blob: %d/%d %s",RelationGetRelid(rel),GetDatabaseId(),msg);
-#endif
+    elog(DEBUG,"blob: %ld/%ld %s",RelationGetRelid(rel),GetDatabaseId(),msg);
     va_end(args);
 }
 

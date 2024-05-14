@@ -875,9 +875,7 @@ void  poolsweep_log(Oid rel, char* pattern, ...) {
 #ifdef SUNOS
     DTRACE_PROBE3(mtpg,poolsweep__msg,msg,rel,GetDatabaseId());  
 #endif
-#ifdef DEBUGLOGS
-    elog(DEBUG,"poolsweep: %d/%d %s",rel,GetDatabaseId(),msg);
-#endif
+    elog(DEBUG,"poolsweep: %ld/%ld %s",rel,GetDatabaseId(),msg);
     va_end(args);
 }
 

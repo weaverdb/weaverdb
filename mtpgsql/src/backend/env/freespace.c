@@ -1146,9 +1146,7 @@ void  freespace_log(FreeSpace* rel, char* pattern, ...) {
 #ifdef SUNOS
     DTRACE_PROBE3(mtpg,freespace__msg,msg,rel->key.relid,rel->key.dbid);  
 #endif
-#ifdef DEBUGLOGS
     elog(DEBUG,"freespace:%d/%d %s",rel->key.relid,rel->key.dbid,msg);  
-#endif
     va_end(args);
 }
 #endif

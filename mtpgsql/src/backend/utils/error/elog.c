@@ -390,18 +390,11 @@ elog(int lev, const char *fmt,...)
 		pq_flush();
 	}
 
-	if ( GetEnv() != NULL ) {
-		Env* env = (Env*)GetEnv();
-		strncpy(env->errortext,msg_buf,255);
-		strncpy(env->state,prefix,39);
-	}
-
 	/*
 	 * Perform error recovery action as specified by lev.
 	 */
 	if (lev == ERROR)
 	{
-
 		/*
 		 * If we have not yet entered the main backend loop (ie, we are in
 		 * the postmaster or in backend startup), then go directly to
@@ -419,33 +412,16 @@ elog(int lev, const char *fmt,...)
 			proc_exit(lev);
 		}
 
-		/*
-		 * Guard against infinite loop from elog() during error recovery.
-		 */
-		if (InError)
-			elog(REALLYFATAL, "elog: error during error recovery, giving up!");
-
-
-		/*
-		 * Otherwise we can return to the main loop in postgres.c. In the
-		 * FATAL case, postgres.c will call proc_exit, but not till after
-		 * completing a standard transaction-abort sequence.
-		 */
-                /*
-		ThreadReleaseSpins(NULL); *//* get rid of spinlocks we hold */
-			
-/*   cleanup your masterlocks before exiting   MKS  1.24.2001  */
-                /*
-		if ( IsNormalProcessingMode() ) {
-			MasterUnLock();
-		}
-                */
 		if ( IsMultiuser() && !IsDBWriter() ) {
-            CancelDolHelpers();
-			if ( GetEnv()->errorcode != 0 ) 
-				longjmp(GetEnv()->errorContext, GetEnv()->errorcode);   
-			else 
-				longjmp(GetEnv()->errorContext, 100);   
+                    CancelDolHelpers();
+                    Env* env = (Env*)GetEnv();
+                    strncpy(env->errortext,msg_buf,255);
+                    strncpy(env->state,prefix,39);
+                    if ( GetEnv()->errorcode != 0 ) {
+                            longjmp(GetEnv()->errorContext, GetEnv()->errorcode);   
+                    } else {
+                            longjmp(GetEnv()->errorContext, 100);
+                    }
 		} else {
 			siglongjmp(Warn_restart, 1);
 		}

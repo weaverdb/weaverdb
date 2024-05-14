@@ -41,16 +41,23 @@ public class JNITest {
         try (Writer w = p.outputWriter()) {
             w.append("create database test;\n").flush();
         }
-
         p.waitFor();
         b = new ProcessBuilder("cp","libweaver.dylib", System.getProperty("user.dir") + "/build/libs/");
         b.inheritIO();
         p = b.start();
         p.waitFor();
+        Properties prop = new Properties();
+        prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
+        prop.setProperty("allow_anonymous", "true");
+        prop.setProperty("start_delay", "1");
+        prop.setProperty("debuglevel", "DEBUG");
+        prop.setProperty("stdlog", "TRUE");
+        WeaverInitializer.initialize(prop);
     }
 
     @org.junit.jupiter.api.AfterAll
     public static void tearDownClass() throws Exception {
+        WeaverInitializer.close(true);
     }
 
     @org.junit.jupiter.api.BeforeEach
@@ -63,18 +70,92 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void test() throws Exception {
-        Properties prop = new Properties();
-        prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
-        prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "1");
-        WeaverInitializer.initialize(prop);
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            try (Statement s = conn.parse("select datname from pg_database;")) {
+            try (Statement s = conn.parse("select * from pg_database;")) {
                 BoundOutput<String> b = s.linkOutput(1, String.class);
-                s.execute();
+                BoundOutput<String> c = s.linkOutput(2, String.class);
+                BoundOutput<String> d = s.linkOutput(3, String.class);
+                BoundOutput<String> e = s.linkOutput(4, String.class);
+                BoundOutput<String> f = s.linkOutput(5, String.class);
+                System.out.println(s.execute());
                 s.fetch();
-                System.out.println(b.get());
+                System.out.println(b.getName() + "=" + b.get());
+                System.out.println(c.getName() + "=" + c.get());
+                System.out.println(d.getName() + "=" + d.get());
+                System.out.println(e.getName() + "=" + e.get());
+                System.out.println(f.getName() + "=" + f.get());
             }
         }
     }    
+    @org.junit.jupiter.api.Test
+    public void testBadBind() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (Statement s = conn.parse("select * from pg_database;")) {
+                BoundOutput<Integer> b = s.linkOutput(1, Integer.class);
+                BoundOutput<Integer> c = s.linkOutput(2, Integer.class);
+                BoundOutput<Integer> d = s.linkOutput(3, Integer.class);
+                BoundOutput<Integer> e = s.linkOutput(4, Integer.class);
+                BoundOutput<Integer> f = s.linkOutput(5, Integer.class);
+                System.out.println(s.execute());
+                s.fetch();
+                System.out.println(b.getName() + "=" + b.get());
+                System.out.println(c.getName() + "=" + c.get());
+                System.out.println(d.getName() + "=" + d.get());
+                System.out.println(e.getName() + "=" + e.get());
+                System.out.println(f.getName() + "=" + f.get());
+            } catch (ExecutionException we) {
+                we.printStackTrace();
+                // expected
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testListTables() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (Statement s = conn.parse("select * from pg_class;")) {
+                BoundOutput<String> b = s.linkOutput(1, String.class);
+                BoundOutput<String> c = s.linkOutput(2, String.class);
+                BoundOutput<String> d = s.linkOutput(3, String.class);
+                BoundOutput<String> e = s.linkOutput(4, String.class);
+                BoundOutput<String> f = s.linkOutput(5, String.class);
+                System.out.println(s.execute());
+                while (s.fetch()) {
+                    if (!b.isNull()) System.out.println(b.getName() + "=" + b.get());
+                    if (!c.isNull())System.out.println(c.getName() + "=" + c.get());
+                    if (!d.isNull())System.out.println(d.getName() + "=" + d.get());
+                    if (!e.isNull())System.out.println(e.getName() + "=" + e.get());
+                    if (!f.isNull())System.out.println(f.getName() + "=" + f.get());
+                    System.out.println("+++++++");
+                }
+            } catch (ExecutionException we) {
+                we.printStackTrace();
+                // expected
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testBadCloseSequence() throws Exception {
+        BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test");
+        Statement s = conn.parse("select * from pg_class;");
+        BoundOutput<String> b = s.linkOutput(1, String.class);
+        BoundOutput<String> c = s.linkOutput(2, String.class);
+        BoundOutput<String> d = s.linkOutput(3, String.class);
+        BoundOutput<String> e = s.linkOutput(4, String.class);
+        BoundOutput<String> f = s.linkOutput(5, String.class);
+        System.out.println(s.execute());
+        while (s.fetch()) {
+            if (!b.isNull()) System.out.println(b.getName() + "=" + b.get());
+            if (!c.isNull())System.out.println(c.getName() + "=" + c.get());
+            if (!d.isNull())System.out.println(d.getName() + "=" + d.get());
+            if (!e.isNull())System.out.println(e.getName() + "=" + e.get());
+            if (!f.isNull())System.out.println(f.getName() + "=" + f.get());
+            System.out.println("+++++++");
+        }
+        conn.close();
+        s.close();
+        conn.close();
+        s.close();
+    }
 }

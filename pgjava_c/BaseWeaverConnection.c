@@ -48,6 +48,8 @@
 #define BINDSTREAM  driver_weaver_BaseWeaverConnection_bindStream
 #define BINDDIRECT  driver_weaver_BaseWeaverConnection_bindDirect
 
+#define JAVA_ERROR -99
+
 JavaVM*   jvm;
 
 static          javacache*      Cache;
@@ -280,9 +282,7 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_executeStatement
         setInputLink(env, talkerObject, linkid, &callData[x]);
      }     
 // exec
-    short result = Exec(conn, ref);
-    
-    if ( result ) {
+    if ( Exec(conn, ref) ) {
 // report errors
         checkError(env,talkerObject,ref);
         return 0;
@@ -310,12 +310,9 @@ JNIEXPORT jboolean JNICALL Java_driver_weaver_BaseWeaverConnection_fetchResults
         callData[x].linkType = translateType(callData[x].bindType);
         setOutputLink(env, talkerObject, linkid, &callData[x]);
     }
-
-    short result = Fetch(conn, ref);
-
 //	fetch        
 //  pass results to java if there are no errors
-    if ( result ) {
+    if ( Fetch(conn, ref) ) {
 // report errors
         checkError(env,talkerObject,ref);
         return JNI_FALSE;
@@ -460,7 +457,7 @@ static ConnMgr getConnMgr(JNIEnv* env, jobject talker) {
 
 static jlong clearError(JNIEnv* env,jobject talkerObject)
 {
-        if ( (*env)->ExceptionOccurred(env) ) return 2;
+        if ( (*env)->ExceptionCheck(env) ) return 2;
         
 	(*env)->SetIntField(env,talkerObject,Cache->result,0);
 	
@@ -477,30 +474,33 @@ static jlong checkError(JNIEnv* env,jobject talkerObject,StmtMgr base)
 
 static jlong reportError(JNIEnv* env,jobject talkerObject,jlong code, const char* errtxt, const char* statetxt)
 {
-        if ( (*env)->ExceptionOccurred(env) ) {
-            (*env)->ExceptionDescribe(env);
-            (*env)->ExceptionClear(env);
-        }
-        
-	(*env)->SetIntField(env,talkerObject,Cache->result,code);
-        
-        if (code != 0 ) {
-            char combo[255];
+    (*env)->SetIntField(env,talkerObject,Cache->result,code);
 
-            if ( !errtxt ) errtxt = "no error text";
-            if ( !statetxt ) statetxt = "NOSTATE";
+    if (code != 0 ) {
+        jthrowable existing = (*env)->ExceptionOccurred(env);
+        char combo[255];
 
-            jstring et = (*env)->NewStringUTF(env,errtxt);
-            jstring st = (*env)->NewStringUTF(env,statetxt);
+        if ( !errtxt ) errtxt = "no error text";
+        if ( !statetxt ) statetxt = "NOSTATE";
 
-            (*env)->SetObjectField(env,talkerObject,Cache->eText,et);
-            (*env)->SetObjectField(env,talkerObject,Cache->eState,st);
+        jstring et = (*env)->NewStringUTF(env,errtxt);
+        jstring st = (*env)->NewStringUTF(env,statetxt);
 
-            snprintf(combo,255,"%s: %s -- err: %d",statetxt,errtxt,(int)code);
+        (*env)->SetObjectField(env,talkerObject,Cache->eText,et);
+        (*env)->SetObjectField(env,talkerObject,Cache->eState,st);
+
+        snprintf(combo,255,"%s: %s -- err: %d",statetxt,errtxt,(int)code);
+        if ((*env)->IsSameObject(env, existing, NULL)) {
             (*env)->ThrowNew(env,Cache->exception,combo);
+        } else {
+            jthrowable throw = (*env)->NewObject(env,Cache->exception,Cache->ecstor, (*env)->NewStringUTF(env, combo));
+            (*env)->CallVoidMethod(env,throw,Cache->suppressed,existing);
+            (*env)->ExceptionClear(env);
+            (*env)->Throw(env,throw);
         }
+    }
 	
-	return code;
+    return code;
 }
 
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
@@ -528,7 +528,7 @@ static int direct_pipeout(void* arg,int type, void* buff,int run)
         if ( (*env)->ExceptionOccurred(env) ) {
             return PIPING_ERROR;
         } else {
-            return run;
+            return 0;
         }
     } else {
         if ( (*env)->ExceptionOccurred(env) ) {
@@ -627,7 +627,7 @@ static int pipeout(void* args,int type, void* buff,int run)
         if ( (*env)->ExceptionOccurred(env) ) {
             return PIPING_ERROR;
         } else {
-            return run;
+            return 0;
         }
     } else {
         if ( (*env)->ExceptionOccurred(env) ) {

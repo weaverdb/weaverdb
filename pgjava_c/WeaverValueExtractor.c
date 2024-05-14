@@ -44,6 +44,8 @@ static int MoveData(void* dest, const void* src, int len);
 javacache*  CreateCache(JNIEnv* env) {
 	/* exceptions  */
         CachedClasses.exception = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/ExecutionException"));
+        CachedClasses.ecstor = (*env)->GetMethodID(env,CachedClasses.exception,"<init>","(Ljava/lang/String;)V");
+        CachedClasses.suppressed = (*env)->GetMethodID(env,CachedClasses.exception,"addSuppressed","(Ljava/lang/Throwable;)V");
         CachedClasses.truncation = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BinaryTruncation"));
         /*  boundary objects */
         CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"driver/weaver/BaseWeaverConnection"));
@@ -56,8 +58,8 @@ javacache*  CreateCache(JNIEnv* env) {
 	CachedClasses.eState =  (*env)->GetFieldID(env,CachedClasses.talker,"state","Ljava/lang/String;");
 
 	CachedClasses.oindex = (*env)->GetFieldID(env,CachedClasses.boundout, "index","I");
+	CachedClasses.oname = (*env)->GetFieldID(env,CachedClasses.boundout, "columnName","Ljava/lang/String;");
 	CachedClasses.ovalue = (*env)->GetFieldID(env,CachedClasses.boundout, "value","Ljava/lang/Object;");
-	CachedClasses.onullfield = (*env)->GetFieldID(env,CachedClasses.boundout,"isnull","Z");
 
 	CachedClasses.iname = (*env)->GetFieldID(env,CachedClasses.boundin, "name","Ljava/lang/String;");
 	CachedClasses.ivalue = (*env)->GetFieldID(env,CachedClasses.boundin,"value","Ljava/lang/Object;");
@@ -366,14 +368,14 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
     if ( (*env)->IsSameObject(env,target,NULL)) return 0;
 
     if ( length == 0 ) {
-        (*env)->SetBooleanField(env,target,Cache->onullfield,JNI_TRUE);
+        (*env)->SetObjectField(env,target,Cache->ovalue,NULL);
         return 0;
+    } else if (passType == METANAMETYPE) {
+        setval = CreateStringField(data,length,env);
+        (*env)->SetObjectField(env,target,Cache->oname,setval);
+        (*env)->DeleteLocalRef(env,setval);
     } else {
-        (*env)->SetBooleanField(env,target,Cache->onullfield,JNI_FALSE);
-    }
-
-        switch(passType)
-        {
+        switch(passType) {
             case INT4TYPE:
                 setval = CreateIntField(data,env);
                 break;
@@ -404,14 +406,18 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
             case STREAMTYPE:
                 /* should never get here */
                 break;
-            default:
+            default: {
+                char err[256];
+                snprintf(err,256,"unable to understand type bound:%d link:%d pass:%d",bindType,linkType,passType);
+                (*env)->ThrowNew(env,Cache->exception,err);    
                 return 745;
-                break;
+            }
         }
 
         if ( setval != NULL ) {
             (*env)->SetObjectField(env,target,Cache->ovalue,setval);
             (*env)->DeleteLocalRef(env,setval);
         }
-        return 0;
+    }
+    return 0;
 }

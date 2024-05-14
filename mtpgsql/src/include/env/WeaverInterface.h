@@ -17,6 +17,7 @@
 #define VARCHARTYPE	1043
 #define BOOLTYPE	16
 #define CHARTYPE	18
+#define METANAMETYPE	19   // column name transfer
 #define BYTEATYPE        17
 #define TEXTTYPE         25
 #define BLOBTYPE         1803
@@ -77,7 +78,7 @@ LIB_EXTERN void* WAllocConnectionMemory(OpaqueWConn conn, size_t size);
 LIB_EXTERN void* WAllocTransactionMemory(OpaqueWConn conn, size_t size);
 LIB_EXTERN void* WAllocStatementMemory(OpaquePreparedStatement conn, size_t size);
 LIB_EXTERN void WFreeMemory(OpaqueWConn conn, void* pointer);
-//LIB_EXTERN void WCheckClear(void* pointer,int size);
+LIB_EXTERN void WCheckMemory(OpaqueWConn conn);
 
 LIB_EXTERN long WExecCount(OpaquePreparedStatement conn);
 LIB_EXTERN long WFetchIsComplete(OpaquePreparedStatement conn);

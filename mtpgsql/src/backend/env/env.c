@@ -998,11 +998,10 @@ void user_log(char* pattern, ...) {
     va_start(args, pattern);
     vsprintf(msg,pattern,args);
 #ifdef SUNOS
-    DTRACE_PROBE2(mtpg,env__msg,env->eid,msg);  
+    DTRACE_PROBE2(mtpg,env__msg,GetEnv()->eid,msg);  
 #endif
-#ifdef DEBUGLOGS
-    elog(DEBUG,"eid:%d -- %s",env->eid,msg); 
-#endif
+    elog(DEBUG,"eid:%d -- %s",GetEnv()->eid,msg); 
+
     va_end(args);
 }
 
@@ -1016,8 +1015,6 @@ void  env_log(Env* env, char* pattern, ...) {
 #ifdef SUNOS
     DTRACE_PROBE2(mtpg,env__msg,env->eid,msg);  
 #endif
-#ifdef DEBUGLOGS
     elog(DEBUG,"eid:%d -- %s",env->eid,msg); 
-#endif
     va_end(args);
 }
