@@ -1410,19 +1410,28 @@ TransferExecArgs(PreparedPlan* plan) {
             paramLI->kind = PARAM_NAMED;
             paramLI->name = plan->slot[k].name;
             paramLI->id = plan->slot[k].index;
+            paramLI->isnull = false;
             
             switch (plan->slot[k].varType) {
                 case CHAROID:
                 case BOOLOID: {
                     char value;
                     paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
-                    paramLI->value = CharGetDatum(value);
+                    if (paramLI->length > 0) {
+                        paramLI->value = CharGetDatum(value);
+                    } else {
+                        paramLI->isnull = true;
+                    }
                     break;
                 }
                 case INT4OID: {
                     int32 value;
                     paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
-                    paramLI->value = Int32GetDatum(value);
+                    if (paramLI->length > 0) {
+                        paramLI->value = Int32GetDatum(value);
+                    } else {
+                        paramLI->isnull = true;
+                    }
                     break;
                 }
                 case TIMESTAMPOID:
@@ -1430,7 +1439,11 @@ TransferExecArgs(PreparedPlan* plan) {
                 case INT8OID: {
                     long* value = palloc(8);
                     paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
-                    paramLI->value = PointerGetDatum(value);
+                    if (paramLI->length > 0) {
+                        paramLI->value = PointerGetDatum(value);
+                    } else {
+                        paramLI->isnull = true;
+                    }
                     break;
                 }
                 case STREAMINGOID: {
@@ -1445,9 +1458,18 @@ TransferExecArgs(PreparedPlan* plan) {
                 case BLOBOID:
                 case JAVAOID:
                 default: {
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,-1);
-                    char* value = palloc(paramLI->length);
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,paramLI->length);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,-1);
+                    if (len > 0) {
+                        char* value = palloc(len + VARHDRSZ);
+                        if (len != plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, VARDATA(value),len)) {
+                            coded_elog(ERROR, 889, "binary truncation expected length: %d", len);
+                        }
+                        SETVARSIZE(value, len);
+                        paramLI->value = PointerGetDatum(value);
+                        paramLI->length = len + VARHDRSZ;
+                    } else {
+                        paramLI->isnull = true;
+                    }
                     break;
                 }
             }

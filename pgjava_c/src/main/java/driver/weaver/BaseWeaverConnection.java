@@ -211,7 +211,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         Statement s = new Statement(stmt);
         liveStatements.put(s.link, new StatementRef(s, statements));
         return s;
-    }
+    }    
     
     private synchronized void disposeStatement(long link) {
         if (isValid()) {
@@ -223,9 +223,11 @@ public class BaseWeaverConnection implements AutoCloseable {
     }
     
     public Object transaction() {
-        long t = getTransactionId();
-        assert(t == transactionId);
-        return transactionId;
+        if (transactionId == 0) {
+            return getTransactionId();
+        } else {
+            return transactionId;
+        }
     }
     
     private native long grabConnection(String name, String password, String connect) throws ExecutionException;

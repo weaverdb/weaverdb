@@ -19,7 +19,7 @@ public class SimpleServer implements Runnable,ActionListener {
         Button bt = new Button();
         try {
         java.awt.Frame f = new java.awt.Frame();
-        f.setTitle("Multithreaded Postgres SimpleServer");
+        f.setTitle("Weaver SimpleServer");
         f.show();
         f.setLayout(new BorderLayout());
         bt.setLabel("SHUTDOWN");
@@ -28,7 +28,6 @@ public class SimpleServer implements Runnable,ActionListener {
         } catch ( Throwable exp ) {
             System.out.println("no display");
         }
-        System.loadLibrary("mtpgjava");
        
         try {
             SimpleServer server = new SimpleServer(new ServerSocket(5432));

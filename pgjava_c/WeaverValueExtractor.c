@@ -123,7 +123,7 @@ javacache*  DropCache(JNIEnv* env) {
 }
 
 int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length) {
-    if ( (*env)->IsSameObject(env,NULL,data) ) {
+    if ( (*env)->IsSameObject(env,NULL,object) ) {
         return 0;
     } else {
 	switch( passType )
@@ -192,14 +192,19 @@ ExtractStringValue(JNIEnv* env, jobject target, void* data, int max) {
     jboolean        copy;
     int             written;
             
-    if ((*env)->IsInstanceOf(env,data,Cache->stringtype)) {
-        value = (jstring)data;
+    if ((*env)->IsInstanceOf(env,target,Cache->stringtype)) {
+        value = (jstring)target;
 
         len = (*env)->GetStringUTFLength(env,value);
-        buffer = (*env)->GetStringUTFChars(env,(jstring)data,&copy);
-        MoveData(data,buffer,len);
-
-        (*env)->ReleaseStringUTFChars(env,data,buffer);    
+        if (data != NULL) {
+            if (len > max) {
+                return -1;
+            } else {
+                buffer = (*env)->GetStringUTFChars(env,value,&copy);
+                MoveData(data,buffer,len);
+                (*env)->ReleaseStringUTFChars(env,value,buffer); 
+            }
+        }
         return len;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a String");    
@@ -332,9 +337,12 @@ static jobject CreateBooleanField(char* var, JNIEnv* env) {
     jboolean flag = ( *var ) ? JNI_TRUE : JNI_FALSE;
     return (*env)->NewObject(env,Cache->booltype,Cache->createbool,flag);
 }
-static jobject CreateStringField(char* var, int length, JNIEnv* env) {
-    *(var + length) = 0x00;
-    return (jobject)(*env)->NewStringUTF(env,var);
+
+static jobject CreateStringField(const char* var, int length, JNIEnv* env) {
+    char buffer[length+1];
+    memmove(buffer,var,length);
+    buffer[length] = 0x00;
+    return (jobject)(*env)->NewStringUTF(env,buffer);
 }
 static jobject CreateBinaryField(char* var, int length, JNIEnv* env) {
     jbyteArray jb = (*env)->NewByteArray(env,length);

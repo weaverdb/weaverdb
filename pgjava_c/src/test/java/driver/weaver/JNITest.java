@@ -158,4 +158,50 @@ public class JNITest {
         conn.close();
         s.close();
     }
+    
+    @org.junit.jupiter.api.Test
+    public void testInputs() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (Statement s = conn.parse("create schema fortune")) {
+                s.execute();
+            }
+            try (Statement s = conn.parse("create table fortune/cookie (id int4, name varchar(128))")) {
+                s.execute();
+            }
+            try (Statement s = conn.parse("insert into fortune/cookie (id, name) values ($id, $name)")) {
+                BoundInput<Integer> id = s.linkInput("id", Integer.class);
+                BoundInput<String> name = s.linkInput("name", String.class);
+                id.set(1);
+                name.set("Marcus");
+                s.execute();
+            }
+            try (Statement s = conn.parse("select * from fortune/cookie where name = $name")) {
+                BoundInput<String> name = s.linkInput("name", String.class);
+                name.set("Marcus");
+                BoundOutput<Integer> id = s.linkOutput(1, Integer.class);
+                name.set("Marcus");
+                s.execute();
+                if (s.fetch()) {
+                    System.out.println("Marcus=" + id.get());
+                }
+            }
+            try (Statement s = conn.parse("update fortune/cookie set id=$id where name = $name")) {
+                BoundInput<String> name = s.linkInput("name", String.class);
+                name.set("Marcus");
+                BoundInput<Integer> id = s.linkInput("id", Integer.class);
+                id.set(3);
+                s.execute();
+            }
+            try (Statement s = conn.parse("select * from fortune/cookie where name = $name")) {
+                BoundInput<String> name = s.linkInput("name", String.class);
+                name.set("Marcus");
+                BoundOutput<Integer> id = s.linkOutput(1, Integer.class);
+                name.set("Marcus");
+                s.execute();
+                if (s.fetch()) {
+                    System.out.println("Marcus=" + id.get());
+                }
+            }
+        }
+    }
 }
