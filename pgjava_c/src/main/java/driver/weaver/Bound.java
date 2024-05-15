@@ -13,7 +13,7 @@ package driver.weaver;
 public class Bound<T> {
 
     private final Types settype;
-    private final Class<T> type;
+    private final Class<T> type; 
     private boolean orphaned;
 
     public Bound(Class<T> type) {

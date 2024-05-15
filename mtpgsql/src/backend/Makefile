@@ -79,9 +79,8 @@ endif
 
 postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o
 	$(CC) $(CFLAGS) -Wl -ld_classic -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o \
- -lmtpg $(LDFLAGS) $(LIBS)
+        -lmtpg $(LDFLAGS) $(LIBS)
 
-# -fuse-ld=/Library/Developer/CommandLineTools/usr/bin/ld-classic
 #.PHONY: postgres
 
 $(OBJS): $(DIRS:%=%.dir)

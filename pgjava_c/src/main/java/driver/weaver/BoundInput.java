@@ -160,22 +160,28 @@ public class BoundInput<T> extends Bound<T> {
         }
     }
 
-    protected int pipeIn(byte[] data) throws IOException {
+    private int pipeIn(byte[] data) throws IOException {
         InputStream os = (InputStream)value;
         return os.read(data);
     }
 
-    protected int pipeIn(java.nio.ByteBuffer data) throws IOException {
-        if (value instanceof ReadableByteChannel) {
-            return ((ReadableByteChannel) value).read(data);
-        } else {
-            if ( data.hasArray() ) {
-                 return ((InputStream) value).read(data.array(),data.arrayOffset() + data.position(),data.remaining());
-            } else {
-                byte[] open = new byte[data.limit()];
-                int count = ((InputStream) value).read(open);
-                if ( count > 0 ) data.put(open,0,count);
-                return count;
+    private int pipeIn(java.nio.ByteBuffer data) throws IOException {
+        switch (value) {
+            case ReadableByteChannel readableByteChannel -> {
+                return readableByteChannel.read(data);
+            }
+            case InputStream inputStream -> {
+                if ( data.hasArray() ) {
+                    return inputStream.read(data.array(),data.arrayOffset() + data.position(),data.remaining());
+                } else {
+                    byte[] open = new byte[data.limit()];
+                    int count = inputStream.read(open);
+                    if ( count > 0 ) data.put(open,0,count);
+                    return count;
+                }
+            }
+            default -> {
+                return -1;
             }
         }
     }

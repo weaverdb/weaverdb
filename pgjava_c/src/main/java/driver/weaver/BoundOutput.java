@@ -82,29 +82,43 @@ public class BoundOutput<T> extends Bound<T> {
         return value == null;
     }
 
-    protected int pipeOut(byte[] data) throws IOException {
+    private int pipeOut(byte[] data) throws IOException {
         if ( value == null ) throw new IOException("pipe not connected");
         OutputStream os = (OutputStream) value;
         os.write(data);
         return data.length;
     }
 
-    protected int pipeOut(java.nio.ByteBuffer data) throws IOException {
+    private int pipeOut(java.nio.ByteBuffer data) throws IOException {
         int len = data.remaining();
-        if ( value == null ) throw new IOException("pipe not connected");
-        if (value instanceof WritableByteChannel) {
-            while (data.hasRemaining()) {
-                ((WritableByteChannel) value).write(data);
+        switch (value) {
+            case null -> throw new IOException("pipe not connected");
+            case WritableByteChannel writableByteChannel -> {
+                int consumed = 0;
+                while (data.hasRemaining()) {
+                    int part = writableByteChannel.write(data);
+                    if (part >= 0) {
+                        consumed += part;
+                    } else {
+                        return part;
+                    }
+                }
+                return consumed;
             }
-        } else {
-            if ( data.hasArray() ) {
-                ((OutputStream) value).write(data.array(),data.position() + data.arrayOffset(),data.remaining());
-            } else {
-                byte[] open = new byte[data.remaining()];
-                data.get(open);
-                ((OutputStream) value).write(open);
+            case OutputStream outputStream -> {
+                if ( data.hasArray() ) {
+                    outputStream.write(data.array(),data.position() + data.arrayOffset(),data.remaining());
+                    return len;
+                } else {
+                    byte[] open = new byte[data.remaining()];
+                    data.get(open);
+                    outputStream.write(open);
+                    return len;
+                }
+            }
+            default -> {
+                return -1;
             }
         }
-        return len;
     }
 }
