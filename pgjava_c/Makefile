@@ -96,6 +96,7 @@ clean_legacy:
 	rm pgjava
 else
 clean: 
+	rm -rf *.dSYM
 	rm libweaver.dylib
 	rm weaver
 endif

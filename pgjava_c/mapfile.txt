@@ -1,27 +1,24 @@
 {
 	global:
-            Java_driver_weaver_BaseWeaverConnection_abortTransaction;
-            Java_driver_weaver_BaseWeaverConnection_beginProcedure;
-            Java_driver_weaver_BaseWeaverConnection_beginTransaction;
-            Java_driver_weaver_BaseWeaverConnection_cancelTransaction;
-            Java_driver_weaver_BaseWeaverConnection_commitTransaction;
-            Java_driver_weaver_BaseWeaverConnection_connectSubConnection;
-            Java_driver_weaver_BaseWeaverConnection_dispose;
-            Java_driver_weaver_BaseWeaverConnection_endProcedure;
-            Java_driver_weaver_BaseWeaverConnection_executeStatement;
-            Java_driver_weaver_BaseWeaverConnection_fetchResults;
-            Java_driver_weaver_BaseWeaverConnection_getCommandId;
-            Java_driver_weaver_BaseWeaverConnection_getOutput;
-            Java_driver_weaver_BaseWeaverConnection_getTransactionId;
-            Java_driver_weaver_BaseWeaverConnection_grabConnection;
-            Java_driver_weaver_BaseWeaverConnection_parseStatement;
-            Java_driver_weaver_BaseWeaverConnection_prepareStatement;
-            Java_driver_weaver_BaseWeaverConnection_prepareTransaction;
-            Java_driver_weaver_BaseWeaverConnection_setInput;
-            Java_driver_weaver_BaseWeaverConnection_streamExec;
-            Java_driver_weaver_BaseWeaverConnection_userLock;
-            Java_driver_weaver_WeaverInitializer_close;
-            Java_driver_weaver_WeaverInitializer_init;
+                _Java_driver_weaver_BaseWeaverConnection_abortTransaction
+                _Java_driver_weaver_BaseWeaverConnection_beginProcedure
+                _Java_driver_weaver_BaseWeaverConnection_beginTransaction
+                _Java_driver_weaver_BaseWeaverConnection_cancelTransaction
+                _Java_driver_weaver_BaseWeaverConnection_commitTransaction
+                _Java_driver_weaver_BaseWeaverConnection_connectSubConnection
+                _Java_driver_weaver_BaseWeaverConnection_dispose
+                _Java_driver_weaver_BaseWeaverConnection_disposeConnection
+                _Java_driver_weaver_BaseWeaverConnection_endProcedure
+                _Java_driver_weaver_BaseWeaverConnection_executeStatement
+                _Java_driver_weaver_BaseWeaverConnection_fetchResults
+                _Java_driver_weaver_BaseWeaverConnection_getCommandId
+                _Java_driver_weaver_BaseWeaverConnection_getTransactionId
+                _Java_driver_weaver_BaseWeaverConnection_grabConnection
+                _Java_driver_weaver_BaseWeaverConnection_prepareStatement
+                _Java_driver_weaver_BaseWeaverConnection_prepareTransaction
+                _Java_driver_weaver_BaseWeaverConnection_streamExec
+                _Java_driver_weaver_WeaverInitializer_close
+                _Java_driver_weaver_WeaverInitializer_init
 	
 	local:
 		*;

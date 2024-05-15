@@ -1,3 +1,5 @@
+
+
 package driver.weaver;
 
 import driver.weaver.BaseWeaverConnection.Statement;
@@ -7,11 +9,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Properties;
-
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/UnitTests/JUnit5TestClass.java to edit this template
- */
 
 /**
  *
@@ -53,7 +50,7 @@ public class JNITest {
         Properties prop = new Properties();
         prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
         prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "10");
+        prop.setProperty("start_delay", "1");
         prop.setProperty("debuglevel", "DEBUG");
         prop.setProperty("stdlog", "TRUE");
         WeaverInitializer.initialize(prop);
@@ -212,13 +209,13 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testStreaming() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            try (Statement s = conn.parse("create schema fortune")) {
+            try (Statement s = conn.parse("create schema summer")) {
                 s.execute();
             }
-            try (Statement s = conn.parse("create table fortune/streamimg (id int4, data blob)")) {
+            try (Statement s = conn.parse("create table summer/streaming (id int4, data blob)")) {
                 s.execute();
             }
-            try (Statement s = conn.parse("insert into fortune/streamimg (id, data) values ($id, $bin)")) {
+            try (Statement s = conn.parse("insert into summer/streaming (id, data) values ($id, $bin)")) {
                 BoundInput<Integer> id = s.linkInput("id", Integer.class);
                 BoundInput<ReadableByteChannel> name = s.linkInput("bin", ReadableByteChannel.class);
                 id.set(1);
@@ -247,7 +244,7 @@ public class JNITest {
                 });
                 s.execute();
             }
-            try (Statement s = conn.parse("select data from fortune/streamimg where id=$id")) {
+            try (Statement s = conn.parse("select data from summer/streaming where id=$id")) {
                 BoundInput<Integer> id = s.linkInput("id", Integer.class);
                 BoundOutput<WritableByteChannel> data = s.linkOutput(1, WritableByteChannel.class);
                 id.set(1);

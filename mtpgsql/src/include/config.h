@@ -29,10 +29,9 @@
 #define ABORT_ON_ASSERT 1
 #define NO_PS_STATUS 1
 #define SUBSETISALLOC 1
-#define MEMORY_STATS 1
-/* #define TRACE_FMGR_PTR 1  */
+/*  #define MEMORY_STATS 1  */
+/*  #define TRACE_FMGR_PTR 1  */
 /*  #define MULTITHREAD_DEBUG  */
-/*  #define SHOW_MEMORY_STATS   */
 /*  #define SPI_EXECUTOR_STATS  */
 /*  #define HASH_STATISTICS   */
 /*  #define YYERROR_VERBOSE  */
