@@ -10,13 +10,13 @@ package driver.weaver;
  *
  * @author  mscott
  */
-public class Bound<T> {
+class Bound<T> {
 
     private final Types settype;
     private final Class<T> type; 
     private boolean orphaned;
 
-    public Bound(Class<T> type) {
+    Bound(Class<T> type) {
         this.type = type;
         this.settype = bind(this.type);
     }
@@ -81,36 +81,36 @@ public class Bound<T> {
             this.signature = sig;
         }
         
-        public int getId() {
+        int getId() {
             return id;
         }
         
-        public String getSignature() {
+        String getSignature() {
             return signature;
         }
     }
 
-    protected Class<T> getTypeClass() {
+    Class<T> getTypeClass() {
         return type;
     }
 
-    public boolean isSameType(Class t) {
+    boolean isSameType(Class t) {
         return t.equals(type);
     }
 
-    protected Types getType() {
+    Types getType() {
         return settype;
     }
 
-    public int getTypeId() {
+    int getTypeId() {
         return settype.getId();
     }
 
-    public void deactivate() {
+    void deactivate() {
         orphaned = false;
     }
     
-    public boolean isOrphaned() {
+    boolean isOrphaned() {
         return orphaned;
     }
 }

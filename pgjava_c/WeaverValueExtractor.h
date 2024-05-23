@@ -24,7 +24,6 @@ typedef struct javacache {
     jclass                          exception;
     jclass                          truncation;
     jclass                          talker;
-    jclass                          linkid;
     jclass                          boundin;
     jclass                          boundout;
 
@@ -36,8 +35,6 @@ typedef struct javacache {
     jclass                          booltype;
     jclass                          stringtype;
    /*  BaseWeaverConnection fields */
-    jfieldID                        idfield;   
-    jfieldID                        tracker;
     jfieldID                        nativePointer;
     jfieldID                        result;
     jfieldID                        eText;
@@ -46,7 +43,6 @@ typedef struct javacache {
     jfieldID                        oindex;
     jfieldID                        oname;
     jfieldID                        ovalue;
-    jfieldID                        onullfield;
     /*  BoundInput fields */
     jfieldID                        iname;
     jfieldID                        ivalue;

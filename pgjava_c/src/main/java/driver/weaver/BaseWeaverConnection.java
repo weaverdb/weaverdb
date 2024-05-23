@@ -5,10 +5,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
+import java.nio.channels.Channels;
+import java.nio.channels.WritableByteChannel;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -38,9 +42,11 @@ public class BaseWeaverConnection implements AutoCloseable {
     
     private final long nativePointer;
     private final AtomicBoolean isOpen = new AtomicBoolean(true);
+    private final StreamingTransformer transformer = new StreamingTransformer();
     
     private long transactionId;
     private boolean auto = false;
+    
     int resultField = 0;
     String errorText = "";
     String state = "";
@@ -126,6 +132,7 @@ public class BaseWeaverConnection implements AutoCloseable {
 
     @Override
     public void close() throws ExecutionException {
+        transformer.close();
         dispose();
     }
 
@@ -148,10 +155,6 @@ public class BaseWeaverConnection implements AutoCloseable {
 
     public void clearResult() {
         resultField = 0;
-    }
-    
-    public Statement statement(String statement) throws ExecutionException {
-        return new Statement(statement);
     }
 
     public long begin() throws ExecutionException {
@@ -194,7 +197,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         endProcedure();
     }
     
-    public Statement parse(String stmt) throws ExecutionException {
+    public Statement statement(String stmt) throws ExecutionException {
         if (transactionId == 0) {
             transactionId = beginTransaction();
             auto = true;
@@ -211,7 +214,13 @@ public class BaseWeaverConnection implements AutoCloseable {
         Statement s = new Statement(stmt);
         liveStatements.put(s.link, new StatementRef(s, statements));
         return s;
-    }    
+    }
+    
+    public long execute(String statement) throws ExecutionException {
+        try (Statement s = statement(statement)) {
+            return s.execute();
+        }
+    }
     
     private synchronized void disposeStatement(long link) {
         if (isValid()) {
@@ -252,31 +261,15 @@ public class BaseWeaverConnection implements AutoCloseable {
 
     public native void streamExec(String statement) throws ExecutionException;
 
-    protected int pipeOut(byte[] data) throws IOException {
+    private final int pipeOut(byte[] data) throws IOException {
         os.write(data);
         os.flush();
         return data.length;
     }
 
-    protected int pipeOut(java.nio.ByteBuffer data) throws IOException {
-        byte[] send = (data.hasArray()) ? data.array() : new byte[data.remaining()];
-        if (!data.hasArray()) {
-            data.get(send);
-        }
-        return pipeOut(send);
-    }
-
-    protected int pipeIn(byte[] data) throws IOException {
+    private final int pipeIn(byte[] data) throws IOException {
         int count = is.read(data, 0, data.length);
         return count;
-    }
-
-    protected int pipeIn(java.nio.ByteBuffer data) throws IOException {
-        byte[] send = (data.hasArray()) ? data.array() : new byte[data.remaining()];
-        if (!data.hasArray()) {
-            data.get(send);
-        }
-        return pipeIn(send);
     }
     
     OutputStream os;
@@ -293,7 +286,8 @@ public class BaseWeaverConnection implements AutoCloseable {
     public class Statement implements AutoCloseable {
         private final long  link;
         private final String raw;
-        
+        private boolean executed = false;
+
         Statement(String statement) throws ExecutionException {
             link = prepareStatement(statement);
             raw = statement;
@@ -305,37 +299,61 @@ public class BaseWeaverConnection implements AutoCloseable {
         
         private final Map<Integer,BoundOutput> outputs = new HashMap<>();
         private final Map<String,BoundInput> inputs = new HashMap<>();
-    
-        public <T> BoundOutput<T> linkOutput(int index, Class<T> type)  throws ExecutionException {
-            BoundOutput<T> bo = outputs.get(index);
-            if ( bo != null ) {
-                if ( bo.isSameType(type) ) return bo;
-                else bo.deactivate();
-            }
-
-            bo = new BoundOutput<>(this,index, type);
-            outputs.put(index, bo);
-            return bo;
+            
+        public <T> Output<T> linkOutput(int index, Class<T> type)  throws ExecutionException {
+            BoundOutput<T> bo = new BoundOutput<>(this,index, type);
+            Optional.ofNullable(outputs.put(index, bo)).ifPresent(BoundOutput::deactivate);
+            return new Output(bo);
         }
         
-        public <T> BoundInput<T> linkInput(String name, Class<T> type)  throws ExecutionException {
-            BoundInput<T> bi = inputs.get(name);
-            if ( bi != null ) {
-                if ( bi.isSameType(type) ) return bi;
-                else bi.deactivate();
-            }
-
-            bi = new BoundInput<>(this, name, type);
-            inputs.put(name, bi);
-            return bi;
+        public <T> Input<T> linkInput(String name, Class<T> type)  throws ExecutionException {
+            BoundInput<T> bi = new BoundInput<>(this, name, type);
+            Optional.ofNullable(inputs.put(name, bi)).ifPresent(BoundInput::deactivate);
+            return new Input<>(bi);
+        }
+        
+        public <T> Input<T> linkInputChannel(String name, Input.Channel<T> transform) throws ExecutionException {
+            BoundInputChannel<T> channel = new BoundInputChannel<>(this, transformer, name, transform);
+            Optional.ofNullable(inputs.put(name, channel)).ifPresent(BoundInput::deactivate);
+            return new Input<>(channel);
+        }
+        
+        public <T> Input<T> linkInputStream(String name, Input.Stream<T> transform) throws ExecutionException {
+            return linkInputChannel(name, (T value,WritableByteChannel w)->transform.transform(value, Channels.newOutputStream(w)));
+        }
+        
+        public <T> Output<T> linkOutputChannel(int index, Output.Channel<T> transform) throws ExecutionException {
+            BoundOutputChannel<T> channel = new BoundOutputChannel<>(this, transformer, index, transform);
+            Optional.ofNullable(outputs.put(index, channel)).ifPresent(BoundOutput::deactivate);
+            return new Output<>(channel);
+        }
+        
+        public <T> Output<T> linkOutputStream(int index, Output.Stream<T> transform) throws ExecutionException {
+            return linkOutputChannel(index, (src) -> transform.transform(Channels.newInputStream(src)));
+        }
+        
+        public <T extends WritableByteChannel> Output<T> linkOutputChannel(int index, Supplier<T> cstor) throws ExecutionException {
+            BoundOutputReceiver<T> receiver = new BoundOutputReceiver<>(this, index, cstor);
+            Optional.ofNullable(outputs.put(index, receiver)).ifPresent(BoundOutput::deactivate);
+            return new Output<>(receiver);
         }
         
         public boolean fetch() throws ExecutionException {
+            if (!executed) {
+                execute();
+            }
+            for (BoundOutput out : outputs.values()) {
+                out.reset();
+            }
             return fetchResults(link, outputs.values().toArray(BoundOutput[]::new));
         }        
         
         public long execute() throws ExecutionException {
-            return executeStatement(link, inputs.values().toArray(BoundInput[]::new));
+            try {
+                return executeStatement(link, inputs.values().toArray(BoundInput[]::new));
+            } finally {
+                executed = true;
+            }
         }
         
         public boolean isValid() {

@@ -904,7 +904,6 @@ span_buffered_blob(Relation rel, HeapTuple tuple)
                 if ( len == COMM_ERROR ) {
                     elog(ERROR,"piping error");
                 }
-
                 replaces[c] = 'r';
                 values[c] = close_write_pipeline_blob(write);
                 pfree(append);

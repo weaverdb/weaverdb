@@ -46,8 +46,9 @@ StreamOutValue(InputOutput* dest, Datum val, Oid type) {
         close_read_pipeline_blob(pointer);
         pfree(buffer);
     } else {
-        result = dest->transfer(dest->userargs,type,VARDATA((bytea*)val),VARSIZE((bytea*)val) - VARHDRSZ);
-    }  
+        result = dest->transfer(dest->userargs,type,VARDATA(DatumGetPointer(val)),VARSIZE(DatumGetPointer(val)) - VARHDRSZ);
+    }
+    dest->transfer(dest->userargs,type,NULL,CLOSE_OP);
     return result;
 }
 
@@ -75,30 +76,10 @@ BinaryCopyOutValue(InputOutput* output, Form_pg_attribute desc, Datum value) {
         }
     } else {
         if ( ISINDIRECT(value) ) {
-            int size = sizeof_indirect_blob(value);
-            int length = 0;
-            int moved = 0;
-            int result = 0;
-            int buf_sz = (sizeof_max_tuple_blob() * 5);
-            void* buffer = palloc(buf_sz);
-
-            Datum pointer = open_read_pipeline_blob(value,false);
-            char* target = palloc(size);
-            while (read_pipeline_segment_blob(pointer,buffer,&length,buf_sz) ) {
-                Assert(length > 0);
-                int sent = 0;
-                while (sent < length) {
-                    int result = output->transfer(output->userargs, desc->atttypid, buffer, length);
-                    if (result < 0) {
-                        return result;
-                    } else {
-                        sent += result;
-                    }   
-                }
-            }
-            close_read_pipeline_blob(pointer);
-            pfree(buffer);
-            return length;
+            bytea* pointer = rebuild_indirect_blob(value);
+            int size = output->transfer(output->userargs, desc->atttypid, VARDATA(pointer), VARSIZE(pointer) - 4);
+            pfree(pointer);
+            return size;
         } else {
             return output->transfer(output->userargs, desc->atttypid, VARDATA(value), VARSIZE(value) - 4);
         }
@@ -150,9 +131,11 @@ TransferColumnName(InputOutput* output, Form_pg_attribute desc) {
 }
 
 bool
-TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value) {
+TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, bool isnull) {
     int result = 0;
-    if (desc->atttypid != output->varType) {
+    if (isnull) {
+        output->transfer(output->userargs,output->varType,NULL,NULL_VALUE);
+    } else if (desc->atttypid != output->varType) {
         switch (output->varType) {
             case STREAMINGOID:
                 result = StreamOutValue(output,value,desc->atttypid);

@@ -120,7 +120,7 @@ LIB_EXTERN void  WResetExecutor(PreparedPlan* plan);
 LIB_EXTERN void WResetQuery(WConn conn,bool err);
 
 LIB_EXTERN bool
-TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value);
+TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, bool isnull);
 LIB_EXTERN bool
 TransferColumnName(InputOutput* output, Form_pg_attribute desc);
 #ifdef __cplusplus

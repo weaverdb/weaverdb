@@ -8,33 +8,42 @@ package driver.weaver;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 
 /**
  *
  * @author  mscott
  */
-public class BoundInput<T> extends Bound<T> {
+class BoundInput<T> extends Bound<T> {
 
     private final BaseWeaverConnection.Statement owner;
     private final String name;
     private Object value;
 
-    protected BoundInput(BaseWeaverConnection.Statement fc, String name, Class<T> type) throws ExecutionException {
+    BoundInput(BaseWeaverConnection.Statement fc, String name, Class<T> type) throws ExecutionException {
         super(type);
         owner = fc;
         this.name = name;
     }  
   
-    public String getName() {
+    String getName() {
         return name;
     }
 
-    protected BaseWeaverConnection.Statement getOwner() {
+    BaseWeaverConnection.Statement getOwner() {
         return owner;
     }
+    
+    void setStream(InputStream value) {
+        this.value = value;
+    }
 
-    public void set(T value) throws ExecutionException {        
+    void setChannel(java.nio.channels.ReadableByteChannel value) {
+        this.value = value;
+    }
+    
+    void set(T value) throws ExecutionException {        
         if ( value == null ) {
             this.value = null;
             return;
@@ -62,7 +71,6 @@ public class BoundInput<T> extends Bound<T> {
                     throw new ExecutionException("invalid type conversion for BLOB from " + value.getClass().getName());
                 }
                 break;
-
             case Direct:
             case Stream:
                 this.value = value;
@@ -152,7 +160,7 @@ public class BoundInput<T> extends Bound<T> {
         }
     }
 
-    public void setObject(Object obj) throws ExecutionException {
+    void setObject(Object obj) throws ExecutionException {
         try {
             set(getTypeClass().cast(obj));
         } catch (ClassCastException cast) {
@@ -160,29 +168,18 @@ public class BoundInput<T> extends Bound<T> {
         }
     }
 
-    private int pipeIn(byte[] data) throws IOException {
-        InputStream os = (InputStream)value;
-        return os.read(data);
-    }
-
     private int pipeIn(java.nio.ByteBuffer data) throws IOException {
+        ReadableByteChannel channel;
+        if (data == null) {
+            return value != null ? 1 : -1;
+        }
         switch (value) {
-            case ReadableByteChannel readableByteChannel -> {
-                return readableByteChannel.read(data);
-            }
-            case InputStream inputStream -> {
-                if ( data.hasArray() ) {
-                    return inputStream.read(data.array(),data.arrayOffset() + data.position(),data.remaining());
-                } else {
-                    byte[] open = new byte[data.limit()];
-                    int count = inputStream.read(open);
-                    if ( count > 0 ) data.put(open,0,count);
-                    return count;
-                }
-            }
+            case ReadableByteChannel readableByteChannel -> channel = readableByteChannel;
+            case InputStream inputStream -> channel = Channels.newChannel(inputStream);
             default -> {
                 return -1;
             }
         }
+        return channel.read(data);
     }
 }

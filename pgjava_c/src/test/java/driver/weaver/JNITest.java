@@ -3,12 +3,19 @@
 package driver.weaver;
 
 import driver.weaver.BaseWeaverConnection.Statement;
-import java.io.IOException;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Writer;
-import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
+import java.nio.channels.Channels;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.Assertions;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  *
@@ -72,12 +79,12 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void test() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            try (Statement s = conn.parse("select * from pg_database;")) {
-                BoundOutput<String> b = s.linkOutput(1, String.class);
-                BoundOutput<String> c = s.linkOutput(2, String.class);
-                BoundOutput<String> d = s.linkOutput(3, String.class);
-                BoundOutput<String> e = s.linkOutput(4, String.class);
-                BoundOutput<String> f = s.linkOutput(5, String.class);
+            try (Statement s = conn.statement("select * from pg_database;")) {
+                Output<String> b = s.linkOutput(1, String.class);
+                Output<String> c = s.linkOutput(2, String.class);
+                Output<String> d = s.linkOutput(3, String.class);
+                Output<String> e = s.linkOutput(4, String.class);
+                Output<String> f = s.linkOutput(5, String.class);
                 System.out.println(s.execute());
                 s.fetch();
                 System.out.println(b.getName() + "=" + b.get());
@@ -91,12 +98,12 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testBadBind() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            try (Statement s = conn.parse("select * from pg_database;")) {
-                BoundOutput<Integer> b = s.linkOutput(1, Integer.class);
-                BoundOutput<Integer> c = s.linkOutput(2, Integer.class);
-                BoundOutput<Integer> d = s.linkOutput(3, Integer.class);
-                BoundOutput<Integer> e = s.linkOutput(4, Integer.class);
-                BoundOutput<Integer> f = s.linkOutput(5, Integer.class);
+            try (Statement s = conn.statement("select * from pg_database;")) {
+                Output<Integer> b = s.linkOutput(1, Integer.class);
+                Output<Integer> c = s.linkOutput(2, Integer.class);
+                Output<Integer> d = s.linkOutput(3, Integer.class);
+                Output<Integer> e = s.linkOutput(4, Integer.class);
+                Output<Integer> f = s.linkOutput(5, Integer.class);
                 System.out.println(s.execute());
                 s.fetch();
                 System.out.println(b.getName() + "=" + b.get());
@@ -114,19 +121,28 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testListTables() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            try (Statement s = conn.parse("select * from pg_class;")) {
-                BoundOutput<String> b = s.linkOutput(1, String.class);
-                BoundOutput<String> c = s.linkOutput(2, String.class);
-                BoundOutput<String> d = s.linkOutput(3, String.class);
-                BoundOutput<String> e = s.linkOutput(4, String.class);
-                BoundOutput<String> f = s.linkOutput(5, String.class);
+            try (Statement s = conn.statement("select * from pg_class;")) {
+                Output<String> b = s.linkOutput(1, String.class);
+                Output<String> c = s.linkOutput(2, String.class);
+                Output<String> d = s.linkOutput(3, String.class);
+                Output<String> e = s.linkOutput(4, String.class);
+                Output<String> f = s.linkOutput(5, String.class);
                 System.out.println(s.execute());
+                Consumer<Output> process = (o)->{
+                    if (o.getName() != null) {
+                        try {
+                            System.out.println(o.getName() + "=" + o.get());
+                        } catch (ExecutionException ee) {
+
+                        }
+                    }
+                };
                 while (s.fetch()) {
-                    if (!b.isNull()) System.out.println(b.getName() + "=" + b.get());
-                    if (!c.isNull())System.out.println(c.getName() + "=" + c.get());
-                    if (!d.isNull())System.out.println(d.getName() + "=" + d.get());
-                    if (!e.isNull())System.out.println(e.getName() + "=" + e.get());
-                    if (!f.isNull())System.out.println(f.getName() + "=" + f.get());
+                    process.accept(b);
+                    process.accept(c);
+                    process.accept(d);
+                    process.accept(e);
+                    process.accept(f);
                     System.out.println("+++++++");
                 }
             } catch (ExecutionException we) {
@@ -139,19 +155,28 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testBadCloseSequence() throws Exception {
         BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test");
-        Statement s = conn.parse("select * from pg_class;");
-        BoundOutput<String> b = s.linkOutput(1, String.class);
-        BoundOutput<String> c = s.linkOutput(2, String.class);
-        BoundOutput<String> d = s.linkOutput(3, String.class);
-        BoundOutput<String> e = s.linkOutput(4, String.class);
-        BoundOutput<String> f = s.linkOutput(5, String.class);
+        Statement s = conn.statement("select * from pg_class;");
+        Output<String> b = s.linkOutput(1, String.class);
+        Output<String> c = s.linkOutput(2, String.class);
+        Output<String> d = s.linkOutput(3, String.class);
+        Output<String> e = s.linkOutput(4, String.class);
+        Output<String> f = s.linkOutput(5, String.class);
         System.out.println(s.execute());
+        Consumer<Output> process = (o)->{
+            if (o.getName() != null) {
+                try {
+                    System.out.println(o.getName() + "=" + o.get());
+                } catch (ExecutionException ee) {
+                    
+                }
+            }
+        };
         while (s.fetch()) {
-            if (!b.isNull()) System.out.println(b.getName() + "=" + b.get());
-            if (!c.isNull())System.out.println(c.getName() + "=" + c.get());
-            if (!d.isNull())System.out.println(d.getName() + "=" + d.get());
-            if (!e.isNull())System.out.println(e.getName() + "=" + e.get());
-            if (!f.isNull())System.out.println(f.getName() + "=" + f.get());
+            process.accept(b);
+            process.accept(c);
+            process.accept(d);
+            process.accept(e);
+            process.accept(f);
             System.out.println("+++++++");
         }
         conn.close();
@@ -163,41 +188,39 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testInputs() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            try (Statement s = conn.parse("create schema fortune")) {
+            try (Statement s = conn.statement("create schema fortune")) {
                 s.execute();
             }
-            try (Statement s = conn.parse("create table fortune/cookie (id int4, name varchar(128))")) {
+            try (Statement s = conn.statement("create table fortune/cookie (id int4, name varchar(128))")) {
                 s.execute();
             }
-            try (Statement s = conn.parse("insert into fortune/cookie (id, name) values ($id, $name)")) {
-                BoundInput<Integer> id = s.linkInput("id", Integer.class);
-                BoundInput<String> name = s.linkInput("name", String.class);
+            try (Statement s = conn.statement("insert into fortune/cookie (id, name) values ($id, $name)")) {
+                Input<Integer> id = s.linkInput("id", Integer.class);
+                Input<String> name = s.linkInput("name", String.class);
                 id.set(1);
                 name.set("Marcus");
                 s.execute();
             }
-            try (Statement s = conn.parse("select * from fortune/cookie where name = $name")) {
-                BoundInput<String> name = s.linkInput("name", String.class);
+            try (Statement s = conn.statement("select * from fortune/cookie where name = $name")) {
+                Input<String> name = s.linkInput("name", String.class);
                 name.set("Marcus");
-                BoundOutput<Integer> id = s.linkOutput(1, Integer.class);
+                Output<Integer> id = s.linkOutput(1, Integer.class);
                 name.set("Marcus");
                 s.execute();
                 if (s.fetch()) {
                     System.out.println("Marcus=" + id.get());
                 }
             }
-            try (Statement s = conn.parse("update fortune/cookie set id=$id where name = $name")) {
-                BoundInput<String> name = s.linkInput("name", String.class);
+            try (Statement s = conn.statement("update fortune/cookie set id=$id where name = $name")) {
+                Input<String> name = s.linkInput("name", String.class);
                 name.set("Marcus");
-                BoundInput<Integer> id = s.linkInput("id", Integer.class);
+                Input<Integer> id = s.linkInput("id", Integer.class);
                 id.set(3);
                 s.execute();
             }
-            try (Statement s = conn.parse("select * from fortune/cookie where name = $name")) {
-                BoundInput<String> name = s.linkInput("name", String.class);
-                name.set("Marcus");
-                BoundOutput<Integer> id = s.linkOutput(1, Integer.class);
-                name.set("Marcus");
+            try (Statement s = conn.statement("select * from fortune/cookie where name = $name")) {
+                s.linkInput("name", String.class).set("Marcus");
+                Output<Integer> id = s.linkOutput(1, Integer.class);
                 s.execute();
                 if (s.fetch()) {
                     System.out.println("Marcus=" + id.get());
@@ -207,72 +230,109 @@ public class JNITest {
     }
     
     @org.junit.jupiter.api.Test
-    public void testStreaming() throws Exception {
+    public void testPiping() throws Exception {
+        ExecutorService feeder = Executors.newVirtualThreadPerTaskExecutor();
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            try (Statement s = conn.parse("create schema summer")) {
+            conn.execute("create schema winter");
+            conn.execute("create table winter/streaming (id int4, data blob, data2 blob, data3 blob, data4 blob)");
+            try (Statement s = conn.statement("insert into winter/streaming (id, data, data2, data3, data4) values ($id, $bin, $binb, $binc, $bind)")) {
+                s.linkInput("id", Integer.class).set(1);
+                Input.Channel<String> df =  (value, sink)->{
+                    try (DataOutputStream out = new DataOutputStream(Channels.newOutputStream(sink))) {
+                        out.writeUTF(value);
+                    }
+                };
+                s.linkInputChannel("bin", df).value("hello to the panda");
+                s.linkInputChannel("binb", df).value("hello to the panda2");
+                s.linkInputChannel("binc", df).value("hello to the panda3");
+                s.linkInputChannel("bind", df).value("hello to the panda4");
+                
                 s.execute();
             }
-            try (Statement s = conn.parse("create table summer/streaming (id int4, data blob)")) {
-                s.execute();
-            }
-            try (Statement s = conn.parse("insert into summer/streaming (id, data) values ($id, $bin)")) {
-                BoundInput<Integer> id = s.linkInput("id", Integer.class);
-                BoundInput<ReadableByteChannel> name = s.linkInput("bin", ReadableByteChannel.class);
-                id.set(1);
-                name.set(new ReadableByteChannel() {
-                    boolean consumed = false;
-                    @Override
-                    public int read(ByteBuffer dst) throws IOException {
-                        if (consumed) return -1;
-                        consumed = true;
-                        byte[] data = "the quick brown fox".getBytes();
-                        if (dst.remaining() > data.length) {
-                            dst.put(data);
-                        }
-                        return data.length;
-                    }
-
-                    @Override
-                    public boolean isOpen() {
-                        return true;
-                    }
-
-                    @Override
-                    public void close() throws IOException {
-                        
-                    }
-                });
-                s.execute();
-            }
-            try (Statement s = conn.parse("select data from summer/streaming where id=$id")) {
-                BoundInput<Integer> id = s.linkInput("id", Integer.class);
-                BoundOutput<WritableByteChannel> data = s.linkOutput(1, WritableByteChannel.class);
-                id.set(1);
-                data.setChannel(new WritableByteChannel() {
-                    boolean consumed = false;
-                    @Override
-                    public int write(ByteBuffer src) throws IOException {
-                        if (consumed) return -1;
-                        byte[] data = new byte[src.remaining()];
-                        src.get(data);
-                        System.out.println(new String(data));
-                        return data.length;
-                    }
-
-                    @Override
-                    public boolean isOpen() {
-                        return true;
-                    }
-
-                    @Override
-                    public void close() throws IOException {
-                        
+            try (Statement s = conn.statement("select data from winter/streaming where id=$id")) {
+                s.linkInput("id", Integer.class).set(1);
+                Output<String> data = s.linkOutputChannel(1, (source)->{
+                    try (DataInputStream in = new DataInputStream(Channels.newInputStream(source))) {
+                        return in.readUTF();
                     }
                 });
                 s.execute();
                 s.fetch();
+                assertEquals("hello to the panda", data.value());
             }
-            
+            feeder.shutdown();
+        }
+    }
+    
+        @org.junit.jupiter.api.Test
+    public void testNullOut() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create schema nullcheck");
+            conn.execute("create table nullcheck/nullcheck (nstring varchar(256), nint int4)");
+            conn.execute("insert into nullcheck/nullcheck (nstring) values ('fun times')");
+            try (Statement s = conn.statement("select nstring, nint from nullcheck/nullcheck")) {
+                Output<String> r = s.linkOutput(1, String.class);
+                Output<Integer> i = s.linkOutput(2, Integer.class);
+                s.execute();
+                assertTrue(s.fetch());
+                Assertions.assertEquals("fun times", r.get());
+                Assertions.assertNull(i.get());
+            }
+        }
+    }
+    
+        @org.junit.jupiter.api.Test
+    public void testStreamingType() throws Exception {
+        ExecutorService service = Executors.newVirtualThreadPerTaskExecutor();
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create schema streamtype");
+            conn.execute("create table streamtype/foo (bar blob)");
+            try (Statement s = conn.statement("insert into streamtype/foo (bar) values ($stream)")) {
+                s.linkInputStream("stream", (String value, OutputStream source)->{
+                    try (DataOutputStream dos = new DataOutputStream(source)) {
+                        dos.writeUTF(value);
+                    }
+                }).value("this is a farse");
+                s.execute();
+            }
+            try (Statement s = conn.statement("select bar from streamtype/foo")) {
+                Output<String> b = s.linkOutputStream(1, (source)->{
+                    try (DataInputStream dis = new DataInputStream(source)) {
+                        return dis.readUTF();
+                    }
+                });
+                assertTrue(s.fetch());
+                assertEquals("this is a farse", b.get());
+            }
+        }
+        service.shutdown();
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testStreamSpanning() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create schema spanning");
+            conn.execute("create table spanning/store (bar streaming)");
+            conn.execute("create table spanning/main (id int4, data blob in spanning/store) inherits (spanning/store)");
+            try (Statement s = conn.statement("insert into spanning/main (id, data) values ($id, $stream)")) {
+                s.linkInput("id", Integer.class).value(1);
+                s.linkInputStream("stream", (String value, OutputStream sink)->{
+                    try (DataOutputStream dos = new DataOutputStream(sink)) {
+                        dos.writeUTF(value);
+                    }
+                }).value("this is a farse");
+                s.execute();
+            }
+            try (Statement s = conn.statement("select data from spanning/main where id=$id")) {
+                s.linkInput("id", Integer.class).set(1);
+                Output<String> value = s.linkOutputStream(1, (InputStream source)->{
+                    try (DataInputStream dis = new DataInputStream(source)) {
+                        return dis.readUTF();
+                    }
+                });
+                assertTrue(s.fetch());
+                assertEquals("this is a farse", value.get());
+            }
         }
     }
 }

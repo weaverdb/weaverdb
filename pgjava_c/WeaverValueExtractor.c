@@ -375,7 +375,8 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
     if (target == NULL ) return 0;
     if ( (*env)->IsSameObject(env,target,NULL)) return 0;
 
-    if ( length == 0 ) {
+
+    if ( data == NULL || length == NULL_VALUE ) {
         (*env)->SetObjectField(env,target,Cache->ovalue,NULL);
         return 0;
     } else if (passType == METANAMETYPE) {

@@ -480,6 +480,11 @@ static jlong reportError(JNIEnv* env,jobject talkerObject,jlong code, const char
         jthrowable existing = (*env)->ExceptionOccurred(env);
         char combo[255];
 
+        if ( existing != NULL ) {
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+        }
+
         if ( !errtxt ) errtxt = "no error text";
         if ( !statetxt ) statetxt = "NOSTATE";
 
@@ -522,12 +527,16 @@ static int transferin(void* arg,int type, void* buff,int run)
     jobject value = (*env)->GetObjectField(env, target, Cache->ivalue);
 
     if ((*env)->IsSameObject(env,value,NULL)) {
-        return 0;
+        return NULL_VALUE;
     }
 
     int checkTrunc = PassInValue(env,comm->bindType,comm->linkType,type,value,buff, run);
     if (checkTrunc < 0) {
         (*env)->ThrowNew(env,Cache->truncation,"binary truncation");
+    }
+    if (buff == NULL) {
+        Assert(run == LENGTH_QUERY_OP);
+        Assert(checkTrunc >= 0);
     }
     return checkTrunc;
 }
@@ -539,7 +548,7 @@ static int transferout(void* arg,int type, void* buff,int run)
     jobject target = comm->target;
                 
     if ((*env)->IsSameObject(env,target,NULL)) {
-        return PIPING_ERROR;
+        return NULL_VALUE;
     }
 
     return PassOutValue(env,comm->bindType,comm->linkType,type,target, buff, run);
@@ -557,6 +566,8 @@ static int direct_pipeout(void* arg,int type, void* buff,int run)
 
     if (type == METANAMETYPE) {
         return PassOutValue(env,comm->bindType,comm->linkType,type,target, buff, run);
+    } else if (buff == NULL) {
+        return (*env)->CallIntMethod(env,target,Cache->pipeout,NULL);
     } else {
         jobject jb = (*env)->NewDirectByteBuffer(env,buff,run);
 
@@ -586,6 +597,10 @@ static int direct_pipein(void* arg,int type, void* buff,int run)
         return PIPING_ERROR;
     }
 
+    if (buff == NULL) {
+    	return (*env)->CallIntMethod(env,target,Cache->pipein,NULL);
+    }
+
     jobject jb = (*env)->NewDirectByteBuffer(env,buff,run);
 
     if ( jb != NULL ) {
@@ -599,7 +614,6 @@ static int direct_pipein(void* arg,int type, void* buff,int run)
         if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         }
-
         return -1;
     }
 }
@@ -613,7 +627,11 @@ static int pipeout(void* args,int type, void* buff,int run)
     if ((*env)->IsSameObject(env,target,NULL)) {
         return PIPING_ERROR;
     }
-    
+
+    if (buff == NULL) {
+    	return (*env)->CallIntMethod(env,target,Cache->infoout,NULL);
+    }
+
     jbyteArray jb = (*env)->NewByteArray(env,run);
 
     if ( jb != NULL ) {

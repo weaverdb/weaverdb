@@ -696,7 +696,7 @@ WFetch(OpaquePreparedStatement plan) {
                 val = HeapGetAttr(tuple, plan->slot[pos].index, tdesc, &isnull);
 
                 if (!isnull) {
-                    if (!TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1], val)) {
+                    if (!TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1], val, false)) {
                         Oid vType = plan->slot[pos].varType;
                         /* field was not transfered, try and coerce to see if it should someday  */
                         if (can_coerce_type(1, &tdesc->attrs[pos]->atttypid, &vType)) {
@@ -710,7 +710,7 @@ WFetch(OpaquePreparedStatement plan) {
                         }
                     }
                 } else {
-                    TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1], PointerGetDatum(NULL));
+                    TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1], PointerGetDatum(NULL), true);
                 }
             }
         }
@@ -1447,9 +1447,14 @@ TransferExecArgs(PreparedPlan* plan) {
                     break;
                 }
                 case STREAMINGOID: {
-                    CommBuffer* value = ConnectCommBuffer(plan->slot[k].userargs, plan->slot[k].transfer);
-                    paramLI->length = sizeof(CommBuffer);
-                    paramLI->value = PointerGetDatum(value);
+                    int nullcheck = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,-1);
+                    if (nullcheck > 0) {
+                        CommBuffer* value = ConnectCommBuffer(plan->slot[k].userargs, plan->slot[k].transfer);
+                        paramLI->length = sizeof(CommBuffer);
+                        paramLI->value = PointerGetDatum(value);
+                    } else {
+                        paramLI->isnull = true;
+                    }
                     break;
                 }
                 case VARCHAROID:
@@ -1458,7 +1463,7 @@ TransferExecArgs(PreparedPlan* plan) {
                 case BLOBOID:
                 case JAVAOID:
                 default: {
-                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,-1);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,LENGTH_QUERY_OP);
                     if (len > 0) {
                         char* value = palloc(len + VARHDRSZ);
                         if (len != plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, VARDATA(value),len)) {
