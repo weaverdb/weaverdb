@@ -57,7 +57,7 @@ public class JNITest {
         Properties prop = new Properties();
         prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
         prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "1");
+        prop.setProperty("start_delay", "10");
         prop.setProperty("debuglevel", "DEBUG");
         prop.setProperty("stdlog", "TRUE");
         WeaverInitializer.initialize(prop);
@@ -332,6 +332,34 @@ public class JNITest {
                 });
                 assertTrue(s.fetch());
                 assertEquals("this is a farse", value.get());
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testNullVsZeroLen() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table zerolen (value varchar(256))");
+            try (Statement s = conn.statement("insert into zerolen (value) values ($checkit)")) {
+                s.linkInput("checkit", String.class).value("");
+                s.execute();
+            }
+            try (Statement s = conn.statement("select value from zerolen")) {
+                Output<String> v = s.linkOutput(1, String.class);
+                s.execute();
+                s.fetch();
+                Assertions.assertTrue(v.get().length() == 0);
+            }
+            conn.execute("delete from zerolen");
+            try (Statement s = conn.statement("insert into zerolen (value) values ($checkit)")) {
+                s.linkInput("checkit", String.class).value(null);
+                s.execute();
+            }
+            try (Statement s = conn.statement("select value from zerolen")) {
+                Output<String> v = s.linkOutput(1, String.class);
+                s.execute();
+                s.fetch();
+                Assertions.assertNull(v.get());
             }
         }
     }

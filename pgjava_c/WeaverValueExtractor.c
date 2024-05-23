@@ -124,7 +124,7 @@ javacache*  DropCache(JNIEnv* env) {
 
 int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length) {
     if ( (*env)->IsSameObject(env,NULL,object) ) {
-        return 0;
+        return NULL_VALUE;
     } else {
 	switch( passType )
 	{
@@ -310,7 +310,7 @@ static int ExtractBytes(JNIEnv* env,jbyteArray target,void* data, int len) {
     jbyte*      buffer;
     if (data != NULL) {
         if (len < length) {
-            return -1;
+            return TRUNCATION_VALUE;
         } else {
             buffer = (*env)->GetByteArrayElements(env,target,&copy);
             MoveData(data,buffer,length);

@@ -46,9 +46,11 @@ typedef struct error {
 
 typedef int (*transferfunc)(void* userenv, int varType, void *varAdd, int varSize);
 #define PIPING_ERROR  -2
-#define NULL_VALUE  0
+#define NULL_VALUE  -1
+#define TRUNCATION_VALUE -32
 #define CLOSE_OP -4
 #define LENGTH_QUERY_OP -8
+#define NULL_CHECK_OP -16
 
 typedef struct Connection* OpaqueWConn;
 typedef struct preparedplan* OpaquePreparedStatement;

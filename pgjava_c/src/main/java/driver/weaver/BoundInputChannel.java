@@ -36,8 +36,8 @@ class BoundInputChannel<T> extends BoundInput<ReadableByteChannel> {
                     type.transform(value, comms.sink());
                     return null;
                 } finally {
-                    if (comms.source().isOpen()) {
-                        comms.source().close();
+                    if (comms.sink().isOpen()) {
+                        comms.sink().close();
                     }
                 }
             });

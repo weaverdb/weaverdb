@@ -171,8 +171,9 @@ class BoundInput<T> extends Bound<T> {
     private int pipeIn(java.nio.ByteBuffer data) throws IOException {
         ReadableByteChannel channel;
         if (data == null) {
-            return value != null ? 1 : -1;
+            return value != null ? 1 : -1;  // null check
         }
+
         switch (value) {
             case ReadableByteChannel readableByteChannel -> channel = readableByteChannel;
             case InputStream inputStream -> channel = Channels.newChannel(inputStream);

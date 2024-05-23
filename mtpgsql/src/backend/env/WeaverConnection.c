@@ -1447,7 +1447,7 @@ TransferExecArgs(PreparedPlan* plan) {
                     break;
                 }
                 case STREAMINGOID: {
-                    int nullcheck = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,-1);
+                    int nullcheck = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL, NULL_CHECK_OP);
                     if (nullcheck > 0) {
                         CommBuffer* value = ConnectCommBuffer(plan->slot[k].userargs, plan->slot[k].transfer);
                         paramLI->length = sizeof(CommBuffer);
@@ -1464,12 +1464,14 @@ TransferExecArgs(PreparedPlan* plan) {
                 case JAVAOID:
                 default: {
                     int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,LENGTH_QUERY_OP);
-                    if (len > 0) {
+                    if (len >= 0) {
                         char* value = palloc(len + VARHDRSZ);
                         if (len != plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, VARDATA(value),len)) {
                             coded_elog(ERROR, 889, "binary truncation expected length: %d", len);
+                            // should result in jump
+                            return TRUNCATION_VALUE;
                         }
-                        SETVARSIZE(value, len);
+                        SETVARSIZE(value, len + VARHDRSZ);
                         paramLI->value = PointerGetDatum(value);
                         paramLI->length = len + VARHDRSZ;
                     } else {

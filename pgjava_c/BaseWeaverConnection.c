@@ -531,7 +531,7 @@ static int transferin(void* arg,int type, void* buff,int run)
     }
 
     int checkTrunc = PassInValue(env,comm->bindType,comm->linkType,type,value,buff, run);
-    if (checkTrunc < 0) {
+    if (checkTrunc == TRUNCATION_VALUE) {
         (*env)->ThrowNew(env,Cache->truncation,"binary truncation");
     }
     if (buff == NULL) {

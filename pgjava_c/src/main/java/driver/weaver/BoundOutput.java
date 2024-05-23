@@ -90,8 +90,7 @@ class BoundOutput<T> extends Bound<T> {
         WritableByteChannel channel;
         switch (value) {
             case null -> {
-                value = new ByteArrayOutputStream();
-                channel = Channels.newChannel((OutputStream)value);
+                return -1;
             }
             case OutputStream os -> channel = Channels.newChannel(os);
             case WritableByteChannel w -> channel = w;
@@ -100,7 +99,7 @@ class BoundOutput<T> extends Bound<T> {
             }
         }
 
-        if (data == null) {
+        if (data == null) { // close op
             channel.close();
             return -1;
         } else {

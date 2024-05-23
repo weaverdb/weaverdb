@@ -77,11 +77,11 @@ BinaryCopyOutValue(InputOutput* output, Form_pg_attribute desc, Datum value) {
     } else {
         if ( ISINDIRECT(value) ) {
             bytea* pointer = rebuild_indirect_blob(value);
-            int size = output->transfer(output->userargs, desc->atttypid, VARDATA(pointer), VARSIZE(pointer) - 4);
+            int size = output->transfer(output->userargs, desc->atttypid, VARDATA(pointer), VARSIZE(pointer) - VARHDRSZ);
             pfree(pointer);
             return size;
         } else {
-            return output->transfer(output->userargs, desc->atttypid, VARDATA(value), VARSIZE(value) - 4);
+            return output->transfer(output->userargs, desc->atttypid, VARDATA(value), VARSIZE(value) - VARHDRSZ);
         }
     }
 }
