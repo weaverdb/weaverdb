@@ -46,10 +46,12 @@ public class Output<T> {
         T value() throws ExecutionException;
     }
 
+    @FunctionalInterface
     public static interface Channel<T> {
         T transform(ReadableByteChannel src) throws IOException;
     }
     
+    @FunctionalInterface
     public static interface Stream<T> {
         T transform(InputStream src) throws IOException;
     }

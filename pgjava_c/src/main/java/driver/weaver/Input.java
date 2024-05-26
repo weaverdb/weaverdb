@@ -33,10 +33,12 @@ public class Input<T> {
         void value(T value) throws ExecutionException;
     }
     
+    @FunctionalInterface
     public static interface Channel<T> {
         void transform(T value, WritableByteChannel c) throws IOException;
     }    
     
+    @FunctionalInterface
     public static interface Stream<T> {
         void transform(T value, OutputStream c) throws IOException;
     }  

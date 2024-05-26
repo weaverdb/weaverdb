@@ -7,6 +7,7 @@ import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -346,7 +347,11 @@ public class BaseWeaverConnection implements AutoCloseable {
                 out.reset();
             }
             return fetchResults(link, outputs.values().toArray(BoundOutput[]::new));
-        }        
+        }
+        
+        Collection<BoundOutput> outputs() {
+            return outputs.values();
+        }
         
         public long execute() throws ExecutionException {
             try {

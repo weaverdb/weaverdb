@@ -134,8 +134,46 @@ bool
 TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, bool isnull) {
     int result = 0;
     if (isnull) {
-        output->transfer(output->userargs,output->varType,NULL,NULL_VALUE);
-    } else if (desc->atttypid != output->varType) {
+        output->transfer(output->userargs,desc->atttypid,NULL,NULL_VALUE);
+    } else if (output->varType == 0 || desc->atttypid == output->varType) {
+        switch (desc->atttypid) {
+            case BOOLOID:
+            case CHAROID:
+                result = DirectCharCopyValue(output,value);
+                break;
+            case INT4OID:
+                result = DirectIntCopyValue(output,value);
+                break;
+            case FLOAT4OID:
+                result = DirectFloatCopyValue(output,value);
+                break;
+            case TIMESTAMPOID:
+            case FLOAT8OID:
+                result = IndirectDoubleCopyValue(output,value);
+                break;
+            case INT8OID:
+            case XIDOID:
+            case OIDOID:
+                result = IndirectLongCopyValue(output,value);
+                break;
+            case BLOBOID:
+            case TEXTOID:
+            case VARCHAROID:
+            case BPCHAROID:
+            case BYTEAOID:
+            case JAVAOID:
+                result = BinaryCopyOutValue(output,desc,value);
+                break;
+            case STREAMINGOID: 
+                result = StreamOutValue(output,value,desc->atttypid);
+                break;
+            case NAMEOID:
+                result = ConvertValueToText(output, desc->atttypid, desc->atttypmod, value);
+                break;
+            default:
+                return false;
+        }
+    } else {
         switch (output->varType) {
             case STREAMINGOID:
                 result = StreamOutValue(output,value,desc->atttypid);
@@ -172,39 +210,6 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
             case FLOAT8OID:
                 if (desc->atttypid == FLOAT4OID) result = DirectDoubleCopyValue(output,(double)*(float*)DatumGetPointer(value));
                 else return false;
-                break;
-            default:
-                return false;
-        }
-    } else {
-        switch (desc->atttypid) {
-            case BOOLOID:
-            case CHAROID:
-                result = DirectCharCopyValue(output,value);
-                break;
-            case INT4OID:
-                result = DirectIntCopyValue(output,value);
-                break;
-            case FLOAT4OID:
-                result = DirectFloatCopyValue(output,value);
-                break;
-            case TIMESTAMPOID:
-            case FLOAT8OID:
-                result = IndirectDoubleCopyValue(output,value);
-                break;
-            case INT8OID:
-                result = IndirectLongCopyValue(output,value);
-                break;
-            case BLOBOID:
-            case TEXTOID:
-            case VARCHAROID:
-            case BPCHAROID:
-            case BYTEAOID:
-            case JAVAOID:
-                result = BinaryCopyOutValue(output,desc,value);
-                break;
-            case STREAMINGOID: 
-                result = StreamOutValue(output,value,desc->atttypid);
                 break;
             default:
                 return false;

@@ -50,8 +50,10 @@ class Bound<T> {
             return Types.Stream;
         } else if (java.io.InputStream.class.isAssignableFrom(type)) {
             return Types.Stream;
-        } else {
+        } else if (java.io.Serializable.class.isAssignableFrom(type)) {
             return Types.Java;
+        } else {
+            return Types.Null;
         }
     }
     

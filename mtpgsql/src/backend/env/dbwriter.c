@@ -486,7 +486,7 @@ int FlushWriteGroup(WriteGroup cart) {
     sync->currstate = NOT_READY;
     if ( sync_buffers > max_logcount ) { 
         CommitPackage(sync);
-        if ( logging ) ClearLogs(sync);
+        ClearLogs(sync);
     }
     elog(DEBUG, "flushed out %d buffers",release);
      
@@ -755,9 +755,7 @@ int SyncWriteGroup(WriteGroup cart) {
     
     CommitPackage(cart);
     
-    if ( logging ) {
-        ClearLogs(cart);
-    }
+    ClearLogs(cart);
     
     if (cart->dotransaction && TransactionSystemInitialized) {
         trans_logged = LogTransactions(cart);

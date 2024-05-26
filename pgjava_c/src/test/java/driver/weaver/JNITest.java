@@ -363,4 +363,44 @@ public class JNITest {
             }
         }
     }
+    
+    @org.junit.jupiter.api.Test
+    public void testNaturalTypes() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table typecheck (id int4, value varchar(256))");
+            conn.execute("insert into typecheck (id, value) values (1, 'value')");
+            try (Statement s = conn.statement("select id, value from typecheck")) {
+                Output<Object> id = s.linkOutput(1, Object.class);
+                Output<Object> v = s.linkOutput(2, Object.class);
+                s.execute();
+                s.fetch();
+                Assertions.assertTrue(id.get() instanceof Integer);
+                Assertions.assertTrue(v.get() instanceof String);
+            }
+        }
+    }
+    
+        
+    @org.junit.jupiter.api.Test
+    public void testResultSetStream() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table typecheck (id int4, value varchar(256))");
+            conn.execute("insert into typecheck (id, value) values (1, 'value')");
+            conn.execute("insert into typecheck (id, value) values (2, 'value2')");
+            conn.execute("insert into typecheck (id, value) values (3, 'value3')");
+            conn.execute("insert into typecheck (id, value) values (4, 'value4')");
+            conn.execute("insert into typecheck (id, value) values (5, 'value5')");
+            try (Statement s = conn.statement("select xmin, * from typecheck")) {
+                Assertions.assertEquals(5,ResultSet.stream(s).peek(os->{
+                    try {
+                        for (int x=0;x<os.length;x++) {
+                            System.out.println(os[x].getName() + "=" + os[x].get());
+                        }
+                    } catch (ExecutionException ee) {
+                        
+                    }
+                }).count());
+            }
+        }
+    }
 }

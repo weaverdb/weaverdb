@@ -682,11 +682,12 @@ WFetch(OpaquePreparedStatement plan) {
                 Datum val = (Datum) NULL;
                 char isnull = 0;
 
-                if (tuple->t_data->t_natts < plan->slot[pos].index || plan->slot[pos].index <= 0) {
-                    coded_elog(ERROR, 104, "no attribute");
+                if (tuple->t_data->t_natts < plan->slot[pos].index) {
+                    continue;
                 }
-                if (tuple->t_data->t_natts < plan->slot[pos].index || plan->slot[pos].index < 0) {
-                    coded_elog(ERROR, 107, "wrong number of attributes");
+             
+                if (plan->slot[pos].index <= 0) {
+                    coded_elog(ERROR, 104, "unassigned attribute");
                 }
 
                 if (plan->stage != STMT_FETCH && plan->processed == 0) {
