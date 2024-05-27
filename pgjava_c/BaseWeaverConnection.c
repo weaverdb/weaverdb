@@ -576,6 +576,7 @@ static int direct_pipeout(void* arg,int type, void* buff,int run)
             if ( (*env)->ExceptionCheck(env) ) {
                 return PIPING_ERROR;
             } else {
+                (*env)->DeleteLocalRef(env, jb);
                 return len;
             }
         } else {
@@ -605,8 +606,11 @@ static int direct_pipein(void* arg,int type, void* buff,int run)
 
     if ( jb != NULL ) {
     	jint count = (*env)->CallIntMethod(env,target,Cache->pipein,jb);
+
         if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
+        } else {
+            (*env)->DeleteLocalRef(env, jb);
         }
         
     	return count;
@@ -640,6 +644,7 @@ static int pipeout(void* args,int type, void* buff,int run)
         if ( (*env)->ExceptionCheck(env) ) {
             return PIPING_ERROR;
         } else {
+            (*env)->DeleteLocalRef(env, jb);
             return len;
         }
     } else {
@@ -670,6 +675,7 @@ static int pipein(void* args,int type, void* buff,int run)
         if ( count > 0 ) {
             (*env)->GetByteArrayRegion(env,jb,0,count,(jbyte*)(buff));
         }
+        (*env)->DeleteLocalRef(env, jb);
     	return count;
     } else {
         if ( (*env)->ExceptionCheck(env) ) {

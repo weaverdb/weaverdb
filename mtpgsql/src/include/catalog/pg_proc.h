@@ -1660,7 +1660,7 @@ DESCR("less-equal-greater");
 DATA(insert OID = 1316 (  time				 PGUID 11 f t f 1 f 1083 "1184" 100 0 0 100  timestamp_time - ));
 DESCR("convert timestamp to time");
 
-DATA(insert OID = 1833 (  length			 PGUID 11 f t t 1 f   23 "1803" 100 0 1 0  textlen - ));
+DATA(insert OID = 1833 (  length			 PGUID 11 f t t 1 f   20 "1803" 100 0 1 0  bloblen - ));
 DESCR("length");
 
 DATA(insert OID = 1317 (  length			 PGUID 11 f t t 1 f   23 "25" 100 0 1 0  textlen - ));

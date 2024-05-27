@@ -35,10 +35,12 @@ BlockNumber span_buffered_blob(Relation rel,HeapTuple direct);
 
 HeapTuple vacuum_respan_tuple_blob(Relation rel, HeapTuple tuple, bool exclude_self);
 
-Size sizeof_tuple_blob(Relation rel, HeapTuple tuple);
-Size sizeof_max_tuple_blob(void);
+uint64 sizeof_tuple_blob(Relation rel, HeapTuple tuple);
+int sizeof_max_tuple_blob(void);
 
 bytea* rebuild_indirect_blob(Datum item);
+
+uint64* bloblen(Datum);
 
 Datum
 open_read_pipeline_blob(Datum pointer, bool read_only);
@@ -48,7 +50,7 @@ void
 close_read_pipeline_blob(Datum pipe);
 Datum 
 close_write_pipeline_blob(Datum pipe);
-uint32 
+uint64
 sizeof_indirect_blob(Datum pipe);
 bool 
 read_pipeline_segment_blob(Datum pipe, char* target,int * length, int limit);

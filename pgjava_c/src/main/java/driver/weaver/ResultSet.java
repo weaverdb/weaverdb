@@ -33,9 +33,19 @@ public class ResultSet implements Iterable<Output[]> {
 
             @Override
             public Output[] next() {
-                return stmt.outputs().stream().filter(bo->bo.getName() != null).map(Output::new).toArray(Output[]::new);
-            }
+                return stmt.outputs().stream()
+                        .filter(bo->bo.getName() != null)
+                        .sorted((a, b)->Integer.compare(a.getIndex(), b.getIndex()))
+                        .map(Output::new).toArray(Output[]::new);
+            }            
         };
+    }
+    
+    public static Stream<Output[]> stream(BaseWeaverConnection con, String stmt) throws ExecutionException {
+        Statement s = con.statement(stmt);
+        Stream<Output[]> results = stream(s);
+        results.onClose(s::close);
+        return results;
     }
 
     public static Stream<Output[]> stream(Statement stmt) throws ExecutionException {

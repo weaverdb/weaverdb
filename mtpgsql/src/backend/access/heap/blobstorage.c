@@ -45,7 +45,7 @@ typedef struct blobseg {
 
 typedef struct blobhead {
         int32           pointer_length;
-	uint32           blob_length;
+	uint64           blob_length;
 	ItemPointerData forward_pointer;
         Oid             relid;
 }  blob_header;
@@ -55,8 +55,8 @@ typedef struct read_pipeline {
         Oid                 rel;
         ItemPointerData     head_pointer;
         ItemPointerData     tail_pointer;
-        uint32              length;
-        uint32              read;
+        uint64              length;
+        uint64              read;
         char*               cache_data;
         int16               cache_offset;
         int16               cache_length;
@@ -69,8 +69,8 @@ typedef struct write_pipeline {
         Oid		    rel;
         ItemPointerData     head_pointer;
         ItemPointerData     tail_pointer;
-        uint32                length;
-        uint32                written;
+        uint64                length;
+        uint64                written;
         BlockNumber         limit;
         bytea*               cache_data;
         uint32              cache_limit;
@@ -93,7 +93,7 @@ typedef struct bloblist {
 
 typedef blob_segment_data *blob_segment;
 
-Size    segment_size = 0;
+int    segment_size = 0;
 
 static HeapTuple store_segment(Relation rel, blob_segment segment, BlockNumber limit);
 static int  delete_segment(Relation rel, ItemPointer pointer);
@@ -110,7 +110,7 @@ static void unlock_segment(Relation relation, Buffer buf, HeapTuple tuple);
 
 static void  blob_log(Relation rel, char* pattern, ...);
 
-Size
+int
 sizeof_max_tuple_blob()
 {
 
@@ -118,7 +118,7 @@ sizeof_max_tuple_blob()
         segment_size = (MaxAttrSize - SEGHDRSZ);
         char* size = GetProperty("blobsegments");
         if ( size != NULL ) {
-            Size ref = atoi(size);
+            int ref = atoi(size);
             if ( ref > 0 && ref < segment_size)  {
                 segment_size = ref;
             }
@@ -285,7 +285,7 @@ get_segment(Relation rel, ItemPointer pointer, bool read_only, char *target, int
 	return len;
 }
 
-uint32 
+uint64 
 sizeof_indirect_blob(Datum pipe) {
         blob_header     header;
         memmove(&header,DatumGetPointer(pipe),sizeof(blob_header));
@@ -616,9 +616,16 @@ rebuild_indirect_blob(Datum item)
 
         memmove(&header,DatumGetPointer(item),sizeof(blob_header));
 	Relation        rel = RelationIdGetRelation(header.relid, DEFAULTDBOID);
+
+        if (header.blob_length > 0x7fffffff) {
+            elog(ERROR,"blob is too large to be rebuild");
+        }
+
 	LockRelation(rel, AccessShareLock);
 
+
         bytea          *data = (bytea *) palloc(header.blob_length);
+
 	SETVARSIZE(data, header.blob_length);
 	link = header.forward_pointer;
 
@@ -732,7 +739,7 @@ delete_indirect_blob(Datum item)
 	return pos;
 }
 
-Size
+uint64
 sizeof_tuple_blob(Relation rel, HeapTuple tuple)
 {
 	TupleDesc       atts = rel->rd_att;
@@ -1182,6 +1189,23 @@ lock_segment_for_update(Relation relation, Buffer * buf, HeapTuple tuple) {
 void 
 unlock_segment(Relation relation, Buffer buf, HeapTuple tuple) {
     UnlockHeapTuple(relation,buf,tuple);
+}
+
+uint64 *
+bloblen(Datum blob)
+{
+    bytea*  t = (bytea*)DatumGetPointer(blob);
+
+	if (!PointerIsValid(t))
+		return 0;
+
+    uint64 * result = palloc(sizeof(uint64));
+
+    *result = ( ISINDIRECT(t) ) ?
+            sizeof_indirect_blob(blob)
+            : VARSIZE(t) - VARHDRSZ;
+
+    return result;
 }
 
 void  blob_log(Relation rel, char* pattern, ...) {

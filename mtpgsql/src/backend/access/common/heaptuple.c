@@ -133,16 +133,15 @@ DataFill(char *data,
 					   *((int32 *) value[i]));
 			break;
 #ifdef _LP64
-		case sizeof(long):
-			if (att[i]->attbyval) {
-				*((long *) data) = DatumGetInt64(value[i]);
-				break;
-			} else {
-				/* fall through to the default */
-			}
+		case sizeof(int64):
+			*((int64 *) data) = (att[i]->attbyval ?
+					   DatumGetInt64(value[i]) :
+					   *((int64 *) value[i]));
+                        break;
 #endif
 		default:
 			Assert(att[i]->attlen >= 0);
+			Assert(!att[i]->attbyval);
 			memmove(data, DatumGetPointer(value[i]),
 				(int4) (att[i]->attlen));
 			break;

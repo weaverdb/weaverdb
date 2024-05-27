@@ -29,6 +29,9 @@ class BoundOutputChannel<T> extends BoundOutput<WritableByteChannel> {
     
     public T value() throws ExecutionException {
         try {
+            if (futurevalue == null) {
+                throw new ExecutionException("statement has not been fetched");
+            }
             return futurevalue.get();
         } catch (java.util.concurrent.ExecutionException | InterruptedException ee) {
             throw new ExecutionException(ee);

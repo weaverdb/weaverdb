@@ -9,10 +9,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Writer;
 import java.nio.channels.Channels;
+import java.security.DigestOutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -57,7 +63,7 @@ public class JNITest {
         Properties prop = new Properties();
         prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
         prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "10");
+        prop.setProperty("start_delay", "1");
         prop.setProperty("debuglevel", "DEBUG");
         prop.setProperty("stdlog", "TRUE");
         WeaverInitializer.initialize(prop);
@@ -390,17 +396,107 @@ public class JNITest {
             conn.execute("insert into typecheck (id, value) values (3, 'value3')");
             conn.execute("insert into typecheck (id, value) values (4, 'value4')");
             conn.execute("insert into typecheck (id, value) values (5, 'value5')");
-            try (Statement s = conn.statement("select xmin, * from typecheck")) {
-                Assertions.assertEquals(5,ResultSet.stream(s).peek(os->{
+            try (Stream<Output[]> r = ResultSet.stream(conn, "select xmin, * from typecheck")) {
+                Assertions.assertEquals(5, r.peek(os->{
                     try {
-                        for (int x=0;x<os.length;x++) {
-                            System.out.println(os[x].getName() + "=" + os[x].get());
+                        for (Output o : os) {
+                            System.out.println(o.getName() + "=" + o.get());
                         }
                     } catch (ExecutionException ee) {
-                        
+
                     }
                 }).count());
             }
         }
     }
+    
+    @org.junit.jupiter.api.Test
+    public void testLongStream() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            Generator generate = new Generator(1024 * 1024);
+            long now = System.nanoTime();
+            conn.execute("create table longstream (data streaming)");
+            conn.execute("create table mainstream (id int4, value blob in longstream) inherits (longstream)");
+            try (Statement s = conn.statement("insert into mainstream(id, value) values ($id, $value)")) {
+                Input<Integer> id = s.linkInput("id", Integer.class);
+                Input<Generator> value = s.linkInputChannel("value", (g, w)-> {
+                    byte[] next = g.read();
+                    OutputStream out = Channels.newOutputStream(w);
+                    while (next != null) {
+                        out.write(next);
+                        next = g.read();
+                    }
+                });
+                id.set(1);
+                value.set(generate);
+                s.execute();
+            }
+            long tp = System.nanoTime() - now;
+            double Gs = Long.valueOf(generate.current).doubleValue() / Long.valueOf(tp).doubleValue();
+            now = System.nanoTime();
+            System.out.println("write took " + Duration.ofNanos(tp).toSeconds() + "." + Duration.ofNanos(tp).toMillisPart());
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (Statement s = conn.statement("select value from mainstream where id = $id")) {
+                s.linkInput("id", Integer.class).set(1);
+                s.linkOutputChannel(1, ()->Channels.newChannel(new DigestOutputStream(OutputStream.nullOutputStream(), digest)));
+                s.execute();
+                s.fetch();
+                tp = System.nanoTime() - now;
+                double Grs = Long.valueOf(generate.current).doubleValue() / Long.valueOf(tp).doubleValue();
+                System.out.println("read took " + Duration.ofNanos(tp).toSeconds() + "." + Duration.ofNanos(tp).toMillisPart());
+                System.out.println("output " + Gs + " " + Grs);
+                Assertions.assertArrayEquals(generate.getSignature(), digest.digest());
+            }
+            try (Statement s = conn.statement("select length(value) from mainstream where id = 1")) {
+                Output<Long> len = s.linkOutput(1, Long.class);
+                s.execute();
+                s.fetch();
+                Assertions.assertEquals(generate.current, len.get().longValue());
+            }
+            now = System.nanoTime();
+            try (Statement s = conn.statement("select md5(value) from mainstream where id = 1")) {
+                Output<String> len = s.linkOutput(1, String.class);
+                s.execute();
+                s.fetch();
+                System.out.println(len.get());
+            }
+            tp = System.nanoTime() - now;
+            System.out.println("md5 " + Duration.ofNanos(tp).toMillis());
+        }
+    }
+    
+    private static class Generator {
+        private final long totalSize;
+        private final MessageDigest sig;
+        private long current = 0;
+        private final Random random;
+
+        public Generator(long totalSize) {
+            this.totalSize = totalSize;
+            MessageDigest sign = null;
+            try {
+                sign = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException no) {
+            }
+            this.sig = sign;
+            random = new Random();
+        }
+        
+        public byte[] read() {
+            if (current >= totalSize) {
+                return null;
+            } else {
+                byte[] gen = new byte[1024];
+                random.nextBytes(gen);
+                sig.update(gen);
+                current += gen.length;
+                return gen;
+            }
+        }
+        
+        public byte[] getSignature() {
+            return sig.digest();
+        }
+    }
+    
 }
