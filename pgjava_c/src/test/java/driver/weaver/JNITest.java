@@ -185,6 +185,7 @@ public class JNITest {
             process.accept(f);
             System.out.println("+++++++");
         }
+
         conn.close();
         s.close();
         conn.close();
@@ -373,9 +374,9 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testNaturalTypes() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            conn.execute("create table typecheck (id int4, value varchar(256))");
-            conn.execute("insert into typecheck (id, value) values (1, 'value')");
-            try (Statement s = conn.statement("select id, value from typecheck")) {
+            conn.execute("create table naturaltypes (id int4, value varchar(256))");
+            conn.execute("insert into naturaltypes (id, value) values (1, 'value')");
+            try (Statement s = conn.statement("select id, value from naturaltypes")) {
                 Output<Object> id = s.linkOutput(1, Object.class);
                 Output<Object> v = s.linkOutput(2, Object.class);
                 s.execute();
@@ -390,13 +391,13 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testResultSetStream() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            conn.execute("create table typecheck (id int4, value varchar(256))");
-            conn.execute("insert into typecheck (id, value) values (1, 'value')");
-            conn.execute("insert into typecheck (id, value) values (2, 'value2')");
-            conn.execute("insert into typecheck (id, value) values (3, 'value3')");
-            conn.execute("insert into typecheck (id, value) values (4, 'value4')");
-            conn.execute("insert into typecheck (id, value) values (5, 'value5')");
-            try (Stream<Output[]> r = ResultSet.stream(conn, "select xmin, * from typecheck")) {
+            conn.execute("create table resultset (id int4, value varchar(256))");
+            conn.execute("insert into resultset (id, value) values (1, 'value')");
+            conn.execute("insert into resultset (id, value) values (2, 'value2')");
+            conn.execute("insert into resultset (id, value) values (3, 'value3')");
+            conn.execute("insert into resultset (id, value) values (4, 'value4')");
+            conn.execute("insert into resultset (id, value) values (5, 'value5')");
+            try (Stream<Output[]> r = ResultSet.stream(conn, "select xmin, * from resultset")) {
                 Assertions.assertEquals(5, r.peek(os->{
                     try {
                         for (Output o : os) {

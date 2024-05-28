@@ -600,6 +600,7 @@ WExec(OpaquePreparedStatement plan) {
                         case CMD_INSERT:
                             slot->val->t_data->t_oid = GetGenId();
                             ExecAppend(slot, NULL, plan->state);
+                            count++;
                             break;
                         case CMD_DELETE:
                             ExecDelete(slot, &tuple_ctid, plan->state);

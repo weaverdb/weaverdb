@@ -22,8 +22,6 @@ public class BaseWeaverConnection implements AutoCloseable {
     
     private static final Logger   LOGGING = Logger.getLogger("Connection");
     
-    private final Throwable creationPath = new Throwable();
-
     public final static int bindString = 2;
     public final static int bindDouble = 3;
     public final static int bindInteger = 1;
@@ -46,7 +44,7 @@ public class BaseWeaverConnection implements AutoCloseable {
     private final StreamingTransformer transformer = new StreamingTransformer();
     
     private long transactionId;
-    private boolean auto = false;
+    private boolean autoCommit = false;
     
     int resultField = 0;
     String errorText = "";
@@ -160,7 +158,7 @@ public class BaseWeaverConnection implements AutoCloseable {
 
     public long begin() throws ExecutionException {
         transactionId = beginTransaction();
-        auto = false;
+        autoCommit = false;
         return transactionId;
     }
 
@@ -179,6 +177,7 @@ public class BaseWeaverConnection implements AutoCloseable {
             throw new RuntimeException(exp);
         } finally {
             transactionId = 0;
+            autoCommit = false;
         }
     }
 
@@ -187,6 +186,7 @@ public class BaseWeaverConnection implements AutoCloseable {
             commitTransaction();
         } finally {
             transactionId = 0;
+            autoCommit = false;
         }
     }
 
@@ -201,8 +201,9 @@ public class BaseWeaverConnection implements AutoCloseable {
     public Statement statement(String stmt) throws ExecutionException {
         if (transactionId == 0) {
             transactionId = beginTransaction();
-            auto = true;
-        } else if (auto) {
+            autoCommit = true;
+            LOGGING.info("using auto-commit");
+        } else if (autoCommit) {
             commitTransaction();
             transactionId = beginTransaction();
         }
@@ -218,9 +219,11 @@ public class BaseWeaverConnection implements AutoCloseable {
     }
     
     public long execute(String statement) throws ExecutionException {
+        long result;
         try (Statement s = statement(statement)) {
-            return s.execute();
+            result = s.execute();
         }
+        return result;
     }
     
     private synchronized void disposeStatement(long link) {
@@ -371,6 +374,17 @@ public class BaseWeaverConnection implements AutoCloseable {
 
         @Override
         public void close() {
+            if (autoCommit) {
+                try {
+                    commit();
+                } catch (ExecutionException ee) {
+                    try {
+                        abort();
+                    } catch (Throwable t) {
+                        LOGGING.log(Level.WARNING, "failed to auto abort", t);
+                    }
+                }
+            }
             dispose();
         }
 

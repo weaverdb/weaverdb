@@ -292,7 +292,11 @@ long ReportError(ConnMgr conn, StmtMgr mgr, const char** text, const char** stat
         *state = mgr->errordelegate.text;
         return mgr->errordelegate.rc;
     }
-    if (!IsValid(conn)) return -1;
+    if (!IsValid(conn)) {
+        *text = "connection is not valid";
+        *state = "INVALID";
+        return -1;
+    }
     long code = WGetErrorCode(conn->theConn);
     if (code != 0) {
         *text = WGetErrorText(conn->theConn);
