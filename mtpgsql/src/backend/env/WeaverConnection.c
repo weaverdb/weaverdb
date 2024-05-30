@@ -75,6 +75,7 @@ static void SetError(WConn connection, int sqlError, char* state, char* err);
 static void* AllocMemory(WConn connection, mem_type type, size_t size);
 static int ExpandSlots(PreparedPlan* connection,TransferType type);
 static short CheckThreadContext(WConn);
+static PreparedPlan* ClearPlan(PreparedPlan* plan);
 
 static SectionId   connection_section_id = SECTIONID("CONN");
 
@@ -91,6 +92,7 @@ static SectionId   connection_section_id = SECTIONID("CONN");
         target->stage = TRAN_ABORTONLY;\
         SetAbortOnly();\
         WHandleError(target,err);\
+        WResetQuery(connection,true);\
     } else {\
         target->CDA.rc = 0\
 
@@ -354,10 +356,10 @@ WBegin(OpaqueWConn conn, long trans) {
         elog(ERROR, "already in transaction %d", connection->stage);
     }
 
-    connection->stage = TRAN_INVALID;
     /*  only do this if we are a top level connection  */
     if (connection->parent == NULL) {
         WResetQuery(connection,false);
+        BeginTransactionBlock();
         StartTransaction();
         SetQuerySnapshot();
     } else {
@@ -372,7 +374,7 @@ WBegin(OpaqueWConn conn, long trans) {
     }
 
     connection->transaction_owner = pthread_self();
-    connection->stage = STMT_NEW;
+    connection->stage = TRAN_BEGIN;
 
     RELEASE(connection);
     return err;
@@ -391,10 +393,6 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     PreparedPlan* plan;
     MemoryContext plan_cxt,old;
 
-    if (CheckThreadContext(conn)) {
-        return NULL;
-    }
-    /* If begin was not called, call it  */
     if (connection->stage == TRAN_INVALID) {
         err = 455;
         SetError(connection, err, "CONTEXT", "context not valid, check call sequence");
@@ -404,6 +402,10 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     if ( connection->stage == TRAN_ABORTONLY ) {
         err = 456;
         SetError(connection, err, "CONTEXT", "context not valid, an error has already occured");
+    }
+
+    if (CheckThreadContext(conn)) {
+        return NULL;
     }
 
     READY(connection, err);
@@ -523,14 +525,15 @@ WExec(OpaquePreparedStatement plan) {
     Plan *plantree = NULL;
     Query *querytree = NULL;
 
-    if (CheckThreadContext(connection)) {
-        return GETERROR(connection);
-    }    
     if ( connection->stage == TRAN_ABORTONLY ) {
         err = 456;
         SetError(connection, err, "CONTEXT", "context not valid, an error has already occured");
         return err;
     }
+
+    if (CheckThreadContext(connection)) {
+        return GETERROR(connection);
+    }  
     
     READY(connection, err);
 
@@ -539,7 +542,6 @@ WExec(OpaquePreparedStatement plan) {
     }
 
     WResetExecutor(plan);
-    plan->stage = STMT_EMPTY;
 
     plan = ParsePlan(plan);
 
@@ -549,11 +551,6 @@ WExec(OpaquePreparedStatement plan) {
     trackplan = plan->plantreelist;
 
     while (trackquery) {
-        /*
-         * Increment Command Counter so we see everything
-         * that happened in this transaction to here
-         */
-        CommandCounterIncrement();
 
         querytree = (Query *) lfirst(trackquery);
         trackquery = lnext(trackquery);
@@ -565,6 +562,7 @@ WExec(OpaquePreparedStatement plan) {
 
         if (querytree->commandType == CMD_UTILITY) {
             ProcessUtility(querytree->utilityStmt, None);
+            plan->processed += 1;  // one util op processed
             /*
              * increment after any utility if there are
              * more subqueries to execute
@@ -582,6 +580,7 @@ WExec(OpaquePreparedStatement plan) {
             plan->tupdesc = ExecutorStart(plan->qdesc, plan->state);
             plan->state->es_processed = 0;
             plan->state->es_lastoid = InvalidOid;
+            plan->stage = STMT_EXEC;
 
             if (plan->qdesc->operation != CMD_SELECT) {
                 TupleTableSlot *slot = NULL;
@@ -625,12 +624,15 @@ WExec(OpaquePreparedStatement plan) {
                 } while (true);
                 plan->processed += count;
                 WResetExecutor(plan);
-                plan->stage = STMT_EMPTY;
-            } else {
-                plan->stage = STMT_EXEC;
             }
         }
-   }
+
+        /*
+         * Increment Command Counter so we see everything
+         * that happened in this transaction to here
+         */
+        CommandCounterIncrement();
+    }
     RELEASE(connection);
     return err;
 }
@@ -657,6 +659,7 @@ WFetch(OpaquePreparedStatement plan) {
         coded_elog(ERROR, 1405, "end of data already reached");
     }
     if (plan->fetch_cxt == NULL) {
+        Assert(plan->exec_cxt != NULL);
         plan->fetch_cxt = AllocSetContextCreate(plan->exec_cxt,
                 "FetchContext",
                 ALLOCSET_DEFAULT_MINSIZE,
@@ -742,7 +745,17 @@ WPrepare(OpaqueWConn conn) {
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
+
+    if (connection->stage != TRAN_BEGIN) {
+        SetError(connection, 456, "CONTEXT", "no transaction active");
+        return 1;
+    }
+
     READY(connection, err);
+    if (IsAbortedTransactionBlockState()) {
+        elog(ERROR, "Transaction is abort only");
+    }
+
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
@@ -772,13 +785,15 @@ WCommit(OpaqueWConn conn) {
         if (CurrentXactInProgress()) {
             WResetQuery(connection,false);
             AbortTransaction();
+            AbandonTransactionBlock();
         }
-        elog(NOTICE, "transaction in abort only mode");
+        elog(ERROR, "transaction in abort only mode");
     } else {
         connection->stage = TRAN_COMMIT;
         WResetQuery(connection,false);
         if (connection->parent == NULL) {
             CommitTransaction();
+            AbandonTransactionBlock();
         } else {
             CloseSubTransaction();
         }
@@ -811,6 +826,7 @@ WRollback(OpaqueWConn conn) {
         WResetQuery(connection,false);
         if (connection->parent == NULL) {
             AbortTransaction();
+            AbandonTransactionBlock();
         } else {
             CloseSubTransaction();
         }
@@ -869,13 +885,6 @@ WBindTransfer(OpaquePreparedStatement plan, const char* var, int type, void* use
         ExpandSlots(plan,TFREE);
     }
         
-/*  if the input is now different, we need to re-parse the statement */
-    if ( plan->node_cxt && plan->slot[index].index == TFREE ) {
-            MemoryContextDelete(plan->node_cxt);
-            plan->node_cxt = NULL;
-            plan->plantreelist = NULL;
-            plan->querytreelist = NULL;
-    }
     if ( plan->slot[index].name == NULL ) {
         plan->slot[index].name = MemoryContextStrdup(plan->plan_cxt,var);
     }
@@ -930,6 +939,7 @@ WDisposeConnection(OpaqueWConn conn) {
                 CloseSubTransaction();
             } else {
                 AbortTransaction();
+                AbandonTransactionBlock();
             }
         }
     }
@@ -1297,16 +1307,13 @@ WStreamExec(OpaqueWConn conn, char *statement) {
             elog(ERROR, "query cancelled");
         }
         /* this is really in GetEnv() and defined there  */
-        SetWhereToSendOutput(Remote);
+//        SetWhereToSendOutput(Remote);
         StartTransactionCommand();
-        connection->stage = STMT_EXEC;
         pg_exec_query_dest((char *) statement, Remote, false);
         pq_flush();
-
         CommitTransactionCommand();
     }
     connection->stage = TRAN_INVALID;
-    WResetQuery(connection,false);
     SetEnv(NULL);
     return err;
 }
@@ -1331,8 +1338,6 @@ WHandleError(WConn connection, int sqlError) {
         return;
     }
     
-    WResetQuery(connection,true);
-
     memset(connection->CDA.state,0x00, 40);
     memset(connection->CDA.text,0x00, 256);
 
@@ -1346,15 +1351,12 @@ WResetQuery(WConn connection,bool err) {
     abort cleanup will take care of it.  */
     OpaquePreparedStatement plan = connection->plan;
     while ( plan ) {
-        if (plan->qdesc != NULL && !err) {
-            ExecutorEnd(plan->qdesc, plan->state);
+        if (err) {
+            plan->stage = STMT_ABORT;
         }
-        plan->tupdesc = NULL;
-        plan->qdesc = NULL;
-        plan->state = NULL;
-        plan->fetch_cxt = NULL;
-        plan->exec_cxt = NULL;
-        plan->stage = STMT_EMPTY;
+        WResetExecutor(plan);
+        ClearPlan(plan); 
+
         plan = plan->next;
     }
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
@@ -1366,8 +1368,11 @@ WResetQuery(WConn connection,bool err) {
 
 void
 WResetExecutor(PreparedPlan * plan) {
-    if (plan->qdesc != NULL) {
+    if (plan->stage == STMT_EXEC || plan->stage == STMT_FETCH) {
+        Assert(plan->qdesc != NULL);
+        Assert(plan->state != NULL);
         ExecutorEnd(plan->qdesc, plan->state);
+        plan->stage = STMT_EMPTY;
     }
 
     if ( plan->exec_cxt != NULL ) {
@@ -1389,7 +1394,6 @@ WResetExecutor(PreparedPlan * plan) {
     plan->qdesc = NULL;
 
     plan->fetch_cxt = NULL;    
-    plan->stage = STMT_EMPTY;
 }
 static int
 TransferExecArgs(PreparedPlan* plan) {
@@ -1413,12 +1417,14 @@ TransferExecArgs(PreparedPlan* plan) {
             paramLI->name = plan->slot[k].name;
             paramLI->id = plan->slot[k].index;
             paramLI->isnull = false;
-            
+            paramLI->type = plan->slot[k].varType;
+
             switch (plan->slot[k].varType) {
                 case CHAROID:
                 case BOOLOID: {
                     char value;
                     paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
+                    paramLI->byval = true;
                     if (paramLI->length > 0) {
                         paramLI->value = CharGetDatum(value);
                     } else {
@@ -1429,6 +1435,7 @@ TransferExecArgs(PreparedPlan* plan) {
                 case INT4OID: {
                     int32 value;
                     paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
+                    paramLI->byval = true;
                     if (paramLI->length > 0) {
                         paramLI->value = Int32GetDatum(value);
                     } else {
@@ -1441,6 +1448,7 @@ TransferExecArgs(PreparedPlan* plan) {
                 case INT8OID: {
                     long* value = palloc(8);
                     paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
+                    paramLI->byval = false;
                     if (paramLI->length > 0) {
                         paramLI->value = PointerGetDatum(value);
                     } else {
@@ -1450,6 +1458,7 @@ TransferExecArgs(PreparedPlan* plan) {
                 }
                 case STREAMINGOID: {
                     int nullcheck = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL, NULL_CHECK_OP);
+                    paramLI->byval = false;
                     if (nullcheck > 0) {
                         CommBuffer* value = ConnectCommBuffer(plan->slot[k].userargs, plan->slot[k].transfer);
                         paramLI->length = sizeof(CommBuffer);
@@ -1466,6 +1475,7 @@ TransferExecArgs(PreparedPlan* plan) {
                 case JAVAOID:
                 default: {
                     int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, NULL,LENGTH_QUERY_OP);
+                    paramLI->byval = false;
                     if (len >= 0) {
                         char* value = palloc(len + VARHDRSZ);
                         if (len != plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, VARDATA(value),len)) {
@@ -1541,15 +1551,22 @@ ParsePlan(PreparedPlan* plan) {
         plan->plantreelist = plantree_list;
         plan->processed = -1;
         /* set the bind context to NULL until a memory context is created  */
-        plan->stage = STMT_PARSED;
         MemoryContextSwitchTo(old);
     }
+
+    plan->stage = STMT_PARSED;
     return plan;
 }
 
 short CheckThreadContext(WConn connection) {
     long err;
-    if (!pthread_equal(connection->transaction_owner, pthread_self())) {
+    if (connection->transaction_owner == 0) {
+        char msg[256];
+        err = 453;
+        snprintf(msg, 255, "no transaction is active");
+        SetError(connection, err, "CONTEXT", msg);
+        return 1;
+    } else if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
         snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
@@ -1557,4 +1574,17 @@ short CheckThreadContext(WConn connection) {
         return 1;
     }
     return 0;
+}
+
+PreparedPlan* ClearPlan(PreparedPlan* plan) {
+/*  if the input is now different, we need to re-parse the statement */
+    if ( plan->node_cxt ) {
+        MemoryContextDelete(plan->node_cxt);
+        plan->node_cxt = NULL;
+        plan->plantreelist = NULL;
+        plan->querytreelist = NULL;
+        plan->stage = STMT_NEW;
+    }
+
+    return plan;
 }

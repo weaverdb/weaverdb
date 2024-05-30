@@ -29,6 +29,7 @@
 #define ABORT_ON_ASSERT 1
 #define NO_PS_STATUS 1
 #define SUBSETISALLOC 1
+/*  #define EXEC_EVALDEBUG 1 . */
 /*  #define MEMORY_STATS 1  */
 /*  #define TRACE_FMGR_PTR 1  */
 /*  #define MULTITHREAD_DEBUG  */

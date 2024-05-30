@@ -1098,7 +1098,6 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
     topaque = (BTPageOpaque) PageGetSpecialPointer(tpage);
     
     if ( PageIsNew(tpage) ) {
-        LockBuffer(rel,tbuffer,BT_WRITE);
         _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
         ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
         _bt_wrtbuf(rel, tbuffer);
@@ -1144,11 +1143,8 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_flags |= BTP_ROOT;
                 ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_parent = BTREE_METAPAGE;
 
-                LockBuffer(rel,metabuf,BT_WRITE);
                 metad->btm_root = lblock;
-                LockBuffer(rel,metabuf,BT_NONE);
 
-                LockBuffer(rel,rootbuf,BT_WRITE);
                 ((BTPageOpaque)PageGetSpecialPointer(rootpg))->btpo_flags |= BTP_REAPED;
 
                 _bt_wrtbuf(rel,rootbuf);
@@ -1169,15 +1165,12 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
         Page npage = BufferGetPage(nbuffer);
         BTPageOpaque nopaque = (BTPageOpaque) PageGetSpecialPointer(npage);
         nopaque->btpo_prev = 0;
-        LockBuffer(rel,nbuffer,BT_NONE);
-        LockBuffer(rel,tbuffer,BT_WRITE);
         ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
         _bt_wrtbuf(rel, nbuffer);
         _bt_wrtbuf(rel, tbuffer);
     } else if ( P_RIGHTMOST(topaque) ) {
         _bt_relbuf(rel, tbuffer);
     } else if ( PageGetPageSize(tpage) != BufferGetPageSize(tbuffer) ) {
-        LockBuffer(rel,tbuffer,BT_WRITE);
         _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
         ((BTPageOpaque)PageGetSpecialPointer(tbuffer))->btpo_flags |= BTP_REAPED;
         _bt_wrtbuf(rel, tbuffer);
@@ -1190,7 +1183,6 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
             if (nopaque->btpo_prev == topaque->btpo_prev && P_ISSPLIT(nopaque)) {
                 nopaque->btpo_parent = topaque->btpo_parent;
                 nopaque->btpo_flags &= ~(BTP_SPLIT);
-                LockBuffer(rel,tbuffer,BT_WRITE);
                 memmove(tpage, npage, PageGetPageSize(npage));
                 _bt_pageinit(npage,PageGetPageSize(npage));
                 ((BTPageOpaque)PageGetSpecialPointer(npage))->btpo_flags |= BTP_REAPED;
@@ -1200,7 +1192,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                 Assert(_bt_empty(npage));
                 reap = BufferGetBlockNumber(nbuffer);
                 ((BTPageOpaque)PageGetSpecialPointer(npage))->btpo_flags |= BTP_REAPED;
-                LockBuffer(rel,nbuffer,BT_NONE);
+                _bt_wrtbuf(rel, nbuffer);
                 if ( !P_RIGHTMOST(nopaque) ) {
                     Buffer sbuffer = _bt_getbuf(rel, nopaque->btpo_next, BT_READYWRITE);
                     Page spage = BufferGetPage(sbuffer);
@@ -1208,9 +1200,7 @@ _bt_check_pagelinks(Relation rel, BlockNumber target) {
                     sopaque->btpo_prev = target;
                     _bt_wrtbuf(rel, sbuffer);
                 }
-                LockBuffer(rel,tbuffer,BT_NONE);
                 topaque->btpo_next = nopaque->btpo_next;
-                _bt_wrtbuf(rel, nbuffer);
                 _bt_wrtbuf(rel, tbuffer);
             }
         } else {

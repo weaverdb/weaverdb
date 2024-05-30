@@ -84,6 +84,7 @@ CreateWeaverConnection(const char* name, const char * paslong, const char* conne
         pthread_mutex_init(&mgr->control, NULL);
         mgr->refCount = 0;
         mgr->theConn = conn;
+        mgr->transactionId = 0L;
         return mgr;
     }
 }
@@ -103,6 +104,8 @@ CreateWeaverStmtManager(ConnMgr connection) {
                 mgr->statement = NULL;
 
                 mgr->errorlevel = 0;
+                mgr->commandId = 0;
+
                 memset(&mgr->errordelegate, 0x00, sizeof (Error));
 
                 mgr->log_count = MAX_FIELDS;
@@ -226,7 +229,10 @@ short Cancel(ConnMgr conn) {
 short Prepare(ConnMgr conn) {
     if (!IsValid(conn)) return -1;
 
-    WPrepare(conn->theConn);
+    if (WPrepare(conn->theConn)) {
+        return 1;
+    }
+
     return WGetErrorCode(conn->theConn) == 0 ? 0 : 1; 
 }
 
@@ -257,7 +263,7 @@ short Exec(ConnMgr conn, StmtMgr mgr) {
 }
 
 long GetTransactionId(ConnMgr conn) {
-    if (!IsValid(conn)) return -1;
+    if (!IsValid(conn)) return -1L;
     return conn->transactionId;
 }
 

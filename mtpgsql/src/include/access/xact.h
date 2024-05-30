@@ -129,6 +129,7 @@ PG_EXTERN void SetAbortOnly(void);
 PG_EXTERN void BeginTransactionBlock(void);
 PG_EXTERN void CommitTransactionBlock(void);
 PG_EXTERN bool IsTransactionBlock(void);
+PG_EXTERN bool AbandonTransactionBlock(void);
 
 PG_EXTERN void StartTransaction(void);
 PG_EXTERN void CloneParentTransaction(void);

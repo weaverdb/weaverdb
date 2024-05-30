@@ -233,7 +233,7 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
                 if ( count ++ > 3 ) {
                         pfree(info);
                         info = NULL;
-        		elog(FATAL, "cannot open %s-%s", relname, dbname);
+        		elog(ERROR, "cannot open %s-%s", relname, dbname);
                 }
         } 
         

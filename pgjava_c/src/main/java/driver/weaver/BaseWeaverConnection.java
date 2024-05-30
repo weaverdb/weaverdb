@@ -44,7 +44,7 @@ public class BaseWeaverConnection implements AutoCloseable {
     private final StreamingTransformer transformer = new StreamingTransformer();
     
     private long transactionId;
-    private boolean autoCommit = false;
+    private boolean allowAutoCommit = true;
     
     int resultField = 0;
     String errorText = "";
@@ -157,9 +157,12 @@ public class BaseWeaverConnection implements AutoCloseable {
     }
 
     public long begin() throws ExecutionException {
-        transactionId = beginTransaction();
-        autoCommit = false;
-        return transactionId;
+        if (transactionId == 0) {
+            transactionId = beginTransaction();
+            return transactionId;
+        } else {
+            throw new ExecutionException("transaction already active");
+        }
     }
 
     public void prepare() throws ExecutionException {
@@ -177,7 +180,6 @@ public class BaseWeaverConnection implements AutoCloseable {
             throw new RuntimeException(exp);
         } finally {
             transactionId = 0;
-            autoCommit = false;
         }
     }
 
@@ -186,7 +188,6 @@ public class BaseWeaverConnection implements AutoCloseable {
             commitTransaction();
         } finally {
             transactionId = 0;
-            autoCommit = false;
         }
     }
 
@@ -199,14 +200,6 @@ public class BaseWeaverConnection implements AutoCloseable {
     }
     
     public Statement statement(String stmt) throws ExecutionException {
-        if (transactionId == 0) {
-            transactionId = beginTransaction();
-            autoCommit = true;
-            LOGGING.info("using auto-commit");
-        } else if (autoCommit) {
-            commitTransaction();
-            transactionId = beginTransaction();
-        }
         StatementRef ref = (StatementRef)statements.poll();
         while (ref != null) {
             disposeStatement(ref.link);
@@ -235,7 +228,23 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
     
-    public Object transaction() {
+    private long checkForTransaction(long current) throws ExecutionException {
+        if (transactionId == 0 && allowAutoCommit) {
+            LOGGING.info("using auto-commit");
+            return begin();
+        } else {
+            return current;
+        }
+    }
+    
+    private void checkForAutoCommit(long currentCommit) throws ExecutionException {
+        if (transactionId == currentCommit && allowAutoCommit) {
+            LOGGING.info("committing by auto-commit");
+            commit();
+        }
+    }
+    
+    public long transaction() {
         if (transactionId == 0) {
             return getTransactionId();
         } else {
@@ -266,14 +275,19 @@ public class BaseWeaverConnection implements AutoCloseable {
     public native void streamExec(String statement) throws ExecutionException;
 
     private final int pipeOut(byte[] data) throws IOException {
-        os.write(data);
-        os.flush();
+        if (os != null) {
+            os.write(data);
+            os.flush();
+        }
         return data.length;
     }
 
     private final int pipeIn(byte[] data) throws IOException {
-        int count = is.read(data, 0, data.length);
-        return count;
+        if (is != null) {
+            return is.read(data, 0, data.length);
+        } else {
+            return data.length;
+        }
     }
     
     OutputStream os;
@@ -287,13 +301,22 @@ public class BaseWeaverConnection implements AutoCloseable {
         is = in;
     }
     
+    public void setAutoCommit(boolean auto) {
+        this.allowAutoCommit = auto;
+    }
+    
     public class Statement implements AutoCloseable {
         private final long  link;
         private final String raw;
         private boolean executed = false;
+        private long autoCommit;
 
         Statement(String statement) throws ExecutionException {
+            autoCommit = checkForTransaction(autoCommit);
             link = prepareStatement(statement);
+            if (link == 0) {
+                throw new ExecutionException("statement parsing error");
+            }
             raw = statement;
         }
 
@@ -357,11 +380,19 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
         
         public long execute() throws ExecutionException {
+            long processed = 0;
+            
+            autoCommit = checkForTransaction(autoCommit);
+
             try {
-                return executeStatement(link, inputs.values().toArray(BoundInput[]::new));
+                processed = executeStatement(link, inputs.values().toArray(BoundInput[]::new));
             } finally {
                 executed = true;
             }
+            if (processed > 0 && autoCommit > 0) {
+                checkForAutoCommit(autoCommit);
+            }
+            return processed;
         }
         
         public boolean isValid() {
@@ -374,16 +405,10 @@ public class BaseWeaverConnection implements AutoCloseable {
 
         @Override
         public void close() {
-            if (autoCommit) {
-                try {
-                    commit();
-                } catch (ExecutionException ee) {
-                    try {
-                        abort();
-                    } catch (Throwable t) {
-                        LOGGING.log(Level.WARNING, "failed to auto abort", t);
-                    }
-                }
+            try {
+                checkForAutoCommit(autoCommit);
+            } catch (ExecutionException ee) {
+                LOGGING.log(Level.WARNING, "failed to auto-commit on close", ee);
             }
             dispose();
         }
@@ -432,5 +457,5 @@ public class BaseWeaverConnection implements AutoCloseable {
         public boolean dispose() {
             return disposed.compareAndSet(false, true);
         }
-    }    
+    }
 }

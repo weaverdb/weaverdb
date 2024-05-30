@@ -692,6 +692,9 @@ void
 TakeUserSnapshot(void) 
 {
 	SnapshotHolder* holder = GetSnapshotHolder();
+        if (holder->UserSnapshot != NULL) {
+            elog(ERROR, "already holding a user snapshot");
+        }
 	holder->UserSnapshot = GetSnapshotData(false);
 	holder->UserSnapshot->isUser = true;
 	if ( holder->QuerySnapshot != NULL && 

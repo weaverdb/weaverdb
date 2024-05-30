@@ -3,6 +3,8 @@
 package driver.weaver;
 
 import driver.weaver.BaseWeaverConnection.Statement;
+import driver.weaver.ResultSet.Column;
+import driver.weaver.ResultSet.Row;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
@@ -17,7 +19,9 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,7 +67,7 @@ public class JNITest {
         Properties prop = new Properties();
         prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
         prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "1");
+        prop.setProperty("start_delay", "10");
         prop.setProperty("debuglevel", "DEBUG");
         prop.setProperty("stdlog", "TRUE");
         WeaverInitializer.initialize(prop);
@@ -397,15 +401,11 @@ public class JNITest {
             conn.execute("insert into resultset (id, value) values (3, 'value3')");
             conn.execute("insert into resultset (id, value) values (4, 'value4')");
             conn.execute("insert into resultset (id, value) values (5, 'value5')");
-            try (Stream<Output[]> r = ResultSet.stream(conn, "select xmin, * from resultset")) {
+            try (Stream<Row> r = ResultSet.stream(conn.statement("select xmin, * from resultset"))) {
                 Assertions.assertEquals(5, r.peek(os->{
-                    try {
-                        for (Output o : os) {
+                        for (Column o : os) {
                             System.out.println(o.getName() + "=" + o.get());
                         }
-                    } catch (ExecutionException ee) {
-
-                    }
                 }).count());
             }
         }
@@ -466,6 +466,334 @@ public class JNITest {
         }
     }
     
+    @org.junit.jupiter.api.Test
+    public void testAutoCommit() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table autocom (id int4, data varchar(256))");
+            conn.execute("insert into autocom (id, data) values (1, 'fortune')");
+            try (Statement s = conn.statement("select id, data from autocom")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<String> data = s.linkOutput(2, String.class);
+                s.execute();
+                while (s.fetch()) {
+                    System.out.println(id.get() + " " + data.get());
+                }
+            }
+        }   
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (Statement s = conn.statement("select id, data from autocom")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<String> data = s.linkOutput(2, String.class);
+                s.execute();
+                int count = 0;
+                while (s.fetch()) {
+                    System.out.println(id.get() + " " + data.get());
+                    count++;
+                }
+                Assertions.assertEquals(1, count);
+            }
+        }  
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testAbort() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table test5 (id int4, data varchar(256))");
+            conn.begin();
+            conn.execute("insert into test5 (id, data) values (1, 'fortune')");
+            conn.abort();
+            try (Statement s = conn.statement("select id, data from test5")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<String> data = s.linkOutput(2, String.class);
+                s.execute();
+                int count = 0;
+                while (s.fetch()) {
+                    System.out.println(id.get() + " " + data.get());
+                    count++;
+                }
+                Assertions.assertEquals(0, count);
+            }
+        }   
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testExecuteCount() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table test6 (id int4, data varchar(256))");
+            long result = conn.execute("insert into test6 (id, data) values (1, 'fortune')");
+            Assertions.assertEquals(1, result);
+            try (Statement s = conn.statement("select id, data from test6")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<String> data = s.linkOutput(2, String.class);
+                Assertions.assertEquals(0, s.execute());
+                int count = 0;
+                while (s.fetch()) {
+                    System.out.println(id.get() + " " + data.get());
+                    count++;
+                }
+                Assertions.assertEquals(1, count);
+            }
+        }   
+    }
+        
+    @org.junit.jupiter.api.Test
+    public void testPrepareSpansCommits() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table test7 (id int4, data varchar(256))");
+            long result = conn.execute("insert into test7 (id, data) values (1, 'fortune')");
+            Assertions.assertEquals(1, result);
+            conn.begin();
+            try (Statement s = conn.statement("select id, data from test7")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<String> data = s.linkOutput(2, String.class);
+                Assertions.assertEquals(0, s.execute());
+                int count = 0;
+                while (s.fetch()) {
+                    System.out.println(id.get() + " " + data.get());
+                    count++;
+                }
+                Assertions.assertEquals(1, count);
+                conn.commit();
+                conn.begin();
+                s.execute();
+                count = 0;
+                while (s.fetch()) {
+                    System.out.println(id.get() + " " + data.get());
+                    count++;
+                }
+                Assertions.assertEquals(1, count);
+                conn.commit();
+            }
+        }   
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testCheckCommits() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            System.out.println(conn.transaction());
+            long transaction = conn.begin();
+            long check = conn.transaction();
+            System.out.println(check + " " + transaction);
+            Assertions.assertEquals(check, transaction);
+            conn.commit();
+            long check2 = conn.transaction();
+            Assertions.assertEquals(0L, check2);
+        }   
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testNestedTransactionsNotAllowed() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.begin();
+            conn.begin();
+        } catch (ExecutionException ee) {
+            ee.printStackTrace();
+            // expected
+        } 
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testNestedProcuduresNotAllowed() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.begin();
+            conn.start();
+            conn.start();
+        } catch (ExecutionException ee) {
+            ee.printStackTrace();
+            // expected
+        } 
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testPrepareFailsWithBadQuery() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.begin();
+            try {
+                conn.execute("select * from faketable");
+            } catch (ExecutionException ee) {
+                ee.printStackTrace();
+                // expected
+            }
+            try {
+                conn.prepare();
+            } catch (ExecutionException ee) {
+                ee.printStackTrace();
+                // expected
+            }
+            conn.commit(); // fails
+        } catch (ExecutionException ee) {
+            ee.printStackTrace();
+            // expected
+        } 
+        
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testResultSetStreams() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table test9 (id int4, value varchar(256))");
+            conn.execute("insert into test9 (id, value) values (1, 'test1')");
+            conn.execute("insert into test9 (id, value) values (2, 'test2')");
+            conn.execute("insert into test9 (id, value) values (3, 'test3')");
+            conn.execute("insert into test9 (id, value) values (4, 'test4')");
+            conn.execute("insert into test9 (id, value) values (5, 'test5')");
+            try (TransactionSequence ts = new TransactionSequence(conn)) {
+                try (TransactionSequence.Procedure p = ts.start()) {
+                    try (Stream<Row> set = ResultSet.stream(p.statement("select * from test9"))) {
+                        set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
+                    }
+                }
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testDisableAutoCommit() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.setAutoCommit(false);
+            conn.execute("create table test10 (id int4, value varchar(256))");
+        } catch (ExecutionException ee) {
+            // expected 
+            ee.printStackTrace();
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testIndexCreation() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (TransactionSequence ts = new TransactionSequence(conn)) {
+                try (TransactionSequence.Procedure p = ts.start()) {
+                    p.execute("create table test11 (id int4, value varchar(256))");
+                    p.execute("insert into test11 (id, value) values (1, 'test1')");
+                    p.execute("insert into test11 (id, value) values (2, 'test2')");
+                    p.execute("insert into test11 (id, value) values (3, 'test3')");
+                    p.execute("insert into test11 (id, value) values (4, 'test4')");
+                    p.execute("insert into test11 (id, value) values (5, 'test5')");
+
+                    try (Stream<Row> set = ResultSet.stream(p.statement("select * from test11"))) {
+                        set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
+                    }
+                }
+                try (TransactionSequence.Procedure p = ts.start()) {
+                    p.execute("create index test11_id_idx on test11(id)");
+                    try (Statement s = p.statement("insert into test11 (id, value) values ($id, $val)")) {
+                        Input<Integer> id = s.linkInput("id", Integer.class);
+                        Input<String> val = s.linkInput("val", String.class);
+                        IntStream.range(0, 10000).forEach(i->{
+                            try {
+                                id.set(i);
+                                val.set("value" + i);
+                                s.execute();
+                            } catch (ExecutionException ee) {
+                                
+                            }
+                        });
+                    }
+                }
+//                try (Stream<Row> explain = ResultSet.stream(ts.statement("select * from (explain select value from test11 where id = 4)"))) {
+//                    explain.flatMap(r->r.stream()).forEach(System.out::println);
+//                }
+            }
+        } catch (ExecutionException ee) {
+            // expected 
+            ee.printStackTrace();
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testStreamExec() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (TransactionSequence ts = new TransactionSequence(conn)) {
+                try (TransactionSequence.Procedure p = ts.start()) {
+                    p.execute("create table test12 (id int4, value varchar(256))");
+                    p.execute("insert into test12 (id, value) values (1, 'test1')");
+                    p.execute("insert into test12 (id, value) values (2, 'test2')");
+                    p.execute("insert into test12 (id, value) values (3, 'test3')");
+                    p.execute("insert into test12 (id, value) values (4, 'test4')");
+                    p.execute("insert into test12 (id, value) values (5, 'test5')");
+
+                    try (Stream<Row> set = ResultSet.stream(p.statement("select * from test12"))) {
+                        set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
+                    }
+                }
+            }
+            conn.setStandardOutput(System.out);
+            conn.streamExec("explain select * from test12");
+
+            Random gen = new Random();
+            try (TransactionSequence p = new TransactionSequence(conn)) {
+                try (Statement s = p.statement("insert into test12 (id, value) values ($id, $val)")) {
+                    Input<Integer> id = s.linkInput("id", Integer.class);
+                    Input<String> val = s.linkInput("val", String.class);
+                    for (int x=0;x<1000000;x++) {
+                        id.set(x);
+                        val.set("value" + gen.nextInt(1000000));
+                        s.execute();
+                    }
+                }
+            }
+            System.out.println("load finished");
+            conn.begin();
+            System.out.println("begin create index");
+
+            conn.execute("create index test12_id_idx on test12(id)");
+            System.out.println("finish create index");
+            conn.commit();
+            System.out.println("index finished");   
+            conn.streamExec("explain select * from test12 where id = 4");
+            try (Statement s = conn.statement("select id, value from test12 where id = $id")) {
+                int search = gen.nextInt(1000000);
+                System.out.println("searching " + search);
+                s.linkInput("id", Integer.class).set(search);
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<String> value = s.linkOutput(2, String.class);
+                s.execute();
+                // execute
+                while (s.fetch()) {
+                    System.out.println(id.get() + " " + value.get());
+                }
+            }
+            conn.execute("drop index test12_id_idx");
+            conn.streamExec("explain select * from test12 where id = 4");
+            try (Statement s = conn.statement("select id, value from test12 where id = $id")) {
+                s.linkInput("id", Integer.class).set(gen.nextInt(1000000));
+                try (Stream<Row> explain = ResultSet.stream(s)) {
+                    explain.flatMap(r->r.stream()).forEach(System.out::println);
+                }
+            }
+            System.out.println("done");
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testCreateIndex() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("create table test13 (id int4, value varchar(256))");
+            conn.execute("create index test13_id_idx on test13(id)");
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testAbortCreate() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.begin();
+            conn.execute("create table test14 (id int4, value varchar(256))");
+            conn.abort();
+            conn.begin();
+            conn.execute("create table test14 (id int4, value varchar(256))");
+            conn.commit();
+            conn.execute("create table test15 (id int4, value varchar(256))");
+            conn.begin();
+            conn.execute("create table test16 (id int4, value varchar(256))");
+            try {
+                conn.execute("create table test17 (id int4, value varchar(256))");
+            } catch (ExecutionException ee) {
+                ee.printStackTrace();
+            }
+            conn.abort();
+        }
+    }
+    
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;
@@ -484,7 +812,7 @@ public class JNITest {
         }
         
         public byte[] read() {
-            if (current >= totalSize) {
+            if (totalSize > 0 && current >= totalSize) {
                 return null;
             } else {
                 byte[] gen = new byte[1024];

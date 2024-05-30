@@ -16,8 +16,8 @@
 #define _WEAVER_CONNECTION_H_
 #define HAVE_UNION_SEMUN
 
-#define START_ARGS 4
-#define MAX_ARGS 32
+#define START_ARGS 8
+#define MAX_ARGS 64
 #define MAX_CHILDREN 4
 
 #include <stdlib.h>  
@@ -47,19 +47,23 @@ typedef struct inout {
     transferfunc  transfer;
 } InputOutput;
 
-typedef enum stage {
+typedef enum t_stage {
 	TRAN_BEGIN,
+        TRAN_COMMIT,
+        TRAN_ABORT,
+        TRAN_ABORTONLY,
+	TRAN_INVALID
+} TransactionStage;
+
+typedef enum s_stage {
         STMT_NEW,
 	STMT_PARSED,
 	STMT_EXEC,
 	STMT_FETCH,
         STMT_EOD,
         STMT_EMPTY,
-        TRAN_COMMIT,
-        TRAN_ABORT,
-        TRAN_ABORTONLY,
-	TRAN_INVALID
-} Stage;
+        STMT_ABORT
+} StatementStage;
 
 typedef struct Connection {
     double              align;
@@ -70,7 +74,7 @@ typedef struct Connection {
     char* 		name;
     char* 		connect;
 
-    Stage		stage;
+    TransactionStage		stage;
 
 /*   Query Stuff   */		
     OpaquePreparedStatement	plan;
@@ -90,7 +94,7 @@ typedef struct Connection {
 typedef struct preparedplan {
     WConn               owner;
     char*               statement;
-    Stage               stage;
+    StatementStage               stage;
         List*		querytreelist;
         List*		plantreelist;
 

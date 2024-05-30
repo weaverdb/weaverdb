@@ -165,7 +165,7 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
         ConnMgr conn = getConnMgr(env,talkerObject);
         
         if (linkid != 0L) {
-            StmtMgr mgr = (StmtMgr)linkid;
+            StmtMgr mgr = GETSTMT(linkid);
             DestroyWeaverStmtManager(conn, mgr);
         } else {
             DestroyWeaverConnection(conn); 
@@ -173,12 +173,12 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_dispose
 }
 
 JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_disposeConnection
-  (JNIEnv * env, jclass clazz, jlong linkid) 
+  (JNIEnv * env, jclass clazz, jlong connid) 
 {
 	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
         
-        if (linkid != 0L) {
-            DestroyWeaverConnection((ConnMgr)linkid); 
+        if (connid != 0L) {
+            DestroyWeaverConnection((ConnMgr)connid); 
         }
 }
 
@@ -213,10 +213,10 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
             short result = ParseStatement(conn, base,pass_stmt);
             (*env)->ReleaseStringUTFChars(env,statement,pass_stmt);
             if (result) {
+                checkError(env, talkerObject, base);
                 DestroyWeaverStmtManager(conn, base);
                 base = NULL;
             }
-            checkError(env,talkerObject,base);
         } else {
             (*env)->ThrowNew(env,Cache->exception,"statement space exhusted");
         }

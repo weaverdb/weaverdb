@@ -1354,6 +1354,17 @@ IsTransactionBlock()
 	return false;
 }
 
+bool
+AbandonTransactionBlock()
+{
+	TransactionState s = GetTransactionInfo()->CurrentTransactionState;
+
+	bool wasBlocked = (s->blockState == TBLOCK_MANUAL || s->blockState == TBLOCK_ABORTONLY);
+
+        s->blockState = TBLOCK_DEFAULT;
+
+	return wasBlocked;
+}
 
 TransactionInfo*
 GetTransactionInfo(void)

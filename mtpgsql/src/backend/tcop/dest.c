@@ -120,6 +120,7 @@ BeginCommand(char *pname,
 	switch (dest)
 	{
 		case Remote:
+                    break;
 		case RemoteInternal:
 			/* ----------------
 			 *		if this is a "retrieve portal" query, done
@@ -226,7 +227,7 @@ DestToFunction(CommandDest dest)
 {
 	switch (dest)
 	{
-			case Remote:
+                case Remote:
 			/* printtup wants a dynamically allocated DestReceiver */
 			return printtup_create_DR();
 			break;
@@ -268,6 +269,7 @@ EndCommand(char *commandTag, CommandDest dest)
 	switch (dest)
 	{
 		case Remote:
+                    break;
 		case RemoteInternal:
 			/* ----------------
 			 *		tell the fe that the query is over

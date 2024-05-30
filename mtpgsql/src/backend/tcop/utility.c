@@ -169,7 +169,9 @@ ProcessUtility(Node *parsetree,
 		case T_CreateStmt:
 			(commandTag = "CREATE");
 			CHECK_IF_ABORTED();
-
+                        if (GetCurrentCommandId() != FirstCommandId) {
+                            elog(ERROR, "CREATE must occur in its own transaction");
+                        }
 			SetTransactionCommitType(TRANSACTION_SYNCED_COMMIT);
 			DefineRelation((CreateStmt *) parsetree, RELKIND_RELATION);
 			break;
@@ -181,7 +183,9 @@ ProcessUtility(Node *parsetree,
 				List	   *arg;
 				
 				CHECK_IF_ABORTED();
-
+                        if (GetCurrentCommandId() != FirstCommandId) {
+                            elog(ERROR, "DROP must occur in its own transaction");
+                        }
 			SetTransactionCommitType(TRANSACTION_SYNCED_COMMIT);				
 			if ( stmt->schema ) {
 				(commandTag = "DROP SCHEMA");
