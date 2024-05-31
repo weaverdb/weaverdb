@@ -79,7 +79,7 @@ static ConnMgr getConnMgr(JNIEnv* env, jobject talker);
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt);
 static jlong  clearError(JNIEnv* env,jobject talker);
 static jlong  checkError(JNIEnv* env,jobject talker,StmtMgr link);
-static jlong  reportError(JNIEnv* env,jobject talker,jlong code, const char* text, const char* state);
+static jlong  reportErrorToJava(JNIEnv* env,jobject talker,jlong code, const char* text, const char* state);
 static int   translateType(jint type);
 
 static void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace);
@@ -89,15 +89,19 @@ static ConnMgr allocateWeaver(JNIEnv* env,jstring username,jstring password,jstr
 
 JNIEXPORT void JNICALL Java_driver_weaver_WeaverInitializer_init(JNIEnv *env,jobject talkerObject, jstring jd)
 {
-	char		datapass[2048];
-	memset(datapass,0,2048);
-	
-	if ( jd != NULL ) {
-            int len = (*env)->GetStringUTFLength(env,jd);
-            (*env)->GetStringUTFRegion(env,jd,0,len,datapass);
+    const char*    variables;
+
+	if ( (*env)->IsSameObject(env, jd, NULL) ) {
+            (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment setup is not valid");
+            return;
         }
 
-	if ( !initweaverbackend(datapass) ) {
+        variables = (*env)->GetStringUTFChars(env,jd,NULL);
+
+        bool valid = initweaverbackend(variables);
+
+        (*env)->ReleaseStringUTFChars(env, jd, variables);
+	if ( !valid ) {
             (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment not valid, see db log");
             return;
         }
@@ -201,6 +205,10 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
 
         ConnMgr conn = getConnMgr(env,talkerObject);
 
+        if (conn == NULL) {
+            return 0;
+        }
+
         if ( statement == NULL ) {
             (*env)->ThrowNew(env,Cache->exception,"no statement");
             return 0;
@@ -225,25 +233,29 @@ JNIEXPORT jlong JNICALL Java_driver_weaver_BaseWeaverConnection_prepareStatement
 
 void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* userspace)
 {
- 	char        var[64];
-        jsize       varsize = 0;
+ 	const char*        varname;
 
         ConnMgr        conn = getConnMgr(env, talkerObject);
         StmtMgr        base = GETSTMT(linkid);
 //  don't need a local ref
 //  root object is held
         jstring theVar = (*env)->GetObjectField(env, userspace->target, Cache->iname);
-    
-	varsize = (*env)->GetStringLength(env,theVar);	
-	if ( varsize > 63 ) {
+
+        if ((*env)->IsSameObject(env, theVar, NULL)) {
             if (!(*env)->ExceptionOccurred(env) ) 
-                (*env)->ThrowNew(env,Cache->exception,"bind name too long");
+                (*env)->ThrowNew(env,Cache->exception,"bind name is null");
             return;
-	}
-	(*env)->GetStringUTFRegion(env,theVar,0, varsize, var); 		
-	var[varsize] = 0;
+        } else if ((*env)->GetStringLength(env,theVar) > 63) {
+            if (!(*env)->ExceptionOccurred(env) ) 
+                (*env)->ThrowNew(env,Cache->exception,"bind name is too long");
+            return;
+        }
+
+	varname = (*env)->GetStringUTFChars(env,theVar,NULL); 		
         
-        LinkInput(conn,base,var,userspace->linkType,userspace,userspace->linkType == STREAMTYPE ? direct_pipein : transferin);
+        LinkInput(conn,base,varname,userspace->linkType,userspace,userspace->linkType == STREAMTYPE ? direct_pipein : transferin);
+
+        (*env)->ReleaseStringUTFChars(env,theVar,varname); 
 //  report errors
 	checkError(env,talkerObject,base);
 }
@@ -416,7 +428,6 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_streamExec
   (JNIEnv * env, jobject talkerObject, jstring statement)
 {	
     const char*  state;
-    jboolean     copy;		
     CommArgs     commenv;
     
     commenv.env = env;
@@ -424,14 +435,16 @@ JNIEXPORT void JNICALL Java_driver_weaver_BaseWeaverConnection_streamExec
     //	get proper agent	
     ConnMgr base = getConnMgr(env,talkerObject);
 	
-    state = (*env)->GetStringUTFChars(env,statement,&copy);
+    state = (*env)->GetStringUTFChars(env,statement,NULL);
                 
     ConnectStdIO(base,&commenv,pipein,pipeout);
 
-    if ( StreamExec(base,(char*)state ) ) {
+    bool valid = StreamExec(base,(char*)state); 
+
+    (*env)->ReleaseStringUTFChars(env,statement,state);
+
+    if (!valid) {
         checkError(env,talkerObject,NULL);
-    } else {
-       (*env)->ReleaseStringUTFChars(env,statement,state);
     }
 
     DisconnectStdIO(base);
@@ -469,21 +482,16 @@ static jlong checkError(JNIEnv* env,jobject talkerObject,StmtMgr base)
         const char* errtxt;
         const char* statetxt;
         jlong code = ReportError(getConnMgr(env, talkerObject), base, &errtxt, &statetxt);
-        return reportError(env, talkerObject, code, errtxt, statetxt);
+        return reportErrorToJava(env, talkerObject, code, errtxt, statetxt);
 }
 
-static jlong reportError(JNIEnv* env,jobject talkerObject,jlong code, const char* errtxt, const char* statetxt)
+static jlong reportErrorToJava(JNIEnv* env,jobject talkerObject,jlong code, const char* errtxt, const char* statetxt)
 {
     (*env)->SetIntField(env,talkerObject,Cache->result,code);
 
     if (code != 0 ) {
         jthrowable existing = (*env)->ExceptionOccurred(env);
         char combo[255];
-
-        if ( existing != NULL ) {
-            (*env)->ExceptionDescribe(env);
-            (*env)->ExceptionClear(env);
-        }
 
         if ( !errtxt ) errtxt = "no error text";
         if ( !statetxt ) statetxt = "NOSTATE";
@@ -693,6 +701,10 @@ static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
         jsize namelen = 0;
         jsize connlen = 0;
 
+        name[0] = '\0';
+        pass[0] = '\0';
+        conn[0] = '\0';
+
         if (!(*env)->IsSameObject(env, username, NULL) && !(*env)->IsSameObject(env, password, NULL)) {
             jsize passlen = (*env)->GetStringUTFLength(env,password);
             jsize namelen = (*env)->GetStringUTFLength(env,username);
@@ -701,6 +713,7 @@ static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
             (*env)->GetStringUTFRegion(env,password,0,passlen,pass);
             (*env)->GetStringUTFRegion(env,username,0,namelen,name);
         }
+
         if (!(*env)->IsSameObject(env, connection, NULL)) {
             connlen = (*env)->GetStringUTFLength(env,connection);
             conn[connlen] = 0;

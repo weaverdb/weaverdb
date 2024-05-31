@@ -110,7 +110,7 @@ public class BaseWeaverConnection implements AutoCloseable {
     }
     
     public boolean isValid() {
-        return isOpen.get();
+        return nativePointer != 0 && isOpen.get();
     }
 
     private long connectToDatabaseAnonymously(String db) {

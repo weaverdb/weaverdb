@@ -1,0 +1,2 @@
+Both settings set platform.plugin.darwin.ignored-exceptions EXC_BAD_ACCESS and export LLDB_DEBUGSERVER_EXTRA_ARG_1=--unmask-signals can solve it.
+

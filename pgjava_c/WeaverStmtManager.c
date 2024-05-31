@@ -478,7 +478,7 @@ short CheckForErrors(ConnMgr conn, StmtMgr mgr) {
     return 0;
 }
 
-short StreamExec(ConnMgr conn, char* statement) {
+short StreamExec(ConnMgr conn, const char* statement) {
     if (!IsValid(conn)) return -1;
 
     WStreamExec(conn->theConn, statement);

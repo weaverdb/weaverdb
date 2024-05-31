@@ -60,7 +60,7 @@ short UserLock(ConnMgr, StmtMgr , const char* grouptolock,uint32_t val,char lock
 void     ConnectStdIO(ConnMgr ,void* args,transferfunc pipein,transferfunc pipeout);
 void     DisconnectStdIO(ConnMgr );
 
-short StreamExec(ConnMgr ,char* statement);
+short StreamExec(ConnMgr ,const char* statement);
 
 short ParseStatement(ConnMgr, StmtMgr ,const char* statement);
 short Fetch( ConnMgr, StmtMgr  );

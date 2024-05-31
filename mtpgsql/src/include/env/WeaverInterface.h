@@ -91,7 +91,7 @@ LIB_EXTERN long WGetErrorCode(OpaqueWConn conn);
 LIB_EXTERN const char* WGetErrorText(OpaqueWConn conn);
 LIB_EXTERN const char* WGetErrorState(OpaqueWConn conn);
 
-LIB_EXTERN long WStreamExec(OpaqueWConn conn,char* statement);
+LIB_EXTERN long WStreamExec(OpaqueWConn conn,const char* statement);
 
 LIB_EXTERN void WConnectStdIO(OpaqueWConn conn,void* pipeargs,transferfunc in,transferfunc out);
 LIB_EXTERN void* WDisconnectStdIO(OpaqueWConn conn);

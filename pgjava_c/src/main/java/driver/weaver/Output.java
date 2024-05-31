@@ -15,17 +15,17 @@ public class Output<T> {
     private final Supplier<String> name;
     private final Getter<T> source;
     
-    Output(BoundOutput<T> base) {
+    Output(BoundOutput<? extends T> base) {
         source = base::get;
         name = base::getName;
     }
     
-    Output(BoundOutputChannel<T> base) {
+    Output(BoundOutputChannel<? extends T> base) {
         source = base::value;
         name = base::getName;
     }
     
-    Output(BoundOutputReceiver<T> base) {
+    Output(BoundOutputReceiver<? extends T> base) {
         source = base::value;
         name = base::getName;
     }
@@ -42,6 +42,7 @@ public class Output<T> {
         return source.value();
     }
     
+    @FunctionalInterface
     private static interface Getter<T> {
         T value() throws ExecutionException;
     }

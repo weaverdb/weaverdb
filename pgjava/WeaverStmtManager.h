@@ -102,7 +102,7 @@ class  WeaverStmtManager {
 		void	Init(JNIEnv* e );
 		short PassResults( JNIEnv* env );
 
-                long StreamExec(char* statement);
+                long StreamExec(const char* statement);
                 long PipeConnect(int pipeid,int streamid, pipefunc func);
                 long PipeDisconnect( int streamid );
 

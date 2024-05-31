@@ -189,7 +189,6 @@ ExtractStringValue(JNIEnv* env, jobject target, void* data, int max) {
     jsize           len = 0;
     jstring         value;
     const char*          buffer;
-    jboolean        copy;
     int             written;
             
     if ((*env)->IsInstanceOf(env,target,Cache->stringtype)) {
@@ -200,7 +199,7 @@ ExtractStringValue(JNIEnv* env, jobject target, void* data, int max) {
             if (len > max) {
                 return -1;
             } else {
-                buffer = (*env)->GetStringUTFChars(env,value,&copy);
+                buffer = (*env)->GetStringUTFChars(env,value,NULL);
                 MoveData(data,buffer,len);
                 (*env)->ReleaseStringUTFChars(env,value,buffer); 
             }

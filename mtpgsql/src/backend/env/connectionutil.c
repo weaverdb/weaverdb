@@ -90,15 +90,15 @@ static int checklockfile(void);
 
 pthread_mutex_t    init_lock;
 
-LIB_EXTERN bool initweaverbackend(char* vars)
+LIB_EXTERN bool initweaverbackend(const char* vars)
 {    
         char*       dbname = NULL;
 	char	   *reason;
 	char	   datpath[MAXPGPATH],control[MAXPGPATH],xlogdir[MAXPGPATH];
         char*       lasts;
+        char       *tofree, *token, *cursor;
 
-        char*       key = strtok_r(vars,"=",&lasts);
-        char*       val = strtok_r(NULL,";",&lasts);
+        tofree = cursor = strdup(vars);
 
         pthread_mutex_init(&init_lock, NULL);
         pthread_mutex_lock(&init_lock);
@@ -119,7 +119,9 @@ LIB_EXTERN bool initweaverbackend(char* vars)
         
         CreateProperties();
         
-        while ( key != NULL ) {
+        while ( (token = strsep(&cursor, "=")) != NULL ) {
+            const char* key = token;
+            char* val = strsep(&cursor, ";");
             if ( strcmp(key,"debuglevel") == 0 ) {
                 dbug = val;
             } else if ( strcmp(key,"logfile") == 0 ) {
@@ -151,8 +153,6 @@ LIB_EXTERN bool initweaverbackend(char* vars)
                 nval = hash_search(properties,(char*)&nkey,HASH_ENTER,&found);
                 namestrcpy(nval + 1,val);
             }
-            key = strtok_r(NULL,"=",&lasts);
-            val = strtok_r(NULL,";",&lasts);
         }
 
         if ( start_delay ) {
@@ -164,25 +164,10 @@ LIB_EXTERN bool initweaverbackend(char* vars)
 	master = false;
 /*  this is the only route to start multithreaded, multiuser  */	
 	GoMultiuser();
-	
 
-/*  no more notion of shared server  
-	if ( servertype != NULL ) {
-		isPrivate = !(strcasecmp(servertype,"SHARED") == 0);
-	}    
-*/
-
-        /*  only private mode is supported now  */
-#ifndef NOTUSED
-	if ( isPrivate ) {
-		ipc_key = PrivateIPCKey;
-	} else {
-		ipc_key = PostPortName * 1000;
-	}
-#else  /*  Mac OSX does not have system global pthread structures so MacOSX is private */
+    /*  Mac OSX does not have system global pthread structures so MacOSX is private */
 	/*  memory space only  MKS 11.28.2001  */
-    ipc_key = PrivateIPCKey;
-#endif
+        ipc_key = PrivateIPCKey;
     
 /*  create an exclusive semaphore so only one backend is using the
         data dir at a time   */
@@ -422,6 +407,8 @@ if ( master ) {
     pthread_mutex_unlock(&init_lock);
         
     SetEnv(NULL);
+
+    free(tofree);
         
     return true;
 }

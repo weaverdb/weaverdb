@@ -7,19 +7,52 @@ import driver.weaver.ResultSet.Row;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Spliterator;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /**
  *
  */
-public class ResultSet implements Iterable<Output[]> {
+public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
     
     private final Statement stmt;
     private final static int MAX_ATTRIBUTES = 20;
 
-    public ResultSet(Statement stmt) {
+    ResultSet(Statement stmt) {
         this.stmt = stmt;
+    }
+
+    @Override
+    public boolean tryAdvance(Consumer<? super Output[]> action) {
+        try {
+            boolean advanced = stmt.fetch();
+            if (advanced) {
+                action.accept(stmt.outputs().stream()
+                        .filter(bo->bo.getName() != null)
+                        .sorted((a, b)->Integer.compare(a.getIndex(), b.getIndex()))
+                        .map(Output::new).toArray(Output[]::new));
+            }
+            return advanced;
+        } catch (ExecutionException ee) {
+            throw new RuntimeException(ee);
+        }
+    }
+
+    @Override
+    public Spliterator<Output[]> trySplit() {
+        return null;
+    }
+
+    @Override
+    public long estimateSize() {
+        return Long.MAX_VALUE;
+    }
+
+    @Override
+    public int characteristics() {
+        return Spliterator.IMMUTABLE | Spliterator.NONNULL | Spliterator.ORDERED;
     }
 
     @Override
@@ -43,16 +76,21 @@ public class ResultSet implements Iterable<Output[]> {
             }            
         };
     }
-
-    public static Stream<Row> stream(Statement stmt) throws ExecutionException {
-        if (stmt.outputs().isEmpty()) {
-            for (int x=1;x<=MAX_ATTRIBUTES;x++) {
-                stmt.linkOutput(x, Object.class);
-            }
+    
+    public static Stream<Row> stream(BaseWeaverConnection conn, String stmt) throws ExecutionException {
+        Statement s = conn.statement(stmt);
+        for (int x=1;x<=MAX_ATTRIBUTES;x++) {
+            s.linkOutput(x, Object.class);
         }
-        stmt.execute();
-        ResultSet set = new ResultSet(stmt);
-        return StreamSupport.stream(set.spliterator(), false).map(oa->new Row(Arrays.stream(oa).map(Column::new).toList()));
+        s.execute();
+        Stream<Row> rows = StreamSupport.stream(new ResultSet(s), false).map(oa->new Row(Arrays.stream(oa).map(Column::new).toList()));
+        rows.onClose(s::close);
+        return rows;
+    }
+    
+    public static Stream<Row> stream(Statement stmt) throws ExecutionException {
+        Stream<Row> rows = StreamSupport.stream(new ResultSet(stmt), false).map(oa->new Row(Arrays.stream(oa).map(Column::new).toList()));
+        return rows;
     }
     
     public static class Row implements Iterable<Column> {

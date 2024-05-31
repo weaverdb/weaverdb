@@ -359,9 +359,9 @@ WBegin(OpaqueWConn conn, long trans) {
     /*  only do this if we are a top level connection  */
     if (connection->parent == NULL) {
         WResetQuery(connection,false);
+        StartTransactionCommand();
         BeginTransactionBlock();
-        StartTransaction();
-        SetQuerySnapshot();
+        CommitTransactionCommand();
     } else {
         if (connection->parent->stage == TRAN_INVALID) {
             elog(ERROR, "parent transaction is not in a transaction");
@@ -467,7 +467,7 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
         start->next = stmt->next;
     }
 
-    if (stmt->qdesc != NULL) {
+    if (stmt->stage == STMT_EXEC || stmt->stage == STMT_FETCH) {
         ExecutorEnd(stmt->qdesc, stmt->state);
     }
 
@@ -550,6 +550,8 @@ WExec(OpaquePreparedStatement plan) {
     trackquery = plan->querytreelist;
     trackplan = plan->plantreelist;
 
+    SetQuerySnapshot();
+
     while (trackquery) {
 
         querytree = (Query *) lfirst(trackquery);
@@ -558,29 +560,31 @@ WExec(OpaquePreparedStatement plan) {
         plantree = (Plan *) lfirst(trackplan);
         trackplan = lnext(trackplan);
 
-        SetQuerySnapshot();
-
         if (querytree->commandType == CMD_UTILITY) {
+            StartTransactionCommand();
             ProcessUtility(querytree->utilityStmt, None);
+            CommitTransactionCommand();
             plan->processed += 1;  // one util op processed
             /*
              * increment after any utility if there are
              * more subqueries to execute
              */
         } else {
+            StartTransactionCommand();
+            plan->stage = STMT_EXEC;
+
             plan->state = CreateExecutorState();
             
             if (TransferExecArgs(plan) == 0) {
                 pfree(plan->state->es_param_list_info);
                 plan->state->es_param_list_info = NULL;
             }
-
+            
             plan->qdesc = CreateQueryDesc(querytree, plantree, None);
 
             plan->tupdesc = ExecutorStart(plan->qdesc, plan->state);
             plan->state->es_processed = 0;
             plan->state->es_lastoid = InvalidOid;
-            plan->stage = STMT_EXEC;
 
             if (plan->qdesc->operation != CMD_SELECT) {
                 TupleTableSlot *slot = NULL;
@@ -631,7 +635,6 @@ WExec(OpaquePreparedStatement plan) {
          * Increment Command Counter so we see everything
          * that happened in this transaction to here
          */
-        CommandCounterIncrement();
     }
     RELEASE(connection);
     return err;
@@ -825,8 +828,9 @@ WRollback(OpaqueWConn conn) {
     if (CurrentXactInProgress()) {
         WResetQuery(connection,false);
         if (connection->parent == NULL) {
-            AbortTransaction();
-            AbandonTransactionBlock();
+            StartTransactionCommand();
+            AbortTransactionBlock();
+            CommitTransactionCommand();
         } else {
             CloseSubTransaction();
         }
@@ -1288,7 +1292,7 @@ WDisconnectStdIO(OpaqueWConn conn) {
 }
 
 long
-WStreamExec(OpaqueWConn conn, char *statement) {
+WStreamExec(OpaqueWConn conn, const char *statement) {
     WConn connection = SETUP(conn);
     long err;
 
@@ -1372,6 +1376,7 @@ WResetExecutor(PreparedPlan * plan) {
         Assert(plan->qdesc != NULL);
         Assert(plan->state != NULL);
         ExecutorEnd(plan->qdesc, plan->state);
+        CommitTransactionCommand();
         plan->stage = STMT_EMPTY;
     }
 
@@ -1381,7 +1386,7 @@ WResetExecutor(PreparedPlan * plan) {
 #endif
         MemoryContextResetAndDeleteChildren(plan->exec_cxt);
     } else {
-        plan->exec_cxt = AllocSetContextCreate(MemoryContextGetEnv()->QueryContext,
+        plan->exec_cxt = AllocSetContextCreate(plan->plan_cxt,
             "ExecutorContext",
             ALLOCSET_DEFAULT_MINSIZE,
             ALLOCSET_DEFAULT_INITSIZE,
