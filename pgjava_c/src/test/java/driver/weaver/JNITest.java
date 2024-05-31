@@ -647,13 +647,16 @@ public class JNITest {
     }
     
     @org.junit.jupiter.api.Test
-    public void testDisableAutoCommit() throws Exception {
+    public void testAutoCommitWorks() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
-            conn.setAutoCommit(false);
             conn.execute("create table test10 (id int4, value varchar(256))");
-        } catch (ExecutionException ee) {
-            // expected 
-            ee.printStackTrace();
+            conn.execute("insert into test10 (id, value) values (1, 'fabulous')");
+        }
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            try (Statement s = conn.statement("select * from test10")) {
+                s.execute();
+                Assertions.assertTrue(s.fetch());
+            }
         }
     }
     

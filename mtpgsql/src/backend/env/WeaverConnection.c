@@ -392,12 +392,6 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     int k = 0;
     PreparedPlan* plan;
     MemoryContext plan_cxt,old;
-
-    if (connection->stage == TRAN_INVALID) {
-        err = 455;
-        SetError(connection, err, "CONTEXT", "context not valid, check call sequence");
-        return NULL;
-    }
     
     if ( connection->stage == TRAN_ABORTONLY ) {
         err = 456;
@@ -446,7 +440,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     
     plan->next = connection->plan;
     connection->plan = plan;
-
+    MemoryContextSwitchTo(old);
     RELEASE(connection);
 
     return plan;
@@ -542,9 +536,9 @@ WExec(OpaquePreparedStatement plan) {
     }
 
     WResetExecutor(plan);
+    StartTransactionCommand();
 
     plan = ParsePlan(plan);
-
     plan->processed = 0;
     
     trackquery = plan->querytreelist;
@@ -561,7 +555,6 @@ WExec(OpaquePreparedStatement plan) {
         trackplan = lnext(trackplan);
 
         if (querytree->commandType == CMD_UTILITY) {
-            StartTransactionCommand();
             ProcessUtility(querytree->utilityStmt, None);
             CommitTransactionCommand();
             plan->processed += 1;  // one util op processed
@@ -570,7 +563,6 @@ WExec(OpaquePreparedStatement plan) {
              * more subqueries to execute
              */
         } else {
-            StartTransactionCommand();
             plan->stage = STMT_EXEC;
 
             plan->state = CreateExecutorState();
@@ -997,9 +989,6 @@ WGetTransactionId(OpaqueWConn conn) {
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
-    if (connection->stage == TRAN_INVALID) {
-        elog(ERROR, "transaction not begun");
-    }
 
     xid = GetCurrentTransactionId();
 
@@ -1021,9 +1010,6 @@ WGetCommandId(OpaqueWConn conn) {
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
-    }
-    if (connection->stage == TRAN_INVALID) {
-        elog(ERROR, "transaction not begun");
     }
 
     cid = GetCurrentCommandId();
@@ -1047,9 +1033,6 @@ WBeginProcedure(OpaqueWConn conn) {
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
-    if (connection->stage == TRAN_INVALID) {
-        elog(ERROR, "transaction not begun");
-    }
 
     TakeUserSnapshot();
 
@@ -1072,7 +1055,7 @@ WEndProcedure(OpaqueWConn conn) {
         elog(ERROR, "Query Cancelled");
     }
     if (connection->stage == TRAN_INVALID) {
-        elog(ERROR, "transaction not begun");
+        elog(ERROR, "no active transaction block");
     }
 
     DropUserSnapshot();
@@ -1400,6 +1383,7 @@ WResetExecutor(PreparedPlan * plan) {
 
     plan->fetch_cxt = NULL;    
 }
+
 static int
 TransferExecArgs(PreparedPlan* plan) {
     int k = 0;
@@ -1566,11 +1550,7 @@ ParsePlan(PreparedPlan* plan) {
 short CheckThreadContext(WConn connection) {
     long err;
     if (connection->transaction_owner == 0) {
-        char msg[256];
-        err = 453;
-        snprintf(msg, 255, "no transaction is active");
-        SetError(connection, err, "CONTEXT", msg);
-        return 1;
+        return 0;
     } else if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;

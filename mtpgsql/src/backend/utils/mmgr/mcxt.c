@@ -515,6 +515,8 @@ MemoryContext
 MemoryContextSwitchTo(MemoryContext context) {
     MemoryContext old;
     Env* env = GetEnv();
+    
+    Assert(context != NULL);
 
     old = env->current_context;
     env->current_context = context;
