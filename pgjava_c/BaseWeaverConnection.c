@@ -694,37 +694,41 @@ static int pipein(void* args,int type, void* buff,int run)
 }
 
 static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jstring connection) {
-	char pass[64];
-	char name[64];
-	char conn[64];
-        jsize passlen = 0;
-        jsize namelen = 0;
-        jsize connlen = 0;
-
-        name[0] = '\0';
-        pass[0] = '\0';
-        conn[0] = '\0';
+	char pass[256];
+	char name[256];
+	char conn[256];
+        const char* errMsg = NULL;
 
         if (!(*env)->IsSameObject(env, username, NULL) && !(*env)->IsSameObject(env, password, NULL)) {
             jsize passlen = (*env)->GetStringUTFLength(env,password);
             jsize namelen = (*env)->GetStringUTFLength(env,username);
-            pass[passlen] = 0;
-            name[namelen] = 0;
-            (*env)->GetStringUTFRegion(env,password,0,passlen,pass);
-            (*env)->GetStringUTFRegion(env,username,0,namelen,name);
+            if (passlen >= 0 && passlen < 255 && namelen >= 0 && namelen < 255) {
+                (*env)->GetStringUTFRegion(env,password,0,passlen,pass);
+                (*env)->GetStringUTFRegion(env,username,0,namelen,name);
+                pass[passlen] = '\0';
+                name[namelen] = '\0';
+            } else {
+                errMsg = "Invalid username or password - too many characters";
+            }
+        } else {
+            name[0] = '\0';
+            pass[0] = '\0';
         }
 
         if (!(*env)->IsSameObject(env, connection, NULL)) {
-            connlen = (*env)->GetStringUTFLength(env,connection);
-            conn[connlen] = 0;
-            (*env)->GetStringUTFRegion(env,connection,0,connlen,conn);
+            jsize connlen = (*env)->GetStringUTFLength(env,connection);
+            if (connlen >= 0 && connlen < 255) {
+                (*env)->GetStringUTFRegion(env,connection,0,connlen,conn);
+                conn[connlen] = '\0';
+            } else {
+                errMsg = "Invalid database - too many characters";
+            }
         }
 
-	if (( passlen > 63 || namelen > 63 || connlen > 63 ) ||
-        ( passlen < 0 || namelen < 0 || connlen <= 0 ) )
-        {
-            if (!(*env)->ExceptionOccurred(env) ) 
-                (*env)->ThrowNew(env,Cache->exception,"User not valid");
+	if (errMsg != NULL) {
+            if (!(*env)->ExceptionOccurred(env) ) {
+                (*env)->ThrowNew(env,Cache->exception,errMsg);
+            }
             return NULL;
 	}
 

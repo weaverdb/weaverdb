@@ -104,7 +104,6 @@ static SectionId   connection_section_id = SECTIONID("CONN");
 OpaqueWConn
 WCreateConnection(const char *tName, const char *pass, const char *conn) {
     int sqlError = 0;
-    char dbpath[512];
     Oid dbid = InvalidOid;
     WConn connection = NULL;
     Env*     env;
@@ -138,7 +137,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     connection->env->Mode = InitProcessing;
 
     SetDatabaseName(conn);
-    GetRawDatabaseInfo(conn, &dbid, dbpath);
+    GetRawDatabaseInfo(conn, &dbid, NULL);
 
     if (dbid == InvalidOid) {
         sqlError = 99;
