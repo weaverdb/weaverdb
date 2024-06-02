@@ -124,6 +124,7 @@ PG_EXTERN void InitializeTransactionSystem(void);
 PG_EXTERN bool CurrentXactInProgress(void);
 PG_EXTERN void StartTransactionCommand(void);
 PG_EXTERN void CommitTransactionCommand(void);
+PG_EXTERN bool CommitTransactionCommandIfNeeded(void);
 PG_EXTERN void AbortTransactionBlock(void);
 PG_EXTERN void SetAbortOnly(void);
 PG_EXTERN void BeginTransactionBlock(void);

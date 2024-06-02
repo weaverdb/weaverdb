@@ -705,6 +705,8 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testStreamExec() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.setStandardOutput(System.out);
+            conn.streamExec("report user memory");
             try (TransactionSequence ts = new TransactionSequence(conn)) {
                 try (TransactionSequence.Procedure p = ts.start()) {
                     p.execute("create table test12 (id int4, value varchar(256))");
@@ -719,7 +721,6 @@ public class JNITest {
                     }
                 }
             }
-            conn.setStandardOutput(System.out);
             conn.streamExec("explain select * from test12");
 
             Random gen = new Random();
@@ -763,6 +764,7 @@ public class JNITest {
                     explain.flatMap(r->r.stream()).forEach(System.out::println);
                 }
             }
+            conn.streamExec("report user memory");
             System.out.println("done");
         }
     }
@@ -796,6 +798,66 @@ public class JNITest {
         }
     }
     
+     @org.junit.jupiter.api.Test
+    public void testMemoryConsumption() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.setStandardOutput(System.out);
+            conn.execute("create table test20 (id int4, value varchar(256))");
+            conn.execute("truncate table test20");
+            for (int x=0;x<25;x++) {
+                System.out.println("round " +  (x+1));
+                try (TransactionSequence ts = new TransactionSequence(conn)) {
+                    try (TransactionSequence.Procedure p = ts.start()) {
+                        p.execute("insert into test20 (id, value) values (1, 'test1')");
+                        p.execute("insert into test20 (id, value) values (2, 'test2')");
+                        p.execute("insert into test20 (id, value) values (3, 'test3')");
+                        p.execute("insert into test20 (id, value) values (4, 'test4')");
+                        p.execute("insert into test20 (id, value) values (5, 'test5')");
+
+                        try (Statement s = p.statement("select * from test20")) {
+                            try (Stream<Row> set = ResultSet.stream(s)) {
+                                set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
+                            }
+                        }
+                    }
+                }
+                conn.streamExec("explain select * from test20");
+                Random gen = new Random();
+                try (TransactionSequence p = new TransactionSequence(conn)) {
+                    try (Statement s = p.statement("insert into test20 (id, value) values ($id, $val)")) {
+                        Input<Integer> id = s.linkInput("id", Integer.class);
+                        Input<String> val = s.linkInput("val", String.class);
+                        for (int y=0;y<10000;y++) {
+                            id.set(y);
+                            val.set("value" + gen.nextInt(10000));
+                            s.execute();
+                        }
+                    }
+                }
+                System.out.println("load finished");
+                conn.execute("create index test20_id_idx on test20(id)");
+                conn.streamExec("explain select * from test20 where id = 4");
+                try (Statement s = conn.statement("select id, value from test20 where id = $id")) {
+                    s.linkInput("id", Integer.class).set(gen.nextInt(1000000));
+                    try (Stream<Row> explain = ResultSet.stream(s)) {
+                        explain.flatMap(r->r.stream()).forEach(System.out::println);
+                    }
+                }
+                conn.execute("drop index test20_id_idx");
+                conn.streamExec("report user memory");
+            }
+            System.out.println("done");
+        }
+    }   
+    
+    @org.junit.jupiter.api.Test
+    public void testReportMemory() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.setStandardOutput(System.out);
+            conn.streamExec("report user memory");
+        }
+    }
+
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;

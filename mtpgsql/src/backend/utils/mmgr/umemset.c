@@ -38,7 +38,7 @@ static void UmemSetDelete(MemoryContext context);
 #ifdef MEMORY_CONTEXT_CHECKING
 static void UmemSetCheck(MemoryContext context);
 #endif
-static size_t UmemSetStats(MemoryContext context);
+static size_t UmemSetStats(MemoryContext context, char* describe, int size);
 
 /*
  * This is the virtual function table for AllocSet contexts.
@@ -98,9 +98,9 @@ UmemSetInit(MemoryContext context)
  * block specified for the set.
  */
 static void
-SubSetReset(MemoryContext context)
+UmemSetReset(MemoryContext context)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+	UmemSetContext*  sub = (UmemSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
 	for (x=0;x<sub->map_size;x++) {
@@ -126,9 +126,9 @@ SubSetReset(MemoryContext context)
  * But note we are not responsible for deleting the context node itself.
  */
 static void
-SubSetDelete(MemoryContext context)
+UmemSetDelete(MemoryContext context)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+	UmemSetContext*  sub = (UmemSetContext*)context;
 	int x = 0;
 	void**   pointer = sub->alloced_pointers;
 	for (x=0;x<sub->map_size;x++) {
@@ -149,9 +149,9 @@ SubSetDelete(MemoryContext context)
  *		to the set.
  */
 static void *
-SubSetAlloc(MemoryContext context, Size size)
+UmemSetAlloc(MemoryContext context, Size size)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+	UmemSetContext*  sub = (UmemSetContext*)context;
 	void* pointer = MemoryContextAlloc(sub->header.parent,size);
 	int x;
 	void** store = sub->alloced_pointers;
@@ -178,9 +178,9 @@ SubSetAlloc(MemoryContext context, Size size)
  *		Frees allocated memory; memory is removed from the set.
  */
 static void
-SubSetFree(MemoryContext context, void *pointer)
+UmemSetFree(MemoryContext context, void *pointer)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+	UmemSetContext*  sub = (UmemSetContext*)context;
 	int x = 0;
 	void** store = sub->alloced_pointers;
 	for ( x=0;x<sub->map_size;x++ ) {
@@ -201,9 +201,9 @@ SubSetFree(MemoryContext context, void *pointer)
  *		into the new memory, and the old memory is freed.
  */
 static void *
-SubSetRealloc(MemoryContext context, void *pointer, Size size)
+UmemSetRealloc(MemoryContext context, void *pointer, Size size)
 {
-	SubSetContext*  sub = (SubSetContext*)context;
+	UmemSetContext*  sub = (UmemSetContext*)context;
 	void* save;
 	GetMemoryContext(pointer) = sub->header.parent;
 	save = repalloc(pointer,size);
@@ -224,11 +224,11 @@ SubSetRealloc(MemoryContext context, void *pointer, Size size)
  *		Displays stats about memory consumption of an allocset.
  */
 static size_t
-SubSetStats(MemoryContext context)
+UmemSetStats(MemoryContext context, char* describe, int size)
 {	
 	int x = 0;
 	Size hold = 0;
-	SubSetContext* sub = (SubSetContext*)context;
+	UmemSetContext* sub = (UmemSetContext*)context;
         void** store = sub->alloced_pointers;
         for ( x=0;x<sub->map_size;x++ ) {
                 if (*store != NULL) {
@@ -236,9 +236,14 @@ SubSetStats(MemoryContext context)
                 }
                 store++;
         }		
-	fprintf(stderr,
+        if (describe != NULL) {
+            snprintf(describe, size, "%s: %ld used from %s\n",
+			sub->header.name,hold,sub->header.parent->name);
+        } else {
+            userlog(
 		"%s: %ld used from %s\n",
 			sub->header.name,hold,sub->header.parent->name);
+        }
 	return 0;
 }
 
@@ -254,7 +259,7 @@ SubSetStats(MemoryContext context)
  * routine will be entered again when elog cleanup tries to release memory!
  */
 static void
-SubSetCheck(MemoryContext context)
+UmemSetCheck(MemoryContext context)
 {
 
 }

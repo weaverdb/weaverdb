@@ -1112,6 +1112,18 @@ CommitTransactionCommand()
 	}
 }
 
+bool
+CommitTransactionCommandIfNeeded() {
+    TransactionState s = GetTransactionInfo()->CurrentTransactionState;
+
+    if (s->blockState == TBLOCK_MANUAL || s->blockState != TBLOCK_DEFAULT) {
+        CommitTransactionCommand();
+        return true;
+    } else {
+        return false;
+    }
+}
+
 /* ----------------------------------------------------------------
  *					   transaction block support
  * ----------------------------------------------------------------

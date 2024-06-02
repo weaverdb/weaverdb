@@ -210,7 +210,7 @@ static void AllocSetDelete(MemoryContext context);
 #ifdef MEMORY_CONTEXT_CHECKING
 static void AllocSetCheck(MemoryContext context);
 #endif
-static size_t AllocSetStats(MemoryContext context);
+static size_t AllocSetStats(MemoryContext context, char* describe, int size);
 
 /*
  * This is the virtual function table for AllocSet contexts.
@@ -976,7 +976,7 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
  *		Displays stats about memory consumption of an allocset.
  */
 static size_t
-AllocSetStats(MemoryContext context)
+AllocSetStats(MemoryContext context, char* describe, int size)
 {
 	AllocSet	set = (AllocSet) context;
 	long		nblocks = 0;
@@ -1002,9 +1002,15 @@ AllocSetStats(MemoryContext context)
 			freespace += chunk->size + ALLOC_CHUNKHDRSZ;
 		}
 	}
-	user_log("%s: %ld total in %ld blocks; %ld free (%ld chunks); %ld used",
+        if (describe != NULL) {
+            snprintf(describe, size,"::%ld total in %ld blocks; %ld free (%ld chunks); %ld used",
+			totalspace, nblocks, freespace, nchunks,
+			totalspace - freespace);
+        } else {
+            user_log("%s: %ld total in %ld blocks; %ld free (%ld chunks); %ld used",
 			set->header.name, totalspace, nblocks, freespace, nchunks,
 			totalspace - freespace);
+        }
             
     return totalspace - freespace;
 }

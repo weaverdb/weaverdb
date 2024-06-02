@@ -45,7 +45,7 @@ typedef struct MemoryContextMethods
 #ifdef MEMORY_CONTEXT_CHECKING
 	void		(*check) (MemoryContext context);
 #endif
-	size_t		(*stats) (MemoryContext context);
+	size_t		(*stats) (MemoryContext context, char* describe, int size);
 } MemoryContextMethods;
 
 

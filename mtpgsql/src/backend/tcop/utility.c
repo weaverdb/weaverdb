@@ -741,7 +741,18 @@ ProcessUtility(Node *parsetree,
 				ExplainQuery(stmt->query, stmt->verbose, dest);
 			}
 			break;
+		case T_ReportMemoryStmt:
+			{
+				ReportMemoryStmt *stmt = (ReportMemoryStmt *) parsetree;
 
+				(commandTag = "REPORT");
+				CHECK_IF_ABORTED();
+
+				PrintMemoryContextStats(stmt->cxt, dest, 0);
+                                
+                                
+			}
+			break;
 #ifdef NOT_USED
 
 			/*

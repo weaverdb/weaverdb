@@ -120,7 +120,6 @@ BeginCommand(char *pname,
 	switch (dest)
 	{
 		case Remote:
-                    break;
 		case RemoteInternal:
 			/* ----------------
 			 *		if this is a "retrieve portal" query, done
@@ -269,7 +268,6 @@ EndCommand(char *commandTag, CommandDest dest)
 	switch (dest)
 	{
 		case Remote:
-                    break;
 		case RemoteInternal:
 			/* ----------------
 			 *		tell the fe that the query is over
@@ -334,8 +332,8 @@ NullCommand(CommandDest dest)
 {
 	switch (dest)
 	{
-			case RemoteInternal:
-			case Remote:
+		case RemoteInternal:
+		case Remote:
 			/* ----------------
 			 *		tell the fe that we saw an empty query string
 			 * ----------------
@@ -366,8 +364,8 @@ ReadyForQuery(CommandDest dest)
 {
 	switch (dest)
 	{
-			case RemoteInternal:
-			case Remote:
+		case RemoteInternal:
+		case Remote:
 			if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 2)
 				pq_putbytes("Z", 1);
 			/* Flush output at end of cycle in any case. */
@@ -389,7 +387,7 @@ UpdateCommandInfo(int operation, Oid lastoid, uint32 tuples)
 	
         switch (operation)
 	{
-			case CMD_INSERT:
+		case CMD_INSERT:
 			if (tuples > 1)
 				lastoid = InvalidOid;
 			sprintf(global->CommandInfo, " %lu %u", lastoid, tuples);

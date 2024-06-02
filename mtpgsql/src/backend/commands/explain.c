@@ -18,7 +18,7 @@
 #include "parser/parsetree.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/relcache.h"
-#include "libpq/pqformat.h"
+#include "libpq/libpq.h"
 
 
 typedef struct ExplainState
@@ -113,8 +113,9 @@ ExplainOneQuery(Query *query, bool verbose, CommandDest dest)
 		if (s)
 		{
 			elog(NOTICE, "QUERY DUMP:\n\n%s", s);
-                        if (dest == Remote) {
-                            pq_puttextmessage('\0', s);
+                        if (dest == Local) {
+                            pq_putbytes(s, strlen(s));
+                            pq_flush();
                         }
 			pfree(s);
 		}
@@ -126,8 +127,9 @@ ExplainOneQuery(Query *query, bool verbose, CommandDest dest)
 		if (s)
 		{
 			elog(NOTICE, "QUERY PLAN:\n\n%s", s);
-                        if (dest == Remote) {
-                            pq_puttextmessage('\0', s);
+                        if (dest == Local) {
+                            pq_putbytes(s, strlen(s));
+                            pq_flush();
                         }
 			pfree(s);
 		}

@@ -41,7 +41,7 @@ static void SubSetDelete(MemoryContext context);
 #ifdef MEMORY_CONTEXT_CHECKING
 static void SubSetCheck(MemoryContext context);
 #endif
-static size_t SubSetStats(MemoryContext context);
+static size_t SubSetStats(MemoryContext context, char* describe, int size);
 
 /*
  * This is the virtual function table for AllocSet contexts.
@@ -258,7 +258,7 @@ SubSetRealloc(MemoryContext context, void *pointer, Size size)
  *		Displays stats about memory consumption of an allocset.
  */
 static size_t
-SubSetStats(MemoryContext context)
+SubSetStats(MemoryContext context, char* describe, int size)
 {	
 	int x = 0;
 	Size hold = 0;
@@ -269,9 +269,14 @@ SubSetStats(MemoryContext context)
                        hold += GetMemorySize(*store); 
                 }
                 store++;
-        }		
-	user_log("%s: %ld used from %s",
+        }
+        if (describe != NULL) {
+            snprintf(describe, size, "::%ld used from %s",
+			hold,sub->header.parent->name);
+        } else {
+            user_log("%s: %ld used from %s",
 			sub->header.name,hold,sub->header.parent->name);
+        }
 	return 0;
 }
 

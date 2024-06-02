@@ -2781,8 +2781,9 @@ ReportStmt:  REPORT ACCESS STATS
 	     			}
 	     | REPORT USER MEMORY
 	     			{
-	     				PrintUserMemory();
-					$$ = NULL;
+                                        ReportMemoryStmt* stmt = makeNode(ReportMemoryStmt);
+                                        stmt->cxt = GetEnv()->global_context;
+					$$ = (Node *)stmt;
 	     			}
 	     | REPORT ALL MEMORY
 	     			{

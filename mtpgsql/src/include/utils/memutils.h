@@ -18,6 +18,7 @@
 #define MEMUTILS_H
 
 #include "nodes/memnodes.h"
+#include "tcop/dest.h"
 
 
 /*
@@ -96,6 +97,7 @@ PG_EXTERN void MemoryContextResetChildren(MemoryContext context);
 PG_EXTERN void MemoryContextDeleteChildren(MemoryContext context);
 PG_EXTERN void MemoryContextResetAndDeleteChildren(MemoryContext context);
 PG_EXTERN size_t MemoryContextStats(MemoryContext context);
+PG_EXTERN size_t PrintMemoryContextStats(MemoryContext context, CommandDest dest, int depth);
 PG_EXTERN void MemoryContextCheck(MemoryContext context);
 PG_EXTERN bool MemoryContextContains(MemoryContext context, void *pointer);
 

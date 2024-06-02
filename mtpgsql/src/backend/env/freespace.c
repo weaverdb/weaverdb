@@ -856,7 +856,12 @@ RelationGetNumberOfBlocks(Relation relation)
         if ( freespace == NULL ) {
             relation->rd_nblocks = smgrnblocks(relation->rd_smgr);
         } else {
+            BlockNumber blocks = smgrnblocks(relation->rd_smgr);
             pthread_mutex_lock(&freespace->accessor);
+            if (blocks != freespace->relsize) {
+                elog(NOTICE, "%s blocks %lu != freespace %lu", RelationGetRelationName(relation), blocks, freespace->relsize);
+                freespace->relsize = blocks;
+            }
             relation->rd_nblocks = freespace->relsize;
             pthread_mutex_unlock(&freespace->accessor);
         }

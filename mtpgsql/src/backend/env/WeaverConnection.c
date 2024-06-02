@@ -83,7 +83,7 @@ static SectionId   connection_section_id = SECTIONID("CONN");
 
 #define SETUP(target) (WConn)target
 
-#define READY(target, err)  \
+#define READY(target, err, usingTransaction)  \
     SetEnv(target->env);\
     \
     err = setjmp(target->env->errorContext);\
@@ -91,12 +91,21 @@ static SectionId   connection_section_id = SECTIONID("CONN");
         strncpy(connection->env->state, "ABORTONLY", 39);\
         target->stage = TRAN_ABORTONLY;\
         SetAbortOnly();\
-        WHandleError(target,err);\
-        WResetQuery(connection,true);\
+        if (usingTransaction) { \
+            CommitTransactionCommand(); \
+        } \
+        WHandleError(target,err); \
+        WResetQuery(connection,true); \
     } else {\
-        target->CDA.rc = 0\
+        target->CDA.rc = 0;\
+        if (usingTransaction) { \
+            StartTransactionCommand(); \
+        } \
 
-#define RELEASE(target) \
+#define RELEASE(target,usingTransaction) \
+        if (usingTransaction) {\
+            CommitTransactionCommand(); \
+        } \
     } \
     SetEnv(NULL);  \
 
@@ -138,6 +147,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
 
     SetDatabaseName(conn);
     GetRawDatabaseInfo(conn, &dbid, NULL);
+    SetWhereToSendOutput(Local);
 
     if (dbid == InvalidOid) {
         sqlError = 99;
@@ -349,18 +359,12 @@ WBegin(OpaqueWConn conn, long trans) {
         return err;
     }
 
-    READY(connection, err);
-
-    if (connection->stage != TRAN_INVALID) {
-        elog(ERROR, "already in transaction %d", connection->stage);
-    }
+    READY(connection, err, true);
 
     /*  only do this if we are a top level connection  */
     if (connection->parent == NULL) {
         WResetQuery(connection,false);
-        StartTransactionCommand();
         BeginTransactionBlock();
-        CommitTransactionCommand();
     } else {
         if (connection->parent->stage == TRAN_INVALID) {
             elog(ERROR, "parent transaction is not in a transaction");
@@ -375,7 +379,7 @@ WBegin(OpaqueWConn conn, long trans) {
     connection->transaction_owner = pthread_self();
     connection->stage = TRAN_BEGIN;
 
-    RELEASE(connection);
+    RELEASE(connection, true);
     return err;
 }
 
@@ -401,7 +405,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
         return NULL;
     }
 
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
@@ -440,7 +444,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     plan->next = connection->plan;
     connection->plan = plan;
     MemoryContextSwitchTo(old);
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return plan;
 }
@@ -449,7 +453,7 @@ long
 WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     WConn connection = SETUP(stmt->owner);
     long err;
-    READY(connection,err);
+    READY(connection,err, false);
     if ( stmt == connection->plan ) {
         connection->plan = stmt->next;
     } else {
@@ -464,11 +468,9 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
         ExecutorEnd(stmt->qdesc, stmt->state);
     }
 
-    if ( stmt->exec_cxt ) MemoryContextDelete(stmt->exec_cxt);
     MemoryContextDelete(stmt->plan_cxt);
     
-    err = ( connection->plan == NULL ) ? 1 : 0;
-    RELEASE(connection);
+    RELEASE(connection, false);
     return err;
 }
 
@@ -482,7 +484,7 @@ WOutputTransfer(OpaquePreparedStatement plan, short pos, int type, void* userenv
         return GETERROR(connection);
     }
 
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
@@ -503,7 +505,7 @@ WOutputTransfer(OpaquePreparedStatement plan, short pos, int type, void* userenv
     plan->slot[index].userargs = userenv;
     plan->slot[index].transfer = func;
 
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return err;
 }
@@ -512,6 +514,7 @@ long
 WExec(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
     long err = 0;
+    bool needsCommit = true;
 
     List *trackquery = NULL;
     List *trackplan = NULL;
@@ -528,14 +531,13 @@ WExec(OpaquePreparedStatement plan) {
         return GETERROR(connection);
     }  
     
-    READY(connection, err);
+    READY(connection, err, needsCommit);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
 
     WResetExecutor(plan);
-    StartTransactionCommand();
 
     plan = ParsePlan(plan);
     plan->processed = 0;
@@ -555,17 +557,16 @@ WExec(OpaquePreparedStatement plan) {
 
         if (querytree->commandType == CMD_UTILITY) {
             ProcessUtility(querytree->utilityStmt, None);
-            CommitTransactionCommand();
             plan->processed += 1;  // one util op processed
             /*
              * increment after any utility if there are
              * more subqueries to execute
              */
         } else {
-            plan->stage = STMT_EXEC;
-
             plan->state = CreateExecutorState();
-            
+            plan->stage = STMT_EXEC;
+            needsCommit = false;  // commit is handled in executor 
+
             if (TransferExecArgs(plan) == 0) {
                 pfree(plan->state->es_param_list_info);
                 plan->state->es_param_list_info = NULL;
@@ -627,7 +628,7 @@ WExec(OpaquePreparedStatement plan) {
          * that happened in this transaction to here
          */
     }
-    RELEASE(connection);
+    RELEASE(connection, needsCommit);
     return err;
 }
 
@@ -639,7 +640,7 @@ WFetch(OpaquePreparedStatement plan) {
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
-    READY(connection, err);
+    READY(connection, err, false);
 
     int pos = 0;
 
@@ -721,7 +722,7 @@ WFetch(OpaquePreparedStatement plan) {
 
     MemoryContextSwitchTo(old);
 
-    RELEASE(connection);
+    RELEASE(connection, false);
     return err;
 }
 
@@ -745,7 +746,7 @@ WPrepare(OpaqueWConn conn) {
         return 1;
     }
 
-    READY(connection, err);
+    READY(connection, err, false);
     if (IsAbortedTransactionBlockState()) {
         elog(ERROR, "Transaction is abort only");
     }
@@ -753,7 +754,7 @@ WPrepare(OpaqueWConn conn) {
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
-    RELEASE(connection);
+    RELEASE(connection, false);
     return err;
 }
 
@@ -765,7 +766,7 @@ WCommit(OpaqueWConn conn) {
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
-    READY(connection, err);
+    READY(connection, err, true);
 
     if (connection->stage == TRAN_INVALID) {
         elog(ERROR, "connection is currently in an invalid state for commit");
@@ -774,27 +775,15 @@ WCommit(OpaqueWConn conn) {
         elog(ERROR, "Query Cancelled");
     }
 
-    /* clean up executor   */
-    if (connection->stage == TRAN_ABORTONLY) {
-        if (CurrentXactInProgress()) {
-            WResetQuery(connection,false);
-            AbortTransaction();
-            AbandonTransactionBlock();
-        }
-        elog(ERROR, "transaction in abort only mode");
-    } else {
+    WResetQuery(connection,false);
+    if (connection->parent == NULL) {
         connection->stage = TRAN_COMMIT;
-        WResetQuery(connection,false);
-        if (connection->parent == NULL) {
-            CommitTransaction();
-            AbandonTransactionBlock();
-        } else {
-            CloseSubTransaction();
-        }
+        CommitTransactionBlock();
+    } else {
+        CloseSubTransaction();
     }
 
-    RELEASE(connection);
-
+    RELEASE(connection, true);
     connection->stage = TRAN_INVALID;
     connection->transaction_owner = 0;
 
@@ -809,7 +798,7 @@ WRollback(OpaqueWConn conn) {
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
-    READY(connection, err);
+    READY(connection, err, true);
 
     if (connection->stage == TRAN_INVALID) {
         elog(ERROR, "connection is currently in an invalid state for commit");
@@ -819,16 +808,13 @@ WRollback(OpaqueWConn conn) {
     if (CurrentXactInProgress()) {
         WResetQuery(connection,false);
         if (connection->parent == NULL) {
-            StartTransactionCommand();
             AbortTransactionBlock();
-            CommitTransactionCommand();
         } else {
             CloseSubTransaction();
         }
     }
 
-    RELEASE(connection);
-
+    RELEASE(connection, true);
     connection->transaction_owner = 0;
     connection->stage = TRAN_INVALID;
 
@@ -855,7 +841,7 @@ WBindTransfer(OpaquePreparedStatement plan, const char* var, int type, void* use
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
-    READY(connection, err);
+    READY(connection, err, false);
 
     /*  remove the marker flag of the named parameter if there is one */
     switch (*var) {
@@ -888,7 +874,7 @@ WBindTransfer(OpaquePreparedStatement plan, const char* var, int type, void* use
     plan->slot[index].userargs = userenv;
     plan->slot[index].transfer = func;
     
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return err;
 }
@@ -983,7 +969,7 @@ WGetTransactionId(OpaqueWConn conn) {
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
@@ -991,7 +977,7 @@ WGetTransactionId(OpaqueWConn conn) {
 
     xid = GetCurrentTransactionId();
 
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return xid;
 }
@@ -1005,7 +991,7 @@ WGetCommandId(OpaqueWConn conn) {
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
@@ -1013,7 +999,7 @@ WGetCommandId(OpaqueWConn conn) {
 
     cid = GetCurrentCommandId();
 
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return cid;
 }
@@ -1027,7 +1013,7 @@ WBeginProcedure(OpaqueWConn conn) {
         return GETERROR(connection);
     }
 
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
@@ -1035,7 +1021,7 @@ WBeginProcedure(OpaqueWConn conn) {
 
     TakeUserSnapshot();
 
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return err;
 }
@@ -1048,7 +1034,7 @@ WEndProcedure(OpaqueWConn conn) {
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
     }
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
@@ -1059,7 +1045,7 @@ WEndProcedure(OpaqueWConn conn) {
 
     DropUserSnapshot();
 
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return err;
 }
@@ -1080,14 +1066,14 @@ WAllocStatementMemory(OpaquePreparedStatement conn, size_t size) {
     void* pointer;
     int err;
 
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "query cancelled");
     }
 
     pointer = MemoryContextAlloc(conn->plan_cxt, size);
-    RELEASE(connection);
+    RELEASE(connection, false);
     return pointer;
 }
 
@@ -1098,7 +1084,7 @@ AllocMemory(WConn conn, mem_type type, size_t size) {
     MemoryContext cxt;
     int err;
 
-    READY(connection, err);
+    READY(connection, err, false);
 
     if (CheckForCancel()) {
         elog(ERROR, "query cancelled");
@@ -1119,7 +1105,7 @@ AllocMemory(WConn conn, mem_type type, size_t size) {
     }
 
     pointer = MemoryContextAlloc(cxt, size);
-    RELEASE(connection);
+    RELEASE(connection, false);
     return pointer;
 }
 
@@ -1128,10 +1114,10 @@ WFreeMemory(OpaqueWConn conn, void* pointer) {
     WConn connection = SETUP(conn);
     int err;
 
-    READY(connection, err);
+    READY(connection, err, false);
 
     pfree(pointer);
-    RELEASE(connection);
+    RELEASE(connection, false);
 }
 
 
@@ -1140,10 +1126,10 @@ WCheckMemory(OpaqueWConn conn) {
     WConn connection = SETUP(conn);
     int err;
 
-    READY(connection, err);
+    READY(connection, err, false);
     fprintf(stdout, "memory of connection: %ld\n", MemoryContextStats(conn->memory));    
    
-    RELEASE(connection);
+    RELEASE(connection, false);
 }
 
 long
@@ -1152,7 +1138,7 @@ WUserLock(OpaqueWConn conn, const char *group, uint32_t val, char lockit) {
     Oid grouplockid = (Oid) - 3;
     long err = 0;
 
-    READY(connection, err);
+    READY(connection, err, false);
 
     char *trax;
     char gname[256];
@@ -1207,7 +1193,7 @@ WUserLock(OpaqueWConn conn, const char *group, uint32_t val, char lockit) {
         elog(DEBUG, "user unlock on group:%s item:%d result:%d", gname, val, lockstate);
     }
 
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return err;
 }
@@ -1253,11 +1239,11 @@ WConnectStdIO(OpaqueWConn conn, void* args, transferfunc in, transferfunc out) {
     long err;
     MemoryContext cxt;
 
-    READY(connection, err);
+    READY(connection, err, false);
     cxt = MemoryContextSwitchTo(GetEnvMemoryContext());
     ConnectIO(args, in, out);
     MemoryContextSwitchTo(cxt);
-    RELEASE(connection);
+    RELEASE(connection, false);
 }
 
 void*
@@ -1266,9 +1252,9 @@ WDisconnectStdIO(OpaqueWConn conn) {
     long err;
     void* args;
 
-    READY(connection, err);
+    READY(connection, err, false);
     args = DisconnectIO();
-    RELEASE(connection);
+    RELEASE(connection, false);
 
     return args;
 }
@@ -1293,9 +1279,8 @@ WStreamExec(OpaqueWConn conn, const char *statement) {
             elog(ERROR, "query cancelled");
         }
         /* this is really in GetEnv() and defined there  */
-//        SetWhereToSendOutput(Remote);
         StartTransactionCommand();
-        pg_exec_query_dest((char *) statement, Remote, false);
+        pg_exec_query_dest((char *) statement, Local, false);
         pq_flush();
         CommitTransactionCommand();
     }

@@ -703,7 +703,16 @@ typedef struct ExplainStmt
 	Query	   *query;			/* the query */
 	bool		verbose;		/* print plan info */
 } ExplainStmt;
-
+/* ----------------------
+ *		Report Statement
+ * ----------------------
+ */
+typedef struct ReportMemoryStmt
+{
+	NodeTag		type;
+	MemoryContext	cxt;			/* the context */
+	bool		verbose;		/* print memory info */
+} ReportMemoryStmt;
 /* ----------------------
  * Set Statement
  * ----------------------

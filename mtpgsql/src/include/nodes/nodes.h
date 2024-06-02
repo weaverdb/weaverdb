@@ -183,6 +183,7 @@ typedef enum NodeTag
 	T_DropdbStmt,
 	T_VacuumStmt,
 	T_ExplainStmt,
+        T_ReportMemoryStmt,
 	T_CreateSeqStmt,
 	T_VariableSetStmt,
 	T_VariableShowStmt,

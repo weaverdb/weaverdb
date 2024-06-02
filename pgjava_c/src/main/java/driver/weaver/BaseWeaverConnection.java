@@ -103,8 +103,10 @@ public class BaseWeaverConnection implements AutoCloseable {
         while (ref != null) {
             ref = liveConnections.remove(ref.link);
             if (ref != null && ref.dispose()) {
+                LOGGING.log(Level.FINE, "disposing unclosed connection");
                 disposeConnection(ref.link);
             }
+            ref = (ConnectionRef)connections.poll();
         }
     }
     
@@ -222,6 +224,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         if (isValid()) {
             StatementRef ref = liveStatements.remove(link);
             if (ref != null && ref.dispose()) {
+                LOGGING.log(Level.FINE, "disposing unclosed statement");
                 dispose(link);
             }
         }

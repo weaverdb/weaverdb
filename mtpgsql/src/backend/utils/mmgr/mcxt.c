@@ -25,6 +25,7 @@
 #include "nodes/memnodes.h"
 #include "utils/excid.h"
 #include "utils/memutils.h"
+#include "libpq/libpq.h"
 
 
 /*****************************************************************************
@@ -221,13 +222,60 @@ MemoryContextStats(MemoryContext context) {
 
     AssertArg(MemoryContextIsValid(context));
 
-    used = (*context->methods->stats) (context);
+    used = (*context->methods->stats) (context, NULL, 0);
     for (child = context->firstchild; child != NULL; child = child->nextchild)
         used += MemoryContextStats(child);
 
     return used;
 }
 
+size_t
+PrintMemoryContextStats(MemoryContext context, CommandDest dest, int depth) {
+    MemoryContext child;
+    size_t used;
+    int dc;
+    char report[512];
+    char describe[512];
+    char prefix[32];
+
+    if (depth > 30) {
+        if (dest == Local) {
+            const char* msg = "maximum context depth exceeded\n";
+            pq_putbytes(msg, strlen(msg));
+            return 0;
+        }
+    }
+    AssertArg(MemoryContextIsValid(context));
+
+    used = (*context->methods->stats) (context, describe, 512);
+
+    for (dc=0;dc<depth;dc++) {
+        prefix[dc] = '\t';
+    }
+    prefix[dc] = '\0';
+
+    snprintf(report, 512, "%sContext: %s used %lu -- %s\n",prefix,context->name,used,describe); 
+    
+    if (dest == Local) {
+        pq_putbytes(report, strlen(report));
+    } else {
+        elog(NOTICE, "%s", report);
+    }
+
+    for (child = context->firstchild; child != NULL; child = child->nextchild)
+        used += PrintMemoryContextStats(child, dest,depth + 1);
+
+    if (depth == 0) {
+        if (dest == Local) {
+            snprintf(report, 512, "Total memory used: %lu\n",used); 
+            pq_putbytes(report, strlen(report));
+            pq_flush();
+        } else {
+            elog(NOTICE, "%s", report);
+        }
+    }
+    return used;
+}
 
 /*
  * MemoryContextCheck
