@@ -798,7 +798,7 @@ public class JNITest {
         }
     }
     
-     @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.Test
     public void testMemoryConsumption() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
             conn.setStandardOutput(System.out);

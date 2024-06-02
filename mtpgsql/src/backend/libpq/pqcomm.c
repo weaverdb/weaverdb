@@ -504,19 +504,21 @@ extern void* DisconnectIO() {
         CommCursor* comm = (CommCursor*)env->pipein;
         if (comm->ptr < comm->end) {
             if ( comm->datamove(comm->args, 0, comm->buffer + comm->ptr,comm->end - comm->ptr) == COMM_ERROR ) {
-                elog(ERROR,"piping error occurred");
+                elog(NOTICE,"piping error occurred on disconnect");
             }
         }
         args = comm->args;
+        pfree(comm);
     } 
     
     if ( env->pipeout != NULL ) {
         CommCursor* comm = (CommCursor*)env->pipeout;
         if (comm->ptr < comm->end) {
             if ( comm->datamove(comm->args, 0, comm->buffer + comm->ptr, comm->end - comm->ptr) == COMM_ERROR ) {
-                elog(ERROR,"piping error occurred");
+                elog(NOTICE,"piping error occurred on disconnect");
             }
         }
+        pfree(comm);
     }
     
     env->pipein = NULL;
