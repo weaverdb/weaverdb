@@ -388,7 +388,12 @@ elog(int lev, const char *fmt,...)
 		 * much ...
 		 */
 		pq_flush();
-	}
+	} else if (lev > DEBUG && WhereToSendOutput() == Local) {
+                pq_putbytes(prefix, strlen(prefix));
+                pq_putbytes(msg_buf + TIMESTAMP_SIZE, strlen(msg_buf + TIMESTAMP_SIZE));
+                pq_flush();
+        }
+
 
 	/*
 	 * Perform error recovery action as specified by lev.

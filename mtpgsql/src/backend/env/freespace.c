@@ -859,7 +859,7 @@ RelationGetNumberOfBlocks(Relation relation)
             BlockNumber blocks = smgrnblocks(relation->rd_smgr);
             pthread_mutex_lock(&freespace->accessor);
             if (blocks != freespace->relsize) {
-                elog(NOTICE, "%s blocks %lu != freespace %lu", RelationGetRelationName(relation), blocks, freespace->relsize);
+                elog(NOTICE, "%s blocks %lu freespace %lu relation %lu", RelationGetRelationName(relation), blocks, freespace->relsize, relation->rd_nblocks);
                 freespace->relsize = blocks;
             }
             relation->rd_nblocks = freespace->relsize;
@@ -924,24 +924,6 @@ FindEndSpace(Relation rel,BlockNumber nblocks,int next_extent) {
             if ( free_pages > next_extent * 10 ) break;
         }
     }
-
-/*
-    if ( free_pages > 0 ) {
-        pthread_mutex_lock(&entry->accessor);
-        firstfree = nblocks - free_pages;
-        entry->size = free_pages;
-        entry->blocks = MemoryContextAlloc(entry->context,sizeof(FreeRun) * free_pages);
-        for (count=0;count<free_pages;count++) {
-            entry->blocks[count].live = true;
-            entry->blocks[count].tryblock = (entry->relsize - free_pages + count);
-            entry->blocks[count].avail = total;
-            entry->blocks[count].misses = 0;
-            entry->blocks[count].unused_pointers = 0;    
-            entry->total_available += total;
-        }
-        entry->active = true;
-    } 
-*/
     
     return free_pages;
 }

@@ -78,6 +78,7 @@ typedef struct Connection {
 
 /*   Query Stuff   */		
     OpaquePreparedStatement	plan;
+    OpaquePreparedStatement	inselect;
 /* private */
     Env*                            env;
     MemoryContext                   memory;
@@ -102,7 +103,6 @@ typedef struct preparedplan {
        MemoryContext   node_cxt;
 
        MemoryContext   exec_cxt;
-       MemoryContext   fetch_cxt;
 
         TupleDesc	tupdesc;
         EState*		state;

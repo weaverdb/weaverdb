@@ -438,7 +438,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     
     plan->node_cxt = NULL;
     plan->exec_cxt = NULL;
-    plan->fetch_cxt = NULL;
+
     plan->stage = STMT_NEW;
     
     plan->next = connection->plan;
@@ -464,8 +464,9 @@ WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
         start->next = stmt->next;
     }
 
-    if (stmt->stage == STMT_EXEC || stmt->stage == STMT_FETCH) {
-        ExecutorEnd(stmt->qdesc, stmt->state);
+    WResetExecutor(stmt);
+    if (connection->inselect == stmt) {
+        connection->inselect = NULL;
     }
 
     MemoryContextDelete(stmt->plan_cxt);
@@ -514,7 +515,7 @@ long
 WExec(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
     long err = 0;
-    bool needsCommit = true;
+    bool needsCommit = false;
 
     List *trackquery = NULL;
     List *trackplan = NULL;
@@ -531,13 +532,21 @@ WExec(OpaquePreparedStatement plan) {
         return GETERROR(connection);
     }  
     
-    READY(connection, err, needsCommit);
+    READY(connection, err, false);
+
+    if (connection->inselect != NULL) {
+        WResetExecutor(connection->inselect);
+        connection->inselect = NULL;
+    }
+
+    WResetExecutor(plan);
 
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
 
-    WResetExecutor(plan);
+    StartTransactionCommand();
+    needsCommit = true;
 
     plan = ParsePlan(plan);
     plan->processed = 0;
@@ -558,6 +567,8 @@ WExec(OpaquePreparedStatement plan) {
         if (querytree->commandType == CMD_UTILITY) {
             ProcessUtility(querytree->utilityStmt, None);
             plan->processed += 1;  // one util op processed
+            CommitTransactionCommand();
+            needsCommit = false;
             /*
              * increment after any utility if there are
              * more subqueries to execute
@@ -620,6 +631,10 @@ WExec(OpaquePreparedStatement plan) {
                 } while (true);
                 plan->processed += count;
                 WResetExecutor(plan);
+            } else {
+                Assert(connection->inselect == NULL);
+                connection->inselect = plan;
+                plan->stage = STMT_FETCH;
             }
         }
 
@@ -644,6 +659,9 @@ WFetch(OpaquePreparedStatement plan) {
 
     int pos = 0;
 
+    if (connection->inselect != NULL && connection->inselect != plan) {
+        elog(ERROR, "cannot mix multiple select statements on the same connection");
+    }
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
@@ -653,23 +671,14 @@ WFetch(OpaquePreparedStatement plan) {
     if (plan->stage == STMT_EOD) {
         coded_elog(ERROR, 1405, "end of data already reached");
     }
-    if (plan->fetch_cxt == NULL) {
-        Assert(plan->exec_cxt != NULL);
-        plan->fetch_cxt = AllocSetContextCreate(plan->exec_cxt,
-                "FetchContext",
-                ALLOCSET_DEFAULT_MINSIZE,
-                (32 * 1024),
-                ALLOCSET_DEFAULT_MAXSIZE);
-    }
-    
-    MemoryContextResetAndDeleteChildren(plan->fetch_cxt);
-    MemoryContext old = MemoryContextSwitchTo(plan->fetch_cxt);
 
     TupleTableSlot *slot = ExecProcNode(plan->qdesc->plantree);
 
     if (TupIsNull(slot)) {
         err = 4; /*  EOT ( End of Transmission ascii code */
         WResetExecutor(plan);
+        Assert(plan == connection->inselect);
+        connection->inselect = NULL;
         plan->stage = STMT_EOD;
    } else {
         HeapTuple tuple = slot->val;
@@ -719,9 +728,9 @@ WFetch(OpaquePreparedStatement plan) {
         plan->processed++;
         plan->stage = STMT_FETCH;
     }
-
+/*
     MemoryContextSwitchTo(old);
-
+*/
     RELEASE(connection, false);
     return err;
 }
@@ -1278,7 +1287,10 @@ WStreamExec(OpaqueWConn conn, const char *statement) {
         if (CheckForCancel()) {
             elog(ERROR, "query cancelled");
         }
-        /* this is really in GetEnv() and defined there  */
+        if (connection->inselect) {
+            WResetExecutor(connection->inselect);
+            connection->inselect = NULL;
+        }
         StartTransactionCommand();
         pg_exec_query_dest((char *) statement, Local, false);
         pq_flush();
@@ -1330,6 +1342,7 @@ WResetQuery(WConn connection,bool err) {
 
         plan = plan->next;
     }
+    connection->inselect = NULL;
     MemoryContextSwitchTo(MemoryContextGetEnv()->QueryContext);
 #ifdef MEMORY_STATS
     fprintf(stderr, "memory at query: %ld\n", MemoryContextStats(MemoryContextGetEnv()->QueryContext));
@@ -1339,6 +1352,9 @@ WResetQuery(WConn connection,bool err) {
 
 void
 WResetExecutor(PreparedPlan * plan) {
+    if (plan == NULL) {
+        return;
+    }
     if (plan->stage == STMT_EXEC || plan->stage == STMT_FETCH) {
         Assert(plan->qdesc != NULL);
         Assert(plan->state != NULL);
@@ -1364,8 +1380,6 @@ WResetExecutor(PreparedPlan * plan) {
     plan->tupdesc = NULL;
     plan->state = NULL;
     plan->qdesc = NULL;
-
-    plan->fetch_cxt = NULL;    
 }
 
 static int

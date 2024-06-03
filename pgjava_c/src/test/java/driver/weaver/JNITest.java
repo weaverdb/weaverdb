@@ -838,17 +838,27 @@ public class JNITest {
                 conn.execute("create index test20_id_idx on test20(id)");
                 conn.streamExec("explain select * from test20 where id = 4");
                 try (Statement s = conn.statement("select id, value from test20 where id = $id")) {
-                    s.linkInput("id", Integer.class).set(gen.nextInt(1000000));
+                    s.linkInput("id", Integer.class).set(gen.nextInt(10000));
                     try (Stream<Row> explain = ResultSet.stream(s)) {
                         explain.flatMap(r->r.stream()).forEach(System.out::println);
                     }
                 }
+                try (Statement s = conn.statement("select id, value from test20")) {
+                    try (Stream<Row> explain = ResultSet.stream(s)) {
+                        explain.flatMap(r->r.stream()).forEach(JNITest::blackhole);
+                    }
+                    conn.streamExec("report user memory");
+                }
                 conn.execute("drop index test20_id_idx");
-                conn.streamExec("report user memory");
             }
+            conn.streamExec("report user memory");
             System.out.println("done");
         }
-    }   
+    }
+    
+    private static void blackhole(Object r) {
+        
+    }
     
     @org.junit.jupiter.api.Test
     public void testReportMemory() throws Exception {
