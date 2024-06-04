@@ -212,6 +212,15 @@ public class BaseWeaverConnection implements AutoCloseable {
         return s;
     }
     
+    public void stream(String stmt) throws ExecutionException {
+        StatementRef ref = (StatementRef)statements.poll();
+        while (ref != null) {
+            disposeStatement(ref.link);
+            ref = (StatementRef)statements.poll();
+        }
+        streamExec(stmt);
+    }
+    
     public long execute(String statement) throws ExecutionException {
         long result;
         try (Statement s = statement(statement)) {
@@ -258,7 +267,7 @@ public class BaseWeaverConnection implements AutoCloseable {
     private native long getTransactionId();
     private native long getCommandId(long link);
 
-    public native void streamExec(String statement) throws ExecutionException;
+    private native void streamExec(String statement) throws ExecutionException;
 
     private final int pipeOut(byte[] data) throws IOException {
         if (os != null) {

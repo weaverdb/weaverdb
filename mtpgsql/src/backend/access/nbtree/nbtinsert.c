@@ -23,6 +23,7 @@
 #include "utils/relcache.h"
 #include "catalog/index.h"
 #include "utils/tuplesort.h"
+#include "utils/syscache.h"
 
 typedef struct
 {
@@ -45,6 +46,7 @@ static void _bt_fixbranch(Relation rel, BlockNumber lblkno,
 			  BlockNumber rblkno, BTStack true_stack);
 static void _bt_fixlevel(Relation rel, Buffer buf, BlockNumber limit);
 static void _bt_fixup(Relation rel, Buffer buf);
+
 static OffsetNumber _bt_getoff(Page page, BlockNumber blkno);
 
 static Buffer _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf);
@@ -1444,7 +1446,7 @@ _bt_fixtree(Relation rel, BlockNumber blkno)
  
 		page = BufferGetPage(buf);
 		opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-		if (!P_LEFTMOST(opaque) || P_ISLEAF(opaque))
+		if (P_ISLEAF(opaque))
 			elog(ERROR, "bt_fixtree[%s]: invalid start page (need to recreate index)", RelationGetRelationName(rel));
 		pblkno = opaque->btpo_parent;
 
@@ -1984,4 +1986,196 @@ _bt_isequal(TupleDesc itupdesc, Page page, OffsetNumber offnum,
 
 	/* if we get here, the keys are equal */
 	return true;
+}
+
+bool
+_bt_validate_node(Relation rel, BlockNumber block) {
+    bool changed,empty;
+    bool dryrun = IsReadOnlyProcessingMode();
+    Buffer buffer = _bt_getbuf(rel, block, BT_READ);
+    Page page = BufferGetPage(buffer);
+    BTPageOpaque opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+        OffsetNumber current;
+
+    empty = (P_ISREAPED(opaque) || P_ISFREE(opaque));
+    _bt_relbuf(rel, buffer);
+
+   if (!empty && !dryrun) {
+        for (current = P_FIRSTDATAKEY(opaque); current <= PageGetMaxOffsetNumber(page); current = OffsetNumberNext(current)) {
+            bool deleteit = false;
+
+            BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, current));
+            ItemPointer pointer = &item->bti_itup.t_tid;
+            Buffer child = _bt_getbuf(rel, ItemPointerGetBlockNumber(pointer), BT_READ);
+
+            if (!BufferIsValid(child)) {
+                deleteit = true;
+            } else {
+                Page childPage = BufferGetPage(child);
+
+                if (ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(childPage)) {
+                    ItemId childitem = PageGetItemId(childPage, ItemPointerGetOffsetNumber(pointer));
+                    if (!ItemIdIsUsed(childitem)) {
+                        deleteit = true;
+                    }
+                } else {
+                    deleteit = true;
+                }
+                _bt_relbuf(rel, child);
+            }
+
+            if (deleteit) {
+                PageIndexTupleDelete(page, current);
+                elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
+                current = OffsetNumberPrev(current);
+                changed = true;
+            }
+        }
+
+        empty = _bt_empty(page);
+        if (changed) {
+            _bt_fixup(rel, buffer);
+            _bt_wrtbuf(rel, buffer);
+        } else {
+            _bt_relbuf(rel, buffer);
+        }
+
+        if (empty) {
+            empty = _bt_reap(rel, block);
+        }
+    }
+
+    return empty;
+}
+
+bool
+_bt_validate_leaf(Relation rel, BlockNumber block) {
+    bool changed,empty;
+    bool dryrun = IsReadOnlyProcessingMode();
+    Buffer buffer = _bt_getbuf(rel, block, BT_READ);
+    Page page = BufferGetPage(buffer);
+    BTPageOpaque opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+
+    changed = empty = false;
+
+    empty = (P_ISREAPED(opaque) || P_ISFREE(opaque));
+    _bt_relbuf(rel, buffer);
+
+    if (!empty && !dryrun) {
+        HeapTuple heap = SearchSysCacheTuple(INDEXRELID, ObjectIdGetDatum(rel->rd_id), PointerGetDatum(NULL), PointerGetDatum(NULL), PointerGetDatum(NULL));
+        Oid heapid = SysCacheGetAttr(INDEXRELID, heap, Anum_pg_index_indrelid, NULL);
+        Relation heaprel = RelationIdGetRelation(heapid, DEFAULTDBOID);
+        OffsetNumber current;
+
+        for (current = P_FIRSTDATAKEY(opaque); current <= PageGetMaxOffsetNumber(page); current = OffsetNumberNext(current)) {
+            bool deleteit = false;
+
+            BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, current));
+            ItemPointer pointer = &item->bti_itup.t_tid;
+            Buffer heapbuffer = ReadBuffer(heaprel, ItemPointerGetBlockNumber(pointer));
+
+            if (!BufferIsValid(heapbuffer)) {
+                deleteit = true;
+            } else {
+                LockBuffer(heaprel, heapbuffer, BT_READ);
+                Page heapPage = BufferGetPage(heapbuffer);
+
+                if (ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(heapPage)) {
+                    ItemId heapitem = PageGetItemId(heapPage, ItemPointerGetOffsetNumber(pointer));
+                    if (!ItemIdIsUsed(heapitem)) {
+                        deleteit = true;
+                    }
+                } else {
+                    deleteit = true;
+                }
+                LockBuffer(heaprel, heapbuffer, BT_NONE);
+                ReleaseBuffer(heaprel, heapbuffer);
+            }
+
+            if (deleteit) {
+                PageIndexTupleDelete(page, current);
+                elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
+                current = OffsetNumberPrev(current);
+                changed = true;
+            } else {
+                /*
+                                elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
+                 */
+            }
+        }
+        RelationClose(heaprel);
+    
+        empty = _bt_empty(page);
+        if (changed) {
+            _bt_wrtbuf(rel, buffer);
+        } else {
+            _bt_relbuf(rel, buffer);
+        }
+        if (empty) {
+            empty = _bt_reap(rel, block);
+        }
+    }
+
+    return empty;
+}
+
+bool
+_bt_reap(Relation rel, BlockNumber block) {
+    BlockNumber parent,left,right;
+
+    bool reaped,empty;
+    Buffer buffer = _bt_getbuf(rel, block, BT_READ);
+    Page page = BufferGetPage(buffer);
+    BTPageOpaque opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+
+    empty = _bt_empty(page);
+    parent = opaque->btpo_parent;
+    left = opaque->btpo_prev;
+    right = opaque->btpo_next;
+
+    _bt_relbuf(rel, buffer);
+    
+    if (!empty) {
+        return false;
+    }
+
+    Buffer pbuffer = _bt_getbuf(rel, parent, BT_WRITE);
+    Page ppage = BufferGetPage(buffer);
+    OffsetNumber bo = _bt_getoff(page, block);
+    
+    if (bo == InvalidOffsetNumber) {
+        Buffer lbuffer = _bt_getbuf(rel,left,BT_WRITE);
+        Page lpage = BufferGetPage(lbuffer);
+        BTPageOpaque lopaque = (BTPageOpaque) PageGetSpecialPointer(lpage);
+        Assert(lopaque->btpo_next == block);
+        lopaque->btpo_next = right;
+
+        buffer = _bt_getbuf(rel, block, BT_WRITE);
+        page = BufferGetPage(buffer);
+        opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+        Assert(opaque->btpo_prev == left);
+        Assert(opaque->btpo_next == right);
+        Assert(opaque->btpo_parent == parent);
+        opaque->btpo_parent = InvalidBlockNumber;
+        opaque->btpo_next = InvalidBlockNumber;
+        opaque->btpo_prev = InvalidBlockNumber;
+        opaque->btpo_flags = BTP_FREE | BTP_REAPED;
+
+        Buffer rbuffer = _bt_getbuf(rel,right,BT_WRITE);
+        Page rpage = BufferGetPage(rbuffer);
+        BTPageOpaque ropaque = (BTPageOpaque) PageGetSpecialPointer(rpage);
+        Assert(ropaque->btpo_prev == block);
+        ropaque->btpo_prev = left;
+
+        _bt_wrtbuf(rel, rbuffer);
+        _bt_wrtbuf(rel, buffer);
+        _bt_wrtbuf(rel, lbuffer);
+        reaped = true;
+    } else {
+        reaped = false;
+    }    
+    _bt_relbuf(rel, pbuffer);
+
+    return reaped;
+    // unlink from tree
 }

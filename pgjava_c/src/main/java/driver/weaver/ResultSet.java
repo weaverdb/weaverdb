@@ -4,8 +4,8 @@ package driver.weaver;
 
 import driver.weaver.BaseWeaverConnection.Statement;
 import driver.weaver.ResultSet.Row;
-import java.util.Arrays;
-import java.util.Collection;
+import java.nio.file.Files;
+import java.util.AbstractList;
 import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
@@ -77,37 +77,97 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
         };
     }
     
-    public static Stream<Row> stream(BaseWeaverConnection conn, String stmt) throws ExecutionException {
-        Statement s = conn.statement(stmt);
-        for (int x=1;x<=MAX_ATTRIBUTES;x++) {
-            s.linkOutput(x, Object.class);
-        }
-        s.execute();
-        Stream<Row> rows = StreamSupport.stream(new ResultSet(s), false).map(oa->new Row(Arrays.stream(oa).map(Column::new).toList()));
-        rows.onClose(s::close);
-        return rows;
+    public static ResultSet.Builder builder(BaseWeaverConnection conn) {
+        return new Builder(conn);
     }
     
     public static Stream<Row> stream(Statement stmt) throws ExecutionException {
-        Stream<Row> rows = StreamSupport.stream(new ResultSet(stmt), false).map(oa->new Row(Arrays.stream(oa).map(Column::new).toList()));
+        Stream<Row> rows = StreamSupport.stream(new ResultSet(stmt), false).map(Row::new);
         return rows;
     }
     
-    public static class Row implements Iterable<Column> {
+    public static class Builder {
+        private final BaseWeaverConnection connection;
         
-        private final Collection<Column> columns;
-
-        public Row(Collection<Column> columns) {
-            this.columns = columns;
+        Builder(BaseWeaverConnection connection) {
+            this.connection = connection;
         }
         
-        public Stream<Column> stream() {
-            return columns.stream();
+        public StatementBuilder parse(String stmt) throws ExecutionException {
+            return new StatementBuilder(connection.statement(stmt));
+        }
+    }
+    
+    public static class StatementBuilder {
+        private final Statement stmt;
+        private ExecutionException ee;
+
+        public StatementBuilder(Statement stmt) throws ExecutionException {
+                this.stmt = stmt;
+        }
+
+        public <T> StatementBuilder output(int pos, Class<T> type) {
+            try {
+                stmt.linkOutput(pos, type);
+            } catch (ExecutionException ee) {
+                this.ee = ee;
+            }
+            return this;
+        }
+        
+        public <T> StatementBuilder output(int pos, Output.Channel<T> convert) {
+            try {
+                stmt.linkOutputChannel(pos, convert);
+            } catch (ExecutionException ee) {
+                this.ee = ee;
+            }
+            return this;
+        }
+        
+        public <T> StatementBuilder input(String name, T value) {
+            try {
+                stmt.linkInput(name, (Class<T>)value.getClass()).set(value);
+            } catch (ExecutionException ee) {
+                this.ee = ee;
+            }
+            return this;
+        }
+        
+        public <T> StatementBuilder input(String name, Input.Channel<T> convert) {
+            try {
+                stmt.linkInputChannel(name, convert);
+            } catch (ExecutionException ee) {
+                this.ee = ee;
+            }
+            return this;
+        }
+        
+        public Stream<Row> execute() throws ExecutionException {
+            if (ee != null) {
+                throw ee;
+            }
+            return StreamSupport.stream(new ResultSet(stmt), false)
+                .map(Row::new)
+                .onClose(stmt::close);
+        }
+    }
+    
+    public static class Row extends AbstractList<Column> {
+        
+        private final Output[] columns;
+
+        public Row(Output[] columns) {
+            this.columns = columns;
         }
 
         @Override
-        public Iterator<Column> iterator() {
-            return columns.iterator();
+        public Column get(int index) {
+            return new Column(columns[index]);
+        }
+
+        @Override
+        public int size() {
+            return columns.length;
         }
     }
     

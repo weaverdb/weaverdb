@@ -682,143 +682,51 @@ btrecoverpage(Relation rel, BlockNumber block) {
     Page page;
     BTPageOpaque opaque;
     bool changed = false;
-    BlockNumber  relsize = RelationGetNumberOfBlocks(rel);
+    bool empty = false;
+    OffsetNumber offset;
+
+
+    bool dryrun = IsReadOnlyProcessingMode();
     /*  notthing to check on meta */
-    if (block == BTREE_METAPAGE) return LongGetDatum(InvalidBlockNumber);
-        
-    buffer = _bt_getbuf(rel, block, BT_WRITE);
-    page = BufferGetPage(buffer);
-    opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-    
+    if (block == BTREE_METAPAGE) {
+	return LongGetDatum(InvalidBlockNumber);
+    } else {
+        buffer = _bt_getbuf(rel, block, BT_WRITE);
+        page = BufferGetPage(buffer);
+        opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+    }
+
     if ( PageIsNew(page) ) {
-        _bt_pageinit(page,BufferGetPageSize(buffer));
-        opaque->btpo_flags |= BTP_REAPED;
-        _bt_wrtbuf(rel, buffer);
-        return LongGetDatum(block);
+        _bt_relbuf(rel,buffer);
+	return LongGetDatum(block);
     }
     
+    if (P_ISROOT(opaque)) {
+        _bt_relbuf(rel,buffer);
+        return LongGetDatum(InvalidBlockNumber);
+    }
+
     if (P_ISSPLIT(opaque)) {
         _bt_relbuf(rel,buffer);
         return LongGetDatum(InvalidBlockNumber);
     }
-    
-    if ( P_ISREAPED(opaque) || 
-            (
-                !P_ISROOT(opaque) 
-                && BTreeInvalidParent(opaque)
-                && P_RIGHTMOST(opaque) 
-                && P_LEFTMOST(opaque)
-                && _bt_empty(page)
-            )
-    ) {
-        if ( !P_ISREAPED(opaque) ) {
-                opaque->btpo_flags |= BTP_REAPED;
-                _bt_wrtbuf(rel,buffer);
+
+    empty = P_ISREAPED(opaque) && P_ISFREE(opaque);
+    _bt_relbuf(rel,buffer);
+
+    if (!empty) {
+        if (!P_ISLEAF(opaque)) {
+            empty = _bt_validate_node(rel, block);
         } else {
-                _bt_relbuf(rel,buffer);
+            empty = _bt_validate_leaf(rel,block);
         }
+    }
+
+    if (empty) {
         return LongGetDatum(block);
-    }
-
-    if ( !_bt_empty(page) ) {
-        if (P_ISLEAF(opaque) && IsInitProcessingMode()) {
-            HeapTuple heap = SearchSysCacheTuple(INDEXRELID, ObjectIdGetDatum(rel->rd_id), PointerGetDatum(NULL), PointerGetDatum(NULL), PointerGetDatum(NULL));
-            Oid heapid = SysCacheGetAttr(INDEXRELID, heap, Anum_pg_index_indrelid, NULL);
-            Relation heaprel = RelationIdGetRelation(heapid, DEFAULTDBOID);
-            OffsetNumber current;
-
-            for (current = P_FIRSTDATAKEY(opaque); current <= PageGetMaxOffsetNumber(page); current = OffsetNumberNext(current)) {
-                bool deleteit = false;
-
-                BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, current));
-                ItemPointer pointer = &item->bti_itup.t_tid;
-                Buffer heapbuffer = ReadBuffer(heaprel, ItemPointerGetBlockNumber(pointer));
-
-                if (!BufferIsValid(heapbuffer)) {
-                    deleteit = true;
-                } else {
-                    LockBuffer(heaprel, heapbuffer, BT_READ);
-                    Page heapPage = BufferGetPage(heapbuffer);
-
-                    if (ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(heapPage)) {
-                        ItemId heapitem = PageGetItemId(heapPage, ItemPointerGetOffsetNumber(pointer));
-                        if (!ItemIdIsUsed(heapitem)) {
-                            deleteit = true;
-                        }
-                    } else {
-                        deleteit = true;
-                    }
-                    LockBuffer(heaprel, heapbuffer, BT_NONE);
-                    ReleaseBuffer(heaprel, heapbuffer);
-                }
-
-                if (deleteit) {
-                    PageIndexTupleDelete(page, current);
-                    elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
-                    current = OffsetNumberPrev(current);
-                    changed = true;
-                } else {
-                    /*
-                                    elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
-                     */
-                }
-            }
-            RelationClose(heaprel);
-        } else if ( !P_ISLEAF(opaque) && !IsReadOnlyProcessingMode() ) {
-            OffsetNumber current;
-
-            for (current = P_FIRSTDATAKEY(opaque); current <= PageGetMaxOffsetNumber(page); current = OffsetNumberNext(current)) {
-                bool deleteit = false;
-
-                BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, current));
-                ItemPointer pointer = &item->bti_itup.t_tid;
-                BlockNumber lblock = ItemPointerGetBlockNumber(pointer);
-                Buffer leafbuffer = InvalidBuffer;
-                
-                if ( lblock != block && lblock < relsize ) leafbuffer = _bt_getbuf(rel, lblock, BT_READYWRITE);
-
-                if (!BufferIsValid(leafbuffer)) {
-                    deleteit = true;
-                } else {
-                    Page leafpage = BufferGetPage(leafbuffer);
-                    BTPageOpaque lopaque = (BTPageOpaque) PageGetSpecialPointer(leafpage);
-                    if (lopaque->btpo_parent == InvalidBlockNumber ) {
-                        deleteit = true;
-                        _bt_relbuf(rel, leafbuffer);
-                    } else if ( _bt_empty(leafpage) ) {
-                        if ( !P_RIGHTMOST(lopaque) ) {
-                            deleteit = true;
-                            lopaque->btpo_parent = InvalidBlockNumber;
-                            _bt_wrtbuf(rel, leafbuffer);
-                        } else {
-                            _bt_relbuf(rel, leafbuffer);
-                        }
-                    } else {
-                        _bt_relbuf(rel, leafbuffer);
-                    }
-                }
-
-                if (deleteit) {
-                    PageIndexTupleDelete(page, current);
-                    current = OffsetNumberPrev(current);
-                    changed = true;                  
-                } else {
-                    /*
-                                    elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
-                     */
-                }
-            }             
-        }
     } else {
-
+        return LongGetDatum(InvalidBlockNumber);
     }
-
-    if (changed) {
-        _bt_wrtbuf(rel, buffer);
-    } else {
-        _bt_relbuf(rel, buffer);
-    }
-    return LongGetDatum(_bt_check_pagelinks(rel, block));
 }
 
 /*
@@ -1084,137 +992,6 @@ _bt_restscan(IndexScanDesc scan) {
         offnum = P_FIRSTDATAKEY(opaque);
         ItemPointerSet(current, blkno, offnum);
     }
-}
-
-static BlockNumber
-_bt_check_pagelinks(Relation rel, BlockNumber target) {
-    Buffer tbuffer;
-    Page tpage;
-    BTPageOpaque topaque;
-    BlockNumber reap = InvalidBlockNumber;
-
-    tbuffer = _bt_getbuf(rel, target, BT_WRITE);
-    tpage = BufferGetPage(tbuffer);
-    topaque = (BTPageOpaque) PageGetSpecialPointer(tpage);
-    
-    if ( PageIsNew(tpage) ) {
-        _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
-        ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
-        _bt_wrtbuf(rel, tbuffer);
-        reap = target;
-    } else if ( P_ISREAPED(topaque) ) {
-        _bt_relbuf(rel,tbuffer);
-        return target;
-    } else if ( P_ISROOT(topaque) ) {
-	Buffer		metabuf,rootbuf;
-	Page		metapg,rootpg;
-	BTMetaPageData *metad;
-        BlockNumber     root;
-        
-        bool reroot = (PageGetMaxOffsetNumber(tpage) == 1 && !P_ISLEAF(topaque));
-        
-        _bt_relbuf(rel, tbuffer);
-
-        if ( reroot ) {
-            metabuf = _bt_getbuf(rel, BTREE_METAPAGE, BT_WRITE);
-            metapg = BufferGetPage(metabuf);
-            metad = BTPageGetMeta(metapg);
-
-            Assert(((BTPageOpaque)PageGetSpecialPointer(metapg))->btpo_flags & BTP_META);
-            Assert(metad->btm_magic == BTREE_MAGIC);
-            Assert(metad->btm_version == BTREE_VERSION);
-
-            root = metad->btm_root;
-            
-            rootbuf = _bt_getbuf(rel, root, BT_WRITE);
-            rootpg = BufferGetPage(rootbuf);
-            while (PageGetMaxOffsetNumber(rootpg) == 1 && !P_ISLEAF((BTPageOpaque) PageGetSpecialPointer(rootpg))) {
-                BTItem item = (BTItem) PageGetItem(rootpg, PageGetItemId(rootpg, 1));
-                ItemPointer pointer = &item->bti_itup.t_tid;
-                BlockNumber lblock = ItemPointerGetBlockNumber(pointer);
-                Buffer leafbuffer = InvalidBuffer;    
-                Page leafpage = NULL;
-
-                Assert(lblock != BTREE_METAPAGE);
-                leafbuffer = _bt_getbuf(rel,lblock,BT_READYWRITE);
-                leafpage = BufferGetPage(leafbuffer);
-                Assert(((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_prev == 0);
-                Assert(((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_next == 0);
-                ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_flags |= BTP_ROOT;
-                ((BTPageOpaque)PageGetSpecialPointer(leafpage))->btpo_parent = BTREE_METAPAGE;
-
-                metad->btm_root = lblock;
-
-                ((BTPageOpaque)PageGetSpecialPointer(rootpg))->btpo_flags |= BTP_REAPED;
-
-                _bt_wrtbuf(rel,rootbuf);
-                rootbuf = leafbuffer;
-                rootpg = leafpage;
-                reap = root;
-            }
-            
-            _bt_wrtbuf(rel,rootbuf);
-            _bt_wrtbuf(rel,metabuf);
-            reap = root;
-        } 
-    } else if ( P_LEFTMOST(topaque) && BTreeInvalidParent(topaque) ) {
-        reap = target;
-        /*  if this is rightmost too, it should never get here. */
-        Assert(!P_RIGHTMOST(topaque));
-        Buffer nbuffer = _bt_getbuf(rel,topaque->btpo_next,BT_READYWRITE);
-        Page npage = BufferGetPage(nbuffer);
-        BTPageOpaque nopaque = (BTPageOpaque) PageGetSpecialPointer(npage);
-        nopaque->btpo_prev = 0;
-        ((BTPageOpaque)PageGetSpecialPointer(tpage))->btpo_flags |= BTP_REAPED;
-        _bt_wrtbuf(rel, nbuffer);
-        _bt_wrtbuf(rel, tbuffer);
-    } else if ( P_RIGHTMOST(topaque) ) {
-        _bt_relbuf(rel, tbuffer);
-    } else if ( PageGetPageSize(tpage) != BufferGetPageSize(tbuffer) ) {
-        _bt_pageinit(tpage,BufferGetPageSize(tbuffer));
-        ((BTPageOpaque)PageGetSpecialPointer(tbuffer))->btpo_flags |= BTP_REAPED;
-        _bt_wrtbuf(rel, tbuffer);
-        reap = target;
-    } else {
-        Buffer nbuffer = _bt_getbuf(rel,topaque->btpo_next,BT_READYWRITE);
-        Page npage = BufferGetPage(nbuffer);
-        BTPageOpaque nopaque = (BTPageOpaque) PageGetSpecialPointer(npage);
-        if ( BTreeInvalidParent(nopaque) ) {
-            if (nopaque->btpo_prev == topaque->btpo_prev && P_ISSPLIT(nopaque)) {
-                nopaque->btpo_parent = topaque->btpo_parent;
-                nopaque->btpo_flags &= ~(BTP_SPLIT);
-                memmove(tpage, npage, PageGetPageSize(npage));
-                _bt_pageinit(npage,PageGetPageSize(npage));
-                ((BTPageOpaque)PageGetSpecialPointer(npage))->btpo_flags |= BTP_REAPED;
-                _bt_wrtbuf(rel, nbuffer);
-                _bt_wrtbuf(rel, tbuffer);
-            } else {
-                Assert(_bt_empty(npage));
-                reap = BufferGetBlockNumber(nbuffer);
-                ((BTPageOpaque)PageGetSpecialPointer(npage))->btpo_flags |= BTP_REAPED;
-                _bt_wrtbuf(rel, nbuffer);
-                if ( !P_RIGHTMOST(nopaque) ) {
-                    Buffer sbuffer = _bt_getbuf(rel, nopaque->btpo_next, BT_READYWRITE);
-                    Page spage = BufferGetPage(sbuffer);
-                    BTPageOpaque sopaque = (BTPageOpaque) PageGetSpecialPointer(spage); 
-                    sopaque->btpo_prev = target;
-                    _bt_wrtbuf(rel, sbuffer);
-                }
-                topaque->btpo_next = nopaque->btpo_next;
-                _bt_wrtbuf(rel, tbuffer);
-            }
-        } else {
-            if ( nopaque->btpo_prev != target ) {
-                nopaque->btpo_prev = target;
-                _bt_wrtbuf(rel, nbuffer);
-            } else {
-                _bt_relbuf(rel, nbuffer);
-            }
-            _bt_relbuf(rel, tbuffer);
-        }
-    }
-
-    return reap;
 }
 
 static int

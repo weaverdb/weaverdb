@@ -14,20 +14,24 @@ import java.util.function.Supplier;
 public class Output<T> {
     private final Supplier<String> name;
     private final Getter<T> source;
+    private final Class<? extends T> type;
     
     Output(BoundOutput<? extends T> base) {
         source = base::get;
         name = base::getName;
+        type = base.getTypeClass();
     }
     
     Output(BoundOutputChannel<? extends T> base) {
         source = base::value;
         name = base::getName;
+        type = null;
     }
     
     Output(BoundOutputReceiver<? extends T> base) {
         source = base::value;
         name = base::getName;
+        type = null;
     }
     
     public String getName() {
@@ -36,6 +40,10 @@ public class Output<T> {
     
     public T value() throws ExecutionException {
         return source.value();
+    }
+    
+    public Class<? extends T> getType() {
+        return type;
     }
     
     public T get() throws ExecutionException {

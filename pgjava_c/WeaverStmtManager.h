@@ -20,7 +20,7 @@
 
   
 #define MAX_FIELDS  0
-#define MAX_STATEMENTS 512
+#define MAX_STATEMENTS 8196
 
 typedef struct bound *  Bound;
 typedef struct outputObj * Output;

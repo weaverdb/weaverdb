@@ -12,13 +12,16 @@ import java.nio.channels.WritableByteChannel;
  */
 public class Input<T> {
     private final Setter<? super T> source;
+    private final Class<? super T> type;
     
     Input(BoundInput<? super T> base) {
         source = base::set;
+        type = base.getTypeClass();
     }
     
     Input(BoundInputChannel<? super T> base) {
         source = base::put;
+        type = null;
     }    
     
     public void value(T value) throws ExecutionException {

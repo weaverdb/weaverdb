@@ -69,6 +69,7 @@ public class JNITest {
         prop.setProperty("start_delay", "10");
         prop.setProperty("debuglevel", "DEBUG");
         prop.setProperty("stdlog", "TRUE");
+//        prop.setProperty("usegc", "FALSE");
         WeaverInitializer.initialize(prop);
     }
 
@@ -706,7 +707,7 @@ public class JNITest {
     public void testStreamExec() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
             conn.setStandardOutput(System.out);
-            conn.streamExec("report user memory");
+            conn.stream("report user memory");
             try (TransactionSequence ts = new TransactionSequence(conn)) {
                 try (TransactionSequence.Procedure p = ts.start()) {
                     p.execute("create table test12 (id int4, value varchar(256))");
@@ -721,7 +722,7 @@ public class JNITest {
                     }
                 }
             }
-            conn.streamExec("explain select * from test12");
+            conn.stream("explain select * from test12");
 
             Random gen = new Random();
             try (TransactionSequence p = new TransactionSequence(conn)) {
@@ -743,7 +744,7 @@ public class JNITest {
             System.out.println("finish create index");
             conn.commit();
             System.out.println("index finished");   
-            conn.streamExec("explain select * from test12 where id = 4");
+            conn.stream("explain select * from test12 where id = 4");
             try (Statement s = conn.statement("select id, value from test12 where id = $id")) {
                 int search = gen.nextInt(1000000);
                 System.out.println("searching " + search);
@@ -757,14 +758,14 @@ public class JNITest {
                 }
             }
             conn.execute("drop index test12_id_idx");
-            conn.streamExec("explain select * from test12 where id = 4");
+            conn.stream("explain select * from test12 where id = 4");
             try (Statement s = conn.statement("select id, value from test12 where id = $id")) {
                 s.linkInput("id", Integer.class).set(gen.nextInt(1000000));
                 try (Stream<Row> explain = ResultSet.stream(s)) {
                     explain.flatMap(r->r.stream()).forEach(System.out::println);
                 }
             }
-            conn.streamExec("report user memory");
+            conn.stream("report user memory");
             System.out.println("done");
         }
     }
@@ -801,6 +802,7 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testMemoryConsumption() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test20 (id int4, value varchar(256))");
             conn.execute("truncate table test20");
@@ -821,7 +823,7 @@ public class JNITest {
                         }
                     }
                 }
-                conn.streamExec("explain select * from test20");
+                conn.stream("explain select * from test20");
                 Random gen = new Random();
                 try (TransactionSequence p = new TransactionSequence(conn)) {
                     try (Statement s = p.statement("insert into test20 (id, value) values ($id, $val)")) {
@@ -836,7 +838,7 @@ public class JNITest {
                 }
                 System.out.println("load finished");
                 conn.execute("create index test20_id_idx on test20(id)");
-                conn.streamExec("explain select * from test20 where id = 4");
+                conn.stream("explain select * from test20 where id = 4");
                 try (Statement s = conn.statement("select id, value from test20 where id = $id")) {
                     s.linkInput("id", Integer.class).set(gen.nextInt(10000));
                     try (Stream<Row> explain = ResultSet.stream(s)) {
@@ -847,11 +849,11 @@ public class JNITest {
                     try (Stream<Row> explain = ResultSet.stream(s)) {
                         explain.flatMap(r->r.stream()).forEach(JNITest::blackhole);
                     }
-                    conn.streamExec("report user memory");
+                    conn.stream("report user memory");
                 }
                 conn.execute("drop index test20_id_idx");
             }
-            conn.streamExec("report user memory");
+            conn.stream("report user memory");
             System.out.println("done");
         }
     }
@@ -864,10 +866,48 @@ public class JNITest {
     public void testReportMemory() throws Exception {
         try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
             conn.setStandardOutput(System.out);
-            conn.streamExec("report user memory");
+            conn.stream("report user memory");
         }
     }
+    
+    @org.junit.jupiter.api.Test
+    public void testBuilder() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.stream("report user memory");
+            conn.setStandardOutput(System.out);
+            conn.execute("create table test21 (id int4, value varchar(256))");
+            try (Statement s =conn.statement("insert into test21 (id, value) values ($id, $value)")) {
+                Input<Integer> id = s.linkInput("id", Integer.class);
+                Input<String> value = s.linkInput("value", String.class);
+                for (int x=0;x< 25;x++) {
+                    id.set(x);
+                    value.set("testvalue" + x);
+                    s.execute();
+                }
+            }
 
+            try (Stream<Row> r = ResultSet.builder(conn).parse("select id, value from test21")
+                    .output(1, Integer.class)
+                    .output(2, String.class)
+                    .execute()) {
+                    r.flatMap(Row::stream).forEach(System.out::println);
+            }
+            conn.stream("report user memory");
+            Random rand = new Random();
+            for (int x=0;x<1000;x++) {
+                try (Stream<Column> c = ResultSet.builder(conn).parse("select id, value from test21 where id = $id")
+                    .input("id", rand.nextInt(25))
+                    .output(1, Integer.class)
+                    .output(2, String.class)
+                    .execute().flatMap(Row::stream)) {
+                        c.forEach(System.out::println);
+                }
+                System.gc();
+            }
+            conn.stream("report user memory");
+        }
+    }
+    
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;

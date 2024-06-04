@@ -573,7 +573,7 @@ SearchSysCacheTuple(int cacheId,/* cache selection code */
 	{
 #ifdef CACHEDEBUG
 		elog(DEBUG,
-			 "SearchSysCacheTuple: Search %s(%d) %d %d %d %d failed",
+			 "SearchSysCacheTuple: Search %s(%d) %ld %ld %ld %ld failed",
 			 cacheinfo[cacheId].name,
 			 cacheId, key1, key2, key3, key4);
 #endif

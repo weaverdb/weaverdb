@@ -13,7 +13,7 @@ import java.util.concurrent.Future;
  */
 class BoundOutputChannel<T> extends BoundOutput<WritableByteChannel> {
     private final StreamingTransformer transformer;
-    private final Output.Channel<T> type;
+    private final Output.Channel<? extends T> type;
     private Future<T> futurevalue;
 
     BoundOutputChannel(BaseWeaverConnection.Statement fc, StreamingTransformer engine, int index, Output.Channel<T> type) throws ExecutionException {

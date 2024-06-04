@@ -26,10 +26,14 @@
 #define USE_GLOBAL_ENVIRONMENT
 #define PROVIDE_64BIT_CRC
 #define USE_ASSERT_CHECKING 1
+/* #define SLEEP_ON_ASSERT 1 */
 #define ABORT_ON_ASSERT 1
 #define NO_PS_STATUS 1
 #define SUBSETISALLOC 1
-/*  #define EXEC_EVALDEBUG 1 . */
+#define MEMORY_CONTEXT_CHECKING 1 
+#define CLOBBER_FREED_MEMORY 1  
+/* #define CACHEDEBUG 1 */
+/*  #define EXEC_EVALDEBUG 1 */
 /*  #define MEMORY_STATS 1  */
 /*  #define TRACE_FMGR_PTR 1  */
 /*  #define MULTITHREAD_DEBUG  */
@@ -41,21 +45,9 @@
 /*  #define XLOG   */
 /*  how many threads can enter the executor at once   */
 
-#ifdef GC_DEBUG
-
-#include "gc.h"
-
-#define os_malloc GC_MALLOC
-#define os_realloc GC_REALLOC
-#define os_free GC_FREE
-
-#else
-
 #define os_malloc base_mem_alloc
 #define os_realloc base_mem_realloc
 #define os_free base_mem_free
-
-#endif
 
 #ifdef USE_TLS
 #define TLS  static __thread

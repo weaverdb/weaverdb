@@ -438,7 +438,6 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     
     plan->node_cxt = NULL;
     plan->exec_cxt = NULL;
-
     plan->stage = STMT_NEW;
     
     plan->next = connection->plan;
@@ -659,15 +658,20 @@ WFetch(OpaquePreparedStatement plan) {
 
     int pos = 0;
 
-    if (connection->inselect != NULL && connection->inselect != plan) {
+    if (plan->stage != STMT_FETCH) {
+        elog(ERROR, "statement must be executed first executed");
+    }
+    if (connection->inselect == NULL) {
+        elog(ERROR, "no statement executed");
+    }
+
+    if (connection->inselect != plan) {
         elog(ERROR, "cannot mix multiple select statements on the same connection");
     }
     if (CheckForCancel()) {
         elog(ERROR, "Query Cancelled");
     }
-    if (plan->stage != STMT_EXEC && plan->stage != STMT_FETCH) {
-        elog(ERROR, "no statement executed");
-    }
+
     if (plan->stage == STMT_EOD) {
         coded_elog(ERROR, 1405, "end of data already reached");
     }
@@ -698,7 +702,7 @@ WFetch(OpaquePreparedStatement plan) {
                     coded_elog(ERROR, 104, "unassigned attribute");
                 }
 
-                if (plan->stage != STMT_FETCH && plan->processed == 0) {
+                if (plan->processed == 0) {
                     TransferColumnName(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1]);
                 }
 

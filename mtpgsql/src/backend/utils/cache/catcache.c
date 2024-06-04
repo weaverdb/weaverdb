@@ -17,9 +17,7 @@
 #include "access/genam.h"
 #include "access/hash.h"
 #include "access/heapam.h"
-#ifdef NOTUSED
-#include "access/valid.h"
-#endif
+
 #include "catalog/pg_operator.h"
 #include "catalog/pg_type.h"
 #include "catalog/catname.h"
@@ -30,10 +28,6 @@
 #include "utils/syscache.h"
 #include "utils/relcache.h"
 
-#ifdef UNUSED
-static void free_catcache(MemoryContext cxt,void* pointer);
-static void* realloc_catcache(MemoryContext cxt,void* pointer,Size size);
-#endif
 
 static void CatCacheRemoveCTup(CatCache *cache, Dlelem *e);
 static Index CatalogCacheComputeHashIndex(struct catcache * cacheInP);
@@ -73,8 +67,6 @@ typedef struct cache {
         CatCache*           currentcache;
         MemoryContext       catmemcxt;
         MemoryContext		workingcxt;
-	void                (*free_p) (MemoryContext context, void *pointer);
-	void                *(*realloc) (MemoryContext context, void *pointer, Size size);    
         Oid                 indexSelfOid;
         HeapTuple           indexSelfTuple;        
 	HeapTuple*           operatorSelfTuple; /*  array  */
@@ -170,7 +162,7 @@ cc_hashname(NameData *n)
 #ifdef CACHEDEBUG
 #define CatalogCacheInitializeCache_DEBUG1 \
 do { \
-	elog(DEBUG, "CatalogCacheInitializeCache: cache @%08lx", cache); \
+	elog(DEBUG, "CatalogCacheInitializeCache: cache @%08lx", (long)cache); \
 	if (relation) \
 		elog(DEBUG, "CatalogCacheInitializeCache: called w/relation(inval)"); \
 	else \
@@ -254,7 +246,7 @@ CatalogCacheInitializeCache(struct catcache * cache,
 	tupdesc = CreateTupleDescCopyConstr(RelationGetDescr(relation));
 	cache->cc_tupdesc = tupdesc;
 
-	CACHE3_elog(DEBUG, "CatalogCacheInitializeCache: relid %u, %d keys",
+	CACHE3_elog(DEBUG, "CatalogCacheInitializeCache: relid %lu, %d keys",
 				cache->relationId, cache->cc_nkeys);
 
 	/* ----------------
@@ -281,10 +273,10 @@ CatalogCacheInitializeCache(struct catcache * cache,
 					  &cache->cc_skey[i].sk_func);
 			cache->cc_skey[i].sk_nargs = cache->cc_skey[i].sk_func.fn_nargs;
 
-			CACHE4_elog(DEBUG, "CatalogCacheInit %s %d %x",
+			CACHE4_elog(DEBUG, "CatalogCacheInit %s %d %lx",
 						RelationGetRelationName(relation),
 						i,
-						cache);
+						(long)cache);
 		}
 	}
 
@@ -310,6 +302,9 @@ CatalogCacheInitializeCache(struct catcache * cache,
 			 */
                     /*  use low level open to get Index relation   */
 			relation = RelationNameGetRelation(cache->cc_indname, DEFAULTDBOID);
+                        if (!relation) {
+                            relation = RelationNameGetRelation(cache->cc_indname, DEFAULTDBOID);
+                        }
 			Assert(relation);
 			cache->indexId = RelationGetRelid(relation);
 			RelationClose(relation);
@@ -334,10 +329,10 @@ CatalogCacheComputeHashIndex(struct catcache * cacheInP)
 {
 	uint32		hashIndex = 0;
 
-	CACHE4_elog(DEBUG, "CatalogCacheComputeHashIndex %s %d %x",
+	CACHE4_elog(DEBUG, "CatalogCacheComputeHashIndex %s %d %lx",
 				cacheInP->cc_relname,
 				cacheInP->cc_nkeys,
-				cacheInP);
+				(long)cacheInP);
 
 	switch (cacheInP->cc_nkeys)
 	{
@@ -578,10 +573,10 @@ ResetSystemCache()
 	 */
         cglobal->indexSelfOid = InvalidOid;
         cglobal->indexSelfTuple = NULL;        
-	memset(cglobal->operatorSelfTuple,0,(MAX_OIDCMP - MIN_OIDCMP + 1)*sizeof(HeapTuple));
+	memset(cglobal->operatorSelfTuple,0,(MAX_OIDCMP - MIN_OIDCMP + 1)*sizeof(HeapTuple));  
 /*  only reset the memory if we are outside a transaction  */  
-/*	MemoryContextResetAndDeleteChildren(cglobal->workingcxt);     */ 
-        MemoryContextResetChildren(cglobal->catmemcxt);
+	MemoryContextResetAndDeleteChildren(cglobal->workingcxt);
+        MemoryContextDeleteChildren(cglobal->catmemcxt);
         for (cache = cglobal->Caches; PointerIsValid(cache); cache = cache->cc_next)
 	{
 		int			hash;
@@ -613,11 +608,11 @@ ResetSystemCache()
 #ifdef CACHEDEBUG
 #define InitSysCache_DEBUG1 \
 do { \
-	elog(DEBUG, "InitSysCache: rid=%u id=%d nkeys=%d size=%d\n", \
+	elog(DEBUG, "InitSysCache: rid=%lu id=%d nkeys=%d size=%d\n", \
 		cp->relationId, cp->id, cp->cc_nkeys, cp->cc_size); \
 	for (i = 0; i < nkeys; i += 1) \
 	{ \
-		elog(DEBUG, "InitSysCache: key=%d skey=[%d %d %d %d]\n", \
+		elog(DEBUG, "InitSysCache: key=%d skey=[%d %d %ld %ld]\n", \
 			 cp->cc_key[i], \
 			 cp->cc_skey[i].sk_flags, \
 			 cp->cc_skey[i].sk_attno, \
@@ -659,8 +654,7 @@ InitSysCache(char *relname,
 	MemSet((char *) cp, 0, sizeof(CatCache));
         /* allocate a new cache context for this cache  */
         cp->cachecxt = SubSetContextCreate(cglobal->catmemcxt,mem_name);  
-
-       
+           
 	/* ----------------
 	 *	initialize the cache buckets (each bucket is a list header)
 	 *	and the LRU tuple list
@@ -1224,8 +1218,11 @@ InitializeCacheGlobal(void) {
                                                            ALLOCSET_DEFAULT_INITSIZE,
                                                            ALLOCSET_DEFAULT_MAXSIZE);
 
-        cglobal->workingcxt =  SubSetContextCreate(cglobal->catmemcxt,
-					"WorkingCacheMemoryContext");  
+        cglobal->workingcxt =  AllocSetContextCreate(MemoryContextGetEnv()->CacheMemoryContext,
+                                                           "WorkingCacheMemoryContext",
+                                                           ALLOCSET_DEFAULT_MINSIZE,
+                                                           ALLOCSET_DEFAULT_INITSIZE,
+                                                           ALLOCSET_DEFAULT_MAXSIZE); 
                 
         cglobal->indexSelfOid = InvalidOid;
         cglobal->indexSelfTuple = NULL;
@@ -1237,14 +1234,4 @@ InitializeCacheGlobal(void) {
 
         return cglobal;
 }
-#ifdef UNUSED
-static void free_catcache(MemoryContext cxt,void* pointer)
-{
-    	GetCacheGlobal()->free_p(cxt,pointer);
-}
 
-static void* realloc_catcache(MemoryContext cxt,void* pointer,Size size)
-{
-	return GetCacheGlobal()->realloc(cxt,pointer,size);
-}
-#endif

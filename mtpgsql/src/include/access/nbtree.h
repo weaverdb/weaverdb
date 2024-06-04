@@ -210,6 +210,7 @@ typedef BTStackData *BTStack;
 #define P_ISROOT(opaque)		((opaque)->btpo_flags & BTP_ROOT)
 #define P_ISSPLIT(opaque)		((opaque)->btpo_flags & BTP_SPLIT)
 #define P_ISREAPED(opaque)		((opaque)->btpo_flags & BTP_REAPED)
+#define P_ISFREE(opaque)		((opaque)->btpo_flags & BTP_FREE)
 
 /*
  *	Lehman and Yao's algorithm requires a ``high key'' on every non-rightmost
@@ -284,6 +285,9 @@ PG_EXTERN InsertIndexResult _bt_doinsert(Relation rel, BTItem btitem,
 PG_EXTERN InsertIndexResult _bt_queueinsert(Relation rel, BTItem btitem,
 			 bool index_is_unique, Relation heapRel);
 PG_EXTERN Buffer _bt_fixroot(Relation rel, Buffer oldrootbuf, bool release);
+PG_EXTERN bool _bt_validate_leaf(Relation rel, BlockNumber block);
+PG_EXTERN bool _bt_validate_node(Relation rel, BlockNumber block);
+PG_EXTERN bool _bt_reap(Relation rel, BlockNumber block);
 
 /*
  * prototypes for functions in nbtpage.c

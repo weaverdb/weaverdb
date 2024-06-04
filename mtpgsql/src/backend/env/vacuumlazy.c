@@ -438,6 +438,7 @@ lazy_freespace_scan_rel(Oid relid)
                       
                 pfree(vacrelstats);
         } else if (rel->rd_rel->relkind == RELKIND_INDEX) {
+                LockRelation(rel, AccessShareLock);
                 lazy_index_freespace(rel, false);
         } else {
                 RegisterFreespace(rel, 0, NULL, NULL,
@@ -452,7 +453,7 @@ static void
 lazy_index_freespace(Relation onerel, bool alter)
 {
         BlockNumber*    free_pages;
-        BlockNumber     cpage;
+        BlockNumber     cpage = 0L;
         BlockNumber     size;
         int             num_free = 0;
         int             max_free = 4096;
@@ -465,7 +466,8 @@ lazy_index_freespace(Relation onerel, bool alter)
         
         if ( !alter ) SetProcessingMode(ReadOnlyProcessing);
         size = RelationGetNumberOfBlocks(onerel);
-        for(cpage=1;cpage<size;cpage++) {
+
+        for(cpage=0;cpage<size;cpage++) {
             if ( cpage == index_recoverpage(onerel,cpage) ) {
                 free_pages[num_free++] = cpage;
                 if ( num_free >= max_free) break;
@@ -476,8 +478,6 @@ lazy_index_freespace(Relation onerel, bool alter)
 	RegisterFreespace(onerel, num_free,free_pages, 0, 0,
                       0, 0, 0,
                       0,0, true);
-
-/*  don't do this for now, not optimized properly */
 
 	pfree(free_pages);
 

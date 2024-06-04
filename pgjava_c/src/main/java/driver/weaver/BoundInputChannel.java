@@ -14,7 +14,7 @@ import java.nio.channels.ReadableByteChannel;
 class BoundInputChannel<T> extends BoundInput<ReadableByteChannel> {
     
     private final StreamingTransformer transformer;
-    private final Input.Channel<T> type;
+    private final Input.Channel<? super T> type;
 
     BoundInputChannel(BaseWeaverConnection.Statement fc, StreamingTransformer engine, String name, Input.Channel<T> type) throws ExecutionException {
         super(fc, name, ReadableByteChannel.class);

@@ -585,24 +585,7 @@ CacheIdInvalidate(Index cacheId,
 	 */
 	if (!processed) elog(FATAL, "CacheIdInvalidate: cacheId=%d relation id?", cacheId);
 }
-#ifdef UNUSED
-/* --------------------------------
- *		ResetSystemCaches
- *
- *		This blows away all tuples in the system catalog caches and
- *		all the cached relation descriptors (and closes their files too).
- *		Relation descriptors that have positive refcounts are then rebuilt.
- * --------------------------------
- */
-static void
-ResetSystemCaches()
-{
-	/*    RelationCacheInvalidate takes care of this  
-	ResetSystemCache();
- 	*/
- 	RelationCacheInvalidate();
-}
-#endif
+
 /* --------------------------------
  *		InvalidationMessageRegisterSharedInvalid
  * --------------------------------
