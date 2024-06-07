@@ -2785,6 +2785,12 @@ ReportStmt:  REPORT ACCESS STATS
                                         stmt->cxt = GetEnv()->global_context;
 					$$ = (Node *)stmt;
 	     			}
+	     | REPORT STATEMENT MEMORY
+	     			{
+                                        ReportMemoryStmt* stmt = makeNode(ReportMemoryStmt);
+                                        stmt->cxt = NULL;
+					$$ = (Node *)stmt;
+	     			}
 	     | REPORT ALL MEMORY
 	     			{
 	     				PrintFreespaceMemory();

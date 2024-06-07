@@ -1091,12 +1091,24 @@ int LogBuffers(WriteGroup list) {
                                         blk
                                         )
                     ) {
+                    elog(DEBUG, "DBWriter: buffer failed to log in smgr bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                        bufHdr->buf_id,
+                        bufHdr->tag.relId.dbId,
+                        bufHdr->tag.relId.relId,
+                        bufHdr->tag.blockNum);
                     ErrorBufferIO(iostatus,bufHdr);
                 } else {
                     TerminateBufferIO(iostatus,bufHdr);
                 }
             } else {
+/* not diry is not IO error
+                elog(DEBUG, "DBWriter: buffer failed to logio, not dirty bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                    bufHdr->buf_id,
+                    bufHdr->tag.relId.dbId,
+                    bufHdr->tag.relId.relId,
+                    bufHdr->tag.blockNum);
                 ErrorBufferIO(iostatus,bufHdr);
+*/
             }
         } else {
             iostatus = LogBufferIO(bufHdr);
@@ -1113,6 +1125,11 @@ int LogBuffers(WriteGroup list) {
                         bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus,bufHdr);
             } else {
+                elog(FATAL, "DBWriter: bufferid inconsistent and not dirty bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                    bufHdr->buf_id,
+                    bufHdr->tag.relId.dbId,
+                    bufHdr->tag.relId.relId,
+                    bufHdr->tag.blockNum);
                 list->buffers[i] = false;
                 while (list->release[i] > 0) {
                     if ( ManualUnpin(bufHdr, false)) {
@@ -1205,7 +1222,12 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     }
                     
                     RelationClose(target);
-                } else {
+                } else {            
+                    elog(DEBUG, "DBWriter: buffer failed to in sync bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                            bufHdr->buf_id,
+                            bufHdr->tag.relId.dbId,
+                            bufHdr->tag.relId.relId,
+                            bufHdr->tag.blockNum);
                     ErrorBufferIO(iostatus, bufHdr);
                 }
             } else {
@@ -1251,6 +1273,11 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     }
                 } else {
                     ErrorBufferIO(iostatus, bufHdr);
+            elog(DEBUG, "DBWriter: buffer failed sync for writeio bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                bufHdr->buf_id,
+                bufHdr->tag.relId.dbId,
+                bufHdr->tag.relId.relId,
+                bufHdr->tag.blockNum);
                 }
             }
         } else {
@@ -1264,6 +1291,11 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                         bufHdr->tag.relId.dbId, bufHdr->tag.relId.relId, bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus, bufHdr);
             } else {
+            elog(DEBUG, "DBWriter: buffer failed to writeio2 bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                bufHdr->buf_id,
+                bufHdr->tag.relId.dbId,
+                bufHdr->tag.relId.relId,
+                bufHdr->tag.blockNum);
                 ErrorBufferIO(iostatus, bufHdr);
             }
         }
@@ -1628,6 +1660,7 @@ static Block AdvanceBuffer(long generation, BufferDesc* bufHdr) {
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
     if (bufHdr->generation <= generation) {
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
+        PageInsertChecksum((Page)bufHdr->shadow);
         bufHdr->generation = generation;
     }
     pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));

@@ -20,7 +20,7 @@
 #include "storage/bufpage.h"
 #include "env/pg_crc.h"
 
-bool        disable_crc = false;
+bool        disable_crc = true;
 
 static void PageIndexTupleDeleteAdjustLinePointers(PageHeader phdr,
 									   char *location, Size size);

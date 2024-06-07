@@ -395,6 +395,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     int k = 0;
     PreparedPlan* plan;
     MemoryContext plan_cxt,old;
+    char          cxt_name[2048];
     
     if ( connection->stage == TRAN_ABORTONLY ) {
         err = 456;
@@ -411,8 +412,9 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
         elog(ERROR, "Query Cancelled");
     }
     
+    snprintf(cxt_name,2048,"PreparedPlanContext:\"%s\"",smt);
     plan_cxt = AllocSetContextCreate(GetEnvMemoryContext(),
-            "PreparedPlanContext",
+            cxt_name,
             ALLOCSET_DEFAULT_MINSIZE,
             ALLOCSET_DEFAULT_INITSIZE,
             ALLOCSET_DEFAULT_MAXSIZE);
@@ -452,24 +454,26 @@ long
 WDestroyPreparedStatement(OpaquePreparedStatement stmt) {
     WConn connection = SETUP(stmt->owner);
     long err;
+    OpaquePreparedStatement* setter = &connection->plan;
+
+
     READY(connection,err, false);
-    if ( stmt == connection->plan ) {
-        connection->plan = stmt->next;
-    } else {
-        PreparedPlan* start = connection->plan;
-        while ( start->next != stmt ) {
-            start = start->next;
+    while (*setter != NULL && *setter != stmt) {
+        setter = &(*setter)->next;
+    }
+
+    if (*setter != NULL) {
+        Assert(*setter == stmt);
+        *setter = stmt->next;
+
+        WResetExecutor(stmt);
+        if (connection->inselect == stmt) {
+            connection->inselect = NULL;
         }
-        start->next = stmt->next;
+
+        MemoryContextDelete(stmt->plan_cxt);
     }
 
-    WResetExecutor(stmt);
-    if (connection->inselect == stmt) {
-        connection->inselect = NULL;
-    }
-
-    MemoryContextDelete(stmt->plan_cxt);
-    
     RELEASE(connection, false);
     return err;
 }
@@ -497,6 +501,10 @@ WOutputTransfer(OpaquePreparedStatement plan, short pos, int type, void* userenv
     for (index = 0; index < plan->slots; index++) {
         if (plan->slot[index].transferType == TFREE || plan->slot[index].index == pos)
             break;
+    }
+
+    if (index == plan->slots) {
+        ExpandSlots(plan,TFREE);
     }
 
     plan->slot[index].transferType = TOUTPUT;

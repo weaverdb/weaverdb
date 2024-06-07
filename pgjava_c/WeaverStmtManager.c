@@ -114,10 +114,8 @@ CreateWeaverStmtManager(ConnMgr connection) {
                     mgr->inputLog = WAllocConnectionMemory(connection->theConn, sizeof (inputDef) * mgr->log_count);
                     mgr->outputLog = WAllocConnectionMemory(connection->theConn, sizeof (outputDef) * mgr->log_count);
                     /*  zero statement structures */
-                    for (counter = 0; counter < mgr->log_count; counter++) {
-                        memset(&mgr->outputLog[counter], 0, sizeof (outputDef));
-                        memset(&mgr->inputLog[counter], 0, sizeof (inputDef));
-                    }
+                    memset(mgr->outputLog, 0, sizeof (outputDef) * mgr->log_count);
+                    memset(mgr->inputLog, 0, sizeof (inputDef) * mgr->log_count);
                 } else {
                     mgr->inputLog = NULL;
                     mgr->outputLog = NULL;
@@ -173,9 +171,10 @@ void DestroyWeaverStmtManager(ConnMgr conn, StmtMgr mgr) {
         conn->refCount -= 1;
     }
 
-    if (mgr->statement != NULL) WDestroyPreparedStatement(mgr->statement);
     if (mgr->inputLog != NULL) WFreeMemory(conn->theConn, mgr->inputLog);
     if (mgr->outputLog != NULL) WFreeMemory(conn->theConn, mgr->outputLog);
+
+    if (mgr->statement != NULL) WDestroyPreparedStatement(mgr->statement);
 
     WFreeMemory(conn->theConn, mgr);
     pthread_mutex_unlock(&conn->control);
@@ -411,10 +410,14 @@ short ExpandBindings(ConnMgr conn, StmtMgr mgr) {
 
     if (count <= 0) count = 2;
 
-    inputDef* inputs = WAllocConnectionMemory(conn->theConn, sizeof (inputDef) * count);
-    memset(inputs, 0x00, sizeof (inputDef) * count);
-    outputDef* outputs = WAllocConnectionMemory(conn->theConn, sizeof (outputDef) * count);
-    memset(outputs, 0x00, sizeof (outputDef) * count);
+    inputDef* inputs = mgr->statement != NULL ? WAllocStatementMemory(mgr->statement, sizeof (inputDef) * count)
+        : WAllocConnectionMemory(conn->theConn, sizeof (inputDef) * count);
+    memset(inputs, 0, sizeof (inputDef) * count);
+
+    outputDef* outputs = mgr->statement != NULL ? WAllocStatementMemory(mgr->statement, sizeof (outputDef) * count)
+        : WAllocConnectionMemory(conn->theConn, sizeof (outputDef) * count);
+    memset(outputs, 0, sizeof (outputDef) * count);
+
     if (mgr->inputLog != NULL) {
         memmove(inputs, mgr->inputLog, sizeof (inputDef) * mgr->log_count);
         WFreeMemory(conn->theConn, mgr->inputLog);
@@ -423,6 +426,7 @@ short ExpandBindings(ConnMgr conn, StmtMgr mgr) {
         memmove(outputs, mgr->outputLog, sizeof (outputDef) * mgr->log_count);
         WFreeMemory(conn->theConn, mgr->outputLog);
     }
+
     mgr->inputLog = inputs;
     mgr->outputLog = outputs;
     mgr->log_count = count;

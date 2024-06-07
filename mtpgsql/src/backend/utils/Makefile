@@ -41,10 +41,11 @@ fmgrtab.o: ../../include/fmgr.h
 	$(MAKE) -C .. fmgr.h
 
 fmgr.h fmgrtab.c: ./Gen_fmgrtab.sh ../../include/catalog/pg_proc.h
-	CPP='$(CPP)' sh $(SHOPTS) Gen_fmgrtab.sh ${BKIOPTS} ../../include/catalog/pg_proc.h
+	cp ../../include/catalog/pg_proc.h pg_proc.hpp
+	CPP='$(CPP)' sh $(SHOPTS) Gen_fmgrtab.sh ${BKIOPTS} pg_proc.hpp
 
 clean:
-	rm -f SUBSYS.o fmgr.h fmgrtab.o fmgrtab.c
+	rm -f SUBSYS.o fmgr.h fmgrtab.o fmgrtab.c pg_proc.hpp
 	for i in $(DIRS); do $(MAKE) -C $$i clean; done
 
 dep depend: fmgr.h fmgrtab.c

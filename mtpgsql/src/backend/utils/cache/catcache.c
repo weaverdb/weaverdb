@@ -644,7 +644,7 @@ InitSysCache(char *relname,
 
         indname = (iname) ? iname : NULL;
 
-	sprintf(mem_name,"CacheInstanceCxt-rel:%s,ind:%s",relname,indname);
+	snprintf(mem_name,128,"CacheInstanceCxt-rel:%s,ind:%s",relname,indname);
  	oldcxt = MemoryContextSwitchTo(cglobal->catmemcxt);
 	/* ----------------
 	 *	allocate a new cache structure

@@ -197,9 +197,9 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                 bufHdr->tag.relId.dbId,
                 bufHdr->tag.relId.relId,
                 bufHdr->tag.blockNum);
+           ErrorBufferIO(iostatus, bufHdr);
            InvalidateBuffer(bufenv,bufHdr);
            UnpinBuffer(bufenv, bufHdr);
-           ErrorBufferIO(iostatus, bufHdr);
            return InvalidBuffer;
         }
     }
@@ -237,7 +237,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     
     if (status == SM_FAIL) {
         if ( !isLocalBuf ) {
-            elog(DEBUG, "read buffer failed bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+            elog(DEBUG, "read buffer failed bufid:%d dbid:%ld relid:%ld blk:%ld",
                 bufHdr->buf_id,
                 bufHdr->tag.relId.dbId,
                 bufHdr->tag.relId.relId,
@@ -497,6 +497,7 @@ we don't have to lock  */
          * other backend changes its contents while we write it;
          * see comments in BufferSync().
          */
+retry:
         iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus == IO_SUCCESS) {
             Block data = bufHdr->data;
@@ -506,15 +507,24 @@ we don't have to lock  */
 
             status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, data);
             if (status == SM_FAIL) {
-                ErrorBufferIO(iostatus,bufHdr);
                 elog(NOTICE, "FlushBuffer: cannot flush block %lu of the relation %s",
                 bufHdr->tag.blockNum, bufHdr->blind.relname);
+                ErrorBufferIO(iostatus,bufHdr);
+                sleep(3);
+                goto retry;
             } else {
                 /* copy new page to shadow */
                 TerminateBufferIO(iostatus,bufHdr);
             }
         } else {
+            elog(NOTICE, "write buffer failed in io start bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                bufHdr->buf_id,
+                bufHdr->tag.relId.dbId,
+                bufHdr->tag.relId.relId,
+                bufHdr->tag.blockNum);
             ErrorBufferIO(iostatus,bufHdr);
+            sleep(3);
+            goto retry;
         }
         
         UnpinBuffer(bufenv,bufHdr);
@@ -1145,6 +1155,11 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     if ( buf->ioflags & BM_IO_ERROR ) {
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         iostatus = IO_FAIL;
+        elog(NOTICE, "LogBufferIO: previous error bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                buf->buf_id,
+                buf->tag.relId.dbId,
+                buf->tag.relId.relId,
+                buf->tag.blockNum);
         return iostatus;
     }
 
@@ -1178,6 +1193,11 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
     }
 
     if ( buf->ioflags & BM_IO_ERROR ) {
+            elog(DEBUG, "DBWriter: buffer failed to writeio due to previous error bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                buf->buf_id,
+                buf->tag.relId.dbId,
+                buf->tag.relId.relId,
+                buf->tag.blockNum);
         pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
         iostatus = IO_FAIL;
         return iostatus;
@@ -1249,6 +1269,9 @@ ErrorBufferIO(IOStatus iostatus, BufferDesc *buf) {
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
 
     buf->ioflags = BM_IO_ERROR;
+            
+    elog(NOTICE, "IOError: %lu of the relation %s",
+                buf->tag.blockNum, buf->blind.relname);
 
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
 

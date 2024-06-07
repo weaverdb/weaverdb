@@ -66,9 +66,11 @@ public class JNITest {
         Properties prop = new Properties();
         prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
         prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "10");
+        prop.setProperty("start_delay", "1");
         prop.setProperty("debuglevel", "DEBUG");
         prop.setProperty("stdlog", "TRUE");
+        prop.setProperty("heap_corruption", "IGNORE");
+        prop.setProperty("disable_crc", "TRUE");
 //        prop.setProperty("usegc", "FALSE");
         WeaverInitializer.initialize(prop);
     }
@@ -904,9 +906,47 @@ public class JNITest {
                 }
                 System.gc();
             }
+            try (Stream<Row> c = ResultSet.builder(conn).parse("select id, value from test21")
+                .execute()) {
+                    c.forEach(a->{
+                        for (Column b : a) {
+                            System.out.printf("%-15s ", b.get().toString());
+                        }
+                        System.out.println();
+                    });
+            }
             conn.stream("report user memory");
         }
     }
+    
+    @org.junit.jupiter.api.Test
+    public void testBuilderFormatting() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.stream("report user memory");
+            conn.setStandardOutput(System.out);
+            conn.execute("create table test22 (id int4, value varchar(256))");
+            try (Statement s =conn.statement("insert into test22 (id, value) values ($id, $value)")) {
+                Input<Integer> id = s.linkInput("id", Integer.class);
+                Input<String> value = s.linkInput("value", String.class);
+                for (int x=0;x< 25;x++) {
+                    id.set(x);
+                    value.set("testvalue" + x);
+                    s.execute();
+                }
+            }
+
+            try (Stream<Row> c = ResultSet.builder(conn).parse("select id, value from test22")
+                .execute()) {
+                    c.forEach(a->{
+                        for (Column b : a) {
+                            System.out.printf("%-15s ", b.get().toString());
+                        }
+                        System.out.println();
+                    });
+                conn.stream("report user memory");
+            }
+        }
+    }   
     
     private static class Generator {
         private final long totalSize;

@@ -4,7 +4,6 @@ package driver.weaver;
 
 import driver.weaver.BaseWeaverConnection.Statement;
 import driver.weaver.ResultSet.Row;
-import java.nio.file.Files;
 import java.util.AbstractList;
 import java.util.Iterator;
 import java.util.Spliterator;
@@ -20,8 +19,13 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
     private final Statement stmt;
     private final static int MAX_ATTRIBUTES = 20;
 
-    ResultSet(Statement stmt) {
+    ResultSet(Statement stmt) throws ExecutionException {
         this.stmt = stmt;
+        if (stmt.outputs().isEmpty()) {
+            for (int x=1;x<=MAX_ATTRIBUTES;x++) {
+                stmt.linkOutput(x, Object.class);
+            }
+        }
     }
 
     @Override

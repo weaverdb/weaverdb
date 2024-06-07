@@ -748,9 +748,11 @@ ProcessUtility(Node *parsetree,
 				(commandTag = "REPORT");
 				CHECK_IF_ABORTED();
 
-				PrintMemoryContextStats(stmt->cxt, dest, 0);
-                                
-                                
+				if (stmt->cxt != NULL) {
+                                    PrintMemoryContextStats(stmt->cxt, dest, 0);
+                                } else {
+                                    
+                                }
 			}
 			break;
 #ifdef NOT_USED

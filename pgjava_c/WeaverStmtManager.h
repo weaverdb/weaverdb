@@ -19,7 +19,7 @@
 #include "env/WeaverInterface.h"
 
   
-#define MAX_FIELDS  0
+#define MAX_FIELDS  32
 #define MAX_STATEMENTS 8196
 
 typedef struct bound *  Bound;

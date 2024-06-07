@@ -2001,6 +2001,7 @@ _bt_validate_node(Relation rel, BlockNumber block) {
     _bt_relbuf(rel, buffer);
 
    if (!empty && !dryrun) {
+        buffer = _bt_getbuf(rel, block, BT_WRITE);
         for (current = P_FIRSTDATAKEY(opaque); current <= PageGetMaxOffsetNumber(page); current = OffsetNumberNext(current)) {
             bool deleteit = false;
 
@@ -2062,6 +2063,7 @@ _bt_validate_leaf(Relation rel, BlockNumber block) {
     _bt_relbuf(rel, buffer);
 
     if (!empty && !dryrun) {
+        buffer = _bt_getbuf(rel, block, BT_WRITE);
         HeapTuple heap = SearchSysCacheTuple(INDEXRELID, ObjectIdGetDatum(rel->rd_id), PointerGetDatum(NULL), PointerGetDatum(NULL), PointerGetDatum(NULL));
         Oid heapid = SysCacheGetAttr(INDEXRELID, heap, Anum_pg_index_indrelid, NULL);
         Relation heaprel = RelationIdGetRelation(heapid, DEFAULTDBOID);
@@ -2077,7 +2079,7 @@ _bt_validate_leaf(Relation rel, BlockNumber block) {
             if (!BufferIsValid(heapbuffer)) {
                 deleteit = true;
             } else {
-                LockBuffer(heaprel, heapbuffer, BT_READ);
+                LockBuffer(heaprel, heapbuffer, BUFFER_LOCK_SHARE);
                 Page heapPage = BufferGetPage(heapbuffer);
 
                 if (ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(heapPage)) {
@@ -2088,7 +2090,7 @@ _bt_validate_leaf(Relation rel, BlockNumber block) {
                 } else {
                     deleteit = true;
                 }
-                LockBuffer(heaprel, heapbuffer, BT_NONE);
+                LockBuffer(heaprel, heapbuffer, BUFFER_LOCK_UNLOCK);
                 ReleaseBuffer(heaprel, heapbuffer);
             }
 

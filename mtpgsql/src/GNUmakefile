@@ -43,7 +43,7 @@ install: installdirs
 	$(MAKE) -C bin install
 	$(MAKE) -C scripts install
 	tar cvf $(POSTGRESDIR).tar $(POSTGRESDIR)
-	bzip2 $(POSTGRESDIR).tar
+	bzip2 -f $(POSTGRESDIR).tar
 
 installdirs: mkinstalldirs
 	$(SRCDIR)/mkinstalldirs $(BINDIR) $(LIBDIR) $(INCLUDEDIR)
@@ -55,7 +55,7 @@ clean:
 	$(MAKE) -C bin clean
 	rm -Rf tools
 	rm -rf $(POSTGRESDIR)
-	rm $(POSTGRESDIR).tar.bz2
+	rm -f $(POSTGRESDIR).tar.bz2
 
 installclean:
 	rm -rf $(POSTGRESDIR)

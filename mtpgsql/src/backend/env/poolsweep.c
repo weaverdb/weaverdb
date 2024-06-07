@@ -67,7 +67,7 @@ typedef struct joblist {
     JobType             jobtype;
     bool            activejob;
     void*           arg;
-    void           *next;
+    struct joblist*        next;
 } JobList;
 
 typedef struct poolargs {
@@ -87,7 +87,7 @@ typedef struct sweeps {
     JobList        *requests;
     pthread_t       thread;
     pthread_cond_t  gate;
-    void           *next;
+    struct sweeps           *next;
     bool            activesweep;
     int             idle_count;
     Env*            env;
@@ -102,6 +102,7 @@ typedef struct waiter {
 
 
 static pthread_mutex_t list_guard;
+
 static pthread_attr_t sweeperprops;
 static bool     paused = true;
 static bool     inited = false;
@@ -161,56 +162,51 @@ PoolsweepInit(int priority) {
 
 void
 StopPoolsweepsForDB(Oid dbid) {
-    Sweeps         *next = NULL;
-    Sweeps         *last = NULL;
+    Sweeps         **position = NULL;
         
     if (!inited)
         return;
     
     pthread_mutex_lock(&list_guard);
-    if ( sweep_cxt != NULL ) {
-        next = sweeplist;
-        while (next != NULL) {
-            if ( next->dbid == dbid ) {
-                next = ShutdownPoolsweep(next);
-                if ( last == NULL ) sweeplist = next;
-                else last->next = next;
-            } else {
-                next = next->next;
-            }
-            last = next;
+    *position = sweeplist;
+    while (*position != NULL) {
+        if ( (*position)->dbid == dbid ) {
+            *position = ShutdownPoolsweep(*position);
+            break;
         }
-    } 
+    }
     pthread_mutex_unlock(&list_guard);
 }
 
 void
 PoolsweepDestroy() {
     Sweeps         *next = NULL;
-    MemoryContext   cxt = sweep_cxt;
         
     if (!inited)
         return;
     
     pthread_mutex_lock(&list_guard);
-    if ( sweep_cxt != NULL ) {
-        sweep_cxt = NULL;
-        next = sweeplist;
-        while (next != NULL) {
-            next = ShutdownPoolsweep(next);
-        }
-        MemoryContextDelete(cxt);
-    } else {
-        printf("no poolsweep context");
+    next = sweeplist;
+
+    while (next != NULL) {
+        next = ShutdownPoolsweep(next);
     }
+    sweeplist = NULL;
+
+    if (sweep_cxt != NULL) {
+        MemoryContextDelete(sweep_cxt);
+        sweep_cxt = NULL;
+    }
+
     inited = false;
     pthread_mutex_unlock(&list_guard);
 }
 
 Sweeps         *
 StartupPoolsweep(char *dbname, Oid dbid) {
+    Sweeps         **setter = &sweeplist;
     Sweeps         *inst = NULL;
-    Sweeps         *next = NULL;
+
     char            name[256];
     /*  already holding listguard  */
     snprintf(name,256,"SweepInstanceCxt -- dbid: %ld",dbid);
@@ -235,16 +231,10 @@ StartupPoolsweep(char *dbname, Oid dbid) {
     if (pthread_create(&inst->thread, &sweeperprops, Poolsweep, inst) != 0) {
         elog(FATAL, "could not create pool sweep thread\n");
     }
-    if (sweeplist == NULL) {
-        sweeplist = inst;
-        return inst;
-    } else {
-        next = sweeplist;
-        while (next->next != NULL) {
-            next = next->next;
-        }
-        next->next = inst;
+    while (*setter != NULL) {
+        setter = &(*setter)->next;
     }
+    *setter = inst;
     return inst;
 }
 
@@ -306,7 +296,9 @@ Poolsweep(void *args) {
         
         if (setjmp(env->errorContext)) {
             pthread_mutex_lock(&list_guard);
-            tool->requests = ( item ) ? item->next : NULL;
+            if (item->activejob && tool->requests == item) {
+                tool->requests = item->next;
+            }
             pthread_mutex_unlock(&list_guard);
             if ( item != NULL ) pfree(item);
             item = NULL;
@@ -348,98 +340,99 @@ Poolsweep(void *args) {
                 } else {
                     tool->idle_count = 0;
                 }
-            } else {
-        /* current request has already been run, go to the next one */
-                if ( tool->requests->activejob ) 
-                    tool->requests = tool->requests->next;
-            }
-            
-            if (paused || tool->requests == NULL) {
                 pthread_mutex_unlock(&list_guard);
-                continue;
             } else {
                 item = tool->requests;
-                item->activejob = true;
+                if (item != NULL) {
+                    Assert(!item->activejob);
+                    item->activejob = true;
+                }
                 pthread_mutex_unlock(&list_guard);
-            }
-            
-            SetTransactionCommitType(TRANSACTION_CAREFUL_COMMIT);
-            
-            StartTransaction();
-            
-            SetQuerySnapshot();
-            
-            if (item->jobtype == VACUUM_JOB) {
-                poolsweep_log(item->relid, "starting vacuum job");
-                lazy_open_vacuum_rel(item->relid, false, false);
-            } else if (item->jobtype == REINDEX_JOB) {
-                poolsweep_log(item->relid, "starting reindex job");
-                reindex_index(item->relid, true);
-            } else if (item->jobtype == SCAN_JOB) {
-                poolsweep_log(item->relid, "starting scan job");
-                lazy_open_vacuum_rel(item->relid, false, true);
-            } else if (item->jobtype == FREESPACE_JOB) {
-                poolsweep_log(item->relid, "starting freespace scan job");
-                lazy_freespace_scan_rel(item->relid);                
-            } else if (item->jobtype == DEFRAG_JOB) {
-                FragArgs* args = item->arg;
-                poolsweep_log(item->relid, "starting defrag job");
-                lazy_fragmentation_scan_rel(item->relid, false,(args->useblobs) ? BLOB_MOVE : NORMAL, args->max);
-                pfree(args);
-            } else if (item->jobtype == ANALYZE_JOB) {
-                poolsweep_log(item->relid, "starting analyze job");
-                analyze_rel(item->relid);
-            } else if (item->jobtype == TRIM_JOB) {
-                poolsweep_log(item->relid, "starting trim job");
-                lazy_open_vacuum_rel(item->relid, true, false);
-            } else if (item->jobtype == RESPAN_JOB) {
-                poolsweep_log(item->relid, "starting respan job");
-                lazy_respan_blobs_rel(item->relid, true, false); /* don't exclude self moves */
-            } else if (item->jobtype == RELINK_JOB) {
-/*
-                poolsweep_log(item->relid, "starting relink job");
-                lazy_fragmentation_scan_rel(item->relid, true, RELINKING, 1024 * 1024);
-*/
-            } else if (item->jobtype == MOVE_JOB) {
-                poolsweep_log(item->relid, "starting move job");
-                lazy_respan_blobs_rel(item->relid, true, true);/* exclude self moves */
-            } else if (item->jobtype == VACUUMDB_JOB) {
-                poolsweep_log(item->relid, "starting vacuumdb job");
-                lazy_vacuum_database(false);
-            } else if (item->jobtype == COMPACT_JOB) {
-                FragArgs* args = item->arg;
-                poolsweep_log(item->relid, "starting compact job");
-                lazy_fragmentation_scan_rel(item->relid, true,(args->useblobs) ? BLOB_MOVE : NORMAL, args->max);
-                pfree(args);
-             } else if ( item->jobtype == ALLOCATE_JOB ) {
-                Relation rel = RelationIdGetRelation(item->relid, DEFAULTDBOID);
-                poolsweep_log(item->relid, "starting space allocation job");
-/*
-                AllocateMoreSpace(rel, NULL);
-*/
-                RelationClose(rel);
-            } else if ( item->jobtype == WAIT_JOB ) {
-                poolsweep_log(item->relid, "starting wait notification");
-                Waiter*     w = item->arg;
-                pthread_mutex_lock(&w->guard);
-                w->done = true;
-                pthread_cond_broadcast(&w->gate);
-                pthread_mutex_unlock(&w->guard);
-            } else  if ( item->jobtype == RECOVER_JOB ) {
-                List* pages = smgrgetrecoveredlist(GetDatabaseId());
-                index_recoverpages(pages);
-            } else {
-                poolsweep_log(item->relid, "unknown job type %d", item->jobtype);
-            }
-            
-            MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
-            CommitTransaction();
-            if (item != NULL) {
-                pthread_mutex_lock(&list_guard);
-                tool->requests = ( item ) ? item->next : NULL;
-                pthread_mutex_unlock(&list_guard);
-                pfree(item);
-                item = NULL;
+
+                if (paused || item == NULL) {
+                    continue;
+                }
+
+                SetTransactionCommitType(TRANSACTION_CAREFUL_COMMIT);
+
+                StartTransaction();
+
+                SetQuerySnapshot();
+
+                if (item->jobtype == VACUUM_JOB) {
+                    poolsweep_log(item->relid, "starting vacuum job");
+                    lazy_open_vacuum_rel(item->relid, false, false);
+                } else if (item->jobtype == REINDEX_JOB) {
+                    poolsweep_log(item->relid, "starting reindex job");
+                    reindex_index(item->relid, true);
+                } else if (item->jobtype == SCAN_JOB) {
+                    poolsweep_log(item->relid, "starting scan job");
+                    lazy_open_vacuum_rel(item->relid, false, true);
+                } else if (item->jobtype == FREESPACE_JOB) {
+                    poolsweep_log(item->relid, "starting freespace scan job");
+                    lazy_freespace_scan_rel(item->relid);                
+                } else if (item->jobtype == DEFRAG_JOB) {
+                    FragArgs* args = item->arg;
+                    poolsweep_log(item->relid, "starting defrag job");
+                    lazy_fragmentation_scan_rel(item->relid, false,(args->useblobs) ? BLOB_MOVE : NORMAL, args->max);
+                    pfree(args);
+                } else if (item->jobtype == ANALYZE_JOB) {
+                    poolsweep_log(item->relid, "starting analyze job");
+                    analyze_rel(item->relid);
+                } else if (item->jobtype == TRIM_JOB) {
+                    poolsweep_log(item->relid, "starting trim job");
+                    lazy_open_vacuum_rel(item->relid, true, false);
+                } else if (item->jobtype == RESPAN_JOB) {
+                    poolsweep_log(item->relid, "starting respan job");
+                    lazy_respan_blobs_rel(item->relid, true, false); /* don't exclude self moves */
+                } else if (item->jobtype == RELINK_JOB) {
+    /*
+                    poolsweep_log(item->relid, "starting relink job");
+                    lazy_fragmentation_scan_rel(item->relid, true, RELINKING, 1024 * 1024);
+    */
+                } else if (item->jobtype == MOVE_JOB) {
+                    poolsweep_log(item->relid, "starting move job");
+                    lazy_respan_blobs_rel(item->relid, true, true);/* exclude self moves */
+                } else if (item->jobtype == VACUUMDB_JOB) {
+                    poolsweep_log(item->relid, "starting vacuumdb job");
+                    lazy_vacuum_database(false);
+                } else if (item->jobtype == COMPACT_JOB) {
+                    FragArgs* args = item->arg;
+                    poolsweep_log(item->relid, "starting compact job");
+                    lazy_fragmentation_scan_rel(item->relid, true,(args->useblobs) ? BLOB_MOVE : NORMAL, args->max);
+                    pfree(args);
+                 } else if ( item->jobtype == ALLOCATE_JOB ) {
+                    Relation rel = RelationIdGetRelation(item->relid, DEFAULTDBOID);
+                    poolsweep_log(item->relid, "starting space allocation job");
+    /*
+                    AllocateMoreSpace(rel, NULL);
+    */
+                    RelationClose(rel);
+                } else if ( item->jobtype == WAIT_JOB ) {
+                    poolsweep_log(item->relid, "starting wait notification");
+                    Waiter*     w = item->arg;
+                    pthread_mutex_lock(&w->guard);
+                    w->done = true;
+                    pthread_cond_broadcast(&w->gate);
+                    pthread_mutex_unlock(&w->guard);
+                } else  if ( item->jobtype == RECOVER_JOB ) {
+                    List* pages = smgrgetrecoveredlist(GetDatabaseId());
+                    index_recoverpages(pages);
+                } else {
+                    poolsweep_log(item->relid, "unknown job type %d", item->jobtype);
+                }
+
+                MemoryContextResetAndDeleteChildren(MemoryContextGetEnv()->QueryContext);
+                CommitTransaction();
+                if (item != NULL) {
+                    pthread_mutex_lock(&list_guard);
+                    Assert(tool->requests == item);
+                    Assert(item->activejob);
+                    tool->requests = item->next;
+                    pthread_mutex_unlock(&list_guard);
+                    pfree(item);
+                    item = NULL;
+                }
             }
         }
     }
@@ -490,9 +483,10 @@ CheckSweepForJob(Sweeps* sweep, JobType type, Oid relid) {
 
 static int
 AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid relid, Oid dbid, PoolArgs* extra) {
-    
-    JobList* item = (JobList *) MemoryContextAlloc(sweep->context, sizeof(JobList));
-    
+    JobList** setter = NULL;
+    JobList* item = MemoryContextAlloc(sweep->context, sizeof(JobList));
+    int depth = 0;
+
     strncpy(item->relname, relname, 255);
     item->relid = relid;
     item->dbid = dbid;
@@ -509,34 +503,21 @@ AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid reli
         }
     } 
     
-    item->next = NULL;
-    
-    if (sweep->requests == NULL) {
-        sweep->requests = item;
-        if (!paused) pthread_cond_signal(&sweep->gate);
-        return 0;
-    } else {
-        JobList        *save, *search;
-        
-        save = search = sweep->requests;
-        
-        int pos = 0;
-        while (search != NULL) {
-            /* put reindex jobs before anything else  */
-            if (item->jobtype == REINDEX_JOB && search->jobtype != REINDEX_JOB) {
-                poolsweep_log(item->relid, "doing head swap request for reindex %s", relname);
-                break;
-            }
-            pos++;
-            save = search;
-            search = search->next;
+    setter = &sweep->requests;
+
+    while (*setter != NULL) {
+        if (item->jobtype == REINDEX_JOB && (*setter)->jobtype != REINDEX_JOB && !(*setter)->activejob) {
+        // reindex jobs go first
+            break;
         }
-        if (item != NULL) {
-            item->next = save->next;
-            save->next = item;
-        }
-        return pos;
+        setter = &(*setter)->next;
+        depth++;
     }
+    
+    item->next = *setter;
+    *setter = item;
+    
+    return depth;
 }
 
 static int
