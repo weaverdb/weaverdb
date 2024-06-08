@@ -93,6 +93,8 @@ static void ShowBufferIO(int id, int io);
 static bool DirtyBufferIO(BufferDesc* header, long generation);
 static bool WaitBufferIO(bool write_mode, BufferDesc *buf);
 
+static bool ShadowBufferIfNeeded(BufferDesc* buf, bool forflush);
+
 static SectionId   buffer_section_id = SECTIONID("BMGR");
 
 #ifdef TLS
@@ -112,6 +114,8 @@ typedef struct bufenv {
     int                         total_pins;
     bool                        DidWrite;
 } BufferEnv;
+
+static volatile long buffer_generation = 0;
 
 void		PrintBufferDescs(void);
 
@@ -500,10 +504,7 @@ we don't have to lock  */
 retry:
         iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus == IO_SUCCESS) {
-            Block data = bufHdr->data;
-            if ( rel->rd_rel->relkind != RELKIND_SPECIAL )  {
-                PageInsertChecksum((Page)data);
-            }
+            Block data = AdvanceBufferIO(bufHdr, true);
 
             status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, data);
             if (status == SM_FAIL) {
@@ -1374,14 +1375,8 @@ Block BufferGetBlock(Buffer buffer) {
     if ( BufferIsLocal(buffer) ) {
         return (Block) (GetLocalBufferDescriptor((-buffer) - 1)->data);
     } else {
-        long generation = GetBufferGeneration();
         BufferDesc* bufHdr = &BufferDescriptors[buffer - 1];
-        pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-        if (generation > bufHdr->generation) {
-            memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
-            bufHdr->generation = generation;
-        }
-        pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
+        ShadowBufferIfNeeded(bufHdr, false);
         return bufHdr->data;
     }
 }
@@ -1482,3 +1477,32 @@ GetBufferCxt() {
     return env;
 }
 
+bool ShadowBufferIfNeeded(BufferDesc* bufHdr, bool forflush) {
+    bool shadowed = false;
+    long gen = buffer_generation; //  this needs thread safety, read by any thread
+    pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
+    if (
+        (bufHdr->generation < gen) || 
+        (forflush && bufHdr->generation <= gen)
+    ) {
+        memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
+        bufHdr->generation = gen;
+        shadowed = true;
+    }
+    pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
+    return shadowed;
+}
+
+
+Block AdvanceBufferIO(BufferDesc* bufHdr, bool forflush) {
+    ShadowBufferIfNeeded(bufHdr, forflush);
+    if (bufHdr->kind != RELKIND_SPECIAL) {
+        PageInsertChecksum((Page)bufHdr->shadow);
+    }
+    return (Block)bufHdr->shadow;
+}
+
+void
+SetBufferGeneration(long generation) {
+    buffer_generation = generation; //  this needs thread safety, only set by dbwriter
+}

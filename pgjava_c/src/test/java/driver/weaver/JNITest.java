@@ -25,59 +25,65 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  *
  * @author myronscott
  */
+@ExtendWith({InstallNative.class})
 public class JNITest {
     
     public JNITest() {
     }
 
+    @Disabled
     @org.junit.jupiter.api.BeforeAll
     public static void setUpClass() throws Exception {
-        ProcessBuilder b = new ProcessBuilder("pwd");
-        b.inheritIO();
-        Process p = b.start();
-        p.waitFor();
-        b = new ProcessBuilder("tar","xvf", "../mtpgsql/src/mtpg.tar.bz2","-C","build");
-        b.inheritIO();
-        p = b.start();
-        p.waitFor();
-        b = new ProcessBuilder("rm","-rf", System.getProperty("user.dir") + "/build/testdb");
-        b.inheritIO();
-        p = b.start();
-        p.waitFor();
-        b = new ProcessBuilder("build/mtpg/bin/initdb","-D", System.getProperty("user.dir") + "/build/testdb");
-        b.inheritIO();
-        p = b.start();
-        p.waitFor();
-        b = new ProcessBuilder("build/mtpg/bin/postgres","-D", System.getProperty("user.dir") + "/build/testdb","template1");
-        p = b.start();
-        try (Writer w = p.outputWriter()) {
-            w.append("create database test;\n").flush();
-        }
-        p.waitFor();
-        b = new ProcessBuilder("cp","libweaver.dylib", System.getProperty("user.dir") + "/build/libs/");
-        b.inheritIO();
-        p = b.start();
-        p.waitFor();
-        Properties prop = new Properties();
-        prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
-        prop.setProperty("allow_anonymous", "true");
-        prop.setProperty("start_delay", "1");
-        prop.setProperty("debuglevel", "DEBUG");
-        prop.setProperty("stdlog", "TRUE");
-        prop.setProperty("heap_corruption", "IGNORE");
-        prop.setProperty("disable_crc", "TRUE");
+                ProcessBuilder b = new ProcessBuilder("pwd");
+                b.inheritIO();
+                Process p = b.start();
+                p.waitFor();
+                b = new ProcessBuilder("tar", "xvf", "../mtpgsql/src/mtpg.tar.bz2", "-C", "build");
+                b.inheritIO();
+                p = b.start();
+                p.waitFor();
+                b = new ProcessBuilder("rm", "-rf", System.getProperty("user.dir") + "/build/testdb");
+                b.inheritIO();
+                p = b.start();
+                p.waitFor();
+                b = new ProcessBuilder("build/mtpg/bin/initdb", "-D", System.getProperty("user.dir") + "/build/testdb");
+                b.inheritIO();
+                p = b.start();
+                p.waitFor();
+                b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "template1");
+                p = b.start();
+                try (Writer w = p.outputWriter()) {
+                    w.append("create database test;\n").flush();
+                }
+                p.waitFor();
+//        b = new ProcessBuilder("cp","libweaver.dylib", System.getProperty("user.dir") + "/build/libs/");
+//        b.inheritIO();
+//        p = b.start();
+//        p.waitFor();
+                Properties prop = new Properties();
+                prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
+                prop.setProperty("allow_anonymous", "true");
+                prop.setProperty("start_delay", "1");
+                prop.setProperty("debuglevel", "DEBUG");
+                prop.setProperty("stdlog", "TRUE");
+//        prop.setProperty("index_corruption", "IGNORE");
+//        prop.setProperty("heap_corruption", "IGNORE");
+                prop.setProperty("disable_crc", "TRUE");
 //        prop.setProperty("usegc", "FALSE");
-        WeaverInitializer.initialize(prop);
+                WeaverInitializer.initialize(prop);
     }
 
+    @Disabled
     @org.junit.jupiter.api.AfterAll
     public static void tearDownClass() throws Exception {
-        WeaverInitializer.close(true);
+            WeaverInitializer.close(true);
     }
 
     @org.junit.jupiter.api.BeforeEach
@@ -695,9 +701,6 @@ public class JNITest {
                         });
                     }
                 }
-//                try (Stream<Row> explain = ResultSet.stream(ts.statement("select * from (explain select value from test11 where id = 4)"))) {
-//                    explain.flatMap(r->r.stream()).forEach(System.out::println);
-//                }
             }
         } catch (ExecutionException ee) {
             // expected 
@@ -819,9 +822,7 @@ public class JNITest {
                         p.execute("insert into test20 (id, value) values (5, 'test5')");
 
                         try (Statement s = p.statement("select * from test20")) {
-                            try (Stream<Row> set = ResultSet.stream(s)) {
-                                set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
-                            }
+                            ResultSet.stream(s).flatMap(Row::stream).filter(Column::isValid).forEach(JNITest::blackhole);
                         }
                     }
                 }
@@ -843,19 +844,15 @@ public class JNITest {
                 conn.stream("explain select * from test20 where id = 4");
                 try (Statement s = conn.statement("select id, value from test20 where id = $id")) {
                     s.linkInput("id", Integer.class).set(gen.nextInt(10000));
-                    try (Stream<Row> explain = ResultSet.stream(s)) {
-                        explain.flatMap(r->r.stream()).forEach(System.out::println);
-                    }
+                    ResultSet.stream(s).flatMap(r->r.stream()).forEach(System.out::println);
                 }
                 try (Statement s = conn.statement("select id, value from test20")) {
-                    try (Stream<Row> explain = ResultSet.stream(s)) {
-                        explain.flatMap(r->r.stream()).forEach(JNITest::blackhole);
-                    }
+                    ResultSet.stream(s).flatMap(r->r.stream()).forEach(JNITest::blackhole);
                     conn.stream("report user memory");
                 }
                 conn.execute("drop index test20_id_idx");
+                conn.stream("report user memory");
             }
-            conn.stream("report user memory");
             System.out.println("done");
         }
     }
@@ -892,7 +889,7 @@ public class JNITest {
                     .output(1, Integer.class)
                     .output(2, String.class)
                     .execute()) {
-                    r.flatMap(Row::stream).forEach(System.out::println);
+                    r.flatMap(Row::stream).forEach(JNITest::blackhole);
             }
             conn.stream("report user memory");
             Random rand = new Random();
@@ -902,9 +899,8 @@ public class JNITest {
                     .output(1, Integer.class)
                     .output(2, String.class)
                     .execute().flatMap(Row::stream)) {
-                        c.forEach(System.out::println);
+                        c.forEach(JNITest::blackhole);
                 }
-                System.gc();
             }
             try (Stream<Row> c = ResultSet.builder(conn).parse("select id, value from test21")
                 .execute()) {

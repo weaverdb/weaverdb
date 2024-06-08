@@ -41,9 +41,6 @@
 #include "storage/bufmgr.h"
 
 
-extern SPINLOCK FreeBufMgrLock;
-
-
 typedef struct {
     int                 head;
     int                 tail;

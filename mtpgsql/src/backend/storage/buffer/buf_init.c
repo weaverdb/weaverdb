@@ -113,11 +113,6 @@ MemoryContext buffer_cxt;
  *
  */
 
-
-SPINLOCK	HeapBufLock;
-SPINLOCK	IndexBufLock;
-SPINLOCK	FreeBufMgrLock;
-
 long int	ReadBufferCount;
 long int	ReadLocalBufferCount;
 long int	BufferHitCount;

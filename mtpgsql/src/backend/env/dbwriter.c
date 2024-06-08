@@ -179,7 +179,6 @@ static int MergeWriteGroups(WriteGroup target, WriteGroup src);
 static int ResetThreadState(THREAD*  t);
 
 static int TakeFileSystemSnapshot(char* cmd);
-static Block AdvanceBuffer(long generation, BufferDesc* bufHdr);
 
 extern bool     TransactionSystemInitialized;
 
@@ -1055,6 +1054,7 @@ int LogBuffers(WriteGroup list) {
     IOStatus        iostatus;
 
     smgrbeginlog();
+    SetBufferGeneration(list->generation);
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         
         /* Ignore buffers that were not dirtied by me */
@@ -1077,8 +1077,7 @@ int LogBuffers(WriteGroup list) {
 
             iostatus = LogBufferIO(bufHdr);
             if ( iostatus == IO_SUCCESS ) {
-                Block blk = AdvanceBuffer(list->generation, bufHdr);
-                PageInsertChecksum((Page)blk);
+                Block blk = AdvanceBufferIO(bufHdr, false);
                 buffer_hits++;
                 if ( SM_FAIL == smgrlog(
                                         DEFAULT_SMGR,
@@ -1170,6 +1169,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
     int iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_COMMIT;
 
 
+    SetBufferGeneration(list->generation);
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         bool written = false;
       /* Ignore buffers that were not dirtied by me */
@@ -1207,8 +1207,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 iostatus = WriteBufferIO(bufHdr, WRITE_FLUSH);
                 if (iostatus == IO_SUCCESS) {
                     Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
-                    Block blk = AdvanceBuffer(list->generation, bufHdr);
-                    PageInsertChecksum((Page)blk);
+                    Block blk = AdvanceBufferIO(bufHdr, !forcommit);
                     status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, blk);
                     written = true;
                     
@@ -1250,8 +1249,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 if ( iostatus == IO_SUCCESS) {                    
                     buffer_hits++;
                     cache->commit = true;
-                    Block blk = AdvanceBuffer(list->generation, bufHdr);
-                    PageInsertChecksum((Page)blk);
+                    Block blk = AdvanceBufferIO(bufHdr, true);
                     
                     if (blk == 0)
                         elog(FATAL, "[DBWriter]bad buffer block in buffer sync");
@@ -1656,17 +1654,6 @@ GetFlushTime() {
     return flush_time;
 }
 
-static Block AdvanceBuffer(long generation, BufferDesc* bufHdr) {
-    pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-    if (bufHdr->generation <= generation) {
-        memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
-        PageInsertChecksum((Page)bufHdr->shadow);
-        bufHdr->generation = generation;
-    }
-    pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
-    return (Block)bufHdr->data;
-}
-
 long GetBufferGeneration() {
     if (db_inited) {
         WriteGroup w = GetCurrentWriteGroup(false);
@@ -1677,4 +1664,3 @@ long GetBufferGeneration() {
         return 0;
     }
 }
-
