@@ -148,9 +148,6 @@ static void* SyncWriter(void *jones);
 
 static WriteGroup GetSyncGroup(void);
 static void ActivateSyncGroup(void);
-#ifdef UNUSED
-static void ReleaseSyncGroup(void);
-#endif
 static int FlushWriteGroup(WriteGroup cart);
 
 static void DBTableInit(void);
@@ -459,14 +456,7 @@ void ActivateSyncGroup() {
     pthread_cond_signal(&sync_group->broadcaster);
     pthread_mutex_unlock(&sync_group->checkpoint);
 }
-#ifdef UNUSED
-void ReleaseSyncGroup() {
-    pthread_mutex_lock(&sync_group->checkpoint);
-    sync_group->currstate = READY;
-    pthread_cond_signal(&sync_group->broadcaster);
-    pthread_mutex_unlock(&sync_group->checkpoint);
-}
-#endif
+
 int FlushWriteGroup(WriteGroup cart) {
     int release = 0;
     struct timeval t1,t2;
@@ -476,12 +466,14 @@ int FlushWriteGroup(WriteGroup cart) {
     
     gettimeofday(&t1,NULL);
 
-    if ( logging ) LogBuffers(cart);
+    if ( logging ) {
+        release = LogBuffers(cart);
+    }
     
     WriteGroup sync = GetSyncGroup();
     sync_buffers += MergeWriteGroups(sync,cart);
     sync->currstate = FLUSHING;
-    release = SyncBuffers(sync,true);
+    release += SyncBuffers(sync,true);
     sync->currstate = NOT_READY;
     if ( sync_buffers > max_logcount ) { 
         CommitPackage(sync);
@@ -1090,7 +1082,7 @@ int LogBuffers(WriteGroup list) {
                                         blk
                                         )
                     ) {
-                    elog(DEBUG, "DBWriter: buffer failed to log in smgr bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                    elog(DEBUG, "DBWriter: buffer failed to log in smgr bufid:%d dbid:%ld relid:%ld blk:%ld",
                         bufHdr->buf_id,
                         bufHdr->tag.relId.dbId,
                         bufHdr->tag.relId.relId,
@@ -1100,35 +1092,41 @@ int LogBuffers(WriteGroup list) {
                     TerminateBufferIO(iostatus,bufHdr);
                 }
             } else {
-/* not diry is not IO error
-                elog(DEBUG, "DBWriter: buffer failed to logio, not dirty bufid:%d dbid:%ld relid:%ld blk:%ld\n",
-                    bufHdr->buf_id,
-                    bufHdr->tag.relId.dbId,
-                    bufHdr->tag.relId.relId,
-                    bufHdr->tag.blockNum);
-                ErrorBufferIO(iostatus,bufHdr);
-*/
+                if (IsDirtyBufferIO(bufHdr)) {
+                    elog(DEBUG, "DBWriter: not dirty bufid:%d dbid:%ld relid:%ld blk:%ld",
+                        bufHdr->buf_id,
+                        bufHdr->tag.relId.dbId,
+                        bufHdr->tag.relId.relId,
+                        bufHdr->tag.blockNum);
+                    ErrorBufferIO(iostatus,bufHdr);
+                }
             }
         } else {
             iostatus = LogBufferIO(bufHdr);
             
             if (iostatus == IO_SUCCESS) {
-                elog(NOTICE, "log buffers - this should not happen");
-                elog(NOTICE, "dbid:%ld relid:%ld blk:%ld",
+                elog(DEBUG, "log buffers - this should not happen");
+                elog(DEBUG, "dbid:%ld relid:%ld blk:%ld",
                         list->descriptions[i].relId.dbId,
                         list->descriptions[i].relId.relId,
                         list->descriptions[i].blockNum);
-                elog(NOTICE, "dbid:%ld relid:%ld blk:%ld",
+                elog(DEBUG, "dbid:%ld relid:%ld blk:%ld",
                         bufHdr->tag.relId.dbId,
                         bufHdr->tag.relId.relId,
                         bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus,bufHdr);
             } else {
-                elog(NOTICE, "DBWriter: bufferid inconsistent and not dirty, dropped due to truncation bufid:%d dbid:%ld relid:%ld blk:%ld",
-                    bufHdr->buf_id,
-                    bufHdr->tag.relId.dbId,
-                    bufHdr->tag.relId.relId,
-                    bufHdr->tag.blockNum);
+                if (IsDirtyBufferIO(bufHdr)) {
+                    elog(DEBUG, "DBWriter: bufferid dropped bufid:%d dbid:%ld relid:%ld blk:%ld",
+                        bufHdr->buf_id,
+                        bufHdr->tag.relId.dbId,
+                        bufHdr->tag.relId.relId,
+                        bufHdr->tag.blockNum);
+                    ErrorBufferIO(iostatus,bufHdr);
+                }
+                /* releasing because this is no longer part of the write group
+                   it has been flushed out for reuse due to buffer exhaustion
+                */
                 list->buffers[i] = false;
                 while (list->release[i] > 0) {
                     if ( ManualUnpin(bufHdr, false)) {
@@ -1137,9 +1135,6 @@ int LogBuffers(WriteGroup list) {
                     list->release[i]--;
                     releasecount++;
                 }
-                /*  already in error
-                ErrorBufferIO(iostatus,bufHdr);
-                */
             }
         }
     }
@@ -1224,7 +1219,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     
                     RelationClose(target);
                 } else {            
-                    elog(DEBUG, "DBWriter: buffer failed to in sync bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                    elog(DEBUG, "DBWriter: buffer failed to in sync bufid:%d dbid:%ld relid:%ld blk:%ld",
                             bufHdr->buf_id,
                             bufHdr->tag.relId.dbId,
                             bufHdr->tag.relId.relId,
@@ -1272,48 +1267,42 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                         TerminateBufferIO(iostatus, bufHdr);
                     }
                 } else {
+                    elog(NOTICE, "DBWriter: buffer failed sync for writeio bufid:%d dbid:%ld relid:%ld blk:%ld",
+                        bufHdr->buf_id,
+                        bufHdr->tag.relId.dbId,
+                        bufHdr->tag.relId.relId,
+                        bufHdr->tag.blockNum);
                     ErrorBufferIO(iostatus, bufHdr);
-            elog(DEBUG, "DBWriter: buffer failed sync for writeio bufid:%d dbid:%ld relid:%ld blk:%ld\n",
-                bufHdr->buf_id,
-                bufHdr->tag.relId.dbId,
-                bufHdr->tag.relId.relId,
-                bufHdr->tag.blockNum);
                 }
             }
         } else {
             iostatus = WriteBufferIO(bufHdr, WRITE_FLUSH);
             if (iostatus == IO_SUCCESS) {
-                elog(NOTICE, "already out dbid:%ld relid:%ld blk:%ld\n",
+                elog(DEBUG, "already out dbid:%ld relid:%ld blk:%ld",
                         list->descriptions[i].relId.dbId,
                         list->descriptions[i].relId.relId,
                         list->descriptions[i].blockNum);
-                elog(NOTICE, "now dbid:%ld relid:%ld blk:%ld\n",
+                elog(DEBUG, "now dbid:%ld relid:%ld blk:%ld",
                         bufHdr->tag.relId.dbId, bufHdr->tag.relId.relId, bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus, bufHdr);
             } else {
-            elog(DEBUG, "DBWriter: buffer failed to writeio2 bufid:%d dbid:%ld relid:%ld blk:%ld\n",
-                bufHdr->buf_id,
-                bufHdr->tag.relId.dbId,
-                bufHdr->tag.relId.relId,
-                bufHdr->tag.blockNum);
+                elog(DEBUG, "DBWriter: buffer failed to writeio2 bufid:%d dbid:%ld relid:%ld blk:%ld",
+                    bufHdr->buf_id,
+                    bufHdr->tag.relId.dbId,
+                    bufHdr->tag.relId.relId,
+                    bufHdr->tag.blockNum);
                 ErrorBufferIO(iostatus, bufHdr);
             }
         }
         
+        list->buffers[i] = false;
         while(list->release[i] > 0) {
-            if ( !written ) {
-                #ifdef UNUSED
-                BufferTag* tag = &list->descriptions[i];
-                BufferTag* bt = &bufHdr->tag;
-                #endif
-            }
             if ( ManualUnpin(bufHdr, false) ) {
                 freecount++;
             }
             list->release[i]--;
             releasecount++;
         }
-        list->buffers[i] = false;
     }
     
     DTRACE_PROBE4(mtpg, dbwriter__syncedbuffers, buffer_hits, releasecount, freecount, forcommit);

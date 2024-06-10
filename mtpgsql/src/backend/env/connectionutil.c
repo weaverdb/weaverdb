@@ -115,6 +115,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 	char*  nofsync = getenv("PG_NOFSYNC");
 	char*  stdlog = getenv("PG_STDLOG");
 	char*  servertype = getenv("PG_SERVERTYPE");
+        char*  redirect = getenv("RG_REDIRECTERR");
 	DataDir = getenv("PGDATA");
 
 	struct timeval     timer;	
@@ -133,6 +134,8 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
                 dbug = val;
             } else if ( strcmp(key,"logfile") == 0 ) {
                 output = val;
+            } else if ( strcmp(key,"redirecterr") == 0) {
+                redirect = val;
             } else if ( strcmp(key,"nofsync") == 0 ) {
                 nofsync = val;
             } else if ( strcmp(key,"stdlog") == 0 ) {
@@ -233,12 +236,18 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         
 	if ( output != NULL && strlen(output) > 0 ) {
 		 strncpy(OutputFileName,output,MAXPGPATH);
+                 stdlog = "TRUE";
 	} else {
 /*  standard output  */	
 	}
 	
 	if ( stdlog != NULL ) {
-		if ((toupper(stdlog[0]) == 'T')) DebugFileOpen();
+            if (redirect == NULL) {
+                redirect = "FALSE";
+            }
+            if ((toupper(stdlog[0]) == 'T')) {
+                DebugFileOpen((toupper(redirect[0]) == 'T'));
+            }
 	}
 		
 	SetProcessingMode(InitProcessing);   

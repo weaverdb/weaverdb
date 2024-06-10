@@ -38,7 +38,7 @@ PG_EXTERN void elog(int lev, const char *fmt,...) __attribute__((format(printf, 
 
 #ifndef PG_STANDALONE
 
-PG_EXTERN int	DebugFileOpen(void);
+PG_EXTERN int	DebugFileOpen(bool redirect);
 #ifdef __cplusplus
 }
 #endif

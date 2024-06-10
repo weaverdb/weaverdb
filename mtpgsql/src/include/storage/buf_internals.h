@@ -163,7 +163,8 @@ typedef struct sbufdesc
 
 typedef enum {
     IO_SUCCESS,
-    IO_FAIL
+    IO_FAIL,
+    IO_CLEAN
 } IOStatus;
 /*
  *	mao tracing buffer allocation

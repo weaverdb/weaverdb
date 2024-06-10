@@ -1192,13 +1192,6 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
     }
 
     if ( buf->ioflags & BM_IO_ERROR ) {
-/*
-            elog(DEBUG, "DBWriter: buffer failed to writeio due to previous error bufid:%d dbid:%ld relid:%ld blk:%ld",
-                buf->buf_id,
-                buf->tag.relId.dbId,
-                buf->tag.relId.relId,
-                buf->tag.blockNum);
-*/
         iostatus = IO_FAIL;
     } else {
 /*  flushes are always dirty  */
@@ -1248,7 +1241,7 @@ DirtyBufferIO(BufferDesc *buf, long generation) {  /*  clears the inbound flag  
 
 
 bool
-IsDirtyBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
+IsDirtyBufferIO(BufferDesc *buf) { 
     bool dirty = false;
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
     

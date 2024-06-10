@@ -446,5 +446,5 @@ BaseInit(void)
 	 * input/output/debugging file descriptors.
 	 */
 	InitCommunication();
-	DebugFileOpen();
+	DebugFileOpen(true);
 }

@@ -441,7 +441,7 @@ elog(int lev, const char *fmt,...)
             if ( IsMultiuser() ) {
                 printf("SYSTEM HALT: from thread %ld\n",(long)pthread_self());
                 printf("%s", msg_buf);
-                fprintf(stderr, "%s", msg_buf);
+                fprintf(stderr, "%s\n", msg_buf);
                 #ifdef MACOSX
                 kill(getpid(),SIGABRT);
                 #else
@@ -470,7 +470,7 @@ elog(int lev, const char *fmt,...)
 #ifndef PG_STANDALONE
 
 int
-DebugFileOpen(void)
+DebugFileOpen(bool redirectErr)
 {
 	int			fd;
 
@@ -480,16 +480,23 @@ DebugFileOpen(void)
 	if (OutputFileName[0])
 	{
 		if ((fd = open(OutputFileName, O_CREAT | O_APPEND | O_WRONLY,
-					   0666)) < 0)
-			elog(FATAL, "DebugFileOpen: open of %s: %m",
+					   0666)) < 0) {
+                    elog(FATAL, "DebugFileOpen: open of %s: %m",
 				 OutputFileName);
-		close(fd);
-
-		if (!freopen(OutputFileName, "a", stderr))
-			elog(FATAL, "DebugFileOpen: %s reopen as stderr: %m",
+                } else {
+                    fprintf(stderr, "logging output to %s\n", OutputFileName);
+                    if (redirectErr) {
+        		close(fd);
+                        if (!freopen(OutputFileName, "a", stderr)) {
+                            elog(FATAL, "DebugFileOpen: %s reopen as stderr: %m",
 				 OutputFileName);
-		Err_file = Debugfile = fileno(stderr);
-		return Debugfile;
+                        } else {
+                            fd = fileno(stderr);
+                        }
+                    }
+                    Err_file = Debugfile = fd;
+                    return Debugfile;
+                }
 	}
 
 	/*
