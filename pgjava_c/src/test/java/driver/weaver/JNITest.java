@@ -41,28 +41,28 @@ public class JNITest {
     @Disabled
     @org.junit.jupiter.api.BeforeAll
     public static void setUpClass() throws Exception {
-                ProcessBuilder b = new ProcessBuilder("pwd");
-                b.inheritIO();
-                Process p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("tar", "xvf", "../mtpgsql/src/mtpg.tar.bz2", "-C", "build");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("rm", "-rf", System.getProperty("user.dir") + "/build/testdb");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/initdb", "-D", System.getProperty("user.dir") + "/build/testdb");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "template1");
-                p = b.start();
-                try (Writer w = p.outputWriter()) {
-                    w.append("create database test;\n").flush();
-                }
-                p.waitFor();
+//                ProcessBuilder b = new ProcessBuilder("pwd");
+//                b.inheritIO();
+//                Process p = b.start();
+//                p.waitFor();
+//                b = new ProcessBuilder("tar", "xvf", "../mtpgsql/src/mtpg.tar.bz2", "-C", "build");
+//                b.inheritIO();
+//                p = b.start();
+//                p.waitFor();
+//                b = new ProcessBuilder("rm", "-rf", System.getProperty("user.dir") + "/build/testdb");
+//                b.inheritIO();
+//                p = b.start();
+//                p.waitFor();
+//                b = new ProcessBuilder("build/mtpg/bin/initdb", "-D", System.getProperty("user.dir") + "/build/testdb");
+//                b.inheritIO();
+//                p = b.start();
+//                p.waitFor();
+//                b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "template1");
+//                p = b.start();
+//                try (Writer w = p.outputWriter()) {
+//                    w.append("create database test;\n").flush();
+//                }
+//                p.waitFor();
 //        b = new ProcessBuilder("cp","libweaver.dylib", System.getProperty("user.dir") + "/build/libs/");
 //        b.inheritIO();
 //        p = b.start();
@@ -70,7 +70,7 @@ public class JNITest {
                 Properties prop = new Properties();
                 prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
                 prop.setProperty("allow_anonymous", "true");
-                prop.setProperty("start_delay", "1");
+                prop.setProperty("start_delay", "10");
                 prop.setProperty("debuglevel", "DEBUG");
                 prop.setProperty("stdlog", "TRUE");
 //        prop.setProperty("index_corruption", "IGNORE");
@@ -810,8 +810,8 @@ public class JNITest {
             conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test20 (id int4, value varchar(256))");
-            conn.execute("truncate table test20");
             for (int x=0;x<25;x++) {
+                conn.execute("truncate table test20");
                 System.out.println("round " +  (x+1));
                 try (TransactionSequence ts = new TransactionSequence(conn)) {
                     try (TransactionSequence.Procedure p = ts.start()) {

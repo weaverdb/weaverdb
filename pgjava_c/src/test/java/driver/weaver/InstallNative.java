@@ -34,12 +34,13 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 b.inheritIO();
                 p = b.start();
                 p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/initdb", "-D", System.getProperty("user.dir") + "/build/testdb");
+                b = new ProcessBuilder("build/mtpg/bin/initdb","-D", System.getProperty("user.dir") + "/build/testdb");
                 b.inheritIO();
                 p = b.start();
                 p.waitFor();
                 b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "template1");
-
+                b.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                b.redirectError(ProcessBuilder.Redirect.INHERIT);
                 p = b.start();
                 try (Writer w = p.outputWriter()) {
                     w.append("create database test;\n").flush();
@@ -52,7 +53,7 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 Properties prop = new Properties();
                 prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
                 prop.setProperty("allow_anonymous", "true");
-                prop.setProperty("start_delay", "1");
+                prop.setProperty("start_delay", "10");
                 prop.setProperty("debuglevel", "DEBUG");
                 prop.setProperty("stdlog", "TRUE");
 //        prop.setProperty("index_corruption", "IGNORE");

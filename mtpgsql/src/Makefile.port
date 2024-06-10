@@ -39,25 +39,6 @@ CPU=sparcv9
 ENDIAN=BIG_ENDIAN
 endif
 
-ifndef JAVA_HOME
-JAVA_HOME=/usr/latest/jdk
-endif
-
-#OS=LINUX
-#CPU=amd64
-#PORTNAME=linux
-#ENDIAN=LITTLE_ENDIAN
-
-#OS=SUNOS
-#CPU=amd64
-#PORTNAME=solaris
-#ENDIAN=LITTLE_ENDIAN
-
-#OS=SUNOS
-#CPU=sparcv9
-#PORTNAME=solaris
-#ENDIAN=BIG_ENDIAN
-
 %.so: %.o
 	$(LD) -G -Bdynamic -o $@ $<
 MK_NO_LORDER=true
@@ -71,7 +52,7 @@ else ifeq ($(CC), clang)
 CC=clang
 CPP=clang++
 CFLAGS+= -g -fPIC -m64 -std=gnu89
-CFLAGS+=  -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
+CFLAGS+= -DNOARRAY -D${OS} -DBYTE_ORDER=${ENDIAN} -D_REENTRANT 
 CFLAGS+= -Wall -Wmissing-prototypes -Wmissing-declarations -Werror
 LD=ld
 else 
@@ -87,20 +68,8 @@ endif
 #CFLAGS+= -xO4 -m64 -KPIC
 #CFLAGS+= -mt -xildoff -DNOARRAY -D${OS} -xipo -DBYTE_ORDER=${ENDIAN}
 
-#for java
-ifeq ($(JAVA_HOME),"")
-JAVA_HOME=/usr/jdk/latest
-endif
-
-CFLAGS+= -I${JAVA_HOME}/include -I${JAVA_HOME}/include/${PORTNAME}
 BKIOPTS+= -DNOARRAY -I../../include -I..
 
-#CFLAGS+= -DDEBUG_INDEX_INSERT
-#CFLAGS+= -DCACHEDEBUG
-#CFLAGS+= -DHEAPDEBUGALL
-#CFLAGS+= -DCLOBBER_FREED_MEMORY
-#CFLAGS+= -DMEMORY_CONTEXT_CHECKING
-CFLAGS+= -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/${PORTNAME}
 AROPT= crs
 CFLAGS_SL=
 ifeq ($(OS),SUNOS) 
@@ -111,16 +80,24 @@ ifeq ($(OS),LINUX)
 LDFLAGS= -L/usr/lib64
 LIBS= -lnsl -lrt -lm -lcrypt -lmcheck -lpthread 
 endif
+ifeq ($(OS),MACOSX)
+LIBS= 
+endif
 
 INSTALL= $(SRCDIR)/install-sh -c
 POSTGRESDIR=$(SRCDIR)/mtpg
 
-LEAK_DETECT=0
-
-ifeq ($(LEAK_DETECT),1)
-CFLAGS+= -I$(SRCDIR)/../../gc/include
-CFLAGS+= -L/usr/ucblib/${CPU}
-CFLAGS+= -DGC_DEBUG=1
-CFLAGS+= -L$(SRCDIR)/../../gc/.libs
+#for java
+ifeq ($(JAVA_HOME),"")
+JAVA_HOME=/usr/jdk/latest
 endif
 
+CFLAGS+= -I${JAVA_HOME}/include -I${JAVA_HOME}/include/${PORTNAME}
+
+ifeq ($(LEAK_DETECT),1)
+ifeq ($(ARCH),Darwin)
+CFLAGS+= -I/usr/local/include/
+CFLAGS+= -DUSEGC=1
+LDFLAGS+= /Users/myronscott/projects/gc/bdwgc/extra/.libs/gc.o
+endif
+endif

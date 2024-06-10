@@ -32,6 +32,7 @@
 #define SUBSETISALLOC 1
 #define MEMORY_CONTEXT_CHECKING 1 
 #define CLOBBER_FREED_MEMORY 1  
+/* #define HAVE_ALLOCINFO 1  */
 /* #define CACHEDEBUG 1 */
 /*  #define EXEC_EVALDEBUG 1 */
 /*  #define MEMORY_STATS 1  */
@@ -45,9 +46,16 @@
 /*  #define XLOG   */
 /*  how many threads can enter the executor at once   */
 
+#ifdef USEGC
+#include "gc/gc.h"
+#define os_malloc GC_MALLOC
+#define os_realloc GC_REALLOC
+#define os_free GC_FREE
+#else
 #define os_malloc base_mem_alloc
 #define os_realloc base_mem_realloc
 #define os_free base_mem_free
+#endif
 
 #ifdef USE_TLS
 #define TLS  static __thread

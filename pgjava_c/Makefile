@@ -38,8 +38,7 @@ MYLIBS=\
 -lpthread -lrt -lm -lnsl -lc 
 endif
 
-MACOSLIBS=\
--lpthread 
+MACOSLIBS=
 
 MYPATH=\
 -L${SRCDIR} \
@@ -73,7 +72,7 @@ else
 all: libweaver.dylib weaver
 weaver: 
 	${CC} ${CFLAGS} -DWEAVER_JAVA \
-	${MACOSINC} ${MACOSPATH} -lpthread -L${JAVA_HOME}/lib/server/ -ljli -lobjc \
+	${MACOSINC} ${MACOSPATH} -L${JAVA_HOME}/lib/server/ -ljli -lobjc \
 	main.c \
 	-o weaver
 libweaver.dylib:

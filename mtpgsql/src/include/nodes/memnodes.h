@@ -35,9 +35,15 @@
 
 typedef struct MemoryContextMethods
 {
+#ifdef HAVE_ALLOCINFO
+	void	   *(*alloc) (MemoryContext context, Size size,const char* file, int line, const char* func);
+	/* call this free_p in case someone #define's free() */
+	void		(*free_p) (MemoryContext context, void *pointerconst,const char* file, int line, const char* func);
+#else
 	void	   *(*alloc) (MemoryContext context, Size size);
 	/* call this free_p in case someone #define's free() */
 	void		(*free_p) (MemoryContext context, void *pointer);
+#endif
 	void	   *(*realloc) (MemoryContext context, void *pointer, Size size);
 	void		(*init) (MemoryContext context);
 	void		(*reset) (MemoryContext context);

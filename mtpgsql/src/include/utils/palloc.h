@@ -54,17 +54,30 @@ extern void *MemoryContextAlloc(MemoryContext context, Size size);
 
 extern DLLIMPORT MemoryContext CurrentMemoryContext;
 
+#ifdef HAVE_ALLOCINFO
+#define palloc(sz)	CallMemoryContextAlloc(CurrentMemoryContext, (sz), __FILE__, __LINE__, __FUNCTION__)
+#define pfree(pointer)   call_pfree(pointer,  __FILE__, __LINE__, __FUNCTION__)
+#else
 #define palloc(sz)	MemoryContextAlloc(CurrentMemoryContext, (sz))
+#endif
 
 #else  /* USE_GLOBAL_ENVIRONMENT */
 
-
+#ifdef HAVE_ALLOCINFO
+#define palloc(sz)	CallMemoryContextAlloc(MemoryContextGetCurrentContext(), (sz), __FILE__, __LINE__, __FUNCTION__)
+#define pfree(pointer)   call_pfree(pointer,  __FILE__, __LINE__, __FUNCTION__)
+#else
 #define palloc(sz)	MemoryContextAlloc(MemoryContextGetCurrentContext(), (sz))
+#endif
 
 #endif  /*  USE_GLOBAL_ENVIRONMENT  */
 PG_EXTERN void* pmerge(void* first,int fl,void* second,int sl);
 PG_EXTERN void pclear(void *pointer);
+#ifdef HAVE_ALLOCINFO
+PG_EXTERN void call_pfree(void *pointer, const char* file, int line, const char* func);
+#else
 PG_EXTERN void pfree(void *pointer);
+#endif
 
 PG_EXTERN void *repalloc(void *pointer, Size size);
 

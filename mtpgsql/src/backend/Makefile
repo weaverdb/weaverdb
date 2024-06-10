@@ -79,7 +79,7 @@ endif
 
 postgres: ../include/fmgr.h libmtpg.a main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o
 	$(CC) $(CFLAGS) -Wl -ld_classic -L. -o postgres main/SUBSYS.o bootstrap/SUBSYS.o postmaster/postmaster.o \
-        -lmtpg $(LDFLAGS) $(LIBS)
+        -lmtpg 
 
 #.PHONY: postgres
 
@@ -116,18 +116,8 @@ bootstrap/SUBSYS.o:
 ifeq ($(PORTNAME),solaris)
 mtpg.o: $(OBJS) mtpg.d
 	/usr/sbin/dtrace -G -64 -s mtpg.d $(OBJS)
-else
-mtpg.o: $(OBJS) 
-	ar q mtpg.o $(OBJS)
 endif
 
-ifeq ($(LEAK_DETECT),1)
-libmtpg.a: ${OBJS} mtpg.o
-	${LD} -r ${LDFLAGS} -\
-	${OBJS} ${GCOBJ} ${VERSIONOBJ} \
-	-o libclearmtpg.a
-	${LD} -r -M$(SRCDIR)/backend/mapfile.txt mtpg.o libclearmtpg.a -o libmtpg.a
-else
 ifeq ($(PORTNAME),solaris)
 #	${LD} -r ${LDFLAGS} -M$(SRCDIR)/backend/mapfile.txt 
 libmtpg.a: ${OBJS} mtpg.o
@@ -135,18 +125,15 @@ libmtpg.a: ${OBJS} mtpg.o
 	${OBJS} ${VERSIONOBJ} mtpg.o \
 	-o libmtpg.a
 else ifeq ($(PORTNAME),darwin)
-libmtpg.a: ${OBJS} mtpg.o
+libmtpg.a: ${OBJS}
 	${LD} -r ${LDFLAGS} \
-	${OBJS} ${VERSIONOBJ} mtpg.o \
+	${OBJS} ${VERSIONOBJ} \
 	-o libmtpg.a
 else
-#	ar ${AROPT} libmtpg.a 
-#	${OBJS} ${VERSIONOBJ}
 libmtpg.a: ${OBJS} 
 	${LD} -r ${LDFLAGS} --version-script=$(SRCDIR)/backend/mapfile.txt \
 	${OBJS} ${VERSIONOBJ} \
 	-o libmtpg.a
-endif
 endif
 
 ############################################################################
@@ -320,7 +307,7 @@ endif
 # are up to date.  It saves the time of doing all the submakes.
 .PHONY: quick
 quick: $(OBJS)
-	$(CC) -o postgres $(OBJS) $(OBJS1) $(LDFLAGS)
+	$(CC) -o postgres $(OBJS) $(OBJS1) 
 
 #
 # Build the file, "./ID", used by the "gid" (grep-for-identifier) tool

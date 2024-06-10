@@ -1154,31 +1154,29 @@ LogBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     }
 
     if ( buf->ioflags & BM_IO_ERROR ) {
-        pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-        iostatus = IO_FAIL;
-        elog(NOTICE, "LogBufferIO: previous error bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+/*
+        elog(DEBUG, "LogBufferIO: previous error bufid:%d dbid:%ld relid:%ld blk:%ld",
                 buf->buf_id,
                 buf->tag.relId.dbId,
                 buf->tag.relId.relId,
                 buf->tag.blockNum);
-        return iostatus;
-    }
-
-    dirty = (buf->ioflags & BM_DIRTY);
-
-    if ( dirty ) {
-        buf->ioflags |= (BM_LOG_IN_PROGRESS);
-        buf->ioflags &= ~(BM_DIRTY);
-    }
-
-    pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-    
-    DTRACE_PROBE4(mtpg,buffer__logbufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
-    
-    if ( !dirty ) {
+*/
         iostatus = IO_FAIL;
+    } else {
+        dirty = (buf->ioflags & BM_DIRTY);
+
+        if ( dirty ) {
+            buf->ioflags |= (BM_LOG_IN_PROGRESS);
+            buf->ioflags &= ~(BM_DIRTY);
+        }
+
+        DTRACE_PROBE4(mtpg,buffer__logbufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
+
+        if ( !dirty ) {
+            iostatus = IO_FAIL;
+        }
     }
-    
+    pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
     return iostatus;
 }
 
@@ -1194,45 +1192,43 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
     }
 
     if ( buf->ioflags & BM_IO_ERROR ) {
-            elog(DEBUG, "DBWriter: buffer failed to writeio due to previous error bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+/*
+            elog(DEBUG, "DBWriter: buffer failed to writeio due to previous error bufid:%d dbid:%ld relid:%ld blk:%ld",
                 buf->buf_id,
                 buf->tag.relId.dbId,
                 buf->tag.relId.relId,
                 buf->tag.blockNum);
-        pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
+*/
         iostatus = IO_FAIL;
-        return iostatus;
-    }
-
+    } else {
 /*  flushes are always dirty  */
-    switch ( mode ) {
-        case WRITE_FLUSH:
-            dirty = 1;
-    /*  file will be flushed  */
-    /* can remove both flags b/c flushes only occur on Var and Log relations */
-            Assert(buf->kind == RELKIND_SPECIAL);
-            buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
-            break;
-        case WRITE_COMMIT:
-            dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
-            buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
-            break;
-        case WRITE_NORMAL:
-        default:
-            /* a write is warranted logged or dirty but only remove the logged flag 
-             * as we still need to log it if we are not in commit mode*/
-            dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
-            buf->ioflags &= ~(BM_LOGGED);
-        }
-    
-    if ( dirty ) {
- /*  logging is skipped in single user mode  */
-        buf->ioflags |= BM_WRITE_IN_PROGRESS;
-    }
+        switch ( mode ) {
+            case WRITE_FLUSH:
+                dirty = 1;
+        /*  file will be flushed  */
+        /* can remove both flags b/c flushes only occur on Var and Log relations */
+                Assert(buf->kind == RELKIND_SPECIAL);
+                buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
+                break;
+            case WRITE_COMMIT:
+                dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
+                buf->ioflags &= ~(BM_LOGGED | BM_DIRTY);
+                break;
+            case WRITE_NORMAL:
+            default:
+                /* a write is warranted logged or dirty but only remove the logged flag 
+                 * as we still need to log it if we are not in commit mode*/
+                dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
+                buf->ioflags &= ~(BM_LOGGED);
+            }
 
+        DTRACE_PROBE4(mtpg,buffer__writebufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
+        if ( dirty ) {
+     /*  logging is skipped in single user mode  */
+            buf->ioflags |= BM_WRITE_IN_PROGRESS;
+        }
+    }
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
-    
-    DTRACE_PROBE4(mtpg,buffer__writebufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
     
     return iostatus;
 }
@@ -1483,7 +1479,7 @@ bool ShadowBufferIfNeeded(BufferDesc* bufHdr, bool forflush) {
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
     if (
         (bufHdr->generation < gen) || 
-        (forflush && bufHdr->generation <= gen)
+        (forflush && bufHdr->generation == gen)
     ) {
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
         bufHdr->generation = gen;

@@ -609,14 +609,14 @@ void
 tuplesort_putdatum(Tuplesortstate *state, Datum val, bool isNull)
 {
 	DatumTuple *tuple;
-
+        MemoryContext old = MemoryContextSwitchTo(state->data_cxt);
 	/*
 	 * Build pseudo-tuple carrying the datum, and decrease availMem.
 	 */
 	if (isNull || state->datumTypeByVal)
 	{
 		USEMEM(state, sizeof(DatumTuple));
-		tuple = (DatumTuple *) MemoryContextAlloc(state->data_cxt,sizeof(DatumTuple));
+		tuple = (DatumTuple *) palloc(sizeof(DatumTuple));
 		tuple->val = val;
 		tuple->isNull = isNull;
 	}
@@ -630,7 +630,7 @@ tuplesort_putdatum(Tuplesortstate *state, Datum val, bool isNull)
 			datalen = VARSIZE((struct varlena *) DatumGetPointer(val));
 		tuplelen = datalen + MAXALIGN(sizeof(DatumTuple));
 		USEMEM(state, tuplelen);
-		newVal = (char *) MemoryContextAlloc(state->data_cxt,tuplelen);
+		newVal = (char *) palloc(tuplelen);
 		tuple = (DatumTuple *) newVal;
 		newVal += MAXALIGN(sizeof(DatumTuple));
 		memcpy(newVal, DatumGetPointer(val), datalen);
@@ -638,6 +638,7 @@ tuplesort_putdatum(Tuplesortstate *state, Datum val, bool isNull)
 		tuple->isNull = false;
 	}
 
+        MemoryContextSwitchTo(old);
 	puttuple_common(state, (void *) tuple);
 }
 

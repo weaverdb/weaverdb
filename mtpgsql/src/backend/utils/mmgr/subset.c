@@ -31,8 +31,13 @@ typedef struct SubSetContext
 /*
  * These functions implement the MemoryContext API for AllocSet contexts.
  */
+#ifdef HAVE_ALLOCINFO
+static void *SubSetAlloc(MemoryContext context, Size size, const char* file, int line, const char* func);
+static void SubSetFree(MemoryContext context, void *pointer, const char* file, int line, const char* func);
+#else
 static void *SubSetAlloc(MemoryContext context, Size size);
 static void SubSetFree(MemoryContext context, void *pointer);
+#endif
 static void *SubSetRealloc(MemoryContext context, void *pointer, Size size);
 static void SubSetInit(MemoryContext context);
 static void SubSetReset(MemoryContext context);
@@ -86,15 +91,18 @@ SubSetContextCreate(MemoryContext parent,const char *name)
 	SubSetContext*	context;
         Assert( parent->type != T_SubSetContext );
 	/* Do the type-independent part of context creation */
+        MemoryContext old = MemoryContextSwitchTo(parent);
 	context = (SubSetContext*) MemoryContextCreate(T_SubSetContext,
 										sizeof(SubSetContext),
 										&SubSetMethods,
 										parent,
 										name);
-	context->alloced_pointers = MemoryContextAlloc(parent,10 * sizeof(void*));
+                                     
+	context->alloced_pointers = palloc(10 * sizeof(void*));
 	memset(context->alloced_pointers,0x00,sizeof(void*) * 10);
 	context->map_size = 10;
 	context->highmark = 1;
+        MemoryContextSwitchTo(old);
 	return (MemoryContext) context;
 #endif
 }
@@ -145,9 +153,13 @@ SubSetReset(MemoryContext context)
 		pointer++;
 	}
 	pfree(sub->alloced_pointers);
-	sub->alloced_pointers = MemoryContextAlloc(sub->header.parent,sizeof(void*) * sub->highmark);
+        MemoryContext old = MemoryContextSwitchTo(sub->header.parent);
+
+	sub->alloced_pointers = palloc(sizeof(void*) * sub->highmark);
 	memset(sub->alloced_pointers,0x00,sizeof(void*) * sub->highmark);
 	sub->map_size = sub->highmark;
+
+        MemoryContextSwitchTo(old);
 }
 
 /*
@@ -181,11 +193,16 @@ SubSetDelete(MemoryContext context)
  *		Returns pointer to allocated memory of given size; memory is added
  *		to the set.
  */
+#ifdef HAVE_ALLOCINFO
+static void *SubSetAlloc(MemoryContext context, Size size, const char* file, int line, const char* func)
+#else
 static void *
 SubSetAlloc(MemoryContext context, Size size)
+#endif
 {
     SubSetContext*  sub = (SubSetContext*)context;
-	void* pointer = MemoryContextAlloc(sub->header.parent,size);
+    MemoryContext old = MemoryContextSwitchTo(sub->header.parent);
+	void* pointer = palloc(size);
 	int x;
 	void** store = sub->alloced_pointers;
 	for ( x=0;x<sub->map_size;x++ ) {
@@ -194,7 +211,7 @@ SubSetAlloc(MemoryContext context, Size size)
 	}
 	if ( x == sub->map_size ) {
 		void** save = sub->alloced_pointers;
-		sub->alloced_pointers = MemoryContextAlloc(sub->header.parent,sizeof(void*) * (sub->map_size * 2));
+		sub->alloced_pointers = palloc(sizeof(void*) * (sub->map_size * 2));
 		memset(sub->alloced_pointers,0x00,sizeof(void*) * sub->map_size * 2);
 		memmove(sub->alloced_pointers, save, sizeof(void*) * (sub->map_size));
 		sub->map_size *= 2;
@@ -203,6 +220,7 @@ SubSetAlloc(MemoryContext context, Size size)
 	sub->alloced_pointers[x] = pointer;
 	if ( x > sub->highmark ) sub->highmark = x;
 	GetMemoryContext(pointer) = context;
+    MemoryContextSwitchTo(old);
 	return pointer;
 }
 
@@ -210,8 +228,13 @@ SubSetAlloc(MemoryContext context, Size size)
  * AllocSetFree
  *		Frees allocated memory; memory is removed from the set.
  */
+#ifdef HAVE_ALLOCINFO
+static void
+SubSetFree(MemoryContext context, void *pointer, const char* file, int line, const char* func)
+#else
 static void
 SubSetFree(MemoryContext context, void *pointer)
+#endif
 {
     SubSetContext*  sub = (SubSetContext*)context;
 	int x = 0;

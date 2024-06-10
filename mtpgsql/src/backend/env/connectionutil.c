@@ -60,6 +60,10 @@
 #include "storage/bufpage.h"
 #include "version.h"
 
+#ifdef USEGC
+#include "gc/gc.h"
+#endif
+
 static Env* 				env;
 static int 					PostPortName  = 5432;
 //static const char* 			progname  = "mtpg";
@@ -98,6 +102,9 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         char*       lasts;
         char       *tofree, *token, *cursor;
 
+#ifdef USEGC
+        GC_INIT();
+#endif
         tofree = cursor = strdup(vars);
 
         pthread_mutex_init(&init_lock, NULL);

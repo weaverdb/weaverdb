@@ -58,12 +58,13 @@ extern "C" {
 #endif
 PG_EXTERN MemoryContextGlobals* MemoryContextGetEnv(void);
 PG_EXTERN void EnableMemoryContext(bool on);
+#ifdef HAVE_ALLOCINFO
+#define MemoryContextAlloc(cxt, size)  CallMemoryContextAlloc(cxt,size, __FILE__, __LINE__, __FUNCTION__)
+PG_EXTERN void* CallMemoryContextAlloc(MemoryContext context, Size size, const char* filename, int lineno, const char* function); 
+#else
 PG_EXTERN void* MemoryContextAlloc(MemoryContext context, Size size);
-/*
-PG_EXTERN void* MemoryContextRealloc(MemoryContext context,
-					 Pointer pointer,
-					 Size size);
-*/
+#endif
+
 PG_EXTERN MemoryContext MemoryContextSameContext(Pointer pointer);
 PG_EXTERN void MemoryContextFree(MemoryContext context, Pointer pointer);
 PG_EXTERN MemoryContext MemoryContextSwitchTo(MemoryContext context);

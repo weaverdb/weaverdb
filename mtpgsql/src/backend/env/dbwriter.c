@@ -1114,17 +1114,17 @@ int LogBuffers(WriteGroup list) {
             
             if (iostatus == IO_SUCCESS) {
                 elog(NOTICE, "log buffers - this should not happen");
-                elog(NOTICE, "dbid:%ld relid:%ld blk:%ld\n",
+                elog(NOTICE, "dbid:%ld relid:%ld blk:%ld",
                         list->descriptions[i].relId.dbId,
                         list->descriptions[i].relId.relId,
                         list->descriptions[i].blockNum);
-                elog(NOTICE, "dbid:%ld relid:%ld blk:%ld\n",
+                elog(NOTICE, "dbid:%ld relid:%ld blk:%ld",
                         bufHdr->tag.relId.dbId,
                         bufHdr->tag.relId.relId,
                         bufHdr->tag.blockNum);
                 TerminateBufferIO(iostatus,bufHdr);
             } else {
-                elog(FATAL, "DBWriter: bufferid inconsistent and not dirty bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+                elog(NOTICE, "DBWriter: bufferid inconsistent and not dirty, dropped due to truncation bufid:%d dbid:%ld relid:%ld blk:%ld",
                     bufHdr->buf_id,
                     bufHdr->tag.relId.dbId,
                     bufHdr->tag.relId.relId,
@@ -1137,7 +1137,9 @@ int LogBuffers(WriteGroup list) {
                     list->release[i]--;
                     releasecount++;
                 }
+                /*  already in error
                 ErrorBufferIO(iostatus,bufHdr);
+                */
             }
         }
     }

@@ -172,7 +172,7 @@ MemoryContextDelete(MemoryContext context) {
     }
     (*context->methods->delete) (context);
     if (parent == NULL) os_free(context);
-    else (*parent->methods->free_p) (parent, context);
+    else pfree(context);
 }
 
 /*
@@ -395,7 +395,9 @@ MemoryContextCreate(NodeTag tag, Size size,
     /* Get space for node and name */
     if (parent != NULL) {
         /* Normal case: allocate the node in TopMemoryContext */
-        node = (MemoryContext) MemoryContextAlloc(parent, needed);
+        MemoryContext old = MemoryContextSwitchTo(parent);
+        node = (MemoryContext) palloc(needed);
+        MemoryContextSwitchTo(old);
     } else {
         /* Special case for startup: use good ol' malloc */
         node = (MemoryContext) os_malloc(needed);
@@ -435,12 +437,21 @@ MemoryContextCreate(NodeTag tag, Size size,
  * nodes/memnodes.h into postgres.h which seems a bad idea.
  */
 void*
-MemoryContextAlloc(MemoryContext context, Size size) {
+#ifdef HAVE_ALLOCINFO
+CallMemoryContextAlloc(MemoryContext context, Size size, const char* filename, int lineno, const char* function) 
+#else
+MemoryContextAlloc(MemoryContext context, Size size) 
+#endif
+{
     void* pointer = NULL;
     if (!AllocSizeIsValid(size))
         elog(ERROR, "MemoryContextAlloc:%s invalid request size %lu", context->name,
             (unsigned long) size);
+#ifdef HAVE_ALLOCINFO
+    pointer = (*context->methods->alloc) (context, size, filename, lineno, function);
+#else
     pointer = (*context->methods->alloc) (context, size);
+#endif
     if ( pointer == NULL ) {
         elog(FATAL, "MemoryContextAlloc:%s failed to allocate request size %lu", context->name,
             (unsigned long) size);
@@ -482,7 +493,12 @@ pclear(void *pointer) {
  *		Release an allocated chunk.
  */
 void
-pfree(void *pointer) {
+#ifdef HAVE_ALLOCINFO
+call_pfree(void *pointer, const char* filename, int line, const char* func) 
+#else
+pfree(void *pointer)
+#endif
+{
     StandardChunkHeader *header;
 
     /*
@@ -498,8 +514,11 @@ pfree(void *pointer) {
      */
     header = (StandardChunkHeader *)
             ((char *) pointer - STANDARDCHUNKHEADERSIZE);
-
+#ifdef HAVE_ALLOCINFO
+    (*header->context->methods->free_p) (header->context, pointer, filename, line, func);
+#else
     (*header->context->methods->free_p) (header->context, pointer);
+#endif
 }
 
 MemoryContext MemoryContextSameContext(Pointer pointer) {
@@ -580,11 +599,14 @@ char *
 MemoryContextStrdup(MemoryContext context, const char *string) {
     char *nstr;
     Size len = strlen(string) + 1;
+    MemoryContext old = MemoryContextSwitchTo(context);
 
-    nstr = (char *) MemoryContextAlloc(context, len);
+    nstr = (char *) palloc(len);
     if (nstr != NULL) {
         memcpy(nstr, string, len);
     }
+
+    MemoryContextSwitchTo(old);
     return nstr;
 }
 

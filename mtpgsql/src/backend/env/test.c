@@ -114,19 +114,6 @@ DelegatedScanNext(Marker marker, ItemPointer  ret_item) {
 }
 
 int main(int argc,char* argv[])  {
-/*
-    ItemPointerData pointer;
-    Marker marker = umem_alloc(sizeof(MarkerData),UMEM_NOFAIL);
-    
-    marker->size = 100;
-    
-    marker->items = umem_alloc(marker->size * sizeof(ItemPointerData),UMEM_NOFAIL);
-    int count = 0;
-    
-    while ( DelegatedScanNext(marker, &pointer) ) {
-        printf("count: %d\n",count++);
-    }
-*/
     PageHeaderData data;
     
     int count = (long)&data.pd_linp - (long)&data;

@@ -200,8 +200,13 @@ typedef struct AllocChunkData
 /*
  * These functions implement the MemoryContext API for AllocSet contexts.
  */
+#ifdef HAVE_ALLOCINFO
+static void *AllocSetAlloc(MemoryContext context, Size size, const char* file, int line, const char* func);
+static void AllocSetFree(MemoryContext context, void *pointer, const char* file, int line, const char* func);
+#else
 static void *AllocSetAlloc(MemoryContext context, Size size);
 static void AllocSetFree(MemoryContext context, void *pointer);
+#endif
 static void *AllocSetRealloc(MemoryContext context, void *pointer, Size size);
 static void AllocSetInit(MemoryContext context);
 static void AllocSetReset(MemoryContext context);
@@ -234,15 +239,12 @@ static MemoryContextMethods AllocSetMethods = {
  * ----------
  */
 #ifdef HAVE_ALLOCINFO
-#define AllocFreeInfo(_cxt, _chunk) \
-			fprintf(stderr, "AllocFree: %s: %p, %d\n", \
-				(_cxt)->header.name, (_chunk), (_chunk)->size)
-#define AllocAllocInfo(_cxt, _chunk) \
-			fprintf(stderr, "AllocAlloc: %s: %p, %d\n", \
-				(_cxt)->header.name, (_chunk), (_chunk)->size)
-#else
-#define AllocFreeInfo(_cxt, _chunk)
-#define AllocAllocInfo(_cxt, _chunk)
+#define AllocFreeInfo(_cxt, _chunk, file, line, func) \
+			fprintf(stderr, "AllocFree: %s: %p, %ld in %s at %s:%d\n", \
+				(_cxt)->header.name, (_chunk), (_chunk)->size, func, file, line)
+#define AllocAllocInfo(_cxt, _chunk, file, line, func) \
+			fprintf(stderr, "AllocAlloc: %s: %p, %ld in %s at %s:%d\n", \
+				(_cxt)->header.name, (_chunk), (_chunk)->size, func, file, line)
 #endif
 
 /* ----------
@@ -468,8 +470,13 @@ AllocSetDelete(MemoryContext context)
  *		Returns pointer to allocated memory of given size; memory is added
  *		to the set.
  */
+#ifdef HAVE_ALLOCINFO
+static void *
+AllocSetAlloc(MemoryContext context, Size size, const char* filename, int lineno, const char* function)
+#else
 static void *
 AllocSetAlloc(MemoryContext context, Size size)
+#endif
 {
 	AllocSet	set = (AllocSet) context;
 	AllocBlock	block;
@@ -523,7 +530,9 @@ AllocSetAlloc(MemoryContext context, Size size)
 			set->blocks = block;
 		}
 
-		AllocAllocInfo(set, chunk);
+#ifdef HAVE_ALLOCINFO
+		AllocAllocInfo(set, chunk, filename, lineno, function);
+#endif
 		return AllocChunkGetPointer(chunk);
 	}
 
@@ -561,10 +570,9 @@ AllocSetAlloc(MemoryContext context, Size size)
 			((char *) AllocChunkGetPointer(chunk))[size] = 0x7E;
 #endif
 
-		AllocAllocInfo(set, chunk);
-/*
-                printf("reusing free %d\n",chunk->size);
-*/
+#ifdef HAVE_ALLOCINFO
+		AllocAllocInfo(set, chunk, filename, lineno, function);
+#endif
 		return AllocChunkGetPointer(chunk);
 	}
 
@@ -720,10 +728,9 @@ AllocSetAlloc(MemoryContext context, Size size)
 		((char *) AllocChunkGetPointer(chunk))[size] = 0x7E;
 #endif
 
-	AllocAllocInfo(set, chunk);
-/*
-        printf("new %d\n",chunk->size);
-*/
+#ifdef HAVE_ALLOCINFO
+		AllocAllocInfo(set, chunk, filename, lineno, function);
+#endif
         return AllocChunkGetPointer(chunk);
 }
 
@@ -731,14 +738,20 @@ AllocSetAlloc(MemoryContext context, Size size)
  * AllocSetFree
  *		Frees allocated memory; memory is removed from the set.
  */
+#ifdef HAVE_ALLOCINFO
+static void
+AllocSetFree(MemoryContext context, void *pointer, const char* filename, int lineno, const char* function)
+#else
 static void
 AllocSetFree(MemoryContext context, void *pointer)
+#endif
 {
 	AllocSet	set = (AllocSet) context;
 	AllocChunk	chunk = AllocPointerGetChunk(pointer);
 
-	AllocFreeInfo(set, chunk);
-
+#ifdef HAVE_ALLOCINFO
+	AllocFreeInfo(set, chunk, filename, lineno, function);
+#endif
 #ifdef MEMORY_CONTEXT_CHECKING
 	/* Test for someone scribbling on unused space in chunk */
 	if (chunk->requested_size < chunk->size)
@@ -952,7 +965,11 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
 		/* Normal small-chunk case: just do it by brute force. */
 
 		/* allocate new chunk */
+#ifdef HAVE_ALLOCINFO
+		newPointer = AllocSetAlloc(context, size,__FILE__, __LINE__,__FUNCTION__);
+#else
 		newPointer = AllocSetAlloc(context, size);
+#endif
 		/* transfer existing data (certain to fit) */
 /*
                 printf("moving for realloc %d newsize: %d oldsize: %d chunksize: %d\n",(size < oldsize ) ? size : oldsize, size, oldsize, chunk->size);
@@ -965,8 +982,11 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
                  printf("chunksize: %d\n",chunk->size);
 */
                 /* free old chunk */
+#ifdef HAVE_ALLOCINFO
+		AllocSetFree(context, pointer,__FILE__, __LINE__,__FUNCTION__);
+#else
 		AllocSetFree(context, pointer);
-
+#endif
 		return newPointer;
 	}
 }

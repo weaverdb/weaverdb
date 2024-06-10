@@ -936,6 +936,8 @@ InitIndexStrategy(int numatts,
 	uint16		amsupport;
 	Oid			attrelid;
 	Size		strsize;
+        
+        MemoryContext old = MemoryContextSwitchTo(RelationGetCacheContext());
 
 	/* ----------------
 	 *	get information from the index relation descriptor
@@ -951,14 +953,12 @@ InitIndexStrategy(int numatts,
 	 */
 	strsize = AttributeNumberGetIndexStrategySize(numatts, amstrategies);
 
-	strategy = (IndexStrategy)
-		MemoryContextAlloc(RelationGetCacheContext(), strsize);
+	strategy = (IndexStrategy)palloc(strsize);
 
 	if (amsupport > 0)
 	{
 		strsize = numatts * (amsupport * sizeof(RegProcedure));
-		support = (RegProcedure *) MemoryContextAlloc(RelationGetCacheContext(),
-													  strsize);
+		support = (RegProcedure *) palloc(strsize);
 	}
 	else
 		support = (RegProcedure *) NULL;
@@ -980,6 +980,7 @@ InitIndexStrategy(int numatts,
 	 * ----------------
 	 */
 	RelationSetIndexSupport(indexRelation, strategy, support);
+        MemoryContextSwitchTo(old);
 }
 
 

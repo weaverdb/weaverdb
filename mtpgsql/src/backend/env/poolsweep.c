@@ -484,7 +484,8 @@ CheckSweepForJob(Sweeps* sweep, JobType type, Oid relid) {
 static int
 AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid relid, Oid dbid, PoolArgs* extra) {
     JobList** setter = NULL;
-    JobList* item = MemoryContextAlloc(sweep->context, sizeof(JobList));
+    MemoryContext old = MemoryContextSwitchTo(sweep->context);
+    JobList* item = palloc(sizeof(JobList));
     int depth = 0;
 
     strncpy(item->relname, relname, 255);
@@ -496,7 +497,7 @@ AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid reli
     item->arg = NULL;
     if ( extra != NULL ) {
         if ( extra->copy ) {
-            item->arg = MemoryContextAlloc(sweep->context, extra->length);
+            item->arg = palloc(extra->length);
             memmove(item->arg,extra->args,extra->length);
         } else {
             item->arg = extra->args;
@@ -517,6 +518,7 @@ AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid reli
     item->next = *setter;
     *setter = item;
     
+    MemoryContextSwitchTo(old);
     return depth;
 }
 
@@ -784,34 +786,25 @@ DropVacuumRequests(Oid relid, Oid dbid) {
     job = sweeplist;
     while (job != NULL ) {
         if ( job->dbid == dbid && job->activesweep ) {
+            JobList** setter = &job->requests;
             JobList* search = job->requests;
-            JobList* tail = NULL;
-            JobList* head = NULL;
             
             while (search != NULL) {
-                JobList* target = search;
-                search = search->next;
-                if (relid == target->relid || relid == InvalidOid) {
-                    if (target->activejob) {
-                        target->next = head;
-                        head = target;
+                if (relid == search->relid || relid == InvalidOid) {
+                    if (search->activejob) {
                         job->env->cancelled = true;
+                        setter = &search->next;
                     } else {
-                        pfree(target);
+                        // erase from the list and free
+                        (*setter) = search->next;
+                        pfree(search);
                     }
                 } else {
-                    if ( head == NULL ) {
-                        head = target;
-                    } else if ( tail == NULL ) {
-                        head->next = target;
-                        tail = target;
-                    } else {
-                        tail->next = target;
-                        tail = target;
-                    }
+                    // advance the setter
+                    setter = &search->next;
                 }
+                search = *setter;
             }
-            job->requests = head;
         }
         job = job->next;
     }
