@@ -135,7 +135,7 @@ pq_getport(void)
 void
 pq_close(void)
 {
-    printf("trying to close port\n");
+
 
 }
 
@@ -150,7 +150,7 @@ pq_close(void)
 int
 StreamServerPort(char *hostName, unsigned short portName, int *fdP)
 {
-printf("trying to do stream server port\n");
+
 	return STATUS_OK;
 }
 
@@ -171,7 +171,7 @@ printf("trying to do stream server port\n");
 int
 StreamConnection(int server_fd, Port *port)
 {
-    printf("trying to stream connection\n");
+
 	return STATUS_OK;
 }
 
@@ -181,7 +181,7 @@ StreamConnection(int server_fd, Port *port)
 void
 StreamClose(int sock)
 {
-    printf("trying to stream close\n");
+
 }
 
 

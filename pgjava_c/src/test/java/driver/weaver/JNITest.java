@@ -9,6 +9,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.io.Writer;
 import java.nio.channels.Channels;
 import java.security.DigestOutputStream;
@@ -942,6 +943,28 @@ public class JNITest {
                 conn.stream("report user memory");
             }
         }
+    }   
+    
+    @org.junit.jupiter.api.Test
+    public void testJavaFunction() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            conn.execute("set debug_memory = on");
+            conn.execute("create function hex (int4) returns varchar(256) as 'java/lang/Integer.toHexString','(I)Ljava/lang/String;' language 'java'");
+            try (Statement s = conn.statement("select hex(5)")) {
+                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+            }
+            conn.execute("create function 'java/lang/String.toString' () returns varchar(256) as 'toString','()Ljava/lang/String;' language 'java'");
+            conn.execute("create table test30 (item java)");
+            try (Statement s = conn.statement("insert into test30 (item) values ($item)")) {
+                s.linkInput("item", Serializable.class).set("test");
+                s.execute();
+            }
+            try (Statement s = conn.statement("select item.toString() from test30")) {
+                s.linkOutput(1, String.class);
+                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+            }
+        }
+        
     }   
     
     private static class Generator {

@@ -32,7 +32,7 @@
 #define SUBSETISALLOC 1
 #define MEMORY_CONTEXT_CHECKING 1 
 #define CLOBBER_FREED_MEMORY 1  
-/* #define HAVE_ALLOCINFO 1  */
+/* #define HAVE_ALLOCINFO 1 */
 /* #define CACHEDEBUG 1 */
 /*  #define EXEC_EVALDEBUG 1 */
 /*  #define MEMORY_STATS 1  */

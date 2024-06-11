@@ -860,7 +860,7 @@ exprIsLengthCoercion(Node *expr, int32 *coercedTypmod)
 		((Expr *) expr)->opType != FUNC_EXPR)
 		return false;
 	func = (Func *) (((Expr *) expr)->oper);
-	Assert(IsA(func, Func));
+	Assert(IsA(func, Func) || IsA(func, Java));
 
 	/*
 	 * If it's not a two-argument function with the second argument being

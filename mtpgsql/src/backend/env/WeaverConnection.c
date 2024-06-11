@@ -684,6 +684,18 @@ WFetch(OpaquePreparedStatement plan) {
         coded_elog(ERROR, 1405, "end of data already reached");
     }
 
+    if (plan->fetch_cxt == NULL) {
+        plan->fetch_cxt = AllocSetContextCreate(plan->exec_cxt,
+            "FetchCxt",
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
+    } else {
+        MemoryContextResetAndDeleteChildren(plan->fetch_cxt);
+    }
+
+    MemoryContext old = MemoryContextSwitchTo(plan->fetch_cxt);
+
     TupleTableSlot *slot = ExecProcNode(plan->qdesc->plantree);
 
     if (TupIsNull(slot)) {
@@ -740,9 +752,9 @@ WFetch(OpaquePreparedStatement plan) {
         plan->processed++;
         plan->stage = STMT_FETCH;
     }
-/*
+
     MemoryContextSwitchTo(old);
-*/
+
     RELEASE(connection, false);
     return err;
 }
@@ -1389,6 +1401,9 @@ WResetExecutor(PreparedPlan * plan) {
     }
 
     MemoryContextSwitchTo(plan->exec_cxt);        
+
+    plan->fetch_cxt = NULL;
+
     plan->tupdesc = NULL;
     plan->state = NULL;
     plan->qdesc = NULL;

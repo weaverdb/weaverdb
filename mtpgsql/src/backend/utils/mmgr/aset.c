@@ -240,11 +240,11 @@ static MemoryContextMethods AllocSetMethods = {
  */
 #ifdef HAVE_ALLOCINFO
 #define AllocFreeInfo(_cxt, _chunk, file, line, func) \
-			fprint(stderr, "AllocFree: %s: %p, %ld in %s at %s:%d\n", \
-				(_cxt)->header.name, (_chunk), (_chunk)->size, func, file, line)
+			DebugMemory("AllocFree", \
+				(_cxt)->header.name, (_chunk), (_chunk)->size, file, line, func)
 #define AllocAllocInfo(_cxt, _chunk, file, line, func) \
-			fprintf(stderr, "AllocAlloc: %s: %p, %ld in %s at %s:%d\n", \
-				(_cxt)->header.name, (_chunk), (_chunk)->size, func, file, line)
+			DebugMemory("AllocAlloc", \
+				(_cxt)->header.name, (_chunk), (_chunk)->size, file, line, func)
 #endif
 
 /* ----------

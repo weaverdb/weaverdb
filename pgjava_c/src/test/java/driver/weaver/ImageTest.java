@@ -45,10 +45,9 @@ public class ImageTest {
     
     @org.junit.jupiter.api.Test
     public void test() throws Exception {
-        Path p = Paths.get(System.getProperty("user.home"), "pokemon", "images");
+        Path p = Paths.get(System.getProperty("user.home"), "Downloads", "motorbikes_side", "motorbikes_side");
         DirectoryStream<Path> paths = Files.newDirectoryStream(p, (fp)->{
-            System.out.println(fp.toString());
-            return !fp.endsWith(".png");
+            return fp.getFileName().toString().endsWith(".jpg");
         });
         for (Path img : paths) {
             File f = img.toFile();

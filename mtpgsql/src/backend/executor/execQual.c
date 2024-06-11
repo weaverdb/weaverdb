@@ -757,7 +757,7 @@ ExecMakeFunctionResult(Node * node,
 				*isNull = true;
 
                 ExecEvalJavaArgs(econtext,arguments,args);
-		return fmgr_javaA(PointerGetDatum(info),NULL,fcache->nargs,info->types, args, isNull);
+		return fmgr_cached_javaA(info,fcache->nargs,info->types, args, isNull);
         } else {
 		int             i;
 

@@ -42,7 +42,8 @@ PG_EXTERN jobject   javaout(bytea* datum);
 PG_EXTERN void SetJVM(JavaVM* java, const char* loader);
 PG_EXTERN void SetJavaObjectLoader(const char* loader);
 
-PG_EXTERN Datum fmgr_javaA(Datum target, char *name, int nargs, Oid* types, jvalue* values, bool *isNull);
+PG_EXTERN Datum fmgr_javaA(Datum target, const char *name, int nargs, Oid* types, jvalue* values, bool *isNull);
+PG_EXTERN Datum fmgr_cached_javaA(JavaInfo* jinfo, int nargs, Oid* types, jvalue *args,bool* isNull);
 
 PG_EXTERN bool java_instanceof(bytea* obj,bytea* cname);
 PG_EXTERN int32 java_compare(bytea* obj1,bytea* obj2);
@@ -65,4 +66,4 @@ convert_java_to_scalar(Datum value,double* scaledval,Datum lobound,double* scale
 }
 #endif
 
-#endif	 /* DATETIME_H */
+#endif	 

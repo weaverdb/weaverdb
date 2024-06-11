@@ -65,9 +65,8 @@ typedef enum
 	Debug,						/* results go to debugging output */
 	Local,						/* results go in local portal buffer */
 	Remote,						/* results sent to frontend process */
-	RemoteInternal,				/* results sent to frontend process in
-								 * internal (binary) form */
-	SPI							/* results sent to SPI manager */
+	RemoteInternal,                                 /* results sent to frontend process in internal (binary) form */
+	SPI						/* results sent to SPI manager */
 } CommandDest;
 
 /* ----------------

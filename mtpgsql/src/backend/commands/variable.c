@@ -189,6 +189,9 @@ static bool reset_move(void);
 static bool parse_snapshot(char *);
 static bool show_snapshot(void);
 static bool reset_snapshot(void);
+static bool parse_debug_memory(char *);
+static bool show_debug_memory(void);
+static bool reset_debug_memory(void);
 /*
  * get_token
  *		Obtain the next item in a comma-separated list of items,
@@ -1642,6 +1645,9 @@ static struct VariableParsers
  	{
 		"snapshot", parse_snapshot, show_snapshot, reset_snapshot
 	},
+ 	{
+		"debug_memory", parse_debug_memory, show_debug_memory, reset_debug_memory
+	},
         {
 		NULL, NULL, NULL, NULL
 	}
@@ -2150,5 +2156,28 @@ show_snapshot()
 static bool
 reset_snapshot()
 {
+	return TRUE;
+}
+
+static bool
+parse_debug_memory(char *value)
+{
+	return parse_boolean_var(value, &GetEnv()->print_memory,
+							 "DEBUG_MEMORY", false);
+	return TRUE;
+}
+
+static bool
+show_debug_memory()
+{
+	elog(NOTICE, "DEBUG_MEMORY is %s",
+		 GetEnv()->print_memory ? "ON" : "OFF");
+	return TRUE;
+}
+
+static bool
+reset_debug_memory()
+{
+    GetEnv()->print_memory = FALSE;
 	return TRUE;
 }

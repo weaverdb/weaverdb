@@ -58,7 +58,9 @@
 static int	Debugfile = -1;
 static int	Err_file = -1;
 static int	ElogDebugIndentLevel = 0;
-
+#ifdef HAVE_ALLOCINFO
+static bool     DebugMemoryFlag = false;
+#endif
 /*--------------------
  * elog
  *		Primary error logging function.
@@ -516,5 +518,14 @@ DebugFileOpen(bool redirectErr)
 	Err_file = Debugfile = fd;
 	return Debugfile;
 }
+#ifdef HAVE_ALLOCINFO
+void
+DebugMemory(const char* type, const char* name, void* _cxt, Size _chunk, const char* file, int line, const char* func) {
+    Env* env = GetEnv();
+    if ((DebugMemoryFlag || (env != NULL && env->print_memory)) && Debugfile >= 0) {
+        dprintf(Debugfile, "%s: %s: %p, %ld in %s at %s:%d\n", type, name, _cxt, _chunk, func, file, line);
+    }
+}
+#endif /* HAVE_ALLOCINFO */
 
-#endif
+#endif /* PG_STANDALONE */

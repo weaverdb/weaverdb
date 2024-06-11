@@ -1624,7 +1624,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 					StartTransactionCommand();
 
 					pg_exec_query(parser_input->data);
-
+                                        
 					/*
 					 * Invoke IMMEDIATE constraint triggers
 					 *

@@ -186,18 +186,9 @@ extern bool SetEnv(void* envp)
             if ( env->owner != 0 && env->owner != pthread_self() ) {
                 pthread_mutex_unlock(env->env_guard);
                 return FALSE;
-/*
-                printf("Environment already owned, make sure the connection is owned by a single thread\n");
-                abort();
-*/
             } else {
                 pthread_setspecific(envkey,&envmap[env->eid]);
                 env->owner = pthread_self();
-                if ( env->print_memory ) {
-                    env->print_memory = FALSE;
-                    size_t amt = MemoryContextStats(env->global_context);
-                    env_log(env,"Total env memory: %ld",amt);     
-                }
                 pthread_mutex_unlock(env->env_guard);
             }
         } else {
@@ -207,11 +198,6 @@ extern bool SetEnv(void* envp)
                 
             } else {
                 pthread_mutex_lock(current->env_guard);
-                if ( current->print_memory ) {
-                    current->print_memory = FALSE;
-                    size_t amt = MemoryContextStats(current->global_context);
-                    env_log(current,"Total env memory: %ld",amt);     
-                }
                 current->owner = 0;
                 pthread_setspecific(envkey,NULL);
                 pthread_mutex_unlock(current->env_guard);
@@ -663,14 +649,18 @@ IsMultiuser()
 }
 
 bool CheckForCancel() {
-	EnvPointer* envp = pthread_getspecific(envkey);
+	Env* env = GetEnv();
         
         if ( CurrentMode == ShutdownProcessing ) return true;
-	if ( envp == NULL ) return false;
-	EnvPointer env = *envp; 
+	
+        if ( env == NULL ) {
+            return false;
+        }
+
         if ( env!= NULL && (env)->cancelled ) {
             return TRUE;
         }
+
         if ( env->parent != NULL ) {
             return (env->parent->cancelled || !env->parent->in_transaction);
         }
@@ -856,7 +846,8 @@ ProcessingMode GetProcessingMode(void)
     if ( CurrentMode == InitProcessing || CurrentMode == BootstrapProcessing || CurrentMode == ShutdownProcessing ) {
         return CurrentMode;
     } else {
-        return ((GetEnv()->Mode == NormalProcessing) ? CurrentMode : GetEnv()->Mode);
+        Env* env = GetEnv();
+        return (env == NULL || env->Mode == NormalProcessing) ? CurrentMode : env->Mode;
     }
 }
 
@@ -905,11 +896,9 @@ PrintEnvMemory( void ) {
                 size_t amt = MemoryContextStats(envmap[counter]->global_context);
                 env_log(envmap[counter],"Total env memory: %ld",amt);     
                 pthread_setspecific(envkey,NULL);
-           } else {
-                envmap[counter]->print_memory = true;
-            }
-            pthread_mutex_unlock(envmap[counter]->env_guard);
-        }
+           } else {}
+                pthread_mutex_unlock(envmap[counter]->env_guard);
+           }
     }
     pthread_mutex_unlock(&envlock);
     SetEnv(home);

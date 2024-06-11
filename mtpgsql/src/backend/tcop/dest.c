@@ -206,7 +206,7 @@ BeginCommand(char *pname,
 			 * ----------------
 			 */
 			if (pname == NULL)
-				pname = "blank";
+				pname = "";
 
 			showatts(pname, tupdesc);
 			break;
@@ -279,7 +279,10 @@ EndCommand(char *commandTag, CommandDest dest)
 			break;
 
 		case Local:
+                        break;
 		case Debug:
+			printf("%s%s\n", commandTag, global->CommandInfo);
+                        break;
 		case None:
 		default:
 			break;
