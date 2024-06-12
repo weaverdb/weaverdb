@@ -273,7 +273,7 @@ BootstrapMain(int argc, char *argv[])
 				usage();
 				break;
 		}
-	}							/* while */
+	}						/* while */
 
         if ( wait ) sleep(10);
 
@@ -308,6 +308,7 @@ BootstrapMain(int argc, char *argv[])
 	
 
 	BaseInit();
+        InitializeElog(NULL, DebugMode, false);
 	SetDatabaseName(dbName);
 
 	if (!IsUnderPostmaster)

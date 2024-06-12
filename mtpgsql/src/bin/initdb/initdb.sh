@@ -600,11 +600,9 @@ rm -f "$TEMPFILE" || exit_nicely
 #	| "$PGPATH"/postgres $PGSQL_OPT template1 > /dev/null || exit_nicely
 
 echo
-echo "Success. You can now start the database server using:"
+echo "Success. You can now interact with the database using:"
 echo ""
-echo "	$PGPATH/postmaster -D $PGDATA"
-echo "or"
-echo "	$PGPATH/pg_ctl -D $PGDATA start"
+echo "	$PGPATH/postgres -D $PGDATA template1"
 echo
 
 exit 0

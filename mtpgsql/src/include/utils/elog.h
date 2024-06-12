@@ -38,7 +38,7 @@ PG_EXTERN void elog(int lev, const char *fmt,...) __attribute__((format(printf, 
 
 #ifndef PG_STANDALONE
 
-PG_EXTERN int	DebugFileOpen(bool redirect);
+PG_EXTERN int	InitializeElog(const char* logfile, bool debug, bool redirecterr);
 #ifdef HAVE_ALLOCINFO
 PG_EXTERN void	DebugMemory(const char* type, const char* name, void* _cxt, Size _chunk, const char* file, int line, const char* func);
 #endif

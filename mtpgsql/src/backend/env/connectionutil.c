@@ -101,7 +101,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 	char	   datpath[MAXPGPATH],control[MAXPGPATH],xlogdir[MAXPGPATH];
         char*       lasts;
         char       *tofree, *token, *cursor;
-
+        bool debug = false;
 #ifdef USEGC
         GC_INIT();
 #endif
@@ -185,7 +185,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
             checklockfile();
 	}    
 	if ( dbug != NULL ) {
-            DebugLvl = ( strcasecmp(dbug,"DEBUG") == 0 ) ? DEBUG : NOTICE;
+            debug = ( strcasecmp(dbug,"DEBUG") == 0 );
 	}
 	if ( PropertyIsValid("buffers") ) {
 		NBuffers = GetIntProperty("buffers");
@@ -234,21 +234,11 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 
 	env = InitSystem(isPrivate);	
         
-	if ( output != NULL && strlen(output) > 0 ) {
-		 strncpy(OutputFileName,output,MAXPGPATH);
-                 stdlog = "TRUE";
-	} else {
-/*  standard output  */	
+	if ( strlen(output) == 0 ) {
+            output = NULL;
 	}
 	
-	if ( stdlog != NULL ) {
-            if (redirect == NULL) {
-                redirect = "FALSE";
-            }
-            if ((toupper(stdlog[0]) == 'T')) {
-                DebugFileOpen((toupper(redirect[0]) == 'T'));
-            }
-	}
+	InitializeElog(output, output != NULL || (stdlog != NULL && toupper(stdlog[0]) == 'T'), false);
 		
 	SetProcessingMode(InitProcessing);   
 

@@ -58,6 +58,7 @@
 static int	Debugfile = -1;
 static int	Err_file = -1;
 static int	ElogDebugIndentLevel = 0;
+static bool     IgnoreDebugLevel = false;
 #ifdef HAVE_ALLOCINFO
 static bool     DebugMemoryFlag = false;
 #endif
@@ -143,6 +144,9 @@ elog(int lev, const char *fmt,...)
 
 	if (lev <= DEBUG && Debugfile < 0)
 		return;					/* ignore debug msgs if noplace to send */
+
+        if (lev <= DEBUG && IgnoreDebugLevel) 
+                return;
 
 	if (lev == ERROR || lev == FATAL)
 	{
@@ -472,26 +476,28 @@ elog(int lev, const char *fmt,...)
 #ifndef PG_STANDALONE
 
 int
-DebugFileOpen(bool redirectErr)
-{
+InitializeElog(const char* logfile, bool debug, bool redirecterr) {
 	int			fd;
 
 	Err_file = Debugfile = -1;
 	ElogDebugIndentLevel = 0;
+        IgnoreDebugLevel = !debug;
 
-	if (OutputFileName[0])
+	if (logfile != NULL)
 	{
-		if ((fd = open(OutputFileName, O_CREAT | O_APPEND | O_WRONLY,
+		if ((fd = open(logfile, O_CREAT | O_APPEND | O_WRONLY,
 					   0666)) < 0) {
-                    elog(FATAL, "DebugFileOpen: open of %s: %m",
-				 OutputFileName);
+                    elog(FATAL, "InitializeElog: open of %s: %m",
+				 logfile);
                 } else {
-                    fprintf(stderr, "logging output to %s\n", OutputFileName);
-                    if (redirectErr) {
+                    if (debug) {
+                        fprintf(stderr, "logging output to %s\n", logfile);
+                    }
+                    if (redirecterr) {
         		close(fd);
-                        if (!freopen(OutputFileName, "a", stderr)) {
-                            elog(FATAL, "DebugFileOpen: %s reopen as stderr: %m",
-				 OutputFileName);
+                        if (!freopen(logfile, "a", stderr)) {
+                            elog(FATAL, "InitializeElog: %s reopen as stderr: %m",
+				 logfile);
                         } else {
                             fd = fileno(stderr);
                         }
@@ -508,12 +514,13 @@ DebugFileOpen(bool redirectErr)
 	fd = fileno(stderr);
 	if (fcntl(fd, F_GETFD, 0) < 0)
 	{
-		snprintf(OutputFileName, MAXPGPATH, "%s%cpg.errors.%d",
+                char    lastditchlogger[MAXPGPATH];
+		snprintf(lastditchlogger, MAXPGPATH, "%s%cpg.errors.%d",
 				 DataDir, SEP_CHAR, (int) MyProcPid);
-		fd = open(OutputFileName, O_CREAT | O_APPEND | O_WRONLY, 0666);
+		fd = open(lastditchlogger, O_CREAT | O_APPEND | O_WRONLY, 0666);
 	}
 	if (fd < 0)
-		elog(FATAL, "DebugFileOpen: could not open debugging file");
+		elog(FATAL, "InitializeElog: could not open debugging file");
 
 	Err_file = Debugfile = fd;
 	return Debugfile;

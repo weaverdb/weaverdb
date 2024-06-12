@@ -108,7 +108,7 @@
 PS_DEFINE_BUFFER;
 #endif
 
-PG_EXTERN void BaseInit(void);
+PG_EXTERN void BaseInit();
 PG_EXTERN void StartupXLOG(void);
 PG_EXTERN void ShutdownXLOG(void);
 
@@ -851,7 +851,8 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 	extern char *optarg;
 	extern int	DebugLvl;
 
-
+        const char*   logpath = NULL;
+        bool debug = false;
 
         InitSystem(true);  /*  always private through this interface  */
 	/*
@@ -956,6 +957,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 					DebugPrintPlan = true;
 				if (DebugLvl >= 5)
 					DebugPPrintRewrittenParsetree = true;
+                                debug = true;
 				break;
 
 			case 'E':
@@ -1069,7 +1071,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 				 * ----------------
 				 */
 				if (secure)
-					StrNCpy(OutputFileName, optarg, MAXPGPATH);
+					logpath = strndup(optarg, MAXPGPATH);
 				break;
 
 			case 'p':
@@ -1333,7 +1335,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 		on_proc_exit(UnlinkPidFile, NULL);
 
 		BaseInit();
-
+                InitializeElog(logpath, debug, false);
 
 
 		if (!(pw = getpwuid(geteuid())))

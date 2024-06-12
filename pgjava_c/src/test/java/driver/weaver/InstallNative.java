@@ -38,7 +38,7 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 b.inheritIO();
                 p = b.start();
                 p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "template1");
+                b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "-o", "/dev/null", "template1");
                 b.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                 b.redirectError(ProcessBuilder.Redirect.INHERIT);
                 p = b.start();

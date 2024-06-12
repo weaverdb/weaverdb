@@ -422,7 +422,7 @@ InitPostgres(const char *dbname)
 }
 
 void
-BaseInit(void)
+BaseInit()
 {
 
 	/*
@@ -446,5 +446,4 @@ BaseInit(void)
 	 * input/output/debugging file descriptors.
 	 */
 	InitCommunication();
-	DebugFileOpen(true);
 }
