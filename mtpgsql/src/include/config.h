@@ -218,7 +218,7 @@
  * ELOG_TIMESTAMPS: adds a timestamp with the following format to elog
  * messages:  yymmdd.hh:mm:ss.mmm [pid] message
  */
-/* #define ELOG_TIMESTAMPS */
+#define ELOG_TIMESTAMPS
 
 /*
  * USE_SYSLOG: use syslog for elog and error messages printed by tprintf

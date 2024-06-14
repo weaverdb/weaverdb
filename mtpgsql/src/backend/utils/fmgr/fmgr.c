@@ -571,19 +571,9 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
 				finfo->fn_addr = (func_ptr) NULL;
 				finfo->fn_nargs = procedureStruct->pronargs;
                                 {
-                                    JavaInfo* info = palloc(sizeof(JavaInfo));
-                                    char*   src = textout(&procedureStruct->prosrc);
-                                    char* mark = index(src,'.');
-                                    int i=0;
-                                    *mark = '\0';
-                                    strncpy(info->javaclazz,src,128);
-                                    strncpy(info->javamethod,mark+1,128);
-                                    strncpy(info->javasig,textout(&procedureStruct->probin),128);
-                                    for(i=0;i<finfo->fn_nargs;i++) {
-                                        info->types[i] = procedureStruct->proargtypes[i];
-                                    }
-                                    info->rettype = procedureStruct->prorettype;
-                                    finfo->fn_data = info;
+                                    finfo->fn_data = GetJavaCallArgs(NULL, 
+                                            NameStr(procedureStruct->proname), procedureStruct->pronargs, 
+                                            procedureStruct->proargtypes);
                                 }
 				break;
 			default:
@@ -625,16 +615,15 @@ fmgr(Oid procedureId,...)
 			 procedureId, pronargs, FUNC_MAX_ARGS);
 
         if ( language == JAVAlanguageId ) {
-            JavaInfo*   jinfo = finfo.fn_data;
-            jvalue      values[FUNC_MAX_ARGS];
+            Datum      values[FUNC_MAX_ARGS];
             
             va_start(pvar, procedureId);
 
             for (i = 0; i < pronargs; ++i)
-                    values[i] = ConvertToJavaArg(jinfo->types[i],va_arg(pvar, Datum));
+                    values[i] = va_arg(pvar, Datum);
 
             va_end(pvar);
-            return (char*)fmgr_cached_javaA(finfo.fn_data,finfo.fn_nargs,jinfo->types,values,&isNull);
+            return (char*)fmgr_cached_javaA(finfo.fn_data,finfo.fn_nargs,values, &isNull);
         } else {
             FmgrValues	values;
             va_start(pvar, procedureId);

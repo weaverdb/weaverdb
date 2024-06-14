@@ -310,8 +310,7 @@ tprintf_timestamp()
 	struct timezone tz = {0, 0};
 	struct tm  time;
 	time_t		tm;
-	static char timestamp[32],
-				pid[8];
+	static char timestamp[32];
 
 	gettimeofday(&tv, &tz);
 	tm = tv.tv_sec;
@@ -320,11 +319,10 @@ tprintf_timestamp()
 #else
 	localtime_r(&tm,&time);
 #endif
-	sprintf(pid, "[%d]", MyProcPid);
-	sprintf(timestamp, "%02d%02d%02d.%02d:%02d:%02d.%03d %7s ",
+	snprintf(timestamp, 32, "%02d%02d%02d.%02d:%02d:%02d.%03d",
 			time.tm_year % 100, time.tm_mon + 1, time.tm_mday,
 			time.tm_hour, time.tm_min, time.tm_sec,
-			(int) (tv.tv_usec / 1000), pid);
+			(int) (tv.tv_usec / 1000));
 
 	return timestamp;
 }

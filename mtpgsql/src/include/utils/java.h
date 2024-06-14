@@ -24,14 +24,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
-typedef struct java_info {
-    Oid         rettype;
-    Oid        types[FUNC_MAX_ARGS];
-    char        javaclazz[128];
-    char        javamethod[128];
-    char        javasig[128];
-} JavaInfo;
+
+typedef struct funcdef* JavaFunction;
 
 PG_EXTERN bytea*   javatextin(char* obj);
 PG_EXTERN char*   javatextout(bytea* datum);
@@ -42,8 +36,9 @@ PG_EXTERN jobject   javaout(bytea* datum);
 PG_EXTERN void SetJVM(JavaVM* java, const char* loader);
 PG_EXTERN void SetJavaObjectLoader(const char* loader);
 
-PG_EXTERN Datum fmgr_javaA(Datum target, const char *name, int nargs, Oid* types, jvalue* values, bool *isNull);
-PG_EXTERN Datum fmgr_cached_javaA(JavaInfo* jinfo, int nargs, Oid* types, jvalue *args,bool* isNull);
+
+PG_EXTERN Datum fmgr_javaA(Datum target, const char *name, int nargs, Oid* types, Datum* values, bool *isNull);
+PG_EXTERN Datum fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, bool *isNull);
 
 PG_EXTERN bool java_instanceof(bytea* obj,bytea* cname);
 PG_EXTERN int32 java_compare(bytea* obj1,bytea* obj2);
@@ -57,8 +52,7 @@ PG_EXTERN bool java_lteq(bytea* obj1,bytea* obj2);
 
 PG_EXTERN int javalen(bytea* obj);
 
-PG_EXTERN jvalue ConvertToJavaArg(Oid type, Datum val);
-
+PG_EXTERN JavaFunction GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types);
 
 bool
 convert_java_to_scalar(Datum value,double* scaledval,Datum lobound,double* scaledlo,Datum hibound,double* scaledhi, Datum histogram);

@@ -29,23 +29,86 @@ static JNIEnv  *GetJavaEnv(void);
 JavaVM         *jvm;
 static const char* loader = "driver/weaver/WeaverObjectLoader";
 
-static int  GetJavaSignature(jobject target,const char* name,int nargs,Oid* types, Oid* fid,
-				const char** src, const char** method,
-				const char** sig, Oid* rettype);
+static MemoryContext function_cache_cxt;
+static HTAB*  function_table;
+static pthread_mutex_t   ftable_guard;
+
+static jclass loader_class;
+static jmethodID loader_out;
+static jmethodID loader_in;
+static jmethodID loader_text_in;
+static jmethodID loader_text_out;
+static jmethodID loader_compare;
+static jmethodID loader_equals;
+
+static jclass class_class;
+static jmethodID getname;
+
+typedef struct funcdef {
+    NameData     key;
+    jclass       clazz;
+    jmethodID    method;
+    int          nargs;
+    Oid         argTypes[FUNC_MAX_ARGS];
+    Oid          returnType;
+    bool         isStatic;
+} FuncDef;
+
+static jvalue CallJavaFunction(FuncDef* def, jobject target, int nargs, jvalue* args);
+static jvalue ConvertToJavaArg(Oid type, Datum val);
+static void FormJavaFunctionSig(char* buffer, int buflen, const char* clazz, const char *name, int nargs, Oid * types);
+
+static void FunctionCacheInit() {
+    HASHCTL ctl;
+    JNIEnv* jenv = GetJavaEnv();
+
+    
+    function_cache_cxt = AllocSetContextCreate(NULL,
+            "JavaFunctionCache",
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
+        
+    memset(&ctl, 0, sizeof(HASHCTL));
+    ctl.keysize = sizeof(NameData);
+    ctl.entrysize = sizeof(FuncDef);
+    ctl.hash = string_hash;
+    ctl.hcxt = function_cache_cxt;
+    
+    function_table = hash_create("java function hash", 100, &ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+    pthread_mutex_init(&ftable_guard, NULL);
+
+    class_class = (*jenv)->NewGlobalRef(jenv, (*jenv)->FindClass(jenv, "java/lang/Class"));
+    getname = (*jenv)->GetMethodID(jenv, class_class, "descriptorString", "()Ljava/lang/String;");
+}
 
 void
 SetJVM(JavaVM * java, const char *ol)
 {
 	jvm = java;
-	if (ol != NULL)
-		loader = ol;
+
+        FunctionCacheInit();
+	SetJavaObjectLoader(ol);
 }
 
 void SetJavaObjectLoader(const char* l) {
+    JNIEnv* jenv = GetJavaEnv();
+    
     if ( l != NULL ) loader = strdup(l);
+    if (loader_class != NULL) {
+        (*jenv)->DeleteGlobalRef(jenv, loader_class);
+    }
+
+    loader_class = (*jenv)->NewGlobalRef(jenv, (*jenv)->FindClass(jenv, loader));
+    loader_out = (*jenv)->GetStaticMethodID(jenv, loader_class, "java_out", "([B)Ljava/lang/Object;");
+    loader_in = (*jenv)->GetStaticMethodID(jenv, loader_class, "java_in", "(Ljava/lang/Object;)[B");
+    loader_text_in = (*jenv)->GetStaticMethodID(jenv, loader_class, "java_text_in", "(Ljava/lang/String;)[B");
+    loader_text_out = (*jenv)->GetStaticMethodID(jenv, loader_class, "java_text_out", "([B)Ljava/lang/String;");
+    loader_compare = (*jenv)->GetStaticMethodID(jenv, loader_class, "java_compare", "([B[B)I");
+    loader_equals = (*jenv)->GetStaticMethodID(jenv, loader_class, "java_equals", "([B[B)Z");
 }
 
-JNIEnv         *
+JNIEnv*
 GetJavaEnv()
 {
 	JNIEnv         *jenv;
@@ -64,8 +127,6 @@ jobject
 javaout(bytea * datum)
 {
 	JNIEnv         *jenv;
-	jclass          converter;
-	jmethodID       out;
 	int             length;
 	char           *data;
 	jbyteArray      jb = NULL;
@@ -92,15 +153,6 @@ javaout(bytea * datum)
             close_read_pipeline_blob(pipe);
         } 
 
-	converter = (*jenv)->FindClass(jenv, loader);
-	if (converter == NULL) {
-		elog(ERROR, "failed to find converter class");
-	}
-	out = (*jenv)->GetStaticMethodID(jenv, converter, "java_out", "([B)Ljava/lang/Object;");
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		elog(ERROR, "embedded exception occurred");
-	}
 	jb = (*jenv)->NewByteArray(jenv, length);
 	if (jb != NULL) {
 		(*jenv)->SetByteArrayRegion(jenv, jb, 0, length, (jbyte *) data);
@@ -112,7 +164,7 @@ javaout(bytea * datum)
             pfree(data);
         }
 
-	result = (*jenv)->CallStaticObjectMethod(jenv, converter, out, jb);
+	result = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_out, jb);
 
 	if (result == NULL || (*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
@@ -126,24 +178,13 @@ bytea          *
 javain(jobject target)
 {
 	JNIEnv         *jenv;
-	jclass          converter;
-	jmethodID       in;
 	int             length;
 	bytea          *data;
 	jbyteArray      jb = NULL;
 
 	jenv = GetJavaEnv();
 
-	converter = (*jenv)->FindClass(jenv, loader);
-	if (converter == NULL) {
-		elog(ERROR, "failed to find converter class");
-	}
-	in = (*jenv)->GetStaticMethodID(jenv, converter, "java_in", "(Ljava/lang/Object;)[B");
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		elog(ERROR, "embedded exception occurred");
-	}
-	jb = (*jenv)->CallStaticObjectMethod(jenv, converter, in, target);
+	jb = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_in, target);
 	if (jb == NULL || (*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
 		elog(ERROR, "embedded exception occurred");
@@ -164,8 +205,6 @@ javatextin(char *target)
 	void           *env;
 	JNIEnv         *jenv;
 	int             result;
-	jclass          converter;
-	jmethodID       in;
 	int             length;
 	bytea          *data;
 	jbyteArray      jb = NULL;
@@ -175,18 +214,7 @@ javatextin(char *target)
 
 	(*jenv)->PushLocalFrame(jenv, 10);
 
-	converter = (*jenv)->FindClass(jenv, loader);
-	if (converter == NULL) {
-		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "failed to find converter class");
-}
-	in = (*jenv)->GetStaticMethodID(jenv, converter, "java_text_in", "(Ljava/lang/String;)[B");
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "embedded exception occurred");
-	}
-	jb = (*jenv)->CallStaticObjectMethod(jenv, converter, in, (*jenv)->NewStringUTF(jenv, target));
+	jb = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_text_in, (*jenv)->NewStringUTF(jenv, target));
 	if (jb == NULL || (*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
 		(*jenv)->PopLocalFrame(jenv, NULL);
@@ -208,8 +236,6 @@ char           *
 javatextout(bytea * target)
 {
 	JNIEnv         *jenv;
-	jclass          converter;
-	jmethodID       out;
 	int             length = VARSIZE(target) - VARHDRSZ;
 	char           *data = VARDATA(target);
 	jbyteArray      jb = NULL;
@@ -218,17 +244,6 @@ javatextout(bytea * target)
 
 	jenv = GetJavaEnv();
 
-	converter = (*jenv)->FindClass(jenv, loader);
-	if (converter == NULL) {
-		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "failed to find converter class");
-}
-	out = (*jenv)->GetStaticMethodID(jenv, converter, "java_text_out", "([B)Ljava/lang/String;");
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "embedded exception occurred");
-	}
 	jb = (*jenv)->NewByteArray(jenv, length);
 	if (jb != NULL) {
 		(*jenv)->SetByteArrayRegion(jenv, jb, 0, length, (jbyte *) data);
@@ -237,7 +252,7 @@ javatextout(bytea * target)
 		elog(ERROR, "java memory error");
 	}
 
-	result = (*jenv)->CallStaticObjectMethod(jenv, converter, out, jb);
+	result = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_text_out, jb);
 
 	if (result == NULL || (*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
@@ -254,145 +269,71 @@ javatextout(bytea * target)
 }
 
 Datum
-fmgr_javaA(Datum target, const char* function, int nargs, Oid* types, jvalue *args,bool* isNull)
+fmgr_javaA(Datum target, const char* function, int nargs, Oid* types, Datum *args,bool* isNull)
 {
 	JNIEnv         *jenv;
-	jclass          converter;
-	jmethodID       in;
 	jvalue          rval;
+        jvalue        jargs[FUNC_MAX_ARGS];
 	Datum           ret_datum;
         Oid foid;
         Oid rtype;
         const char            *clazz;
         const char            *method;
         const char            *sig;
+        int x=0;
                 
 	jenv = GetJavaEnv();
 
 	(*jenv)->PushLocalFrame(jenv, 10);
 
-        jobject         jtar = (jobject) javaout((bytea *) DatumGetPointer(target));
 
-        if (GetJavaSignature(jtar,function,nargs,types,&foid,&clazz,&method,&sig,&rtype)) {
-            if ((*jenv)->IsSameObject(jenv, jtar, NULL)) {
-                converter = (*jenv)->FindClass(jenv,clazz);
-                in = (*jenv)->GetStaticMethodID(jenv, converter, method, sig);
-            } else {
-                converter = (*jenv)->GetObjectClass(jenv, jtar);
-                in = (*jenv)->GetMethodID(jenv, converter, method, sig);
-            }
-            pfree((void*)clazz);
-            /* never free method, part of clazz */
-            pfree((void*)sig);
-            if (in == NULL) {
-                (*jenv)->PopLocalFrame(jenv, NULL);
-                elog(ERROR, "%s.%s with signature %s does not exist", clazz, method, sig);
-            }
-        } else {
-            (*jenv)->PopLocalFrame(jenv, NULL);
-            elog(ERROR, "java function %s not found", function);
+        jobject jtar = (jobject) javaout((bytea *) DatumGetPointer(target));
+
+        JavaFunction def = GetJavaCallArgs(jtar, function, nargs, types);
+
+        for (x=0;x<nargs;x++) {
+            jargs[x] = ConvertToJavaArg(def->argTypes[x], args[x]);
         }
 
-        switch (rtype) {
-            case JAVAOID:
-            case TEXTOID:
-            case VARCHAROID:
-                    rval.l = (*jenv)->IsSameObject(jenv, jtar, NULL) ? 
-                            (*jenv)->CallStaticObjectMethodA(jenv, converter, in, (jvalue *) args)
-                            : (*jenv)->CallObjectMethodA(jenv, jtar, in, (jvalue *) args);
-                    break;
-            case BOOLOID:
-                    rval.z = (*jenv)->IsSameObject(jenv, jtar, NULL) ? 
-                        (*jenv)->CallStaticBooleanMethodA(jenv, converter, in, (jvalue *) args)
-                        : (*jenv)->CallBooleanMethodA(jenv, jtar, in, (jvalue *) args);
-                    break;
-            case INT4OID:
-                    rval.i = (*jenv)->IsSameObject(jenv, jtar, NULL) ? 
-                        (*jenv)->CallStaticIntMethodA(jenv, converter, in, (jvalue *) args)
-                        : (*jenv)->CallIntMethodA(jenv, jtar, in, (jvalue *) args);
-                    break;
-            case INT8OID:
-                    rval.j = (*jenv)->IsSameObject(jenv, jtar, NULL) ? 
-                        (*jenv)->CallStaticLongMethodA(jenv, converter, in, (jvalue *) args)
-                        : (*jenv)->CallLongMethodA(jenv, jtar, in, args);
-                    break;                
-            case FLOAT8OID:
-                    rval.d = (*jenv)->IsSameObject(jenv, jtar, NULL) ? 
-                        (*jenv)->CallStaticDoubleMethodA(jenv, converter, in, (jvalue *) args)
-                        : (*jenv)->CallDoubleMethodA(jenv, jtar, in, args);
-                    break;
-            default:
-                    rval.l = (*jenv)->IsSameObject(jenv, jtar, NULL) ? 
-                        (*jenv)->CallStaticObjectMethodA(jenv, converter, in, (jvalue *) args)
-                        : (*jenv)->CallObjectMethodA(jenv, jtar, in, (jvalue *) args);
-                    break;
-        }
+        rval = CallJavaFunction(def, jtar, nargs, jargs);
 
 	if ((*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
 		elog(ERROR, "embedded exception occurred");
 	}
-	ret_datum = ConvertFromJavaArg(rtype, rval,isNull);
+	ret_datum = ConvertFromJavaArg(def->returnType, rval, isNull);
 	(*jenv)->PopLocalFrame(jenv, NULL);
 
 	return ret_datum;
 }
 
 Datum
-fmgr_cached_javaA(JavaInfo* jinfo, int nargs, Oid* types, jvalue *args,bool* isNull)
+fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, bool* isNull)
 {
 	JNIEnv         *jenv = GetJavaEnv();
 	jclass          converter;
 	jmethodID       in;
 	jvalue          rval;
 	Datum           ret_datum;
+        jvalue        jargs[FUNC_MAX_ARGS];
         Oid foid;
-        Oid rtype;
+        int x;
 
 	(*jenv)->PushLocalFrame(jenv, 10);
-
-        rtype = jinfo->rettype;
-        converter = (*jenv)->FindClass(jenv, jinfo->javaclazz);
-        if (converter == NULL) {
-                (*jenv)->ExceptionClear(jenv);
-                (*jenv)->PopLocalFrame(jenv, NULL);
-                elog(ERROR, "java class %s does not resolve", jinfo->javaclazz);
-        }
-        in = (*jenv)->GetStaticMethodID(jenv, converter, jinfo->javamethod, jinfo->javasig);
-        if (in == NULL) {
-                (*jenv)->ExceptionClear(jenv);
-                (*jenv)->PopLocalFrame(jenv, NULL);
-                elog(ERROR, "method does not exist class:%s method:%s sig:%s", jinfo->javaclazz, jinfo->javamethod, jinfo->javasig);
+        
+        for (x=0;x<nargs;x++) {
+            jargs[x] = ConvertToJavaArg(jinfo->argTypes[x], args[x]);
         }
 
-        switch (rtype) {
-		case JAVAOID:
-                case TEXTOID:
-		case VARCHAROID:
-			rval.l = (*jenv)->CallStaticObjectMethodA(jenv, converter, in, (jvalue *) args);
-			break;
-		case BOOLOID:
-			rval.z = (*jenv)->CallStaticBooleanMethodA(jenv, converter, in, (jvalue *) args);
-			break;
-		case INT4OID:
-			rval.i = (*jenv)->CallStaticIntMethodA(jenv, converter, in, (jvalue *) args);
-			break;
-                case INT8OID:
-                        rval.j = (*jenv)->CallStaticLongMethodA(jenv, converter, in, args);
-                        break;                
-                case FLOAT8OID:
-                        rval.d = (*jenv)->CallStaticDoubleMethodA(jenv, converter, in, args);
-                        break;
-                    default:
-			rval.l = (*jenv)->CallStaticObjectMethodA(jenv, converter, in, (jvalue *) args);
-			break;
-	}
+        rval = CallJavaFunction(jinfo,  NULL, nargs, jargs);
 
 	if ((*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
 		elog(ERROR, "embedded exception occurred");
 	}
-	ret_datum = ConvertFromJavaArg(rtype, rval,isNull);
+
+	ret_datum = ConvertFromJavaArg(jinfo->returnType, rval,isNull);
+
 	(*jenv)->PopLocalFrame(jenv, NULL);
 
 	return ret_datum;
@@ -545,7 +486,6 @@ int32
 java_compare(bytea * obj1, bytea * obj2)
 {
 	JNIEnv         *jenv;
-	jclass          converter;
 	jmethodID       in;
 	jint            result = 0;
 	jbyteArray      master1 = NULL;
@@ -554,12 +494,6 @@ java_compare(bytea * obj1, bytea * obj2)
 	jenv = GetJavaEnv();
 	(*jenv)->PushLocalFrame(jenv, 10);
 
-	converter = (*jenv)->FindClass(jenv, loader);
-	if (converter == NULL) {
-		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "failed to find converter class");
-	}
-	in = (*jenv)->GetStaticMethodID(jenv, converter, "java_compare", "([B[B)I");
 	if ((*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
 		(*jenv)->PopLocalFrame(jenv, NULL);
@@ -581,7 +515,7 @@ java_compare(bytea * obj1, bytea * obj2)
 		elog(ERROR, "java memory error in compare 2");
 	}
 
-	result = (*jenv)->CallStaticIntMethod(jenv, converter, in, master1, master2);
+	result = (*jenv)->CallStaticIntMethod(jenv, loader_class, loader_compare, master1, master2);
 
 	if ((*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
@@ -596,8 +530,6 @@ bool
 java_equals(bytea * obj1, bytea * obj2)
 {
 	JNIEnv         *jenv;
-	jclass          converter;
-	jmethodID       in;
 	jboolean        result = 0;
 	jbyteArray      master1 = NULL;
 	jbyteArray      master2 = NULL;
@@ -605,17 +537,6 @@ java_equals(bytea * obj1, bytea * obj2)
 	jenv = GetJavaEnv();
 	(*jenv)->PushLocalFrame(jenv, 10);
 
-	converter = (*jenv)->FindClass(jenv, loader);
-	if (converter == NULL) {
-		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "failed to find converter class");
-	}
-	in = (*jenv)->GetStaticMethodID(jenv, converter, "java_equals", "([B[B)Z");
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "could not find method java_equals method in java object loader");
-	}
 	master1 = (*jenv)->NewByteArray(jenv, VARSIZE(obj1) - VARHDRSZ);
 	if (master1 != NULL) {
 		(*jenv)->SetByteArrayRegion(jenv, master1, 0, VARSIZE(obj1) - VARHDRSZ, (jbyte *) VARDATA(obj1));
@@ -632,7 +553,7 @@ java_equals(bytea * obj1, bytea * obj2)
 		elog(ERROR, "java memory error");
 	}
 
-	result = (*jenv)->CallStaticBooleanMethod(jenv, converter, in, master1, master2);
+	result = (*jenv)->CallStaticBooleanMethod(jenv, loader_class, loader_equals, master1, master2);
 
 	if ((*jenv)->ExceptionOccurred(jenv)) {
 		(*jenv)->ExceptionClear(jenv);
@@ -693,94 +614,183 @@ javalen(bytea * obj)
 	return VARSIZE(obj) - VARHDRSZ;
 }
 
-PG_EXTERN int
-GetJavaSignature(jobject target, const char *name, int nargs, Oid * types, Oid * fid,
-     const char **javasrc, const char **javaname, const char **javasig, Oid * rettype )
+void FormJavaFunctionSig(char* buffer, int buflen, const char* clazz, const char *name, int nargs, Oid * types) {
+        char                 args[128];
+        const char*           argformat = "%ld,";
+
+        int x;
+        char*   insert = args;
+
+        memset(args, '\0', 128);
+
+        for (x=0;x<nargs;x++) {
+            sprintf(insert, argformat, types[x]);
+            insert = index(insert, '\0');
+        }
+        if (*(--insert) == ',') *insert = '\0';
+
+        if (clazz == NULL) {
+            snprintf(buffer, buflen, "%s(%s)", name, args);
+        } else {
+            snprintf(buffer, buflen, "%s.%s(%s)", clazz, name, args);
+        }
+}
+
+JavaFunction
+GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
 {
 	JNIEnv         *jenv;
 	jclass          converter = NULL;
-	jclass          class_class;
-
-	jmethodID       getname;
 	jstring         classid;
-        int found = 0;
+        bool hfound = false;
+        char                 buffer[128];
+        FuncDef*            definition = NULL;
 
 	jenv = GetJavaEnv();
 
-	if (target) {
-                NameData        lookup;
-                
-                memset(NameStr(lookup), 0x00, NAMEDATALEN);
-              (*jenv)->PushLocalFrame(jenv, 10);
+	if (!(*jenv)->IsSameObject(jenv, target, NULL)) {                
+                (*jenv)->PushLocalFrame(jenv, 10);
 		
 		converter = (*jenv)->GetObjectClass(jenv, target);
 
-		class_class = (*jenv)->FindClass(jenv, "java/lang/Class");
-		getname = (*jenv)->GetMethodID(jenv, class_class, "getName", "()Ljava/lang/String;");
-
-		while (converter != NULL) {
-                    char*               mark;
+		while (converter != NULL && definition == NULL) {
+                    NameData        lookup;
                     jsize           len;
+
+                    memset(NameStr(lookup), '\0', NAMEDATALEN);
                     classid = (*jenv)->CallObjectMethod(jenv, converter, getname);
                     len = (*jenv)->GetStringUTFLength(jenv, classid);
-                    (*jenv)->GetStringUTFRegion(jenv, classid, 0, len, NameStr(lookup));
-                    mark = NameStr(lookup);
-                    while ( mark != NULL ) {
-                        mark = index(mark,'.');
-                        if ( mark != NULL ) *mark = '/';
-                    }
+                    (*jenv)->GetStringUTFRegion(jenv, classid, 1, len - 2, buffer);
+                    buffer[len - 1] = '\0';
 
-                    *(NameStr(lookup) + len) = '.';
-                    strncpy(NameStr(lookup) + len + 1, name, NAMEDATALEN - len - 2);
+                    FormJavaFunctionSig(NameStr(lookup), NAMEDATALEN, buffer, name, nargs, types);
 
-                    HeapTuple func = SearchSysCacheTuple(PROCNAME, NameGetDatum(&lookup),
-                       Int32GetDatum(nargs), PointerGetDatum(types), 0);
+                    pthread_mutex_lock(&ftable_guard);
+                    definition = hash_search(function_table, NameStr(lookup), HASH_FIND, &hfound);
+                    pthread_mutex_unlock(&ftable_guard);
+                    if (definition == NULL) {
+                        NameData funcName;
 
-                    if (HeapTupleIsValid(func)) {
-                        char* mark;
-                        Form_pg_proc    pg_proc = (Form_pg_proc) GETSTRUCT(func);
-                        *fid = func->t_data->t_oid;
-                        *rettype = pg_proc->prorettype;
+                        snprintf(NameStr(funcName), NAMEDATALEN, "%s.%s", buffer, name);
+                        HeapTuple func = SearchSysCacheTuple(PROCNAME, NameGetDatum(&funcName),
+                                Int32GetDatum(nargs), PointerGetDatum(types), 0);
 
-                        Datum           cla = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prosrc, NULL);
-                        *javasrc = textout((text *) cla);
-                        *javaname = *javasrc;
-                        Datum           sig = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_probin, NULL);
-                        *javasig = textout((text *) sig);
+                        if (HeapTupleIsValid(func)) {
+                            char* mark;
+                            pthread_mutex_lock(&ftable_guard);
+                            definition = hash_search(function_table, NameStr(lookup), HASH_ENTER, &hfound);
+                            pthread_mutex_unlock(&ftable_guard);
 
-                        found = 1;
-                        break;
-                    } else {
-                        converter = (*jenv)->GetSuperclass(jenv, converter);
+                            if (!hfound) {
+                                Datum           cla = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prosrc, NULL);
+                                const char*           javasrc = textout((text *) cla);
+                                Datum           sig = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_probin, NULL);
+                                const char*           javasig = textout((text *) sig);
+
+                                definition->clazz = (*jenv)->NewGlobalRef(jenv, converter);
+                                definition->method = (*jenv)->GetMethodID(jenv, definition->clazz, javasrc, javasig);
+                                definition->isStatic = false;
+                                definition->returnType = DatumGetObjectId(SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prorettype, NULL));
+                                definition->nargs = nargs;
+                                memmove(definition->argTypes,types, sizeof(Oid) * nargs);
+
+                                pfree((void*)javasrc);
+                                pfree((void*)javasig);
+                            }
+                            break;
+                        } else {
+                            converter = (*jenv)->GetSuperclass(jenv, converter);
+                        }
                     }
 		}
                 (*jenv)->PopLocalFrame(jenv, NULL);
-	} else {
-            NameData        lookup;                
-            memset(NameStr(lookup), 0x00, NAMEDATALEN);
-            strncpy(NameStr(lookup), name, strlen(name));
-            HeapTuple func = SearchSysCacheTuple(PROCNAME, NameGetDatum(&lookup),
+	} else {  /* static function  */
+            NameData   lookup;
+            memset(NameStr(lookup), '\0', NAMEDATALEN);
+
+            FormJavaFunctionSig(NameStr(lookup), NAMEDATALEN, NULL, name, nargs, types);
+
+            pthread_mutex_lock(&ftable_guard);
+            definition = hash_search(function_table, NameStr(lookup), HASH_FIND, &hfound);
+            pthread_mutex_unlock(&ftable_guard);
+            if (definition == NULL) {
+                HeapTuple func = SearchSysCacheTuple(PROCNAME, PointerGetDatum(name),
                        Int32GetDatum(nargs), PointerGetDatum(types), 0);
 
-             if (HeapTupleIsValid(func)) {
+                if (HeapTupleIsValid(func)) {
                     char* mark;
-                    Form_pg_proc    pg_proc = (Form_pg_proc) GETSTRUCT(func);
-                    *fid = func->t_data->t_oid;
-                    *rettype = pg_proc->prorettype;
+                    pthread_mutex_lock(&ftable_guard);
+                    definition = hash_search(function_table, NameStr(lookup), HASH_ENTER, &hfound);
+                    pthread_mutex_unlock(&ftable_guard);
 
-                    Datum           cla = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prosrc, NULL);
-                    *javasrc = textout((text *) cla);
-                    Datum           sig = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_probin, NULL);
-                    *javasig = textout((text *) sig);
+                    if (!hfound) {
+                        Datum           cla = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prosrc, NULL);
+                        const char*  javasrc = textout((text *) cla);
+                        Datum           sig = SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_probin, NULL);
+                        const char*  javasig = textout((text *) sig);
+                        const char*  javaname;
 
-                    mark = index(*javasrc,'.');
-                    *mark = '\0';
-                    *javaname = mark + 1;
-                    found = 1;
+                        mark = index(javasrc,'.');
+                        *mark = '\0';
+                        javaname = mark + 1;
+
+                        definition->clazz = (*jenv)->NewGlobalRef(jenv, (*jenv)->FindClass(jenv, javasrc));
+                        definition->method = (*jenv)->GetStaticMethodID(jenv, definition->clazz, javaname, javasig);
+                        definition->isStatic = true;
+                        definition->returnType = DatumGetObjectId(SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prorettype, NULL));
+                        definition->nargs = nargs;
+                        memmove(definition->argTypes,types, sizeof(Oid) * nargs);
+
+                        pfree((void*)javasrc);
+                        pfree((void*)javasig);
+                    }
                 }
+            }
         }
         
-        return found;
+        return definition;
+}
+
+jvalue
+CallJavaFunction(FuncDef* def, jobject target, int nargs, jvalue* args) {
+	JNIEnv         *jenv = GetJavaEnv();
+        jvalue         rval;
+
+        switch (def->returnType) {
+            case JAVAOID:
+            case TEXTOID:
+            case VARCHAROID:
+                    rval.l = def->isStatic ? 
+                            (*jenv)->CallStaticObjectMethodA(jenv, def->clazz, def->method, args)
+                            : (*jenv)->CallObjectMethodA(jenv, target, def->method, args);
+                    break;
+            case BOOLOID:
+                    rval.z = def->isStatic ? 
+                        (*jenv)->CallStaticBooleanMethodA(jenv, def->clazz, def->method, args)
+                        : (*jenv)->CallBooleanMethodA(jenv, target, def->method, args);
+                    break;
+            case INT4OID:
+                    rval.i = def->isStatic ?
+                        (*jenv)->CallStaticIntMethodA(jenv, def->clazz, def->method, args)
+                        : (*jenv)->CallIntMethodA(jenv, target, def->method, args);
+                    break;
+            case INT8OID:
+                    rval.j = def->isStatic ?
+                        (*jenv)->CallStaticLongMethodA(jenv, def->clazz, def->method, args)
+                        : (*jenv)->CallLongMethodA(jenv, target, def->method, args);
+                    break;                
+            case FLOAT8OID:
+                    rval.d = def->isStatic ?
+                        (*jenv)->CallStaticDoubleMethodA(jenv, def->clazz, def->method, args)
+                        : (*jenv)->CallDoubleMethodA(jenv, target, def->method,args);
+                    break;
+            default:
+                    rval.l = def->isStatic ?
+                        (*jenv)->CallStaticObjectMethodA(jenv, def->clazz, def->method,  args)
+                        : (*jenv)->CallObjectMethodA(jenv, target, def->method, args);
+                    break;
+        }
+        return rval;
 }
 
 bool

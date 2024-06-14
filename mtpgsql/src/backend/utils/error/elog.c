@@ -56,7 +56,7 @@
 #endif
 
 static int	Debugfile = -1;
-static int	Err_file = -1;
+
 static int	ElogDebugIndentLevel = 0;
 static bool     IgnoreDebugLevel = false;
 #ifdef HAVE_ALLOCINFO
@@ -168,12 +168,16 @@ elog(int lev, const char *fmt,...)
 			prefix = "DEBUG:  ";
 			break;
 		case DEBUG:
-			indent = ElogDebugIndentLevel;
-			if (indent < 0)
-				indent = 0;
-			if (indent > 30)
-				indent = indent % 30;
-			prefix = "DEBUG:  ";
+                        if (Debugfile != fileno(stderr)) {
+                            prefix = "";
+                        } else {
+                            indent = ElogDebugIndentLevel;
+                            if (indent < 0)
+                                    indent = 0;
+                            if (indent > 30)
+                                    indent = indent % 30;
+                            prefix = "DEBUG:  ";
+                        }
 			break;
 		case NOTICE:
 			prefix = "NOTICE:  ";
@@ -214,6 +218,7 @@ elog(int lev, const char *fmt,...)
 	}
 #ifdef ELOG_TIMESTAMPS
 	strcpy(fmt_buf, tprintf_timestamp());
+        strcat(fmt_buf, "  ");
 	strcat(fmt_buf, prefix);
 #else
 	strcpy(fmt_buf, prefix);
@@ -335,33 +340,6 @@ elog(int lev, const char *fmt,...)
 
 	len = strlen(msg_buf);
 
-	if (Debugfile >= 0 && UseSyslog <= 1)
-		write(Debugfile, msg_buf, len);
-
-	/*
-	 * If there's an error log file other than our channel to the
-	 * front-end program, write to it first.  This is important because
-	 * there's a bug in the socket code on ultrix.  If the front end has
-	 * gone away (so the channel to it has been closed at the other end),
-	 * then writing here can cause this backend to exit without warning
-	 * that is, write() does an exit(). In this case, our only hope of
-	 * finding out what's going on is if Err_file was set to some disk
-	 * log.  This is a major pain.	(It's probably also long-dead code...
-	 * does anyone still use ultrix?)
-	 */
-	if (lev > DEBUG && Err_file >= 0 &&
-		Debugfile != Err_file && UseSyslog <= 1)
-	{
-		if (write(Err_file, msg_buf, len) < 0)
-		{
-			write(open("/dev/console", O_WRONLY, 0666), msg_buf, len);
-			lev = REALLYFATAL;
-		}
-		fsync(Err_file);
-	}
-
-
-
 	if (lev > DEBUG && WhereToSendOutput() == Remote)
 	{
 		/* Send IPC message to the front-end program */
@@ -395,10 +373,10 @@ elog(int lev, const char *fmt,...)
 		 */
 		pq_flush();
 	} else if (lev > DEBUG && WhereToSendOutput() == Local) {
-                pq_putbytes(prefix, strlen(prefix));
                 pq_putbytes(msg_buf + TIMESTAMP_SIZE, strlen(msg_buf + TIMESTAMP_SIZE));
                 pq_flush();
-        }
+        } else  if (Debugfile >= 0 && UseSyslog <= 1)
+		write(Debugfile, msg_buf, len);
 
 
 	/*
@@ -479,7 +457,7 @@ int
 InitializeElog(const char* logfile, bool debug, bool redirecterr) {
 	int			fd;
 
-	Err_file = Debugfile = -1;
+	Debugfile = -1;
 	ElogDebugIndentLevel = 0;
         IgnoreDebugLevel = !debug;
 
@@ -502,7 +480,7 @@ InitializeElog(const char* logfile, bool debug, bool redirecterr) {
                             fd = fileno(stderr);
                         }
                     }
-                    Err_file = Debugfile = fd;
+                    Debugfile = fd;
                     return Debugfile;
                 }
 	}
@@ -522,7 +500,7 @@ InitializeElog(const char* logfile, bool debug, bool redirecterr) {
 	if (fd < 0)
 		elog(FATAL, "InitializeElog: could not open debugging file");
 
-	Err_file = Debugfile = fd;
+	Debugfile = fd;
 	return Debugfile;
 }
 #ifdef HAVE_ALLOCINFO

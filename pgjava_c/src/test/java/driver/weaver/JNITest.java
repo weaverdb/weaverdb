@@ -10,7 +10,7 @@ import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
-import java.io.Writer;
+import java.lang.reflect.Field;
 import java.nio.channels.Channels;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -728,7 +728,7 @@ public class JNITest {
                     }
                 }
             }
-            conn.stream("explain select * from test12");
+            conn.stream("explain verbose select * from test12");
 
             Random gen = new Random();
             try (TransactionSequence p = new TransactionSequence(conn)) {
@@ -953,20 +953,23 @@ public class JNITest {
             try (Statement s = conn.statement("select hex(5)")) {
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
-            conn.execute("create function 'java/lang/String.toString' () returns varchar(256) as 'toString','()Ljava/lang/String;' language 'java'");
+            conn.execute("create function 'java/lang/String.toString' () returns varchar as 'toString','()Ljava/lang/String;' language 'java'");
             conn.execute("create table test30 (item java)");
             try (Statement s = conn.statement("insert into test30 (item) values ($item)")) {
                 s.linkInput("item", Serializable.class).set("test");
+                s.execute();
+                s.linkInput("item", Serializable.class).set("test2");
+                s.execute();
+                s.linkInput("item", Serializable.class).set("test3");
                 s.execute();
             }
             try (Statement s = conn.statement("select item.toString() from test30")) {
                 s.linkOutput(1, String.class);
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
-        }
-        
-    }   
-    
+        }   
+    }
+
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;

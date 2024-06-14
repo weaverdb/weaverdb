@@ -234,7 +234,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 
 	env = InitSystem(isPrivate);	
         
-	if ( strlen(output) == 0 ) {
+	if ( output != NULL && strlen(output) == 0 ) {
             output = NULL;
 	}
 	

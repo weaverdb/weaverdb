@@ -112,10 +112,12 @@ ExplainOneQuery(Query *query, bool verbose, CommandDest dest)
 		s = nodeToString(plan);
 		if (s)
 		{
-			elog(NOTICE, "QUERY DUMP:\n\n%s", s);
                         if (dest == Local) {
                             pq_putbytes(s, strlen(s));
+                            pq_putbytes("\n", 1);
                             pq_flush();
+                        } else {
+                            elog(NOTICE, "QUERY DUMP:\n\n%s", s);
                         }
 			pfree(s);
 		}
@@ -126,16 +128,17 @@ ExplainOneQuery(Query *query, bool verbose, CommandDest dest)
 		s = Explain_PlanToString(plan, es);
 		if (s)
 		{
-			elog(NOTICE, "QUERY PLAN:\n\n%s", s);
                         if (dest == Local) {
                             pq_putbytes(s, strlen(s));
                             pq_flush();
+                        } else {
+                            elog(NOTICE, "QUERY PLAN:\n\n%s", s);
                         }
 			pfree(s);
 		}
 	}
 
-	if (es->printNodes)
+	if (es->printNodes && dest != Local)
 		pprint(plan);			/* display in postmaster log file */
 
 	pfree(es);

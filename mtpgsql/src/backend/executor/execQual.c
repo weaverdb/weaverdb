@@ -73,7 +73,7 @@ static void
 ExecEvalFuncArgs(FunctionCachePtr fcache, ExprContext * econtext,
 		 List * argList, Datum argV[], bool * argIsDone);
 static void
-ExecEvalJavaArgs(ExprContext * econtext, List * argList, jvalue argV[]);
+ExecEvalJavaArgs(ExprContext * econtext, List * argList, Datum argV[]);
 
 static Datum    ExecEvalNot(Expr * notclause, ExprContext * econtext, bool * isNull);
 static Datum    ExecEvalOper(Expr * opClause, ExprContext * econtext,
@@ -520,7 +520,7 @@ ExecEvalFuncArgs(FunctionCachePtr fcache,
 static void
 ExecEvalJavaArgs(ExprContext * econtext,
 		 List * argList,
-		 jvalue argV[])
+		 Datum argV[])
 {
 	int             i;
 	bool            nullVect;
@@ -535,16 +535,16 @@ ExecEvalJavaArgs(ExprContext * econtext,
 			if (val->constisnull) {
 				nullVect = true;
 			} else {
-				argV[i] = ConvertToJavaArg(val->consttype, val->constvalue);
+				argV[i] = val->constvalue;
 			}
 		} else if (IsA(next, Param)) {
 			Param          *setup = (Param *) next;
 			Datum           setter = ExecEvalParam(setup, econtext, &nullVect);
-			argV[i] = ConvertToJavaArg(setup->paramtype, setter);
+			argV[i] = setter;
 		} else if (IsA(next, Var)) {
 			Var            *var = (Var *) next;
 			Datum           retDatum = ExecEvalVar(var, econtext, &nullVect, NULL, NULL);
-			argV[i] = ConvertToJavaArg(var->vartype, retDatum);
+			argV[i] = retDatum;
 		} else {
 			elog(ERROR, "argument node not supported");
 		}
@@ -559,7 +559,7 @@ ExecEvalJavaArgs(ExprContext * econtext,
 static          Datum
 ExecMakeJavaFunctionResult(Java * node, Datum target, List * args, ExprContext * econtext, bool *isNull)
 {
-	jvalue          jargV[FUNC_MAX_ARGS];
+	Datum          jargV[FUNC_MAX_ARGS];
 
 	/*
 	 * arguments is a list of expressions to evaluate before passing to
@@ -747,8 +747,8 @@ ExecMakeFunctionResult(Node * node,
 		return result;
 	} else if ( fcache->language == JAVAlanguageId ) {
 		int             i;
-                jvalue          args[FUNC_MAX_ARGS];
-                JavaInfo*       info = fcache->func.fn_data;
+                Datum          args[FUNC_MAX_ARGS];
+                JavaFunction       info = fcache->func.fn_data;
 
 		if (isDone)
 			*isDone = true;
@@ -757,7 +757,7 @@ ExecMakeFunctionResult(Node * node,
 				*isNull = true;
 
                 ExecEvalJavaArgs(econtext,arguments,args);
-		return fmgr_cached_javaA(info,fcache->nargs,info->types, args, isNull);
+		return fmgr_cached_javaA(info,fcache->nargs, args, isNull);
         } else {
 		int             i;
 
