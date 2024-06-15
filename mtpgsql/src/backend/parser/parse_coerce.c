@@ -110,6 +110,29 @@ coerce_type(ParseState *pstate, Node *node, Oid inputTypeId,
 
 		result = (Node *) relabel;
 	}
+        else if (inputTypeId == JAVARESULTOID) 
+        {
+		/*
+		 * We don't really need to do a conversion, but we do need to
+		 * attach a RelabelType node so that the expression will be seen
+		 * to have the intended type when inspected by higher-level code.
+		 */
+		RelabelType *relabel = makeNode(RelabelType);
+
+		relabel->arg = node;
+		relabel->resulttype = targetTypeId;
+
+		/*
+		 * XXX could we label result with exprTypmod(node) instead of
+		 * default -1 typmod, to save a possible length-coercion later?
+		 * Would work if both types have same interpretation of typmod,
+		 * which is likely but not certain.
+		 */
+		relabel->resulttypmod = -1;
+
+		result = (Node *) relabel;
+                
+        }
 	else if (typeInheritsFrom(inputTypeId, targetTypeId))
 	{
 		/* Input class type is a subclass of target, so nothing to do */
@@ -207,12 +230,15 @@ can_coerce_type(int nargs, Oid *input_typeids, Oid *func_typeids)
 		if (IS_BINARY_COMPATIBLE(inputTypeId, targetTypeId))
 			continue;
 
+                if (inputTypeId == JAVARESULTOID)
+                    continue;
 		/* don't know what to do for the output type? then quit... */
 		if (targetTypeId == InvalidOid)
 			return false;
 		/* don't know what to do for the input type? then quit... */
 		if (inputTypeId == InvalidOid)
 			return false;
+
 
 		/*
 		 * If input is an untyped string constant, assume we can convert

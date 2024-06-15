@@ -258,9 +258,9 @@ agg_select_candidate(Oid typeid, CandidateList candidates)
  * parse java func
  */
 Node *
-ParseJavaFunc(ParseState *pstate, char *funcname, char* target,List *fargs)
+ParseJavaFunc(ParseState *pstate, char *funcname, char* target, List *fargs)
 {
-	Oid			rettype = InvalidOid;
+	Oid			rettype = JAVARESULTOID;
 	List	   *i = NIL;
 	Ident		   *targetIdent = NULL;
 	Node		   *targetVar = NULL;
@@ -291,7 +291,6 @@ ParseJavaFunc(ParseState *pstate, char *funcname, char* target,List *fargs)
 		Node	   *arg = lfirst(i);
 
 		Oid toid = exprType(arg);
-
 		/*
 		 * Most of the rest of the parser just assumes that functions do
 		 * not have more than FUNC_MAX_ARGS parameters.  We have to test
@@ -304,14 +303,13 @@ ParseJavaFunc(ParseState *pstate, char *funcname, char* target,List *fargs)
 		*(oid_array)++ = toid;
 		nargs++;
 	}
-
 	/* got it */
 	funcnode = makeNode(Java);
         funcnode->funcid = 0;
+        funcnode->functype = rettype;
 /*  don't know exact function type yet  */
 	funcnode->funcname = funcname;
 /*  don't know return type yet  */
-/*	funcnode->funcargs = fargs;  */
 	funcnode->funcargtypes = oid_array;
 	funcnode->funcnargs = nargs;
 	funcnode->java_target = targetVar;
@@ -777,8 +775,6 @@ ParseFuncOrColumn(ParseState *pstate, char *funcname, List *fargs,
 		memmove(jc->funcargtypes,oid_array,FUNC_MAX_ARGS * sizeof(Oid));
 		jc->funcnargs = nargs;
 		jc->java_target = NULL;
-		jc->funcsig = NULL;
-		jc->funcclazz = NULL;
 		
 		expr = makeNode(Expr);
 		expr->typeOid = rettype;

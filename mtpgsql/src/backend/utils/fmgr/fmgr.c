@@ -616,6 +616,7 @@ fmgr(Oid procedureId,...)
 
         if ( language == JAVAlanguageId ) {
             Datum      values[FUNC_MAX_ARGS];
+            Oid      returnType;
             
             va_start(pvar, procedureId);
 
@@ -623,7 +624,7 @@ fmgr(Oid procedureId,...)
                     values[i] = va_arg(pvar, Datum);
 
             va_end(pvar);
-            return (char*)fmgr_cached_javaA(finfo.fn_data,finfo.fn_nargs,values, &isNull);
+            return (char*)fmgr_cached_javaA(finfo.fn_data,finfo.fn_nargs,values, &returnType, &isNull);
         } else {
             FmgrValues	values;
             va_start(pvar, procedureId);

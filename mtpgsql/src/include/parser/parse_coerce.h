@@ -90,15 +90,15 @@ typedef enum CATEGORY
 		|| ((a) == VARCHAROID && (b) == BPCHAROID) \
 		|| ((a) == TEXTOID && (b) == BPCHAROID) \
 		|| ((a) == TEXTOID && (b) == VARCHAROID) \
-		|| ((a) == OIDOID && (b) == INT4OID) \
+		|| ((a) == OIDOID && (b) == INT8OID) \
 		|| ((a) == OIDOID && (b) == REGPROCOID) \
-		|| ((a) == INT4OID && (b) == OIDOID) \
+		|| ((a) == INT8OID && (b) == OIDOID) \
 		|| ((a) == CONNECTOROID && (b) == INT4OID) \
 		|| ((a) == INT4OID && (b) == CONNECTOROID) \
-		|| ((a) == INT4OID && (b) == REGPROCOID) \
+		|| ((a) == INT8OID && (b) == REGPROCOID) \
 		|| ((a) == REGPROCOID && (b) == OIDOID) \
-		|| ((a) == REGPROCOID && (b) == INT4OID) \
-		|| ((a) == ABSTIMEOID && (b) == INT4OID) \
+		|| ((a) == REGPROCOID && (b) == INT8OID) \
+		|| ((a) == ABSTIMEOID && (b) == INT8OID) \
 		|| ((a) == INT4OID && (b) == ABSTIMEOID) \
 		|| ((a) == RELTIMEOID && (b) == INT4OID) \
 		|| ((a) == INT4OID && (b) == RELTIMEOID) \

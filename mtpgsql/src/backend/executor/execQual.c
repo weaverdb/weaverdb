@@ -73,7 +73,7 @@ static void
 ExecEvalFuncArgs(FunctionCachePtr fcache, ExprContext * econtext,
 		 List * argList, Datum argV[], bool * argIsDone);
 static void
-ExecEvalJavaArgs(ExprContext * econtext, List * argList, Datum argV[]);
+ExecEvalJavaArgs(ExprContext * econtext, List * argList, Oid* types, Datum* argV);
 
 static Datum    ExecEvalNot(Expr * notclause, ExprContext * econtext, bool * isNull);
 static Datum    ExecEvalOper(Expr * opClause, ExprContext * econtext,
@@ -83,7 +83,7 @@ static Datum    ExecEvalOr(Expr * orExpr, ExprContext * econtext, bool * isNull)
 static Datum    
 ExecMakeFunctionResult(Node * node, List * arguments, ExprContext * econtext, 
                 bool * isNull, bool * isDone);
-static Datum    ExecMakeJavaFunctionResult(Java * node, Datum target, 
+static Datum    ExecMakeJavaFunctionResult(Java * node, Datum target, Oid expectedType, 
                 List * args, ExprContext * econtext, bool* isNull);
 /*
  * ExecEvalArrayRef
@@ -520,7 +520,8 @@ ExecEvalFuncArgs(FunctionCachePtr fcache,
 static void
 ExecEvalJavaArgs(ExprContext * econtext,
 		 List * argList,
-		 Datum argV[])
+                 Oid*   argTypes,
+		 Datum* argV)
 {
 	int             i;
 	bool            nullVect;
@@ -532,6 +533,7 @@ ExecEvalJavaArgs(ExprContext * econtext,
 
 		if (IsA(next, Const)) {
 			Const          *val = (Const *) next;
+                        argTypes[i] = val->consttype;
 			if (val->constisnull) {
 				nullVect = true;
 			} else {
@@ -540,11 +542,25 @@ ExecEvalJavaArgs(ExprContext * econtext,
 		} else if (IsA(next, Param)) {
 			Param          *setup = (Param *) next;
 			Datum           setter = ExecEvalParam(setup, econtext, &nullVect);
+                        argTypes[i] = setup->paramtype;
 			argV[i] = setter;
 		} else if (IsA(next, Var)) {
 			Var            *var = (Var *) next;
 			Datum           retDatum = ExecEvalVar(var, econtext, &nullVect, NULL, NULL);
-			argV[i] = retDatum;
+                        argTypes[i] = var->vartype;
+                        argV[i] = retDatum;
+		} else if (IsA(next, RelabelType)) {
+                        RelabelType      *relabel = (RelabelType*) next;
+                        Expr*         funcClause = (Expr*)relabel->arg;
+                        Java         * javaNode = (Java*)funcClause->oper;
+                        bool            done, isn,isNull;
+        		Datum           javaTarget = PointerGetDatum(NULL);
+
+                        if (javaNode->java_target)
+                            javaTarget = ExecEvalExpr(javaNode->java_target, econtext, &done, &isn);
+
+                        argTypes[i] = relabel->resulttype;
+                        argV[i] = ExecMakeJavaFunctionResult(javaNode, javaTarget, relabel->resulttype, funcClause->args, econtext,&isNull);
 		} else {
 			elog(ERROR, "argument node not supported");
 		}
@@ -557,10 +573,13 @@ ExecEvalJavaArgs(ExprContext * econtext,
  * ExecMakeJavaFunctionResult
  */
 static          Datum
-ExecMakeJavaFunctionResult(Java * node, Datum target, List * args, ExprContext * econtext, bool *isNull)
+ExecMakeJavaFunctionResult(Java * node, Datum target, Oid expectedType, List * args, ExprContext * econtext, bool *isNull)
 {
 	Datum          jargV[FUNC_MAX_ARGS];
-
+        Oid          jtypes[FUNC_MAX_ARGS];
+        Oid          returnType;
+        memset(jargV, '\0', sizeof(Datum) * FUNC_MAX_ARGS);
+        memset(jtypes, '\0', sizeof(Oid) * FUNC_MAX_ARGS);
 	/*
 	 * arguments is a list of expressions to evaluate before passing to
 	 * the function manager. We collect the results of evaluating the
@@ -571,9 +590,15 @@ ExecMakeJavaFunctionResult(Java * node, Datum target, List * args, ExprContext *
 		if (node->funcnargs > FUNC_MAX_ARGS)
 			elog(ERROR, "ExecMakeJavaFunctionResult: too many arguments");
 
-		ExecEvalJavaArgs(econtext, args, jargV);
+		ExecEvalJavaArgs(econtext, args, jtypes, jargV);
 	}
-	return fmgr_javaA(target, node->funcname,node->funcnargs,node->funcargtypes, jargV, isNull);
+
+	Datum result = fmgr_javaA(target, node->funcname,node->funcnargs,jtypes, jargV, &returnType, isNull);
+        if (OidIsValid(expectedType) && expectedType != returnType) {
+  /*  TODO:  type conversion needed  */
+            elog(ERROR, "nested java types do not match");
+        }
+        return result;
 }
 
 
@@ -747,7 +772,9 @@ ExecMakeFunctionResult(Node * node,
 		return result;
 	} else if ( fcache->language == JAVAlanguageId ) {
 		int             i;
+                Oid   returnType;
                 Datum          args[FUNC_MAX_ARGS];
+                Oid            types[FUNC_MAX_ARGS];
                 JavaFunction       info = fcache->func.fn_data;
 
 		if (isDone)
@@ -756,8 +783,8 @@ ExecMakeFunctionResult(Node * node,
 			if (fcache->nullVect[i] == true)
 				*isNull = true;
 
-                ExecEvalJavaArgs(econtext,arguments,args);
-		return fmgr_cached_javaA(info,fcache->nargs, args, isNull);
+                ExecEvalJavaArgs(econtext,arguments,types,args);
+		return fmgr_cached_javaA(info,fcache->nargs, args, &returnType, isNull);
         } else {
 		int             i;
 
@@ -882,7 +909,7 @@ ExecEvalFunc(Expr * funcClause,
 		if (javaNode->java_target)
 			javaTarget = ExecEvalExpr(javaNode->java_target, econtext, &done, &isn);
 
-		return ExecMakeJavaFunctionResult(javaNode, javaTarget, funcClause->args, econtext,isNull);
+		return ExecMakeJavaFunctionResult(javaNode, javaTarget, InvalidOid, funcClause->args, econtext,isNull);
 	}
 }
 

@@ -286,11 +286,8 @@ typedef struct Java
 	NodeTag		type;
 	Oid			funcid;
 	Oid			functype;
-	char*		funcname;
-	char*		funcsig;
-	char*		funcclazz;
 	int			funcnargs;
-/*	List*		funcargs;  */
+	char*		funcname;
 	Oid*		funcargtypes;
 	Node* 		java_target;
 } Java;

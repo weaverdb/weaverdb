@@ -1,7 +1,6 @@
 
 package driver.weaver;
 
-import driver.weaver.BaseWeaverConnection.Statement;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
@@ -22,18 +21,28 @@ public class FunctionInstaller {
         this.connection = connection;
     }
     
-    public static void main(String[] args) throws Exception {
-        MethodHandle handle = MethodHandles.lookup().unreflect(Object.class.getMethod("toString"));
-        System.out.println(installInstanceFunction(handle));
-        handle = MethodHandles.lookup().unreflect(Integer.class.getMethod("toString", int.class, int.class));
-        System.out.println(installStaticFunction("radix", handle));
+    public void installFunction(String alias, MethodHandle definition) throws ExecutionException {
+        String stmt = createFunctionStatement(alias, definition);
+        System.out.println(stmt);
+        connection.execute(stmt);
     }
     
-    public static String installStaticFunction(String name, MethodHandle definition) throws ExecutionException {
+    private static String createFunctionStatement(String name, MethodHandle definition) {
         MethodHandleInfo info = MethodHandles.lookup().revealDirect(definition);
         StringBuilder builder = new StringBuilder();
-        builder.append("create function ");
+        Matcher cm = clazz.matcher(info.getDeclaringClass().descriptorString());
+        String fullname;
+        if (cm.find()) {
+            fullname = cm.group(1) + '.' + info.getName();
+        } else {
+            throw new RuntimeException();
+        }
+        if (name == null) {
+            name = fullname;
+        }
+        builder.append("create function '");
         builder.append(name);
+        builder.append('\'');
         Stream<Class<?>> c = info.getMethodType().parameterList().stream();
         String args = c.map(FunctionInstaller::convertClass).collect(Collectors.joining(",", "(", ")"));
         builder.append(" ");
@@ -42,50 +51,14 @@ public class FunctionInstaller {
         builder.append(convertClass(info.getMethodType().returnType()));
         builder.append(" as ");
         builder.append('\'');
-        Matcher cm = clazz.matcher(info.getDeclaringClass().descriptorString());
-        if (cm.find()) {
-            builder.append(cm.group(1));
-            builder.append(".");
-            builder.append(info.getName());
-        } else {
-            throw new RuntimeException();
-        }
+        builder.append(fullname);
         builder.append('\'');
         builder.append(',');
         builder.append('\'');
         builder.append(info.getMethodType().descriptorString());
         builder.append('\'');
         builder.append(" language 'java'");
-        return builder.toString();
-    }
-    
-    public static String installInstanceFunction(MethodHandle definition) throws ExecutionException {
-        MethodHandleInfo info = MethodHandles.lookup().revealDirect(definition);
-        StringBuilder builder = new StringBuilder();
-        builder.append("create function ");
-        Matcher cm = clazz.matcher(info.getDeclaringClass().descriptorString());
-        if (cm.find()) {
-            builder.append(cm.group(1));
-            builder.append(".");
-            builder.append(info.getName());
-        } else {
-            throw new RuntimeException();
-        }
-        Stream<Class<?>> c = info.getMethodType().parameterList().stream();
-        String args = c.map(FunctionInstaller::convertClass).collect(Collectors.joining(",", "(", ")"));
-        builder.append(" ");
-        builder.append(args);
-        builder.append(" returns ");
-        builder.append(convertClass(info.getMethodType().returnType()));
-        builder.append(" as ");
-        builder.append('\'');
-        builder.append(info.getName());
-        builder.append('\'');
-        builder.append(',');
-        builder.append('\'');
-        builder.append(info.getMethodType().descriptorString());
-        builder.append('\'');
-        builder.append(" language 'java'");
+       
         return builder.toString();
     }
 
@@ -98,6 +71,10 @@ public class FunctionInstaller {
             return "float8";
         } else if (c.equals(Long.class) || c.equals(long.class)) {
             return "int8";
+        } else if (c.equals(Boolean.class) || c.equals(boolean.class)) {
+            return "bool";
+        } else if (c.equals(Boolean.class) || c.equals(boolean.class)) {
+            return "java";
         }
         return "";
     }

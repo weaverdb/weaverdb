@@ -10,7 +10,8 @@ import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
-import java.lang.reflect.Field;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.nio.channels.Channels;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -953,7 +954,7 @@ public class JNITest {
             try (Statement s = conn.statement("select hex(5)")) {
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
-            conn.execute("create function 'java/lang/String.toString' () returns varchar as 'toString','()Ljava/lang/String;' language 'java'");
+            conn.execute("create function 'java/lang/String.toString' () returns varchar as 'java/lang/String.toString','()Ljava/lang/String;' language 'java'");
             conn.execute("create table test30 (item java)");
             try (Statement s = conn.statement("insert into test30 (item) values ($item)")) {
                 s.linkInput("item", Serializable.class).set("test");
@@ -970,6 +971,33 @@ public class JNITest {
         }   
     }
 
+    @org.junit.jupiter.api.Test
+    public void testJavaFunctionWithParams() throws Exception {
+        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+            MethodHandle mh = MethodHandles.publicLookup().unreflect(System.class.getDeclaredMethod("getProperty", String.class));
+            new FunctionInstaller(conn).installFunction("rickets", mh);
+            new FunctionInstaller(conn).installFunction(null, MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
+            conn.execute("create table properties (prop java)");
+            try (Statement s = conn.statement("insert into properties (prop) values ($item)")) {
+                s.linkInput("item", Serializable.class).set("user.dir");
+                s.execute();
+                s.linkInput("item", Serializable.class).set("os.arch");
+                s.execute();
+                s.linkInput("item", Serializable.class).set("java.vendor");
+                s.execute();
+                s.linkInput("item", Serializable.class).set("java.version");
+                s.execute();
+            }
+            try (Statement s = conn.statement("select rickets(prop.toString()) from properties")) {
+                Output<String> prop = s.linkOutput(1, String.class);
+                s.execute();
+                while (s.fetch()) {
+                    System.out.println(prop.getName() + "=" + prop.get());
+                }
+            }
+        }
+    }
+    
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;
