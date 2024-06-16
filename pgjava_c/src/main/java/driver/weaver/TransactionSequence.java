@@ -3,17 +3,15 @@
  */
 package driver.weaver;
 
-import driver.weaver.BaseWeaverConnection.Statement;
-
 /**
  *
  * @author myronscott
  */
 public class TransactionSequence implements AutoCloseable {
-    private final BaseWeaverConnection connection;
+    private final Connection connection;
     private final long current;
 
-    public TransactionSequence(BaseWeaverConnection connection) throws ExecutionException {
+    public TransactionSequence(Connection connection) throws ExecutionException {
         this.connection = connection;
         this.current = connection.begin();
         if (this.current <= 0) {

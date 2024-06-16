@@ -17,11 +17,11 @@ import java.nio.channels.ReadableByteChannel;
  */
 class BoundInput<T> extends Bound<T> {
 
-    private final BaseWeaverConnection.Statement owner;
+    private final Statement owner;
     private final String name;
     private Object value;
 
-    BoundInput(BaseWeaverConnection.Statement fc, String name, Class<T> type) throws ExecutionException {
+    BoundInput(Statement fc, String name, Class<T> type) throws ExecutionException {
         super(type);
         owner = fc;
         this.name = name;
@@ -31,7 +31,7 @@ class BoundInput<T> extends Bound<T> {
         return name;
     }
 
-    BaseWeaverConnection.Statement getOwner() {
+    Statement getOwner() {
         return owner;
     }
     

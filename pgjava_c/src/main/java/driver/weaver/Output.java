@@ -15,27 +15,35 @@ public class Output<T> {
     private final Supplier<String> name;
     private final Getter<T> source;
     private final Class<? extends T> type;
+    private final int index;
     
     Output(BoundOutput<? extends T> base) {
         source = base::get;
         name = base::getName;
         type = base.getTypeClass();
+        index = base.getIndex();
     }
     
     Output(BoundOutputChannel<? extends T> base) {
         source = base::value;
         name = base::getName;
+        index = base.getIndex();
         type = null;
     }
     
     Output(BoundOutputReceiver<? extends T> base) {
         source = base::value;
         name = base::getName;
+        index = base.getIndex();
         type = null;
     }
     
     public String getName() {
         return name.get();
+    }
+    
+    public int getIndex() {
+        return index;
     }
     
     public T value() throws ExecutionException {

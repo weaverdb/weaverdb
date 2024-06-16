@@ -17,8 +17,9 @@ import java.util.function.Supplier;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
-public class BaseWeaverConnection implements AutoCloseable {
+public class BaseWeaverConnection implements Connection {
     
     private static final Logger   LOGGING = Logger.getLogger("Connection");
     
@@ -66,7 +67,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         nativePointer = connectToDatabaseAnonymously(db);
     }
     
-    public static BaseWeaverConnection connectAnonymously(String db) {
+    static BaseWeaverConnection connectAnonymously(String db) {
         closeDiscardedConnections();
         BaseWeaverConnection connect = new BaseWeaverConnection(db);
         if (connect.isValid()) {
@@ -82,7 +83,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
     
-    public static BaseWeaverConnection connectUser(String username, String password, String database) {
+    static BaseWeaverConnection connectUser(String username, String password, String database) {
         closeDiscardedConnections();
         BaseWeaverConnection connect = new BaseWeaverConnection(username, password, database);
         if (connect.isValid()) {
@@ -110,6 +111,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
     
+    @Override
     public boolean isValid() {
         return nativePointer != 0 && isOpen.get();
     }
@@ -145,8 +147,13 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
 
-    public BaseWeaverConnection spawnHelper() throws ExecutionException {
+    private  BaseWeaverConnection spawnHelper() throws ExecutionException {
         return new BaseWeaverConnection(this.connectSubConnection());
+    }
+    
+    @Override
+    public Connection helper() throws ExecutionException {
+        return spawnHelper();
     }
 
     public String idDatabaseRoots() {
@@ -157,6 +164,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         resultField = 0;
     }
 
+    @Override
     public long begin() throws ExecutionException {
         if (transactionId == 0) {
             transactionId = beginTransaction();
@@ -166,14 +174,17 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
 
+    @Override
     public void prepare() throws ExecutionException {
         prepareTransaction();
     }
 
+    @Override
     public void cancel() throws ExecutionException {
         cancelTransaction();
     }
 
+    @Override
     public void abort() {
         try {
             abortTransaction();
@@ -184,6 +195,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
 
+    @Override
     public void commit() throws ExecutionException {
         try {
             commitTransaction();
@@ -192,14 +204,17 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
 
+    @Override
     public void start() throws ExecutionException {
         beginProcedure();
     }
 
+    @Override
     public void end() throws ExecutionException {
         endProcedure();
     }
     
+    @Override
     public Statement statement(String stmt) throws ExecutionException {
         StatementRef ref = (StatementRef)statements.poll();
         while (ref != null) {
@@ -207,11 +222,12 @@ public class BaseWeaverConnection implements AutoCloseable {
             ref = (StatementRef)statements.poll();
         }
         
-        Statement s = new Statement(stmt);
+        WeaverStatement s = new WeaverStatement(stmt);
         liveStatements.put(s.link, new StatementRef(s, statements));
         return s;
     }
     
+    @Override
     public void stream(String stmt) throws ExecutionException {
         StatementRef ref = (StatementRef)statements.poll();
         while (ref != null) {
@@ -221,6 +237,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         streamExec(stmt);
     }
     
+    @Override
     public long execute(String statement) throws ExecutionException {
         long result;
         try (Statement s = statement(statement)) {
@@ -239,6 +256,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         }
     }
     
+    @Override
     public long transaction() {
         if (transactionId == 0) {
             return getTransactionId();
@@ -288,20 +306,22 @@ public class BaseWeaverConnection implements AutoCloseable {
     OutputStream os;
     InputStream is;
 
+    @Override
     public void setStandardOutput(OutputStream out) {
         os = out;
     }
 
+    @Override
     public void setStandardInput(InputStream in) {
         is = in;
     }
     
-    public class Statement implements AutoCloseable {
+    public class WeaverStatement implements Statement {
         private final long  link;
         private final String raw;
         private boolean executed = false;
 
-        Statement(String statement) throws ExecutionException {
+        WeaverStatement(String statement) throws ExecutionException {
             link = prepareStatement(statement);
             if (link == 0) {
                 throw new ExecutionException("statement parsing error");
@@ -316,44 +336,52 @@ public class BaseWeaverConnection implements AutoCloseable {
         private final Map<Integer,BoundOutput> outputs = new HashMap<>();
         private final Map<String,BoundInput> inputs = new HashMap<>();
             
+        @Override
         public <T> Output<T> linkOutput(int index, Class<T> type)  throws ExecutionException {
             BoundOutput<T> bo = new BoundOutput<>(this,index, type);
             Optional.ofNullable(outputs.put(index, bo)).ifPresent(BoundOutput::deactivate);
             return new Output(bo);
         }
         
+        @Override
         public <T> Input<T> linkInput(String name, Class<T> type)  throws ExecutionException {
             BoundInput<T> bi = new BoundInput<>(this, name, type);
             Optional.ofNullable(inputs.put(name, bi)).ifPresent(BoundInput::deactivate);
             return new Input<>(bi);
         }
         
+        @Override
         public <T> Input<T> linkInputChannel(String name, Input.Channel<T> transform) throws ExecutionException {
             BoundInputChannel<T> channel = new BoundInputChannel<>(this, transformer, name, transform);
             Optional.ofNullable(inputs.put(name, channel)).ifPresent(BoundInput::deactivate);
             return new Input<>(channel);
         }
         
+        @Override
         public <T> Input<T> linkInputStream(String name, Input.Stream<T> transform) throws ExecutionException {
             return linkInputChannel(name, (T value,WritableByteChannel w)->transform.transform(value, Channels.newOutputStream(w)));
         }
         
+        @Override
         public <T> Output<T> linkOutputChannel(int index, Output.Channel<T> transform) throws ExecutionException {
             BoundOutputChannel<T> channel = new BoundOutputChannel<>(this, transformer, index, transform);
             Optional.ofNullable(outputs.put(index, channel)).ifPresent(BoundOutput::deactivate);
             return new Output<>(channel);
         }
         
+        @Override
         public <T> Output<T> linkOutputStream(int index, Output.Stream<T> transform) throws ExecutionException {
             return linkOutputChannel(index, (src) -> transform.transform(Channels.newInputStream(src)));
         }
         
+        @Override
         public <T extends WritableByteChannel> Output<T> linkOutputChannel(int index, Supplier<T> cstor) throws ExecutionException {
             BoundOutputReceiver<T> receiver = new BoundOutputReceiver<>(this, index, cstor);
             Optional.ofNullable(outputs.put(index, receiver)).ifPresent(BoundOutput::deactivate);
             return new Output<>(receiver);
         }
         
+        @Override
         public boolean fetch() throws ExecutionException {
             if (!executed) {
                 execute();
@@ -364,10 +392,12 @@ public class BaseWeaverConnection implements AutoCloseable {
             return fetchResults(link, outputs.values().toArray(BoundOutput[]::new));
         }
         
-        Collection<BoundOutput> outputs() {
-            return outputs.values();
+        @Override
+        public Collection<Output> outputs() {
+            return outputs.values().stream().map(Output::new).collect(Collectors.toList());
         }
         
+        @Override
         public long execute() throws ExecutionException {
             long processed = 0;
             
@@ -380,10 +410,12 @@ public class BaseWeaverConnection implements AutoCloseable {
             return processed;
         }
         
+        @Override
         public boolean isValid() {
             return link != 0 && isOpen.get();
         }
         
+        @Override
         public long command() {
             return BaseWeaverConnection.this.getCommandId(link);
         }
@@ -414,7 +446,7 @@ public class BaseWeaverConnection implements AutoCloseable {
         private final long link;
         private final AtomicBoolean disposed = new AtomicBoolean(false);
 
-        public StatementRef(Statement referent, ReferenceQueue<? super Statement> q) {
+        public StatementRef(WeaverStatement referent, ReferenceQueue<? super Statement> q) {
             super(referent, q);
             link = referent.link;
         }

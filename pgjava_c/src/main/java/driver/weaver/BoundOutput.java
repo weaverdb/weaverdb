@@ -16,18 +16,18 @@ import java.nio.channels.WritableByteChannel;
  */
 class BoundOutput<T> extends Bound<T> {
 
-    private final BaseWeaverConnection.Statement owner;
+    private final Statement owner;
     private final int index;
     private String columnName;
     private Object value;
 
-    BoundOutput(BaseWeaverConnection.Statement fc, int index, Class<T> type) throws ExecutionException {
+    BoundOutput(Statement fc, int index, Class<T> type) throws ExecutionException {
         super(type);
         owner = fc;
         this.index = index;
     }
 
-    BaseWeaverConnection.Statement getOwner() {
+    Statement getOwner() {
         return owner;
     }
 

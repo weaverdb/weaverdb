@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 class BoundOutputReceiver<T> extends BoundOutput<WritableByteChannel> {
     private final Supplier<T> type;
 
-    BoundOutputReceiver(BaseWeaverConnection.Statement fc, int index, Supplier<T> type) throws ExecutionException {
+    BoundOutputReceiver(Statement fc, int index, Supplier<T> type) throws ExecutionException {
         super(fc, index, WritableByteChannel.class);
         this.type = type;
     }

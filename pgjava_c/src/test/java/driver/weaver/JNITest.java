@@ -2,7 +2,6 @@
 
 package driver.weaver;
 
-import driver.weaver.BaseWeaverConnection.Statement;
 import driver.weaver.ResultSet.Column;
 import driver.weaver.ResultSet.Row;
 import java.io.DataInputStream;
@@ -98,7 +97,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void test() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             try (Statement s = conn.statement("select * from pg_database;")) {
                 Output<String> b = s.linkOutput(1, String.class);
                 Output<String> c = s.linkOutput(2, String.class);
@@ -117,7 +116,7 @@ public class JNITest {
     }    
     @org.junit.jupiter.api.Test
     public void testBadBind() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             try (Statement s = conn.statement("select * from pg_database;")) {
                 Output<Integer> b = s.linkOutput(1, Integer.class);
                 Output<Integer> c = s.linkOutput(2, Integer.class);
@@ -140,7 +139,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testListTables() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             try (Statement s = conn.statement("select * from pg_class;")) {
                 Output<String> b = s.linkOutput(1, String.class);
                 Output<String> c = s.linkOutput(2, String.class);
@@ -174,7 +173,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testBadCloseSequence() throws Exception {
-        BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test");
+        Connection conn = Connection.connectAnonymously("test");
         Statement s = conn.statement("select * from pg_class;");
         Output<String> b = s.linkOutput(1, String.class);
         Output<String> c = s.linkOutput(2, String.class);
@@ -208,7 +207,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testInputs() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             try (Statement s = conn.statement("create schema fortune")) {
                 s.execute();
             }
@@ -253,7 +252,7 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testPiping() throws Exception {
         ExecutorService feeder = Executors.newVirtualThreadPerTaskExecutor();
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create schema winter");
             conn.execute("create table winter/streaming (id int4, data blob, data2 blob, data3 blob, data4 blob)");
             try (Statement s = conn.statement("insert into winter/streaming (id, data, data2, data3, data4) values ($id, $bin, $binb, $binc, $bind)")) {
@@ -287,7 +286,7 @@ public class JNITest {
     
         @org.junit.jupiter.api.Test
     public void testNullOut() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create schema nullcheck");
             conn.execute("create table nullcheck/nullcheck (nstring varchar(256), nint int4)");
             conn.execute("insert into nullcheck/nullcheck (nstring) values ('fun times')");
@@ -305,7 +304,7 @@ public class JNITest {
         @org.junit.jupiter.api.Test
     public void testStreamingType() throws Exception {
         ExecutorService service = Executors.newVirtualThreadPerTaskExecutor();
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create schema streamtype");
             conn.execute("create table streamtype/foo (bar blob)");
             try (Statement s = conn.statement("insert into streamtype/foo (bar) values ($stream)")) {
@@ -331,7 +330,7 @@ public class JNITest {
 
     @org.junit.jupiter.api.Test
     public void testStreamSpanning() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create schema spanning");
             conn.execute("create table spanning/store (bar streaming)");
             conn.execute("create table spanning/main (id int4, data blob in spanning/store) inherits (spanning/store)");
@@ -359,7 +358,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNullVsZeroLen() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table zerolen (value varchar(256))");
             try (Statement s = conn.statement("insert into zerolen (value) values ($checkit)")) {
                 s.linkInput("checkit", String.class).value("");
@@ -387,7 +386,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNaturalTypes() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table naturaltypes (id int4, value varchar(256))");
             conn.execute("insert into naturaltypes (id, value) values (1, 'value')");
             try (Statement s = conn.statement("select id, value from naturaltypes")) {
@@ -404,7 +403,7 @@ public class JNITest {
         
     @org.junit.jupiter.api.Test
     public void testResultSetStream() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table resultset (id int4, value varchar(256))");
             conn.execute("insert into resultset (id, value) values (1, 'value')");
             conn.execute("insert into resultset (id, value) values (2, 'value2')");
@@ -423,7 +422,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testLongStream() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             Generator generate = new Generator(1024 * 1024);
             long now = System.nanoTime();
             conn.execute("create table longstream (data streaming)");
@@ -478,7 +477,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAutoCommit() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table autocom (id int4, data varchar(256))");
             conn.execute("insert into autocom (id, data) values (1, 'fortune')");
             try (Statement s = conn.statement("select id, data from autocom")) {
@@ -490,7 +489,7 @@ public class JNITest {
                 }
             }
         }   
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             try (Statement s = conn.statement("select id, data from autocom")) {
                 Output<Integer> id = s.linkOutput(1, Integer.class);
                 Output<String> data = s.linkOutput(2, String.class);
@@ -507,7 +506,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAbort() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table test5 (id int4, data varchar(256))");
             conn.begin();
             conn.execute("insert into test5 (id, data) values (1, 'fortune')");
@@ -528,7 +527,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testExecuteCount() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table test6 (id int4, data varchar(256))");
             long result = conn.execute("insert into test6 (id, data) values (1, 'fortune')");
             Assertions.assertEquals(1, result);
@@ -548,7 +547,7 @@ public class JNITest {
         
     @org.junit.jupiter.api.Test
     public void testPrepareSpansCommits() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table test7 (id int4, data varchar(256))");
             long result = conn.execute("insert into test7 (id, data) values (1, 'fortune')");
             Assertions.assertEquals(1, result);
@@ -579,7 +578,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testCheckCommits() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             System.out.println(conn.transaction());
             long transaction = conn.begin();
             long check = conn.transaction();
@@ -593,7 +592,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNestedTransactionsNotAllowed() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.begin();
             conn.begin();
         } catch (ExecutionException ee) {
@@ -604,7 +603,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNestedProcuduresNotAllowed() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.begin();
             conn.start();
             conn.start();
@@ -616,7 +615,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testPrepareFailsWithBadQuery() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.begin();
             try {
                 conn.execute("select * from faketable");
@@ -640,7 +639,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testResultSetStreams() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table test9 (id int4, value varchar(256))");
             conn.execute("insert into test9 (id, value) values (1, 'test1')");
             conn.execute("insert into test9 (id, value) values (2, 'test2')");
@@ -659,11 +658,11 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAutoCommitWorks() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table test10 (id int4, value varchar(256))");
             conn.execute("insert into test10 (id, value) values (1, 'fabulous')");
         }
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             try (Statement s = conn.statement("select * from test10")) {
                 s.execute();
                 Assertions.assertTrue(s.fetch());
@@ -673,7 +672,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testIndexCreation() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             try (TransactionSequence ts = new TransactionSequence(conn)) {
                 try (TransactionSequence.Procedure p = ts.start()) {
                     p.execute("create table test11 (id int4, value varchar(256))");
@@ -712,7 +711,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testStreamExec() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.setStandardOutput(System.out);
             conn.stream("report user memory");
             try (TransactionSequence ts = new TransactionSequence(conn)) {
@@ -779,7 +778,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testCreateIndex() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create table test13 (id int4, value varchar(256))");
             conn.execute("create index test13_id_idx on test13(id)");
         }
@@ -787,7 +786,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAbortCreate() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.begin();
             conn.execute("create table test14 (id int4, value varchar(256))");
             conn.abort();
@@ -808,7 +807,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testMemoryConsumption() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test20 (id int4, value varchar(256))");
@@ -865,7 +864,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testReportMemory() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.setStandardOutput(System.out);
             conn.stream("report user memory");
         }
@@ -873,7 +872,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testBuilder() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test21 (id int4, value varchar(256))");
@@ -919,7 +918,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testBuilderFormatting() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test22 (id int4, value varchar(256))");
@@ -948,7 +947,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testJavaFunction() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("set debug_memory = on");
             conn.execute("create function hex (int4) returns varchar(256) as 'java/lang/Integer.toHexString','(I)Ljava/lang/String;' language 'java'");
             try (Statement s = conn.statement("select hex(5)")) {
@@ -973,7 +972,7 @@ public class JNITest {
 
     @org.junit.jupiter.api.Test
     public void testJavaFunctionWithParams() throws Exception {
-        try (BaseWeaverConnection conn = BaseWeaverConnection.connectAnonymously("test")) {
+        try (Connection conn = Connection.connectAnonymously("test")) {
             MethodHandle mh = MethodHandles.publicLookup().unreflect(System.class.getDeclaredMethod("getProperty", String.class));
             new FunctionInstaller(conn).installFunction("rickets", mh);
             new FunctionInstaller(conn).installFunction(null, MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));

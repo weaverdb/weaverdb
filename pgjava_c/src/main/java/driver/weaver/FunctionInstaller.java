@@ -13,11 +13,11 @@ import java.util.stream.Stream;
  *
  */
 public class FunctionInstaller {
-    private final BaseWeaverConnection connection;
+    private final Connection connection;
     private static final Pattern clazz = Pattern.compile("L(.*);");
     
 
-    public FunctionInstaller(BaseWeaverConnection connection) {
+    public FunctionInstaller(Connection connection) {
         this.connection = connection;
     }
     

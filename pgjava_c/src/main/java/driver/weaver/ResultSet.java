@@ -2,7 +2,7 @@
  */
 package driver.weaver;
 
-import driver.weaver.BaseWeaverConnection.Statement;
+import driver.weaver.BaseWeaverConnection.WeaverStatement;
 import driver.weaver.ResultSet.Row;
 import java.util.AbstractList;
 import java.util.Iterator;
@@ -36,7 +36,7 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
                 action.accept(stmt.outputs().stream()
                         .filter(bo->bo.getName() != null)
                         .sorted((a, b)->Integer.compare(a.getIndex(), b.getIndex()))
-                        .map(Output::new).toArray(Output[]::new));
+                        .toArray(Output[]::new));
             }
             return advanced;
         } catch (ExecutionException ee) {
@@ -76,12 +76,12 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
                 return stmt.outputs().stream()
                         .filter(bo->bo.getName() != null)
                         .sorted((a, b)->Integer.compare(a.getIndex(), b.getIndex()))
-                        .map(Output::new).toArray(Output[]::new);
+                        .toArray(Output[]::new);
             }            
         };
     }
     
-    public static ResultSet.Builder builder(BaseWeaverConnection conn) {
+    public static ResultSet.Builder builder(Connection conn) {
         return new Builder(conn);
     }
     
@@ -91,9 +91,9 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
     }
     
     public static class Builder {
-        private final BaseWeaverConnection connection;
+        private final Connection connection;
         
-        Builder(BaseWeaverConnection connection) {
+        Builder(Connection connection) {
             this.connection = connection;
         }
         
