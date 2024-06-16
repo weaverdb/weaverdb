@@ -1335,7 +1335,7 @@ RelationNameGetRelation(const char *relationName, Oid databaseId) {
                     rd->rd_lockInfo.lockRelId.relId);
         }
     } else {
-        elog(NOTICE, "Relation not found %s", relationName);
+//        elog(NOTICE, "Relation not found %s", relationName);
     }
 
     return rd;

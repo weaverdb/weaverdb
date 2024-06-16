@@ -126,6 +126,7 @@ elog(int lev, const char *fmt,...)
 	char		msg_fixedbuf[256];
 	char	   *fmt_buf = fmt_fixedbuf;
 	char	   *msg_buf = msg_fixedbuf;
+        char	   *notimestamp, *noprefix;
 
 	/* this buffer is only used if errno has a bogus value: */
 	char		errorstr_buf[32];
@@ -140,7 +141,6 @@ elog(int lev, const char *fmt,...)
 #ifdef USE_SYSLOG
 	int			log_level;
 #endif
-	int			len;
 
 	if (lev <= DEBUG && Debugfile < 0)
 		return;					/* ignore debug msgs if noplace to send */
@@ -202,7 +202,7 @@ elog(int lev, const char *fmt,...)
 	 * vsnprintf won't know what to do with %m).  To keep space
 	 * calculation simple, we only allow one %m.
 	 */
-	space_needed = TIMESTAMP_SIZE + strlen(prefix) + indent + (GetEnv()->lineno ? 24 : 0)
+	space_needed = indent + (GetEnv()->lineno ? 24 : 0)
 		+ strlen(fmt) + strlen(errorstr) + 1;
 	if (expand && space_needed > (int) sizeof(fmt_fixedbuf))
 	{
@@ -217,13 +217,14 @@ elog(int lev, const char *fmt,...)
 		}
 	}
 #ifdef ELOG_TIMESTAMPS
-	strcpy(fmt_buf, tprintf_timestamp());
-        strcat(fmt_buf, "  ");
-	strcat(fmt_buf, prefix);
+	notimestamp = stpcpy(msg_buf, tprintf_timestamp());
+        notimestamp = stpcpy(notimestamp, "  ");
+	noprefix = stpcpy(notimestamp, prefix);
 #else
-	strcpy(fmt_buf, prefix);
+        notimestamp = msg_buf;
+	noprefix = strpcpy(msg_buf, prefix);
 #endif
-	bp = fmt_buf + strlen(fmt_buf);
+	bp = fmt_buf;
 	while (indent-- > 0)
 		*bp++ = ' ';
 
@@ -274,13 +275,14 @@ elog(int lev, const char *fmt,...)
 	 * Now generate the actual output text using vsnprintf(). Be sure to
 	 * leave space for \n added later as well as trailing null.
 	 */
+        int preamble = (noprefix - msg_buf);
 	space_needed = sizeof(msg_fixedbuf);
 	for (;;)
 	{
 		int			nprinted;
 
 		va_start(ap, fmt);
-		nprinted = vsnprintf(msg_buf, space_needed - 2, fmt_buf, ap);
+		nprinted = vsnprintf(noprefix, space_needed - preamble - 1, fmt_buf, ap);
 		va_end(ap);
 
 		/*
@@ -288,11 +290,11 @@ elog(int lev, const char *fmt,...)
 		 * actually stored, but at least one returns -1 on failure. Be
 		 * conservative about believing whether the print worked.
 		 */
-		if (!expand || (nprinted >= 0 && nprinted < space_needed - 3) )
+		if (!expand || (nprinted >= 0 && nprinted < space_needed - 1) )
 			break;
 
 		space_needed *= 2;
-		msg_buf = (char *) palloc(space_needed);
+		msg_buf = (char *) repalloc(msg_buf, space_needed);
 		if (msg_buf == NULL)
 		{
 			/* We're up against it, convert to fatal out-of-memory error */
@@ -306,6 +308,7 @@ elog(int lev, const char *fmt,...)
 #endif
 			break;
 		}
+                notimestamp = msg_buf + preamble;
 	}
 
 	/*
@@ -332,18 +335,16 @@ elog(int lev, const char *fmt,...)
 			log_level = LOG_ERR;
 			break;
 	}
-	write_syslog(log_level, msg_buf + TIMESTAMP_SIZE);
+	write_syslog(log_level, notimestamp);
 #endif
-
-	/* syslog doesn't want a trailing newline, but other destinations do */
-	strcat(msg_buf, "\n");
-
-	len = strlen(msg_buf);
 
 	if (lev > DEBUG && WhereToSendOutput() == Remote)
 	{
 		/* Send IPC message to the front-end program */
 		char		msgtype;
+                
+
+                strcat(msg_buf, "\n");
 
 		if (lev == NOTICE)
 			msgtype = 'N';
@@ -360,7 +361,8 @@ elog(int lev, const char *fmt,...)
 		}
 		/* exclude the timestamp from msg sent to frontend */
 /*  Let the upper layers do this if the type is remote  */
-		if( lev != ERROR ) pq_puttextmessage(msgtype, msg_buf + TIMESTAMP_SIZE);    
+                pq_puttextmessage(msgtype, notimestamp);  
+                pq_putbytes("\n", 1);  
 
 		/*
 		 * This flush is normally not necessary, since postgres.c will
@@ -373,11 +375,13 @@ elog(int lev, const char *fmt,...)
 		 */
 		pq_flush();
 	} else if (lev > DEBUG && WhereToSendOutput() == Local) {
-                pq_putbytes(msg_buf + TIMESTAMP_SIZE, strlen(msg_buf + TIMESTAMP_SIZE));
+                pq_putbytes(notimestamp, strlen(notimestamp));
+                pq_putbytes("\n", 1);
                 pq_flush();
-        } else  if (Debugfile >= 0 && UseSyslog <= 1)
-		write(Debugfile, msg_buf, len);
-
+        } else  if (Debugfile >= 0 && UseSyslog <= 1) {
+		write(Debugfile, msg_buf, strlen(msg_buf));
+		write(Debugfile, "\n", 1);
+        }
 
 	/*
 	 * Perform error recovery action as specified by lev.
@@ -404,7 +408,7 @@ elog(int lev, const char *fmt,...)
 		if ( IsMultiuser() && !IsDBWriter() ) {
                     CancelDolHelpers();
                     Env* env = (Env*)GetEnv();
-                    strncpy(env->errortext,msg_buf,255);
+                    strncpy(env->errortext,noprefix,255);
                     strncpy(env->state,prefix,39);
                     if ( GetEnv()->errorcode != 0 ) {
                             longjmp(GetEnv()->errorContext, GetEnv()->errorcode);   

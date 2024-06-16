@@ -96,8 +96,8 @@ clean_legacy:
 else
 clean: 
 	rm -rf *.dSYM
-	rm libweaver.dylib
-	rm weaver
+	rm -f libweaver.dylib
+	rm -f weaver
 endif
 
 ifneq ($(PORTNAME),darwin)
