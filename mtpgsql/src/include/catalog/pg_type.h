@@ -210,9 +210,7 @@ DESCR("streaming psuedo type data for the streaming of blobs");
 DATA(insert OID = 1830 (	java	   PGUID -1  -1 f b t \x2C 0  0 javatextin javatextout - - i _null_ ));
 DESCR("java data that can span pages");
 #define JAVAOID	 1830
-DATA(insert OID = 1843 (  javaresult   PGUID -1  -1 f b t \x2C 0   0 - - - - i _null_ ));
-DESCR("");
-#define JAVARESULTOID		1843
+
 DATA(insert OID = 1837 (	wrapped	   PGUID -1  -1 f b t \x2C 0  0 - wrappedtotext - - l _null_ ));
 DESCR("wrapped data");
 #define WRAPPEDOID			1837

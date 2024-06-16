@@ -260,7 +260,7 @@ agg_select_candidate(Oid typeid, CandidateList candidates)
 Node *
 ParseJavaFunc(ParseState *pstate, char *funcname, char* target, List *fargs)
 {
-	Oid			rettype = JAVARESULTOID;
+	Oid			rettype = UNKNOWNOID;
 	List	   *i = NIL;
 	Ident		   *targetIdent = NULL;
 	Node		   *targetVar = NULL;

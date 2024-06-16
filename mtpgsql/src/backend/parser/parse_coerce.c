@@ -110,7 +110,7 @@ coerce_type(ParseState *pstate, Node *node, Oid inputTypeId,
 
 		result = (Node *) relabel;
 	}
-        else if (inputTypeId == JAVARESULTOID) 
+        else if (inputTypeId == UNKNOWNOID && (IsA(node, Expr) && IsA(((Expr*)node)->oper, Java))) 
         {
 		/*
 		 * We don't really need to do a conversion, but we do need to
@@ -230,8 +230,6 @@ can_coerce_type(int nargs, Oid *input_typeids, Oid *func_typeids)
 		if (IS_BINARY_COMPATIBLE(inputTypeId, targetTypeId))
 			continue;
 
-                if (inputTypeId == JAVARESULTOID)
-                    continue;
 		/* don't know what to do for the output type? then quit... */
 		if (targetTypeId == InvalidOid)
 			return false;

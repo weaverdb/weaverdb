@@ -85,6 +85,14 @@ ExecMakeFunctionResult(Node * node, List * arguments, ExprContext * econtext,
                 bool * isNull, bool * isDone);
 static Datum    ExecMakeJavaFunctionResult(Java * node, Datum target, Oid expectedType, 
                 List * args, ExprContext * econtext, bool* isNull);
+/* 
+because the exact java method called is not determined until execution, the exact tyope is 
+    not known until after the correct function is discovered.  This updates the returned datatype
+    once the correct function is found and the type is known
+*/
+#define ExtractJavaReturnType(node) (\
+    (IsA(node, Expr) && IsA(((Expr*)node)->oper, Java)) ? ((Java*)((Expr*)node)->oper)->functype : UNKNOWNOID \
+)
 /*
  * ExecEvalArrayRef
  * 
@@ -598,6 +606,7 @@ ExecMakeJavaFunctionResult(Java * node, Datum target, Oid expectedType, List * a
   /*  TODO:  type conversion needed  */
             elog(ERROR, "nested java types do not match");
         }
+        node->functype = returnType;
         return result;
 }
 
@@ -1463,7 +1472,9 @@ ExecTargetList(List * targetlist,
 							  econtext,
 							  &isNull,
 						       &itemIsDone[resind]);
-
+                        if (targettype->attrs[resind]->atttypid == UNKNOWNOID) {
+                            targettype->attrs[resind]->atttypid = ExtractJavaReturnType(expr);
+                        }
 			values[resind] = constvalue;
 
 			if (!isNull)
@@ -1584,6 +1595,9 @@ ExecTargetList(List * targetlist,
 							newTuple = NULL;
 							goto exit;
 						}
+                                                if (targettype->attrs[resind]->atttypid == UNKNOWNOID) {
+                                                    targettype->attrs[resind]->atttypid = ExtractJavaReturnType(expr);
+                                                }
 						values[resind] = constvalue;
 
 						if (!isNull)

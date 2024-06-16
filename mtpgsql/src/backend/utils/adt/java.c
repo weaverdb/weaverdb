@@ -385,9 +385,6 @@ ConvertToJavaArg(Oid type, Datum val)
 	case JAVAOID:
 		rval.l = javaout((bytea*)DatumGetPointer(val));
 		break;
-        case JAVARESULTOID:
-                rval.l = NULL;
-                break;
 	default:
 		rval.i = 0;
 		elog(ERROR, "java argument not valid");
