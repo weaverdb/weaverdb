@@ -2,19 +2,11 @@
 
 package org.weaver;
 
-import org.weaver.Output;
-import org.weaver.Connection;
-import org.weaver.Input;
-import org.weaver.ExecutionException;
-import org.weaver.FunctionInstaller;
-import org.weaver.TransactionSequence;
-import org.weaver.WeaverInitializer;
-import org.weaver.ResultSet;
-import org.weaver.Statement;
 import org.weaver.ResultSet.Column;
 import org.weaver.ResultSet.Row;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
@@ -1009,6 +1001,36 @@ public class JNITest {
                 s.execute();
                 while (s.fetch()) {
                     System.out.println(prop.getName() + "=" + prop.get());
+                }
+            }
+        }
+    }
+    
+    
+    @org.junit.jupiter.api.Test
+    public void testJavaFunctionInstanceAlias() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("test")) {
+            MethodHandle mh = MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("hashCode"));
+            new FunctionInstaller(conn).installFunction("java_hashcode", mh);
+            conn.execute("create table jos (prop java)");
+            try (Statement s = conn.statement("insert into jos (prop) values ($item)")) {
+                s.linkInput("item", Serializable.class).set("this is a test");
+                s.execute();
+                s.linkInput("item", Serializable.class).set(new File("../COPYRIGHT"));
+                s.execute();
+            }
+            try (Statement s = conn.statement("select java_hashCode(prop) from jos")) {
+                Output<String> prop = s.linkOutput(1, String.class);
+                s.execute();
+                while (s.fetch()) {
+                    System.out.println(prop.getName() + "=" + prop.get());
+                }
+            }
+            try (Statement s = conn.statement("select prop from jos")) {
+                Output<Serializable> prop = s.linkOutput(1, Serializable.class);
+                s.execute();
+                while (s.fetch()) {
+                    System.out.println(prop.getName() + "=" + prop.get().getClass());
                 }
             }
         }

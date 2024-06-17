@@ -52,6 +52,7 @@ class BoundOutput<T> extends Bound<T> {
     }
 
     T get() throws ExecutionException {
+        
         if (value == null) {
             return null;
         }
@@ -61,7 +62,7 @@ class BoundOutput<T> extends Bound<T> {
                 case Direct:
                     throw new ExecutionException("streaming type is has no value");
                 case BLOB:
-                    value = new java.io.ByteArrayInputStream((byte[]) value);
+                    return getTypeClass().cast(new java.io.ByteArrayInputStream((byte[]) value));
                 case Character:
                 case Binary:
                 case String:
@@ -71,7 +72,7 @@ class BoundOutput<T> extends Bound<T> {
                 case Long:
                     return getTypeClass().cast(value);
                 case Java:
-                    value = JavaConverter.java_out((byte[]) value);
+                    return getTypeClass().cast(JavaConverter.java_out((byte[]) value));
                 case Double:
                 default:
                     return getTypeClass().cast(value);

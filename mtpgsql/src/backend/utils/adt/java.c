@@ -166,9 +166,8 @@ javaout(bytea * datum)
 
 	result = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_out, jb);
 
-	if (result == NULL || (*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		elog(ERROR, "embedded exception occurred");
+	if (result == NULL || (*jenv)->ExceptionCheck(jenv)) {
+		elog(ERROR, "javaout: embedded exception occurred");
 	}
 	return result;
 }
@@ -185,9 +184,8 @@ javain(jobject target)
 	jenv = GetJavaEnv();
 
 	jb = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_in, target);
-	if (jb == NULL || (*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		elog(ERROR, "embedded exception occurred");
+	if (jb == NULL || (*jenv)->ExceptionCheck(jenv)) {
+		elog(ERROR, "javain: embedded exception occurred");
 	}
 	length = (*jenv)->GetArrayLength(jenv, jb);
 	data = (bytea *) palloc(length + VARHDRSZ);
@@ -215,10 +213,9 @@ javatextin(char *target)
 	(*jenv)->PushLocalFrame(jenv, 10);
 
 	jb = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_text_in, (*jenv)->NewStringUTF(jenv, target));
-	if (jb == NULL || (*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
+	if (jb == NULL || (*jenv)->ExceptionCheck(jenv)) {
 		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "embedded exception occurred");
+		elog(ERROR, "javatextin: embedded exception occurred");
 	}
 	length = (*jenv)->GetArrayLength(jenv, jb);
 	data = (bytea *) palloc(length + VARHDRSZ);
@@ -254,10 +251,9 @@ javatextout(bytea * target)
 
 	result = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_text_out, jb);
 
-	if (result == NULL || (*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
+	if (result == NULL || (*jenv)->ExceptionCheck(jenv)) {
 		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "embedded exception occurred");
+		elog(ERROR, "javatextout: embedded exception occurred");
 	}
 	length = (*jenv)->GetStringUTFLength(jenv, result);
 	data = palloc(length + 1);
@@ -297,9 +293,8 @@ fmgr_javaA(Datum target, const char* function, int nargs, Oid* types, Datum *arg
 
         rval = CallJavaFunction(def, jtar, nargs, jargs);
 
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		elog(ERROR, "embedded exception occurred");
+	if ((*jenv)->ExceptionCheck(jenv)) {
+		elog(ERROR, "fmgr_javaA: embedded exception occurred");
 	}
 	ret_datum = ConvertFromJavaArg(def->returnType, rval, isNull);
 	(*jenv)->PopLocalFrame(jenv, NULL);
@@ -331,9 +326,8 @@ fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, b
 
         rval = CallJavaFunction(jinfo,  NULL, nargs, jargs);
 
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
-		elog(ERROR, "embedded exception occurred");
+	if ((*jenv)->ExceptionCheck(jenv)) {
+		elog(ERROR, "fmgr_cached_javaA: embedded exception occurred");
 	}
 
 	ret_datum = ConvertFromJavaArg(jinfo->returnType, rval,isNull);
@@ -400,54 +394,54 @@ ConvertFromJavaArg(Oid type, jvalue val, bool *isNull)
 	JNIEnv         *jenv;
 	Datum           ret_datum = PointerGetDatum(NULL);
 
-
 	jenv = GetJavaEnv();
         
-        if ( (*jenv)->IsSameObject(jenv,val.l,NULL) ) 
-        {
-            *isNull = true;
-            return PointerGetDatum(NULL);
-        }
-
 	switch (type) {
-	case INT4OID:
-		ret_datum = Int32GetDatum(val.i);
-		break;
-        case TEXTOID:
-	case VARCHAROID:
-		{
-			jstring         strvar = (jstring) val.l;
-			int             len = (*jenv)->GetStringUTFLength(jenv, strvar);
-			bytea          *string = palloc(len + VARHDRSZ + 1);
+            case INT4OID:
+                    ret_datum = Int32GetDatum(val.i);
+                    break;
+            case TEXTOID:
+            case VARCHAROID:
+                    {
+                            jstring         strvar = (jstring) val.l;
+                            int             len = (*jenv)->GetStringUTFLength(jenv, strvar);
+                            bytea          *string = palloc(len + VARHDRSZ + 1);
 
-			SETVARSIZE(string, len + VARHDRSZ);
-			(*jenv)->GetStringUTFRegion(jenv, strvar, 0, len, VARDATA(string));
-                        VARDATA(string)[len] = '\0';
-			ret_datum = PointerGetDatum(string);
-			break;
-		}
-	case BOOLOID:
-		ret_datum = CharGetDatum(val.z);
-		break;
-	case FLOAT8OID:
-            {
-                void* data = palloc(8);
-                memcpy(data,&val.d,8);
-                ret_datum = PointerGetDatum(data);
-                break;
-            }
-        case INT8OID:
-            {
-                void* data = palloc(8);
-                memcpy(data,&val.j,8);
-                ret_datum = PointerGetDatum(data);
-                break;
-            }
-        case JAVAOID:
-		ret_datum = PointerGetDatum(javain(val.l));
-		break;
-	default:
-		elog(ERROR, "java argument not valid");
+                            SETVARSIZE(string, len + VARHDRSZ);
+                            (*jenv)->GetStringUTFRegion(jenv, strvar, 0, len, VARDATA(string));
+                            VARDATA(string)[len] = '\0';
+                            ret_datum = PointerGetDatum(string);
+                            break;
+                    }
+            case BOOLOID:
+                    ret_datum = CharGetDatum(val.z);
+                    break;
+            case FLOAT8OID:
+                {
+                    void* data = palloc(8);
+                    memcpy(data,&val.d,8);
+                    ret_datum = PointerGetDatum(data);
+                    break;
+                }
+            case INT8OID:
+                {
+                    void* data = palloc(8);
+                    memcpy(data,&val.j,8);
+                    ret_datum = PointerGetDatum(data);
+                    break;
+                }
+            case JAVAOID:
+                {
+                    if ((*jenv)->IsSameObject(jenv,val.l,NULL)) {
+                        *isNull = true;
+                        ret_datum = PointerGetDatum(NULL);
+                    } else {
+                        ret_datum = PointerGetDatum(javain(val.l));
+                    }
+                    break;
+                }
+            default:
+                    elog(ERROR, "java argument not valid");
 
 	}
 
@@ -477,10 +471,9 @@ java_instanceof(bytea * object, bytea * class)
 
 	converter = (*jenv)->FindClass(jenv, VARDATA(class));
 
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
+	if ((*jenv)->ExceptionCheck(jenv)) {
 		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "embedded exception while trying to cehck java objects");
+		elog(ERROR, "java_instanceof: embedded exception while trying to cehck java objects");
 	}
 	ret_val = (*jenv)->IsInstanceOf(jenv, target, converter);
 
@@ -524,10 +517,9 @@ java_compare(bytea * obj1, bytea * obj2)
 
 	result = (*jenv)->CallStaticIntMethod(jenv, loader_class, loader_compare, master1, master2);
 
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
+	if ((*jenv)->ExceptionCheck(jenv)) {
 		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "embedded exception while trying to compare java objects");
+		elog(ERROR, "java_compare: embedded exception while trying to compare java objects");
 	}
 	(*jenv)->PopLocalFrame(jenv, NULL);
 	return result;
@@ -562,10 +554,9 @@ java_equals(bytea * obj1, bytea * obj2)
 
 	result = (*jenv)->CallStaticBooleanMethod(jenv, loader_class, loader_equals, master1, master2);
 
-	if ((*jenv)->ExceptionOccurred(jenv)) {
-		(*jenv)->ExceptionClear(jenv);
+	if ((*jenv)->ExceptionCheck(jenv)) {
 		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "embedded exception while trying to compare java objects");
+		elog(ERROR, "java_equals: embedded exception while trying to compare java objects");
 	}
 	(*jenv)->PopLocalFrame(jenv, NULL);
 	return result;
@@ -714,6 +705,9 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
                                     definition->method = (*jenv)->GetMethodID(jenv, definition->clazz, javaname, javasig);
                                     definition->isStatic = false;
                                     if (definition->method == NULL) {
+                                        if ((*jenv)->ExceptionCheck(jenv)) {
+                                            (*jenv)->ExceptionClear(jenv);
+                                        }
                                         definition->method = (*jenv)->GetStaticMethodID(jenv, definition->clazz, javasrc, javasig);
                                         definition->isStatic = true;
                                     }
@@ -766,6 +760,9 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
                         definition->method = (*jenv)->GetStaticMethodID(jenv, definition->clazz, javaname, javasig);
                         definition->isStatic = true;
                         if (definition->method == NULL) {
+                            if ((*jenv)->ExceptionCheck(jenv)) {
+                                (*jenv)->ExceptionClear(jenv);
+                            }
                             definition->method = (*jenv)->GetMethodID(jenv, definition->clazz, javaname, javasig);
                             definition->isStatic = false;
                         }

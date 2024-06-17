@@ -4,6 +4,7 @@ package org.weaver;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -40,10 +41,14 @@ public class FunctionInstaller {
         if (name == null) {
             name = fullname;
         }
+        MethodType mt = info.getMethodType();
+        if (name != null && info.getReferenceKind() == MethodHandleInfo.REF_invokeVirtual) {
+            mt = mt.insertParameterTypes(0, info.getDeclaringClass());        
+        }
         builder.append("create function '");
         builder.append(name);
         builder.append('\'');
-        Stream<Class<?>> c = info.getMethodType().parameterList().stream();
+        Stream<Class<?>> c = mt.parameterList().stream();
         String args = c.map(FunctionInstaller::convertClass).collect(Collectors.joining(",", "(", ")"));
         builder.append(" ");
         builder.append(args);
@@ -73,9 +78,7 @@ public class FunctionInstaller {
             return "int8";
         } else if (c.equals(Boolean.class) || c.equals(boolean.class)) {
             return "bool";
-        } else if (c.equals(Boolean.class) || c.equals(boolean.class)) {
-            return "java";
         }
-        return "";
+        return "java";
     }
 }
