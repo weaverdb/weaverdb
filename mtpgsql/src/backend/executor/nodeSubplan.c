@@ -57,6 +57,7 @@ ExecSubPlan(SubPlan *node, List *pvar, ExprContext *econtext, bool *isNull)
 			Assert(pvar != NIL);
 			prm->value = ExecEvalExpr((Node *) lfirst(pvar),
 									  econtext,
+                                                                          NULL, 
 									  &(prm->isnull), NULL);
 			pvar = lnext(pvar);
 		}
@@ -172,7 +173,7 @@ ExecSubPlan(SubPlan *node, List *pvar, ExprContext *econtext, bool *isNull)
 			/*
 			 * Now we can eval the combining operator for this column.
 			 */
-			expresult = ExecEvalExpr((Node *) expr, econtext, &expnull,
+			expresult = ExecEvalExpr((Node *) expr, econtext, NULL, &expnull,
 									 (bool *) NULL);
 
 			/*

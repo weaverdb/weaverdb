@@ -1325,7 +1325,7 @@ clause_pred_clause_test(Expr *predicate, Node *clause)
 							  copyObject(pred_const));
 
 #ifndef OMIT_PARTIAL_INDEX
-	test_result = ExecEvalExpr((Node *) test_expr, NULL, &isNull, NULL);
+	test_result = ExecEvalExpr((Node *) test_expr, NULL, NULL, &isNull, NULL);
 #endif	 /* OMIT_PARTIAL_INDEX */
 	if (isNull)
 	{

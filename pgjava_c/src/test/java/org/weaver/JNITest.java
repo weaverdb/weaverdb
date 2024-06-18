@@ -1077,7 +1077,7 @@ public class JNITest {
                 s.linkInput("item", Serializable.class).set(new File("../COPYRIGHT"));
                 s.execute();
             }
-            try (Statement s = conn.statement("select java_touppercase(hashvarchar(nested_tostring(prop))) from nested")) {
+            try (Statement s = conn.statement("select java_touppercase(\"varchar\"(nested_tostring(prop), 10)) from nested")) {
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
         }

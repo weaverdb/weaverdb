@@ -67,7 +67,7 @@ static Datum    ExecEvalArrayRef(ArrayRef * arrayRef, ExprContext * econtext,
 		 bool * isNull, bool * isDone);
 #endif
 static Datum    ExecEvalAnd(Expr * andExpr, ExprContext * econtext, bool * isNull);
-static Datum    ExecEvalFunc(Expr * funcClause, ExprContext * econtext,
+static Datum    ExecEvalFunc(Expr * funcClause, ExprContext * econtext, Oid * returnType,
                 bool * isNull, bool * isDone);
 static void 
 ExecEvalFuncArgs(FunctionCachePtr fcache, ExprContext * econtext,
@@ -83,16 +83,9 @@ static Datum    ExecEvalOr(Expr * orExpr, ExprContext * econtext, bool * isNull)
 static Datum    
 ExecMakeFunctionResult(Node * node, List * arguments, ExprContext * econtext, 
                 bool * isNull, bool * isDone);
-static Datum    ExecMakeJavaFunctionResult(Java * node, Datum target, Oid expectedType, 
+static Datum    ExecMakeJavaFunctionResult(Java * node, Datum target, Oid * dataType, 
                 List * args, ExprContext * econtext, bool* isNull);
-/* 
-because the exact java method called is not determined until execution, the exact tyope is 
-    not known until after the correct function is discovered.  This updates the returned datatype
-    once the correct function is found and the type is known
-*/
-#define ExtractJavaReturnType(node) (\
-    (IsA(node, Expr) && IsA(((Expr*)node)->oper, Java)) ? ((Java*)((Expr*)node)->oper)->functype : UNKNOWNOID \
-)
+
 /*
  * ExecEvalArrayRef
  * 
@@ -119,6 +112,7 @@ because the exact java method called is not determined until execution, the exac
 	if (arrayRef->refexpr != NULL) {
 		array_scanner = (ArrayType *) ExecEvalExpr(arrayRef->refexpr,
 							   econtext,
+                                                           NULL,
 							   isNull,
 							   isDone);
 		if (*isNull)
@@ -143,6 +137,7 @@ because the exact java method called is not determined until execution, the exac
 
 		upper.indx[i++] = (int32) ExecEvalExpr((Node *) lfirst(elt),
 						       econtext,
+                                                       NULL,
 						       isNull,
 						       &dummy);
 		if (*isNull)
@@ -157,6 +152,7 @@ because the exact java method called is not determined until execution, the exac
 
 			lower.indx[j++] = (int32) ExecEvalExpr((Node *) lfirst(elt),
 							       econtext,
+                                                               NULL,
 							       isNull,
 							       &dummy);
 			if (*isNull)
@@ -172,6 +168,7 @@ because the exact java method called is not determined until execution, the exac
 	if (arrayRef->refassgnexpr != NULL) {
 		Datum           sourceData = ExecEvalExpr(arrayRef->refassgnexpr,
 							  econtext,
+                                                          NULL,
 							  isNull,
 							  &dummy);
 
@@ -511,6 +508,7 @@ ExecEvalFuncArgs(FunctionCachePtr fcache,
 		 */
 		argV[i] = ExecEvalExpr((Node *) lfirst(arg),
 				       econtext,
+                                       NULL,
 				       &nullVect[i],
 				       argIsDone);
 
@@ -538,37 +536,9 @@ ExecEvalJavaArgs(ExprContext * econtext,
 	i = 0;
 	foreach(arg, argList) {
 		Node           *next = (Node *) lfirst(arg);
-                argTypes[i] = InvalidOid;
                 bool isNull, isDone;
 
-		if (IsA(next, Const)) {
-			Const          *val = (Const *) next;
-                        argTypes[i] = val->consttype;
-			if (val->constisnull) {
-				nullVect = true;
-			} else {
-				argV[i] = val->constvalue;
-			}
-		} else if (IsA(next, Param)) {
-			Param          *setup = (Param *) next;
-			Datum           setter = ExecEvalParam(setup, econtext, &nullVect);
-                        argTypes[i] = setup->paramtype;
-			argV[i] = setter;
-		} else if (IsA(next, Var)) {
-			Var            *var = (Var *) next;
-			Datum           retDatum = ExecEvalVar(var, econtext, &nullVect, NULL, NULL);
-                        argTypes[i] = var->vartype;
-                        argV[i] = retDatum;
-		} else if (IsA(next, RelabelType)) {
-                        RelabelType      *relabel = (RelabelType*) next;
-                        argTypes[i] = relabel->resulttype;
-                        argV[i] = ExecEvalExpr(relabel->arg, econtext, &isNull, &isDone);
-		} else if (IsA(next, Expr)) {
-                    argTypes[i] = ((Expr*)next)->typeOid;
-                    argV[i] = ExecEvalExpr(next, econtext, &isNull, &isDone);
-                } else {
-			elog(ERROR, "argument node not supported");
-		}
+                argV[i] = ExecEvalExpr(next, econtext, &argTypes[i], &isNull, &isDone);
 
 		i++;
 	}
@@ -578,7 +548,7 @@ ExecEvalJavaArgs(ExprContext * econtext,
  * ExecMakeJavaFunctionResult
  */
 static          Datum
-ExecMakeJavaFunctionResult(Java * node, Datum target, Oid expectedType, List * args, ExprContext * econtext, bool *isNull)
+ExecMakeJavaFunctionResult(Java * node, Datum target, Oid * dataType, List * args, ExprContext * econtext, bool *isNull)
 {
 	Datum          jargV[FUNC_MAX_ARGS];
         Oid          jtypes[FUNC_MAX_ARGS];
@@ -599,11 +569,9 @@ ExecMakeJavaFunctionResult(Java * node, Datum target, Oid expectedType, List * a
 	}
 
 	Datum result = fmgr_javaA(target, node->funcname,node->funcnargs,jtypes, jargV, &returnType, isNull);
-        if (OidIsValid(expectedType) && expectedType != returnType) {
-  /*  TODO:  type conversion needed  */
-            elog(ERROR, "nested java types do not match");
+        if (dataType != NULL) {
+            *dataType = returnType;
         }
-        node->functype = returnType;
         return result;
 }
 
@@ -871,6 +839,7 @@ ExecEvalOper(Expr * opClause, ExprContext * econtext, bool * isNull)
 static          Datum
 ExecEvalFunc(Expr * funcClause,
 	     ExprContext * econtext,
+             Oid * returnType,
 	     bool * isNull,
 	     bool * isDone)
 {
@@ -895,6 +864,10 @@ ExecEvalFunc(Expr * funcClause,
 		func = (Func *) funcClause->oper;
 		argList = funcClause->args;
 
+                if (returnType != NULL) {
+                    *returnType = func->functype;
+                }
+
 		/*
 		 * get the fcache from the Func node. If it is NULL, then
 		 * initialize it
@@ -910,12 +883,11 @@ ExecEvalFunc(Expr * funcClause,
 	} else {
 		Java           *javaNode = (Java *) funcClause->oper;
 		bool            done, isn;
-
 		Datum           javaTarget = PointerGetDatum(NULL);
 		if (javaNode->java_target)
-			javaTarget = ExecEvalExpr(javaNode->java_target, econtext, &done, &isn);
+			javaTarget = ExecEvalExpr(javaNode->java_target, econtext, NULL, &done, &isn);
 
-		return ExecMakeJavaFunctionResult(javaNode, javaTarget, InvalidOid, funcClause->args, econtext,isNull);
+		return ExecMakeJavaFunctionResult(javaNode, javaTarget, returnType, funcClause->args, econtext,isNull);
 	}
 }
 
@@ -946,7 +918,7 @@ ExecEvalNot(Expr * notclause, ExprContext * econtext, bool * isNull)
 	 * We don't iterate over sets in the quals, so pass in an isDone
 	 * flag, but ignore it.
 	 */
-	expr_value = ExecEvalExpr(clause, econtext, isNull, &isDone);
+	expr_value = ExecEvalExpr(clause, econtext, NULL, isNull, &isDone);
 
 	/*
 	 * if the expression evaluates to null, then we just cascade the null
@@ -1004,6 +976,7 @@ ExecEvalOr(Expr * orExpr, ExprContext * econtext, bool * isNull)
 		 */
 		clause_value = ExecEvalExpr((Node *) lfirst(clause),
 					    econtext,
+                                            NULL,
 					    isNull,
 					    &isDone);
 
@@ -1054,6 +1027,7 @@ ExecEvalAnd(Expr * andExpr, ExprContext * econtext, bool * isNull)
 		 */
 		clause_value = ExecEvalExpr((Node *) lfirst(clause),
 					    econtext,
+                                            NULL,
 					    isNull,
 					    &isDone);
 
@@ -1103,6 +1077,7 @@ ExecEvalCase(CaseExpr * caseExpr, ExprContext * econtext, bool * isNull)
 		 */
 		clause_value = ExecEvalExpr(wclause->expr,
 					    econtext,
+                                            NULL,
 					    isNull,
 					    &isDone);
 
@@ -1114,6 +1089,7 @@ ExecEvalCase(CaseExpr * caseExpr, ExprContext * econtext, bool * isNull)
 		if (DatumGetChar(clause_value) != 0 && !*isNull) {
 			return ExecEvalExpr(wclause->result,
 					    econtext,
+                                            NULL,
 					    isNull,
 					    &isDone);
 		}
@@ -1122,6 +1098,7 @@ ExecEvalCase(CaseExpr * caseExpr, ExprContext * econtext, bool * isNull)
 	if (caseExpr->defresult) {
 		return ExecEvalExpr(caseExpr->defresult,
 				    econtext,
+                                    NULL,
 				    isNull,
 				    &isDone);
 	}
@@ -1151,10 +1128,12 @@ ExecEvalCase(CaseExpr * caseExpr, ExprContext * econtext, bool * isNull)
 Datum
 ExecEvalExpr(Node * expression,
 	     ExprContext * econtext,
+             Oid * dataType,
 	     bool * isNull,
 	     bool * isDone)
 {
 	Datum           retDatum;
+        Oid             returnType = InvalidOid;
 
 	*isNull = false;
 
@@ -1175,30 +1154,35 @@ ExecEvalExpr(Node * expression,
 	}
 	switch (nodeTag(expression)) {
 	case T_Var:
+                returnType = ((Var *) expression)->vartype;
 		retDatum = ExecEvalVar((Var *) expression, econtext, isNull, NULL,NULL);
 		break;
 	case T_Const:
 		{
 			Const          *con = (Const *) expression;
-
+                        returnType = ((Const *) expression)->consttype;
 			retDatum = con->constvalue;
 			*isNull = con->constisnull;
 			break;
 		}
 	case T_Param:
+                returnType = ((Param *) expression)->paramtype;
 		retDatum = ExecEvalParam((Param *) expression, econtext, isNull);
 		break;
 	case T_Iter:
+                returnType = ((Iter *) expression)->itertype;
 		retDatum = ExecEvalIter((Iter *) expression,
 					econtext,
 					isNull,
 					isDone);
 		break;
 	case T_Aggref:
+                returnType = ((Aggref *) expression)->aggtype;
 		retDatum = ExecEvalAggref((Aggref *) expression, econtext, isNull);
 		break;
 #ifndef NOARRAY
 	case T_ArrayRef:
+                returnType = ((ArrayRef *) expression)->refelemtype;
 		retDatum = ExecEvalArrayRef((ArrayRef *) expression,
 					    econtext,
 					    isNull,
@@ -1208,13 +1192,13 @@ ExecEvalExpr(Node * expression,
 	case T_Expr:
 		{
 			Expr           *expr = (Expr *) expression;
-
+                        returnType = expr->typeOid;
 			switch (expr->opType) {
 			case OP_EXPR:
 				retDatum = ExecEvalOper(expr, econtext, isNull);
 				break;
 			case FUNC_EXPR:
-				retDatum = ExecEvalFunc(expr, econtext,
+				retDatum = ExecEvalFunc(expr, econtext, &returnType,
 							isNull, isDone);
 				break;
 			case OR_EXPR:
@@ -1240,12 +1224,21 @@ ExecEvalExpr(Node * expression,
 			break;
 		}
 	case T_RelabelType:
-		retDatum = ExecEvalExpr(((RelabelType *) expression)->arg,
-					econtext,
-					isNull,
-					isDone);
+                {
+                    Oid checkType;
+                    returnType = ((RelabelType *) expression)->resulttype;
+                    retDatum = ExecEvalExpr(((RelabelType *) expression)->arg,
+                                            econtext,
+                                            &checkType,
+                                            isNull,
+                                            isDone);
+                    if (checkType != returnType) {
+                        elog(NOTICE, "relabel return type does not equal expected type %ld != %ld", checkType, returnType);
+                    }
+                }
 		break;
 	case T_CaseExpr:
+                returnType = ((CaseExpr *) expression)->casetype;
 		retDatum = ExecEvalCase((CaseExpr *) expression, econtext, isNull);
 		break;
 
@@ -1255,7 +1248,9 @@ ExecEvalExpr(Node * expression,
 		retDatum = 0;	/* keep compiler quiet */
 		break;
 	}
-
+        if (dataType != NULL) {
+           *dataType = returnType;
+        }
 	return retDatum;
 }				/* ExecEvalExpr() */
 
@@ -1325,6 +1320,7 @@ ExecQual(List * qual, ExprContext * econtext, bool resultForNull)
 		Datum           expr_value;
 		bool            isNull;
 		bool            isDone;
+                Oid             expr_type;
 
 		/*
 		 * If there is a null clause, consider the qualification to
@@ -1338,7 +1334,7 @@ ExecQual(List * qual, ExprContext * econtext, bool resultForNull)
 		 * pass isDone, but ignore it.	We don't iterate over
 		 * multiple returns in the qualifications.
 		 */
-		expr_value = ExecEvalExpr(clause, econtext, &isNull, &isDone);
+		expr_value = ExecEvalExpr(clause, econtext, &expr_type, &isNull, &isDone);
 
 		if (isNull) {
 			if (resultForNull == false)
@@ -1399,6 +1395,7 @@ ExecTargetList(List * targetlist,
 	Resdom         *resdom;
 	AttrNumber      resind;
 	Datum           constvalue;
+        Oid             consttype;
 	HeapTuple       newTuple;
 	bool            isNull;
 	bool            haveDoneIters;
@@ -1467,10 +1464,11 @@ ExecTargetList(List * targetlist,
 
 			constvalue = (Datum) ExecEvalExpr(expr,
 							  econtext,
+                                                          &consttype,
 							  &isNull,
 						       &itemIsDone[resind]);
                         if (targettype->attrs[resind]->atttypid == UNKNOWNOID) {
-                            targettype->attrs[resind]->atttypid = ExtractJavaReturnType(expr);
+                            targettype->attrs[resind]->atttypid = consttype;
                         }
 			values[resind] = constvalue;
 
@@ -1577,6 +1575,7 @@ ExecTargetList(List * targetlist,
 					if (IsA(expr, Iter) && itemIsDone[resind]) {
 						constvalue = (Datum) ExecEvalExpr(expr,
 								   econtext,
+                                                                   &consttype,
 								    &isNull,
 						       &itemIsDone[resind]);
 						if (itemIsDone[resind]) {
@@ -1593,7 +1592,7 @@ ExecTargetList(List * targetlist,
 							goto exit;
 						}
                                                 if (targettype->attrs[resind]->atttypid == UNKNOWNOID) {
-                                                    targettype->attrs[resind]->atttypid = ExtractJavaReturnType(expr);
+                                                    targettype->attrs[resind]->atttypid = consttype;
                                                 }
 						values[resind] = constvalue;
 

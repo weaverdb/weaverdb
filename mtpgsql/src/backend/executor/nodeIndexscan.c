@@ -380,7 +380,7 @@ ExecIndexReScan(IndexScan *node, ExprContext *exprCtxt)
 					 */
 					scanvalue = (Datum)
 						ExecEvalExpr(scanexpr,
-							 node->scan.scanstate->cstate.cs_ExprContext,
+							 node->scan.scanstate->cstate.cs_ExprContext, NULL,
 									 &isNull, &isDone);
 					scan_keys[j].sk_argument = scanvalue;
 					if (isNull)

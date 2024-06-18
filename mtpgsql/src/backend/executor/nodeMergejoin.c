@@ -229,7 +229,7 @@ MergeCompare(List *eqQual, List *compareQual, ExprContext *econtext)
 		 * ----------------
 		 */
 		const_value = (Datum)
-			ExecEvalExpr((Node *) lfirst(clause), econtext, &isNull, &isDone);
+			ExecEvalExpr((Node *) lfirst(clause), econtext, NULL, &isNull, &isDone);
 
 		if (DatumGetInt32(const_value) != 0)
 			return true;
@@ -244,6 +244,7 @@ MergeCompare(List *eqQual, List *compareQual, ExprContext *econtext)
 		 */
 		const_value = ExecEvalExpr((Node *) lfirst(eqclause),
 								   econtext,
+                                                                   NULL,
 								   &isNull,
 								   &isDone);
 

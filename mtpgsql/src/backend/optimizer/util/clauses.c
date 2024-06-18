@@ -1407,7 +1407,7 @@ simplify_op_or_func(Expr *expr, List *args)
 	 * fortuitous, but it's not so unreasonable --- a constant expression
 	 * does not depend on context, by definition, n'est ce pas?
 	 */
-	const_val = ExecEvalExpr((Node *) newexpr, NULL,
+	const_val = ExecEvalExpr((Node *) newexpr, NULL, NULL,
 							 &const_is_null, &isDone);
 	Assert(isDone);				/* if this isn't set, we blew it... */
 	pfree(newexpr);

@@ -45,7 +45,7 @@ TidListCreate(List *evalList, ExprContext *econtext, ItemPointer *tidList)
 
 	foreach(lst, evalList)
 	{
-		itemptr = (ItemPointer) ExecEvalExpr(lfirst(lst), econtext,
+		itemptr = (ItemPointer) ExecEvalExpr(lfirst(lst), econtext, NULL,
 											 &isNull, (bool *) 0);
 		if (itemptr && ItemPointerIsValid(itemptr))
 		{

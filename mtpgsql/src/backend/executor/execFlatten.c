@@ -53,7 +53,7 @@ ExecEvalIter(Iter *iterNode,
 	 * only worrying about postquel functions, c functions will come
 	 * later.
 	 */
-	return ExecEvalExpr(expression, econtext, resultIsNull, iterIsDone);
+	return ExecEvalExpr(expression, econtext, NULL, resultIsNull, iterIsDone);
 }
 
 void

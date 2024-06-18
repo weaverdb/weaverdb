@@ -92,7 +92,7 @@ PG_EXTERN Datum ExecEvalVar(Var * variable, ExprContext * econtext,
 PG_EXTERN Datum ExecEvalParam(Param *expression, ExprContext *econtext,
 			  bool *isNull);
 
-PG_EXTERN Datum ExecEvalExpr(Node *expression, ExprContext *econtext, bool *isNull,
+PG_EXTERN Datum ExecEvalExpr(Node *expression, ExprContext *econtext, Oid* returnType, bool *isNull,
 			 bool *isDone);
 PG_EXTERN bool ExecQual(List *qual, ExprContext *econtext, bool resultForNull);
 PG_EXTERN int	ExecTargetListLength(List *targetlist);

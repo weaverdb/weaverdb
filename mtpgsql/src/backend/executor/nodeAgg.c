@@ -475,7 +475,7 @@ ExecAgg(Agg *node)
 				Aggref	   *aggref = peraggstate->aggref;
 				Datum		newVal;
 
-				newVal = ExecEvalExpr(aggref->target, econtext,
+				newVal = ExecEvalExpr(aggref->target, econtext, NULL,
 									  &isNull, &isDone);
 
 				if (isNull && !aggref->usenulls)
