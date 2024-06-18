@@ -276,6 +276,13 @@ ExecEvalVar(Var * variable, ExprContext * econtext, bool * isNull, bool * byval,
 		break;
 	}
 
+        if (slot == NULL) {
+            if (isNull != NULL) {
+                *isNull = true;
+            }
+            return PointerGetDatum(NULL);
+        }
+
 	/*
 	 * extract tuple information from the slot
 	 */

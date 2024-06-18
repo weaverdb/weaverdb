@@ -1083,6 +1083,23 @@ public class JNITest {
         }
     }
     
+    @org.junit.jupiter.api.Test
+    public void testLateBoundJavaFunction() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("test")) {
+            new FunctionInstaller(conn).installFunction("varchar", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
+            conn.execute("create table latebound (prop java)");
+            try (Statement s = conn.statement("insert into latebound (prop) values ($item)")) {
+                s.linkInput("item", Serializable.class).set("this is a test");
+                s.execute();
+                s.linkInput("item", Serializable.class).set(new File("../COPYRIGHT"));
+                s.execute();
+            }
+            try (Statement s = conn.statement("select prop::varchar from latebound where prop::varchar = 'this is a test'")) {
+                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+            }
+        }
+    }
+    
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;
