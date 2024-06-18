@@ -253,79 +253,6 @@ agg_select_candidate(Oid typeid, CandidateList candidates)
 	return InvalidOid;
 }	/* agg_select_candidate() */
 
-
-/*
- * parse java func
- */
-Node *
-ParseJavaFunc(ParseState *pstate, char *funcname, char* target, List *fargs)
-{
-	Oid			rettype = UNKNOWNOID;
-	List	   *i = NIL;
-	Ident		   *targetIdent = NULL;
-	Node		   *targetVar = NULL;
-	int			nargs = length(fargs);
-	Java	   *funcnode;
-	Oid*			oid_array = (Oid*)palloc(sizeof(Oid) * FUNC_MAX_ARGS);
-	Node	   *retval;
-	Expr	   *expr;
-
-/*  create the java target attribute  */
-	
-	targetIdent = makeNode(Ident);
-	targetIdent->name = target;
-
-	targetVar = transformExpr(pstate,(Node*)targetIdent,1);
-
-	/*
-	 * If we dropped through to here it's really a function (or a set,
-	 * which is implemented as a function). Extract arg type info and
-	 * transform relation name arguments into varnodes of the appropriate
-	 * form.
-	 */
-	MemSet(oid_array, 0, FUNC_MAX_ARGS * sizeof(Oid));
-
-	nargs = 0;
-	foreach(i, fargs)
-	{
-		Node	   *arg = lfirst(i);
-
-		Oid toid = exprType(arg);
-		/*
-		 * Most of the rest of the parser just assumes that functions do
-		 * not have more than FUNC_MAX_ARGS parameters.  We have to test
-		 * here to protect against array overruns, etc.
-		 */
-		if (nargs >= FUNC_MAX_ARGS)
-			elog(ERROR, "Cannot pass more than %d arguments to a function",
-				 FUNC_MAX_ARGS);
-
-		*(oid_array)++ = toid;
-		nargs++;
-	}
-	/* got it */
-	funcnode = makeNode(Java);
-        funcnode->funcid = 0;
-        funcnode->functype = rettype;
-/*  don't know exact function type yet  */
-	funcnode->funcname = funcname;
-/*  don't know return type yet  */
-	funcnode->funcargtypes = oid_array;
-	funcnode->funcnargs = nargs;
-	funcnode->java_target = targetVar;
-
-	expr = makeNode(Expr);
-	expr->typeOid = rettype;
-	expr->opType = FUNC_EXPR;
-	expr->oper = (Node *) funcnode;
-	expr->args = fargs;
-	retval = (Node *) expr;
-
-	return retval;
-}
-
-
-
 /*
  * parse function
  */
@@ -774,7 +701,6 @@ ParseFuncOrColumn(ParseState *pstate, char *funcname, List *fargs,
 		jc->funcargtypes = palloc(sizeof(Oid) * FUNC_MAX_ARGS);
 		memmove(jc->funcargtypes,oid_array,FUNC_MAX_ARGS * sizeof(Oid));
 		jc->funcnargs = nargs;
-		jc->java_target = NULL;
 		
 		expr = makeNode(Expr);
 		expr->typeOid = rettype;

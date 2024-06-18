@@ -37,7 +37,7 @@ PG_EXTERN void SetJVM(JavaVM* java, const char* loader);
 PG_EXTERN void SetJavaObjectLoader(const char* loader);
 
 
-PG_EXTERN Datum fmgr_javaA(Datum target, const char *name, int nargs, Oid* types, Datum* values, Oid* returnType, bool *isNull);
+PG_EXTERN Datum fmgr_javaA(const char *name, int nargs, Oid* types, Datum* values, Oid* returnType, bool *isNull);
 PG_EXTERN Datum fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, bool *isNull);
 
 PG_EXTERN bool java_instanceof(bytea* obj,bytea* cname);
@@ -52,7 +52,7 @@ PG_EXTERN bool java_lteq(bytea* obj1,bytea* obj2);
 
 PG_EXTERN int javalen(bytea* obj);
 
-PG_EXTERN JavaFunction GetJavaFunction(Datum target, const char *name, int nargs, Oid * types);
+PG_EXTERN JavaFunction GetJavaFunction(const char *name, int nargs, Oid * types);
 PG_EXTERN Oid GetJavaReturnType(JavaFunction function);
 
 bool

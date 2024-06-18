@@ -44,8 +44,7 @@ PG_EXTERN Node *ParseFuncOrColumn(ParseState *pstate,
 				  char *funcname, List *fargs,
 				  bool agg_star, bool agg_distinct,
 				  int *curr_resno, int precedence);
-PG_EXTERN Node *ParseJavaFunc(ParseState *pstate,
-				  char *funcname, char* target,List *fargs);
+
 
 PG_EXTERN List *setup_base_tlist(Oid typeid);
 

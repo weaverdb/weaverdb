@@ -487,21 +487,7 @@ FigureColname(Node *expr, Node *resval)
 		case T_Expr:
 			if (((Expr *) expr)->opType == FUNC_EXPR && IsA(resval, FuncCall)) {
 				FuncCall*  call = (FuncCall*)(resval);
-				if ( call->isJava ) {
-					char*  ret;
-					char* name;
-					ret = name = (char*)palloc((strlen(call->attribute) + strlen(call->funcname) + 2));
-					strncpy(name,call->attribute,strlen(call->attribute));
-					name += strlen(call->attribute);
-					*name = '.';
-					name++;
-					strncpy(name,call->funcname,strlen(call->funcname));
-					name +=strlen(call->funcname);
-					*name = 0x00;
-					return ret;
-				} else {
-					return call->funcname;
-				}
+				return call->funcname;
 			}
 			break;
 		case T_Aggref:

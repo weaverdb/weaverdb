@@ -571,8 +571,7 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
 				finfo->fn_addr = (func_ptr) NULL;
 				finfo->fn_nargs = procedureStruct->pronargs;
                                 {
-                                    finfo->fn_data = GetJavaFunction(PointerGetDatum(NULL), 
-                                            NameStr(procedureStruct->proname), procedureStruct->pronargs, 
+                                    finfo->fn_data = GetJavaFunction(NameStr(procedureStruct->proname), procedureStruct->pronargs, 
                                             procedureStruct->proargtypes);
                                 }
 				break;

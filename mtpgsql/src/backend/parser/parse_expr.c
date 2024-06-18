@@ -294,20 +294,15 @@ transformExpr(ParseState *pstate, Node *expr, int precedence)
 				foreach(args, fn->args)
 					lfirst(args) = transformExpr(pstate, (Node *) lfirst(args), precedence);
 				
-				if ( fn->isJava ) {
-					result = ParseJavaFunc(pstate,
-										   fn->funcname,
-											fn->attribute,
-										   fn->args);
-				} else {
-					result = ParseFuncOrColumn(pstate,
+
+				result = ParseFuncOrColumn(pstate,
 										   fn->funcname,
 										   fn->args,
 										   fn->agg_star,
 										   fn->agg_distinct,
 										   &pstate->p_last_resno,
 										   precedence);
-				}
+
 				break;
 			}
 		case T_SubLink:

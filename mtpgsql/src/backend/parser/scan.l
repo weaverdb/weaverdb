@@ -162,8 +162,6 @@ letter_or_digit	[\200-\377_A-Za-z0-9]
 
 identifier		{letter}{letter_or_digit}*
 
-java_func		[.]{letter}{letter_or_digit}*[(]
-
 typecast		"::"
 
 /*
@@ -465,17 +463,7 @@ other			.
 					yylval_param->str = pstrdup((char*)yytext);
 					return FCONST;
 				}
-{java_func}	{
-					ParserInfo* env = GetParserInfo();
-					int i;
-					ScanKeyword		*keyword;
-					int len = strlen(yytext);
-					yylval_param->str = palloc(len-1);
-					memmove(yylval_param->str,(char*)yytext + 1,len-2);
-					*(yylval_param->str+(len-2)) = 0x00;
 
-					return JAVA_FUNC;
-				}
 {identifier}	{
                     ParserInfo* env = GetParserInfo();
                     int i;

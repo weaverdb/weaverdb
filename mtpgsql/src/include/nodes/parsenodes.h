@@ -1048,7 +1048,6 @@ typedef struct FuncCall
 	List	   *args;			/* the arguments (list of exprs) */
 	bool		agg_star;		/* argument was really '*' */
 	bool		agg_distinct;	/* arguments were labeled DISTINCT */
-	bool      isJava;
 } FuncCall;
 
 /*
@@ -1125,7 +1124,6 @@ typedef struct IndexElem
 	List	   *args;			/* if not NULL, function index */
 	char	   *class;
 	TypeName   *typename;		/* type of index's keys (optional) */
-	bool		isJava;
 } IndexElem;
 
 /*

@@ -390,7 +390,7 @@ static void doNegateFloat(Value *v);
 %token	SCHEMA S_ARRAY S_PATTERN S_NIL NOWAIT
 
 /* Special keywords not in the query language - see the "lex" file */
-%token <str>	IDENT FCONST SCONST Op NAMEDPARAM JAVA_FUNC SYSTEM
+%token <str>	IDENT FCONST SCONST Op NAMEDPARAM SYSTEM
 %token <ival>	ICONST PARAM
 %token INSTANCEOF
 
@@ -2440,7 +2440,6 @@ func_index:  func_name '(' name_list ')' opt_type opt_class
 					$$->args = $3;
 					$$->class = $6;
 					$$->typename = $5;
-					$$->isJava = false;
 				}
 		;
 
@@ -2452,25 +2451,6 @@ index_elem:  attr_name opt_type opt_class
 					$$->class = $3;
 					$$->typename = $2;
 				}
-			|
-				attr_name java_func ')'
-				{
-					$$ = makeNode(IndexElem);
-					$$->name = $1;
-					$$->args = NIL;
-					$$->class = $2;
-					$$->isJava = true;
-				}
-			|
-				attr_name java_func const_list ')'
-				{
-					$$ = makeNode(IndexElem);
-					$$->name = $1;
-					$$->args = $3;
-					$$->class = $2;
-					$$->isJava = true;
-				}
-			;
 
 opt_type:  ':' Typename							{ $$ = $2; }
 		| FOR Typename							{ $$ = $2; }
@@ -4924,28 +4904,6 @@ c_expr:  attr
 					n->agg_distinct = false;
 					$$ = (Node *)n;
 				}
-		| attr_name java_func ')' 
-				{
-					FuncCall *n = makeNode(FuncCall);
-					n->funcname = $2;
-					n->attribute = $1;
-					n->args = NIL;
-					n->agg_star = false;
-					n->agg_distinct = false;
-					n->isJava = true;
-					$$ = (Node *)n;
-				}
-		| attr_name java_func expr_list ')' 
-				{
-					FuncCall *n = makeNode(FuncCall);
-					n->funcname = $2;
-					n->attribute = $1;
-					n->args = $3;
-					n->agg_star = false;
-					n->agg_distinct = false;
-					n->isJava = true;
-					$$ = (Node *)n;
-				}
 		| func_name '(' ALL expr_list ')'
 				{
 					FuncCall *n = makeNode(FuncCall);
@@ -5765,8 +5723,6 @@ ColId:  IDENT							{ $$ = $1; }
 		| TIMESTAMP						{ $$ = "timestamp"; }
 		| TYPE_P						{ $$ = "type"; }
 		;
-
-java_func:	JAVA_FUNC						{  $$ = $1; };
 
 /* Parser tokens to be used as identifiers.
  * Tokens involving data types should appear in ColId only,

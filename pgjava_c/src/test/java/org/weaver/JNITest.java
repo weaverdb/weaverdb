@@ -12,6 +12,7 @@ import java.io.OutputStream;
 import java.io.Serializable;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.nio.channels.Channels;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -958,11 +959,15 @@ public class JNITest {
     public void testJavaFunction() throws Exception {
         try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("set debug_memory = on");
-            conn.execute("create function hex (int4) returns varchar(256) as 'java/lang/Integer.toHexString','(I)Ljava/lang/String;' language 'java'");
+            MethodType type = MethodType.methodType(String.class, String.class);
+            MethodHandle mh = MethodHandles.publicLookup().findStatic(System.class, "getProperty", type);
+            FunctionInstaller fi = new FunctionInstaller(conn);
+            fi.installFunction("system_property", mh);
+            fi.installFunction("hex", MethodHandles.publicLookup().findStatic(Integer.class, "toHexString", MethodType.methodType(String.class, int.class)));
             try (Statement s = conn.statement("select hex(5)")) {
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
-            conn.execute("create function 'java/lang/String.toString' (java) returns varchar as 'java/lang/String.toString','()Ljava/lang/String;' language 'java'");
+            fi.installFunction("to_string", MethodHandles.publicLookup().findVirtual(Object.class, "toString", MethodType.methodType(String.class)));
             conn.execute("create table test30 (item java)");
             try (Statement s = conn.statement("insert into test30 (item) values ($item)")) {
                 s.linkInput("item", Serializable.class).set("test");
@@ -972,7 +977,7 @@ public class JNITest {
                 s.linkInput("item", Serializable.class).set("test3");
                 s.execute();
             }
-            try (Statement s = conn.statement("select item.toString() from test30")) {
+            try (Statement s = conn.statement("select to_string(item) from test30")) {
                 s.linkOutput(1, String.class);
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }

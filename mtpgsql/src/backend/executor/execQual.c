@@ -83,7 +83,7 @@ static Datum    ExecEvalOr(Expr * orExpr, ExprContext * econtext, bool * isNull)
 static Datum    
 ExecMakeFunctionResult(Node * node, List * arguments, ExprContext * econtext, 
                 bool * isNull, bool * isDone);
-static Datum    ExecMakeJavaFunctionResult(Java * node, Datum target, Oid * dataType, 
+static Datum    ExecMakeJavaFunctionResult(Java * node, Oid * dataType, 
                 List * args, ExprContext * econtext, bool* isNull);
 
 /*
@@ -555,7 +555,7 @@ ExecEvalJavaArgs(ExprContext * econtext,
  * ExecMakeJavaFunctionResult
  */
 static          Datum
-ExecMakeJavaFunctionResult(Java * node, Datum target, Oid * dataType, List * args, ExprContext * econtext, bool *isNull)
+ExecMakeJavaFunctionResult(Java * node, Oid * dataType, List * args, ExprContext * econtext, bool *isNull)
 {
 	Datum          jargV[FUNC_MAX_ARGS];
         Oid          jtypes[FUNC_MAX_ARGS];
@@ -575,7 +575,7 @@ ExecMakeJavaFunctionResult(Java * node, Datum target, Oid * dataType, List * arg
 		ExecEvalJavaArgs(econtext, args, jtypes, jargV);
 	}
 
-	Datum result = fmgr_javaA(target, node->funcname,node->funcnargs,jtypes, jargV, &returnType, isNull);
+	Datum result = fmgr_javaA(node->funcname,node->funcnargs,jtypes, jargV, &returnType, isNull);
         if (dataType != NULL) {
             *dataType = returnType;
         }
@@ -890,11 +890,8 @@ ExecEvalFunc(Expr * funcClause,
 	} else {
 		Java           *javaNode = (Java *) funcClause->oper;
 		bool            done, isn;
-		Datum           javaTarget = PointerGetDatum(NULL);
-		if (javaNode->java_target)
-			javaTarget = ExecEvalExpr(javaNode->java_target, econtext, NULL, &done, &isn);
 
-		return ExecMakeJavaFunctionResult(javaNode, javaTarget, returnType, funcClause->args, econtext,isNull);
+		return ExecMakeJavaFunctionResult(javaNode, returnType, funcClause->args, econtext,isNull);
 	}
 }
 

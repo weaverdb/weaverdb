@@ -1648,7 +1648,6 @@ _copyJava(Java* java)
     newnode->funcname = pstrdup(java->funcname);
     newnode->funcargtypes = palloc(sizeof(Oid) * newnode->funcnargs);
     memmove(newnode->funcargtypes, java->funcargtypes, sizeof(Oid) * newnode->funcnargs);
-    newnode->java_target = NULL; 
 
     return newnode;
 }
