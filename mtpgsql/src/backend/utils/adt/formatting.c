@@ -2617,6 +2617,7 @@ to_timestamp(text *date_str, text *fmt)
 #ifdef DEBUG_TO_FROM_CHAR
 		/* dump_node(format, len); */
 #endif
+/*  TODO:  validate this...it looks like it could be dangerous  */
 		VARDATA(date_str)[VARSIZE(date_str) - VARHDRSZ] = '\0';
 		DCH_processor(format, VARDATA(date_str), FROM_CHAR);
 

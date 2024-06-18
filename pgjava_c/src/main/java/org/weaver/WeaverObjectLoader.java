@@ -97,20 +97,24 @@ public class WeaverObjectLoader extends ThreadLocal<WeaverObjectLoader> implemen
     }
     
     public static byte[] java_text_in(String input) {
-        int br = input.indexOf('(');
-        String name = input.substring(0, br ).trim();
-        String arg = input.substring(br).trim();
-        
-        arg = arg.substring(1,arg.length()-2);
-        try {
-            Class c = Class.forName(name);
-            
-            Constructor cont = c.getConstructor(String.class);
-            Object obj = cont.newInstance(arg);
-            return java_in(obj);
-        } catch ( Exception exp ) {
-            exp.printStackTrace();
-            return null;
+        if (input.charAt(0) == 'L' && input.charAt(input.length() -1) == ';') {
+            int br = input.indexOf('(');
+            String name = input.substring(0, br ).trim();
+            String arg = input.substring(br).trim();
+
+            arg = arg.substring(1,arg.length()-2);
+            try {
+                Class c = Class.forName(name);
+
+                Constructor cont = c.getConstructor(String.class);
+                Object obj = cont.newInstance(arg);
+                return java_in(obj);
+            } catch ( Exception exp ) {
+                exp.printStackTrace();
+                return null;
+            }
+        } else {
+            return java_in(input);
         }
     }
     

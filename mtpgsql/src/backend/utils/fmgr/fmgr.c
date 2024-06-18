@@ -95,7 +95,7 @@ fmgr_c(FmgrInfo *finfo,
 	 * instead.
 	 */
 
-	if (finfo->fn_addr == NULL)
+	if (finfo->fn_addr == NULL && finfo->fn_data == NULL)
 		elog(ERROR, "Internal error: fmgr_c received NULL function pointer.");
 
 	switch (finfo->fn_nargs)
@@ -571,7 +571,7 @@ fmgr_info(Oid procedureId, FmgrInfo *finfo)
 				finfo->fn_addr = (func_ptr) NULL;
 				finfo->fn_nargs = procedureStruct->pronargs;
                                 {
-                                    finfo->fn_data = GetJavaCallArgs(NULL, 
+                                    finfo->fn_data = GetJavaFunction(PointerGetDatum(NULL), 
                                             NameStr(procedureStruct->proname), procedureStruct->pronargs, 
                                             procedureStruct->proargtypes);
                                 }
@@ -685,8 +685,12 @@ fmgr_array_args(Oid procedureId, int nargs, char *args[], bool *isNull)
 	fmgr_info(procedureId, &finfo);
 	finfo.fn_nargs = nargs;
 
+        if (finfo.fn_addr == NULL) {
+            return (char*)fmgr_cached_javaA(finfo.fn_data, nargs, ((FmgrValues *) args)->data, NULL, isNull);
+        } else {
 	/* XXX see WAY_COOL_ORTHOGONAL_FUNCTIONS */
-	return fmgr_c(&finfo,
+            return fmgr_c(&finfo,
 				  (FmgrValues *) args,
 				  isNull);
+        }
 }

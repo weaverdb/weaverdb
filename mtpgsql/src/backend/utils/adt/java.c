@@ -57,6 +57,7 @@ typedef struct funcdef {
 static jvalue CallJavaFunction(JavaFunction def, jobject target, int nargs, jvalue* args);
 static jvalue ConvertToJavaArg(Oid type, Datum val);
 static void FormJavaFunctionSig(char* buffer, int buflen, const char* clazz, const char *name, int nargs, Oid * types);
+static JavaFunction GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types);
 
 static void FunctionCacheInit() {
     HASHCTL ctl;
@@ -195,7 +196,6 @@ javain(jobject target)
 
 	return data;
 }
-
 
 bytea          *
 javatextin(char *target)
@@ -455,25 +455,31 @@ java_instanceof(bytea * object, bytea * class)
 	JNIEnv         *jenv;
 	jclass          converter;
 	bool            ret_val;
-	char           *replace;
+	char*           replace;
+	char*           clazz;
+        jobject         target;
 
 	jenv = GetJavaEnv();
 	(*jenv)->PushLocalFrame(jenv, 10);
 
-	jobject         target = javaout(object);
+	target = javaout(object);
 
-	replace = (char *) VARDATA(class);
-	while (replace != NULL) {
+        clazz = textout(class);
+        
+        replace = clazz;
+	while (replace) {
 		replace = strchr(replace, '.');
 		if (replace != NULL)
 			*replace = '/';
 	}
 
-	converter = (*jenv)->FindClass(jenv, VARDATA(class));
+	converter = (*jenv)->FindClass(jenv, clazz);
+
+        pfree(clazz);
 
 	if ((*jenv)->ExceptionCheck(jenv)) {
 		(*jenv)->PopLocalFrame(jenv, NULL);
-		elog(ERROR, "java_instanceof: embedded exception while trying to cehck java objects");
+		elog(ERROR, "java_instanceof: embedded exception while trying to check java objects");
 	}
 	ret_val = (*jenv)->IsInstanceOf(jenv, target, converter);
 
@@ -535,6 +541,10 @@ java_equals(bytea * obj1, bytea * obj2)
 
 	jenv = GetJavaEnv();
 	(*jenv)->PushLocalFrame(jenv, 10);
+
+        if (obj1 == obj2) return true;
+        if (obj1 == NULL && obj2 != NULL) return false;
+        if (obj1 != NULL && obj2 == NULL) return false;
 
 	master1 = (*jenv)->NewByteArray(jenv, VARSIZE(obj1) - VARHDRSZ);
 	if (master1 != NULL) {
@@ -612,13 +622,8 @@ javalen(bytea * obj)
 	return VARSIZE(obj) - VARHDRSZ;
 }
 
-PG_EXTERN Datum 
-java_convert(jobject target, Oid type) 
-{
-    jvalue val;
-    bool isNull;
-    val.l = target;
-    return ConvertFromJavaArg(type, val, &isNull);
+Oid GetJavaReturnType(JavaFunction function) {
+    return function->returnType;
 }
 
 void FormJavaFunctionSig(char* buffer, int buflen, const char* clazz, const char *name, int nargs, Oid * types) {
@@ -644,7 +649,13 @@ void FormJavaFunctionSig(char* buffer, int buflen, const char* clazz, const char
 }
 
 JavaFunction
-GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
+GetJavaFunction(Datum target, const char *name, int nargs, Oid * types)
+{
+    return GetJavaCallArgs(javaout((bytea*)DatumGetPointer(target)), name, nargs, types);
+}
+
+JavaFunction
+GetJavaCallArgs(jobject jtar, const char *name, int nargs, Oid * argtypes)
 {
 	JNIEnv         *jenv;
 	jclass          converter = NULL;
@@ -656,10 +667,21 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
 
 	jenv = GetJavaEnv();
 
-	if (!(*jenv)->IsSameObject(jenv, target, NULL)) {                
+	if (!(*jenv)->IsSameObject(jenv, jtar, NULL)) {            
+                Oid  idenTypes[FUNC_MAX_ARGS];
+                int counter = 0;
+
+                idenTypes[0] = JAVAOID;
+                for (counter = 0;counter<nargs;counter++) {
+                    idenTypes[counter + 1] = argtypes[counter];
+                }
+                for (counter = nargs+1;counter<FUNC_MAX_ARGS;counter++) {
+                    idenTypes[counter] = InvalidOid;
+                }
+
                 (*jenv)->PushLocalFrame(jenv, 10);
 		
-		converter = (*jenv)->GetObjectClass(jenv, target);
+		converter = (*jenv)->GetObjectClass(jenv, jtar);
 
 		while (converter != NULL && definition == NULL) {
                     jsize           len;
@@ -670,7 +692,7 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
                     (*jenv)->GetStringUTFRegion(jenv, classid, 1, len - 2, buffer);
                     buffer[len - 1] = '\0';
 
-                    FormJavaFunctionSig(NameStr(lookup), NAMEDATALEN, buffer, name, nargs, types);
+                    FormJavaFunctionSig(NameStr(lookup), NAMEDATALEN, buffer, name, nargs + 1, idenTypes);
 
                     pthread_mutex_lock(&ftable_guard);
                     definition = hash_search(function_table, NameStr(lookup), HASH_FIND, &hfound);
@@ -680,7 +702,12 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
 
                         snprintf(NameStr(funcName), NAMEDATALEN, "%s.%s", buffer, name);
                         HeapTuple func = SearchSysCacheTuple(PROCNAME, NameGetDatum(&funcName),
-                                Int32GetDatum(nargs), PointerGetDatum(types), 0);
+                                Int32GetDatum(nargs + 1), PointerGetDatum(idenTypes), 0);
+
+                        if (!HeapTupleIsValid(func)) {  /* try again without the identity type  */
+                            func = SearchSysCacheTuple(PROCNAME, NameGetDatum(&funcName),
+                                Int32GetDatum(nargs), PointerGetDatum(argtypes), 0);
+                        }
 
                         if (HeapTupleIsValid(func)) {
                             char* mark;
@@ -712,8 +739,9 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
                                         definition->isStatic = true;
                                     }
                                     definition->returnType = DatumGetObjectId(SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prorettype, NULL));
-                                    definition->nargs = nargs;
-                                    memmove(definition->argTypes,types, sizeof(Oid) * nargs);
+                                    definition->nargs = nargs + 1;  /* add identity  */
+                                    definition->argTypes[0] = JAVAOID;
+                                    memmove(definition->argTypes + 1, argtypes, sizeof(Oid) * nargs);
                                 } else {
                                     definition = hash_search(function_table, NameStr(lookup), HASH_REMOVE, &hfound);
                                     definition = NULL;
@@ -731,14 +759,14 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
 	} else {  /* static function  */
             memset(NameStr(lookup), '\0', NAMEDATALEN);
 
-            FormJavaFunctionSig(NameStr(lookup), NAMEDATALEN, NULL, name, nargs, types);
+            FormJavaFunctionSig(NameStr(lookup), NAMEDATALEN, NULL, name, nargs, argtypes);
 
             pthread_mutex_lock(&ftable_guard);
             definition = hash_search(function_table, NameStr(lookup), HASH_FIND, &hfound);
             pthread_mutex_unlock(&ftable_guard);
             if (definition == NULL) {
                 HeapTuple func = SearchSysCacheTuple(PROCNAME, PointerGetDatum(name),
-                       Int32GetDatum(nargs), PointerGetDatum(types), 0);
+                       Int32GetDatum(nargs), PointerGetDatum(argtypes), 0);
 
                 if (HeapTupleIsValid(func)) {
                     char* mark;
@@ -768,7 +796,7 @@ GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types)
                         }
                         definition->returnType = DatumGetObjectId(SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prorettype, NULL));
                         definition->nargs = nargs;
-                        memmove(definition->argTypes,types, sizeof(Oid) * nargs);
+                        memmove(definition->argTypes,argtypes, sizeof(Oid) * nargs);
 
                         pfree((void*)javasrc);
                         pfree((void*)javasig);

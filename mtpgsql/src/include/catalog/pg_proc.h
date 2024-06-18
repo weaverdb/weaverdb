@@ -2539,7 +2539,6 @@ DATA(insert OID = 2016 ( javatextin	PGUID 11 f t f 1 f 1830 "0" 100 0 0 100	java
 DATA(insert OID = 2017 ( javatextout	PGUID 11 f t f 1 f 25 "0" 100 0 0 100	javatextout - ));
 
 DATA(insert OID = 2018 ( java_noteq	PGUID 11 f t f 2 f 16 "1830 1830" 100 0 0 100	java_noteq - ));
-DATA(insert OID = 2020 ( java_convert	PGUID 11 f t f 1 f 0 "1830" 100 0 0 100	java_convert - ));
 
 DATA(insert OID =  1831 (  javain		   PGUID 11 f t t 1 f 1830 "17" 100 0 0 100  javain - ));
 #define JAVAINOID 1831

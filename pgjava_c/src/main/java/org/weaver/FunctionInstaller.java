@@ -24,7 +24,6 @@ public class FunctionInstaller {
     
     public void installFunction(String alias, MethodHandle definition) throws ExecutionException {
         String stmt = createFunctionStatement(alias, definition);
-        System.out.println(stmt);
         connection.execute(stmt);
     }
     

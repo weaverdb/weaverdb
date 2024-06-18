@@ -962,7 +962,7 @@ public class JNITest {
             try (Statement s = conn.statement("select hex(5)")) {
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
-            conn.execute("create function 'java/lang/String.toString' () returns varchar as 'java/lang/String.toString','()Ljava/lang/String;' language 'java'");
+            conn.execute("create function 'java/lang/String.toString' (java) returns varchar as 'java/lang/String.toString','()Ljava/lang/String;' language 'java'");
             conn.execute("create table test30 (item java)");
             try (Statement s = conn.statement("insert into test30 (item) values ($item)")) {
                 s.linkInput("item", Serializable.class).set("test");
@@ -984,7 +984,7 @@ public class JNITest {
         try (Connection conn = Connection.connectAnonymously("test")) {
             MethodHandle mh = MethodHandles.publicLookup().unreflect(System.class.getDeclaredMethod("getProperty", String.class));
             new FunctionInstaller(conn).installFunction("rickets", mh);
-            new FunctionInstaller(conn).installFunction(null, MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
+            new FunctionInstaller(conn).installFunction("params_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
             conn.execute("create table properties (prop java)");
             try (Statement s = conn.statement("insert into properties (prop) values ($item)")) {
                 s.linkInput("item", Serializable.class).set("user.dir");
@@ -996,7 +996,7 @@ public class JNITest {
                 s.linkInput("item", Serializable.class).set("java.version");
                 s.execute();
             }
-            try (Statement s = conn.statement("select rickets(prop.toString()) from properties")) {
+            try (Statement s = conn.statement("select rickets(params_tostring(prop)) from properties")) {
                 Output<String> prop = s.linkOutput(1, String.class);
                 s.execute();
                 while (s.fetch()) {
@@ -1011,6 +1011,7 @@ public class JNITest {
     public void testJavaFunctionInstanceAlias() throws Exception {
         try (Connection conn = Connection.connectAnonymously("test")) {
             MethodHandle mh = MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("hashCode"));
+            new FunctionInstaller(conn).installFunction("alias_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
             new FunctionInstaller(conn).installFunction("java_hashcode", mh);
             conn.execute("create table jos (prop java)");
             try (Statement s = conn.statement("insert into jos (prop) values ($item)")) {
@@ -1032,6 +1033,52 @@ public class JNITest {
                 while (s.fetch()) {
                     System.out.println(prop.getName() + "=" + prop.get().getClass());
                 }
+            }
+            try (Statement s = conn.statement("select prop from jos where alias_tostring(prop) = 'this is a test'")) {
+                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+            }
+            try (Statement s = conn.statement("select prop from jos where prop instanceof 'java.io.File'")) {
+                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testJavaFunctionInClause() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("test")) {
+            new FunctionInstaller(conn).installFunction("java_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
+            conn.execute("create table boss (prop java)");
+            try (Statement s = conn.statement("insert into boss (prop) values ($item)")) {
+                s.linkInput("item", Serializable.class).set("this is a test");
+                s.execute();
+                s.linkInput("item", Serializable.class).set(new File("../COPYRIGHT"));
+                s.execute();
+            }
+            conn.execute("create index boss_idx on boss(java_tostring(prop))");
+            try (Statement s = conn.statement("select java_tostring(prop) from boss where 'this is a test' = java_tostring(prop)")) {
+                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+            }
+            try (Statement s = conn.statement("select prop from boss where prop instanceof 'java.io.File'")) {
+                s.linkOutput(1, Serializable.class);
+                ResultSet.stream(s).flatMap(Row::stream).forEach(c->System.out.println(c.get().getClass()));
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testNestedFunctions() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("test")) {
+            new FunctionInstaller(conn).installFunction("nested_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
+            new FunctionInstaller(conn).installFunction("java_touppercase", MethodHandles.publicLookup().unreflect(String.class.getDeclaredMethod("toUpperCase")));
+            conn.execute("create table nested (prop java)");
+            try (Statement s = conn.statement("insert into nested (prop) values ($item)")) {
+                s.linkInput("item", Serializable.class).set("this is a test");
+                s.execute();
+                s.linkInput("item", Serializable.class).set(new File("../COPYRIGHT"));
+                s.execute();
+            }
+            try (Statement s = conn.statement("select java_touppercase(hashvarchar(nested_tostring(prop))) from nested")) {
+                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
         }
     }

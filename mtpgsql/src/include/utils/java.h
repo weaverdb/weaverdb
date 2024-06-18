@@ -52,8 +52,8 @@ PG_EXTERN bool java_lteq(bytea* obj1,bytea* obj2);
 
 PG_EXTERN int javalen(bytea* obj);
 
-PG_EXTERN Datum java_convert(jobject target, Oid type);
-PG_EXTERN JavaFunction GetJavaCallArgs(jobject target, const char *name, int nargs, Oid * types);
+PG_EXTERN JavaFunction GetJavaFunction(Datum target, const char *name, int nargs, Oid * types);
+PG_EXTERN Oid GetJavaReturnType(JavaFunction function);
 
 bool
 convert_java_to_scalar(Datum value,double* scaledval,Datum lobound,double* scaledlo,Datum hibound,double* scaledhi, Datum histogram);

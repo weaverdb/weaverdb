@@ -1638,6 +1638,21 @@ _copyLoadStmt(LoadStmt *from)
 	return newnode;
 }
 
+static Java *
+_copyJava(Java* java)
+{
+    Java*  newnode = makeNode(Java);
+    newnode->funcid = java->funcid;
+    newnode->functype = java->functype;
+    newnode->funcnargs = java->funcnargs;
+    newnode->funcname = pstrdup(java->funcname);
+    newnode->funcargtypes = palloc(sizeof(Oid) * newnode->funcnargs);
+    memmove(newnode->funcargtypes, java->funcargtypes, sizeof(Oid) * newnode->funcnargs);
+    newnode->java_target = NULL; 
+
+    return newnode;
+}
+
 static VariableSetStmt *
 _copyVariableSetStmt(VariableSetStmt *from)
 {
@@ -1965,6 +1980,9 @@ copyObject(void *from)
 				}
 			}
 			break;
+                case T_Java:
+                        retval = _copyJava(from);
+                        break;
 		default:
 			elog(ERROR, "copyObject: don't know how to copy %d", nodeTag(from));
 			retval = from;

@@ -538,6 +538,8 @@ ExecEvalJavaArgs(ExprContext * econtext,
 	i = 0;
 	foreach(arg, argList) {
 		Node           *next = (Node *) lfirst(arg);
+                argTypes[i] = InvalidOid;
+                bool isNull, isDone;
 
 		if (IsA(next, Const)) {
 			Const          *val = (Const *) next;
@@ -559,17 +561,12 @@ ExecEvalJavaArgs(ExprContext * econtext,
                         argV[i] = retDatum;
 		} else if (IsA(next, RelabelType)) {
                         RelabelType      *relabel = (RelabelType*) next;
-                        Expr*         funcClause = (Expr*)relabel->arg;
-                        Java         * javaNode = (Java*)funcClause->oper;
-                        bool            done, isn,isNull;
-        		Datum           javaTarget = PointerGetDatum(NULL);
-
-                        if (javaNode->java_target)
-                            javaTarget = ExecEvalExpr(javaNode->java_target, econtext, &done, &isn);
-
                         argTypes[i] = relabel->resulttype;
-                        argV[i] = ExecMakeJavaFunctionResult(javaNode, javaTarget, relabel->resulttype, funcClause->args, econtext,&isNull);
-		} else {
+                        argV[i] = ExecEvalExpr(relabel->arg, econtext, &isNull, &isDone);
+		} else if (IsA(next, Expr)) {
+                    argTypes[i] = ((Expr*)next)->typeOid;
+                    argV[i] = ExecEvalExpr(next, econtext, &isNull, &isDone);
+                } else {
 			elog(ERROR, "argument node not supported");
 		}
 
