@@ -1,4 +1,0 @@
-#!/bin/sh
-unset DISPLAY;
-JAVA_HOME=/usr/jdk/jdk1.5.0_01;export JAVA_HOME
-./startup.sh >& web_log.txt </dev/null

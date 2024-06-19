@@ -1,4 +1,3 @@
 
 rootProject.name = 'weaver'
 include('pgjava_c')
-include('simpleserver')
