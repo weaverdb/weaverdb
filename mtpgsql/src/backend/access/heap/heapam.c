@@ -82,10 +82,6 @@
 #include "access/heapam.h"
 #include "access/hio.h"
 #include "env/freespace.h"
-#ifdef NOTUSED
-#include "access/valid.h"
-#endif
-#include "access/tuptoaster.h"
 #include "catalog/catalog.h"
 #include "miscadmin.h"
 #include "storage/smgr.h"

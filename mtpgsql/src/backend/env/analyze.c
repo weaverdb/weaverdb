@@ -22,7 +22,6 @@
 #include "env/freespace.h"
 #include "access/heapam.h"
 #include "access/blobstorage.h"
-#include "access/tuptoaster.h"
 #include "catalog/catalog.h"
 #include "catalog/catname.h"
 #include "catalog/indexing.h"

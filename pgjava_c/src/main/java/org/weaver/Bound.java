@@ -58,22 +58,22 @@ class Bound<T> {
     }
     
     protected enum Types {
-        String(2,"Ljava/lang/String;"),
-        Double(3,"D"),
-        Integer(1,"I"),
-        Binary(6,"[B"),
-        BLOB(7,"[B"),
-        Character(4,"C"),
-        Boolean(5,"Z"),
-        Date(12,"[B"),
-        Long(13,"[B"),
-        Function(20,"[B"),
-        Slot(30,"[B"),
-        Java(40,"[B"),
-        Text(41,"[B"),
-        Stream(42,"<assigned>"),
-        Direct(43,"<direct>"),
-        Null(0,"");
+        String(BaseWeaverConnection.bindString,"Ljava/lang/String;"),
+        Double(BaseWeaverConnection.bindDouble,"D"),
+        Integer(BaseWeaverConnection.bindInteger,"I"),
+        Binary(BaseWeaverConnection.bindBinary,"[B"),
+        BLOB(BaseWeaverConnection.bindBLOB,"[B"),
+        Character(BaseWeaverConnection.bindCharacter,"C"),
+        Boolean(BaseWeaverConnection.bindBoolean,"Z"),
+        Date(BaseWeaverConnection.bindDate,"[B"),
+        Long(BaseWeaverConnection.bindLong,"[B"),
+        Function(BaseWeaverConnection.bindFunction,"[B"),
+        Slot(BaseWeaverConnection.bindSlot,"[B"),
+        Java(BaseWeaverConnection.bindJava,"[B"),
+        Text(BaseWeaverConnection.bindText,"[B"),
+        Stream(BaseWeaverConnection.bindStream,"<assigned>"),
+        Direct(BaseWeaverConnection.bindDirect,"<direct>"),
+        Null(BaseWeaverConnection.bindNull,"");
                 
         private final int id;
         private final String signature;
