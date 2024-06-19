@@ -6,3 +6,5 @@ mtpgsql/src/include/fmgr.h
 *.o
 *dSYM
 nbproject
+libweaver.dylib
+weaver

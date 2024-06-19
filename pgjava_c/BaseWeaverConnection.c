@@ -27,26 +27,26 @@
 #include "utils/java.h"
 #include "WeaverValueExtractor.h"
 
-#include "org_weaver_WeaverInitializer.h"
-#include "org_weaver_BaseWeaverConnection.h"
+#include "org_weaverdb_WeaverInitializer.h"
+#include "org_weaverdb_BaseWeaverConnection.h"
 
-#define BINDNULL  org_weaver_BaseWeaverConnection_bindNull
-#define BINDINTEGER  org_weaver_BaseWeaverConnection_bindInteger
-#define BINDSTRING  org_weaver_BaseWeaverConnection_bindString
-#define BINDDOUBLE  org_weaver_BaseWeaverConnection_bindDouble
-#define BINDCHARACTER  org_weaver_BaseWeaverConnection_bindCharacter
-#define BINDBOOLEAN  org_weaver_BaseWeaverConnection_bindBoolean
-#define BINDBINARY  org_weaver_BaseWeaverConnection_bindBinary
-#define BINDBLOB  org_weaver_BaseWeaverConnection_bindBLOB
-#define BINDDATE  org_weaver_BaseWeaverConnection_bindDate
-#define BINDDOUBLE  org_weaver_BaseWeaverConnection_bindDouble
-#define BINDLONG  org_weaver_BaseWeaverConnection_bindLong
-#define BINDFUNCTION  org_weaver_BaseWeaverConnection_bindFunction
-#define BINDSLOT org_weaver_BaseWeaverConnection_bindSlot
-#define BINDJAVA  org_weaver_BaseWeaverConnection_bindJava
-#define BINDTEXT  org_weaver_BaseWeaverConnection_bindText
-#define BINDSTREAM  org_weaver_BaseWeaverConnection_bindStream
-#define BINDDIRECT  org_weaver_BaseWeaverConnection_bindDirect
+#define BINDNULL  org_weaverdb_BaseWeaverConnection_bindNull
+#define BINDINTEGER  org_weaverdb_BaseWeaverConnection_bindInteger
+#define BINDSTRING  org_weaverdb_BaseWeaverConnection_bindString
+#define BINDDOUBLE  org_weaverdb_BaseWeaverConnection_bindDouble
+#define BINDCHARACTER  org_weaverdb_BaseWeaverConnection_bindCharacter
+#define BINDBOOLEAN  org_weaverdb_BaseWeaverConnection_bindBoolean
+#define BINDBINARY  org_weaverdb_BaseWeaverConnection_bindBinary
+#define BINDBLOB  org_weaverdb_BaseWeaverConnection_bindBLOB
+#define BINDDATE  org_weaverdb_BaseWeaverConnection_bindDate
+#define BINDDOUBLE  org_weaverdb_BaseWeaverConnection_bindDouble
+#define BINDLONG  org_weaverdb_BaseWeaverConnection_bindLong
+#define BINDFUNCTION  org_weaverdb_BaseWeaverConnection_bindFunction
+#define BINDSLOT org_weaverdb_BaseWeaverConnection_bindSlot
+#define BINDJAVA  org_weaverdb_BaseWeaverConnection_bindJava
+#define BINDTEXT  org_weaverdb_BaseWeaverConnection_bindText
+#define BINDSTREAM  org_weaverdb_BaseWeaverConnection_bindStream
+#define BINDDIRECT  org_weaverdb_BaseWeaverConnection_bindDirect
 
 #define JAVA_ERROR -99
 
@@ -87,7 +87,7 @@ static void setOutputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommA
 
 static ConnMgr allocateWeaver(JNIEnv* env,jstring username,jstring password,jstring database);
 
-JNIEXPORT void JNICALL Java_org_weaver_WeaverInitializer_init(JNIEnv *env,jobject talkerObject, jstring jd)
+JNIEXPORT void JNICALL Java_org_weaverdb_WeaverInitializer_init(JNIEnv *env,jobject talkerObject, jstring jd)
 {
     const char*    variables;
 
@@ -110,10 +110,10 @@ JNIEXPORT void JNICALL Java_org_weaver_WeaverInitializer_init(JNIEnv *env,jobjec
 		
 	(*env)->GetJavaVM(env,&jvm);
 
-        SetJVM(jvm,NULL);
+        SetJVM(jvm,"org/weaverdb/WeaverObjectLoader");
 }
 
-JNIEXPORT void JNICALL Java_org_weaver_WeaverInitializer_close(JNIEnv *env,jobject talkerObject)
+JNIEXPORT void JNICALL Java_org_weaverdb_WeaverInitializer_close(JNIEnv *env,jobject talkerObject)
 {
 /*  shutdown any threads resources still hanging around */
 	if ( prepareforshutdown() ) {
@@ -123,7 +123,7 @@ JNIEXPORT void JNICALL Java_org_weaver_WeaverInitializer_close(JNIEnv *env,jobje
         DropCache(env);
 }
 
-JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_grabConnection
+JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_grabConnection
   (JNIEnv * env, jobject talkerObject, jstring theName, jstring thePassword, jstring theConnect)
  {
     if ( shuttingdown ) {            
@@ -144,7 +144,7 @@ JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_grabConnection
     return (*env)->ExceptionOccurred(env) ? 0 : (jlong)mgr;
 }
 
-JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_connectSubConnection
+JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_connectSubConnection
   (JNIEnv * env, jobject talkerObject) {
         ConnMgr  cparent = getConnMgr(env,talkerObject);
 
@@ -161,7 +161,7 @@ JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_connectSubConnectio
         return (jlong)mgr;
 }
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_dispose
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_dispose
   (JNIEnv *env, jobject talkerObject, jlong linkid)
 {
 	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
@@ -176,7 +176,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_dispose
         }
 }
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_disposeConnection
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_disposeConnection
   (JNIEnv * env, jclass clazz, jlong connid) 
 {
 	if ( (*env)->ExceptionOccurred(env) ) (*env)->ExceptionClear(env);
@@ -186,7 +186,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_disposeConnection
         }
 }
 
-JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_beginTransaction(JNIEnv *env, jobject talkerObject)
+JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_beginTransaction(JNIEnv *env, jobject talkerObject)
 {
     ConnMgr ref = getConnMgr(env,talkerObject);
 //	mark the beginning of the transaction
@@ -199,7 +199,7 @@ JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_beginTransaction(JN
     }
 }
 
-JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_prepareStatement(JNIEnv *env, jobject talkerObject, jstring statement)
+JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_prepareStatement(JNIEnv *env, jobject talkerObject, jstring statement)
 {
 	const char* 	pass_stmt;	
 
@@ -275,7 +275,7 @@ void setOutputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* us
 }
 
 
-JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_executeStatement
+JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_executeStatement
   (JNIEnv *env, jobject talkerObject, jlong linkid, jobjectArray inputs)
 {
     int x;
@@ -304,7 +304,7 @@ JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_executeStatement
     }
 }
 
-JNIEXPORT jboolean JNICALL Java_org_weaver_BaseWeaverConnection_fetchResults
+JNIEXPORT jboolean JNICALL Java_org_weaverdb_BaseWeaverConnection_fetchResults
   (JNIEnv *env, jobject talkerObject,jlong linkid, jobjectArray outputs)
 {
     int x;
@@ -333,7 +333,7 @@ JNIEXPORT jboolean JNICALL Java_org_weaver_BaseWeaverConnection_fetchResults
     }
 }
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_cancelTransaction
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_cancelTransaction
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
@@ -342,7 +342,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_cancelTransaction
     Cancel(ref);
 }
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_prepareTransaction(JNIEnv *env, jobject talkerObject)
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_prepareTransaction(JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
         ConnMgr base = getConnMgr(env,talkerObject);
@@ -355,7 +355,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_prepareTransaction(J
 }
 
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_commitTransaction
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_commitTransaction
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
@@ -367,7 +367,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_commitTransaction
 	}
 }
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_abortTransaction
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_abortTransaction
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
@@ -380,7 +380,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_abortTransaction
 }
 
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_beginProcedure
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_beginProcedure
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
@@ -394,7 +394,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_beginProcedure
 }
 
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_endProcedure
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_endProcedure
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
@@ -406,7 +406,7 @@ JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_endProcedure
 	}
 }
 
-JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_getCommandId
+JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_getCommandId
   (JNIEnv *env, jobject talkerObject, jlong link)
 {
     //	get proper agent	
@@ -415,7 +415,7 @@ JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_getCommandId
 	return GetCommandId(base);
 }
 
-JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_getTransactionId
+JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_getTransactionId
   (JNIEnv *env, jobject talkerObject)
 {
     //	get proper agent	
@@ -424,7 +424,7 @@ JNIEXPORT jlong JNICALL Java_org_weaver_BaseWeaverConnection_getTransactionId
     return GetTransactionId(base);
 }
 
-JNIEXPORT void JNICALL Java_org_weaver_BaseWeaverConnection_streamExec
+JNIEXPORT void JNICALL Java_org_weaverdb_BaseWeaverConnection_streamExec
   (JNIEnv * env, jobject talkerObject, jstring statement)
 {	
     const char*  state;

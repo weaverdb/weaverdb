@@ -27,7 +27,7 @@ static          Datum
 static JNIEnv  *GetJavaEnv(void);
 
 JavaVM         *jvm;
-static const char* loader = "org/weaver/WeaverObjectLoader";
+static const char* loader = "";
 
 static MemoryContext function_cache_cxt;
 static HTAB*  function_table;
