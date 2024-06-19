@@ -200,7 +200,7 @@ static void doNegateFloat(Value *v);
 		from_clause from_list opt_array_bounds
 		expr_list attrs target_list update_target_list
 		def_list opt_indirection group_clause TriggerFuncArgs
-		opt_select_limit const_list 
+		opt_select_limit 
 
 %type <typnam>	func_arg func_return
 
@@ -303,7 +303,7 @@ static void doNegateFloat(Value *v);
 %type <list>	constraints_set_namelist
 %type <boolean>	constraints_set_mode
 
-%type <str>	java_func opt_systemscope opt_excludeblobs opt_max
+%type <str>	opt_systemscope opt_excludeblobs opt_max
 %type <chr>     opt_percent
 /*
  * If you make any token changes remember to:
@@ -5677,11 +5677,6 @@ AexprConst:  Iconst
 					$$ = (Node *)n;
 				}
 		;
-
-const_list:  AexprConst { $$ = lcons($1, NIL); }
-		|  const_list ',' AexprConst  { $$ = lappend($1, $3); }
-		;
-
 
 ParamNo:  PARAM opt_indirection
 				{

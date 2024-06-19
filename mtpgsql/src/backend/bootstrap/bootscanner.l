@@ -49,6 +49,7 @@
 
 #define			YY_NO_UNPUT
 #define YY_NO_INPUT
+#define YYSTYPE INT_YYSTYPE
 #define YY_DECL int yylex \
                (YYSTYPE * yylval_param , void* scanner)
 extern int yylex(YYSTYPE * yylval_param , void* scanner);

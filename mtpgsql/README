@@ -6,7 +6,7 @@ from the process per client model to thread per client model.  Some code
 has been moved over from the main PostgreSQL source which at the time of 
 this writing is at version 8.1.  PostgreSQL can be found at 
 http://www.postgresql.org.  The latest version of Weaver can be obtained 
-from http://weaver.dev.java.net.
+from https://github.com/mkscott/weaverdb.
 
 -----------------------------------------------------------------------
  

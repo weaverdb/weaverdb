@@ -1,6 +1,6 @@
-%define api.pure true
+%define api.pure 
 %param {void* yyparse}
-%name-prefix "Int_yy"
+%define api.prefix {Int_yy}
 %{
 /*-------------------------------------------------------------------------
  *
