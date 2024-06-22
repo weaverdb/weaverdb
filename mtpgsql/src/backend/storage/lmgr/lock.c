@@ -34,7 +34,7 @@
 
 #include "postgres.h"
 #include "env/env.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 
 #include "access/xact.h"
 #include "miscadmin.h"

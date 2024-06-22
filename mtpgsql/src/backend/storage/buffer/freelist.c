@@ -37,7 +37,7 @@
 #else
 #include "storage/s_lock.h"
 #endif
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "storage/bufmgr.h"
 
 

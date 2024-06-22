@@ -25,7 +25,10 @@
 
 #define _INTERNAL_WEAVERCONNECTION_BUILD_
 
+#include "c.h"
+
 #include "env/connectionutil.h"
+#include "env/properties.h"
 #include "env/WeaverConnection.h"
 
 #include "access/heapam.h"

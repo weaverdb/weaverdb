@@ -2,15 +2,6 @@
 
 package org.weaverdb;
 
-import org.weaverdb.WeaverInitializer;
-import org.weaverdb.ResultSet;
-import org.weaverdb.Output;
-import org.weaverdb.TransactionSequence;
-import org.weaverdb.FunctionInstaller;
-import org.weaverdb.Statement;
-import org.weaverdb.ExecutionException;
-import org.weaverdb.Connection;
-import org.weaverdb.Input;
 import org.weaverdb.ResultSet.Column;
 import org.weaverdb.ResultSet.Row;
 import java.io.DataInputStream;

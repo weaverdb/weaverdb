@@ -53,7 +53,7 @@
 #include "env/env.h"
 #include "env/dbwriter.h"
 #include "env/poolsweep.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 
 #include "executor/execdebug.h"
 #include "miscadmin.h"

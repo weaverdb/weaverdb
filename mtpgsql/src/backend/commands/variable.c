@@ -20,7 +20,7 @@
 #include "postgres.h"
 #include "env/env.h"
 #include "env/dbwriter.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "env/poolsweep.h"
 #include "access/xact.h"
 #include "catalog/pg_shadow.h"

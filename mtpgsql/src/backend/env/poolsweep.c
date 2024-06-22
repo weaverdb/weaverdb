@@ -22,7 +22,7 @@
 #include "utils/inval.h"
 #include "utils/portal.h"
 #include "env/poolsweep.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "env/freespace.h"
 #include "commands/vacuum.h"
 #include "storage/smgr.h"

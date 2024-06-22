@@ -46,7 +46,7 @@
 #include "env/freespace.h"
 #include "env/poolsweep.h"
 #include "env/dbwriter.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"

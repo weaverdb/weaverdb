@@ -16,7 +16,7 @@
 #define _WEAVERSTMTMANAGER_H_
 
 #include <sys/types.h>
-#include "env/WeaverInterface.h"
+#include "WeaverInterface.h"
 
   
 #define MAX_FIELDS  32

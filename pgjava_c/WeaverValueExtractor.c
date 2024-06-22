@@ -23,7 +23,7 @@
 
 #include "WeaverStmtManager.h"
 #include "WeaverValueExtractor.h"
-#include "env/WeaverInterface.h"
+#include "WeaverInterface.h"
 
 
 static javacache CachedClasses;

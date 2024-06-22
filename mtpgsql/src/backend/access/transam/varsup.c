@@ -19,7 +19,7 @@
 
 #include "env/env.h"
 
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "env/dbwriter.h"
 #include "access/heapam.h"
 #include "catalog/catname.h"

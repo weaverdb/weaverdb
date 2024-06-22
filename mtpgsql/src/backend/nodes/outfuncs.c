@@ -40,7 +40,7 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-#include "../parse.h"
+#include "parser/parse.h"
 
 static void _outDatum(StringInfo str, Datum value, Oid type);
 static void _outNode(StringInfo str, void *obj);

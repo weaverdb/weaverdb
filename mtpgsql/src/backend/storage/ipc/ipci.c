@@ -16,7 +16,7 @@
 
 #include "postgres.h"
 
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
 #include "storage/sinval.h"

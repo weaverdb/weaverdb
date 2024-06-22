@@ -28,7 +28,7 @@
 #include "c.h"
 #include "postgres.h"
 #include "env/env.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 
 #include "config.h"
 #include "miscadmin.h"

@@ -38,7 +38,6 @@
 #include "commands/copy.h"
 #include "env/dbwriter.h"
 #include "env/dolhelper.h"
-#include "env/connectionutil.h"
 
 
 #ifdef USE_SYSLOG

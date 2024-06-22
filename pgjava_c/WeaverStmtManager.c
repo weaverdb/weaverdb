@@ -20,7 +20,6 @@
 #include <pthread.h>
 
 #include "WeaverStmtManager.h"
-#include "env/WeaverInterface.h"  
 
 typedef struct indirect {
     void* userspace;

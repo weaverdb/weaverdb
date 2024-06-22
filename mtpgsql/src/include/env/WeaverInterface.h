@@ -5,7 +5,6 @@
 
 #include <sys/types.h>
 #include <setjmp.h>
-#include "config.h"
 
 
 /*  leave some space for line item ids and header info try and squeeze two

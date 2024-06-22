@@ -22,7 +22,7 @@
 
 #include "postgres.h"
 #include "env/env.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "env/dbwriter.h"
 #include "env/dolhelper.h"
 

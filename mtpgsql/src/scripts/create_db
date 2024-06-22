@@ -1,8 +1,0 @@
-#!/bin/sh
-PGUSER=`logname`
-if [ ! -n $MTPG ]
-then
-        MTPG=/usr/local/mtpg;
-fi
-
-echo "create database $2" | $MTPG/bin/postgres -P -D$1 template1

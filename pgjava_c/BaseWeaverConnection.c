@@ -21,10 +21,9 @@
 #include <signal.h>
 #include <math.h>
 
-#include "env/connectionutil.h"
+#include "connectionutil.h"
 
 #include "WeaverStmtManager.h"
-#include "utils/java.h"
 #include "WeaverValueExtractor.h"
 
 #include "org_weaverdb_WeaverInitializer.h"
@@ -65,6 +64,8 @@ typedef struct commargs {
     int bindType;
     int linkType;
 } CommArgs;
+
+extern void SetJVM(JavaVM* java, const char* loader);
 
 static int transferin(void* arg,int type, void* buff,int run);
 static int transferout(void* arg,int type, void* buff,int run);
@@ -542,10 +543,7 @@ static int transferin(void* arg,int type, void* buff,int run)
     if (checkTrunc == TRUNCATION_VALUE) {
         (*env)->ThrowNew(env,Cache->truncation,"binary truncation");
     }
-    if (buff == NULL) {
-        Assert(run == LENGTH_QUERY_OP);
-        Assert(checkTrunc >= 0);
-    }
+
     return checkTrunc;
 }
 

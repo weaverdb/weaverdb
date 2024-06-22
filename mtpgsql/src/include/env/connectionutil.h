@@ -12,10 +12,30 @@
 #ifndef _CONNECTION_UTIL_H_
 #define _CONNECTION_UTIL_H_
 
-#include "c.h"
-
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifndef C_H
+#ifndef bool
+typedef char bool;
+#endif	 /* ndef bool */
+
+#ifndef true
+#define true	((bool) 1)
+#endif
+
+#ifndef false
+#define false	((bool) 0)
+#endif
+
+#ifndef TRUE
+#define TRUE	1
+#endif	 /* TRUE */
+
+#ifndef FALSE
+#define FALSE	0
+#endif	 /* FALSE */
 #endif
 
 LIB_EXTERN bool initweaverbackend(const char* dbname);
@@ -23,14 +43,6 @@ LIB_EXTERN bool isinitialized(void);
 LIB_EXTERN bool prepareforshutdown(void);
 LIB_EXTERN void wrapupweaverbackend(void);
 LIB_EXTERN void singleusershutdown(int code);
-
-LIB_EXTERN char* GetProperty(char* key);
-LIB_EXTERN bool GetBoolProperty(char* key);
-LIB_EXTERN int GetIntProperty(char* key);
-LIB_EXTERN double GetFloatProperty(char* key);
-LIB_EXTERN bool PropertyIsValid(char* key);
-LIB_EXTERN int GetMaxBackends(void);
-LIB_EXTERN int GetProcessorCount(void);
 
 #ifdef __cplusplus
 }

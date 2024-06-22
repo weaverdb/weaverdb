@@ -8,7 +8,9 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "env/connectionutil.h"
+#include "c.h"
+
+#include "env/properties.h"
 #include "env/WeaverConnection.h"
 
 #include "access/heapam.h"

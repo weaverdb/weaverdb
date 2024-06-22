@@ -27,7 +27,7 @@
 #include "storage/smgr.h"
 #include "storage/smgr_spi.h"
 #include "utils/relcache.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "utils/lzf.h"
 
 #undef DIAGNOSTIC

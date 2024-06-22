@@ -22,7 +22,7 @@
 #include "postgres.h"
 
 #include "env/env.h"
-#include "env/connectionutil.h"
+#include "env/properties.h"
 #include "catalog/catalog.h"
 #include "executor/execdebug.h"
 #include "miscadmin.h"
