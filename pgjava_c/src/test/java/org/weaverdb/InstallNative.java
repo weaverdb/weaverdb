@@ -1,6 +1,5 @@
 package org.weaverdb;
 
-import org.weaverdb.WeaverInitializer;
 import java.io.Writer;
 import java.util.Properties;
 import java.util.concurrent.locks.Lock;
@@ -27,10 +26,16 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 b.inheritIO();
                 Process p = b.start();
                 p.waitFor();
-                b = new ProcessBuilder("tar", "xvf", "../mtpgsql/src/mtpg.tar.bz2", "-C", "build");
+                
+//                b = new ProcessBuilder("tar", "xvf", "../mtpgsql/src/mtpg.tar.bz2", "-C", "build");
+//                b.inheritIO();
+//                p = b.start();
+//                p.waitFor();
+                b = new ProcessBuilder("cp", "-rf", "../cbuild/mtpg", "build/");
                 b.inheritIO();
                 p = b.start();
                 p.waitFor();
+
                 b = new ProcessBuilder("rm", "-rf", System.getProperty("user.dir") + "/build/testdb");
                 b.inheritIO();
                 p = b.start();

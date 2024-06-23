@@ -54,7 +54,7 @@ comcheck:
 	$(INSTALL) $(INSTL_EXE_OPTS) comcheck $(BINDIR)/comcheck
 
 clean:
-	rm comcheck *_db
+	rm -f comcheck *_db takesnapshot
 
 dep depend:
 

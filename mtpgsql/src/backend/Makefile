@@ -58,7 +58,7 @@ ifeq ($(PORTNAME), qnx4)
 OBJS1 = bootstrap/bootstrap.o postmaster/postmaster.o
 endif
 
-VERSIONOBJ = $(SRCDIR)/utils/version.o
+VERSIONOBJ = $(SRCDIR)/backend/utils/version.o
 
 # kerberos flags
 
@@ -88,8 +88,8 @@ $(OBJS): $(DIRS:%=%.dir)
 $(DIRS:%=%.dir):
 	$(MAKE) -C $(subst .dir,,$@) all 
 
-$(VERSIONOBJ): $(SRCDIR)/utils/version.c $(SRCDIR)/include/version.h
-	$(MAKE) -C $(SRCDIR)/utils version.o
+$(VERSIONOBJ): $(SRCDIR)/backend/utils/version.c $(SRCDIR)/include/version.h
+	$(MAKE) -C $(SRCDIR)/backend/utils version.o
 
 $(SRCDIR)/utils/dllinit.o: $(SRCDIR)/utils/dllinit.c
 	$(MAKE) -C $(SRCDIR)/utils dllinit.o

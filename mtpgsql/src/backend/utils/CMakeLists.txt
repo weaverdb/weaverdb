@@ -27,11 +27,14 @@ add_subdirectory(mmgr)
 add_subdirectory(sort)
 add_subdirectory(time)
 
-add_library(utils OBJECT 
-    version.c
+add_library(fmgrtab OBJECT 
     fmgrtab.c
 )
 
-target_compile_options(utils PRIVATE -Wno-constant-conversion)
+add_library(version OBJECT 
+    version.c
+)
+
+target_compile_options(fmgrtab PRIVATE -Wno-constant-conversion)
 
 add_dependencies(time build_fmgr)

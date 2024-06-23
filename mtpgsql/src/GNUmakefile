@@ -26,7 +26,6 @@ XARGS = /usr/bin/xargs
 all:
 	chmod 755 config.buildtime
 	/bin/sh -e config.buildtime
-	$(MAKE) -C utils all
 	$(MAKE) -C backend all
 	$(MAKE) -C interfaces all
 	$(MAKE) -C bin all
@@ -37,7 +36,6 @@ all:
 install: installdirs
 	chmod 755 config.buildtime
 	/bin/sh -e config.buildtime
-	$(MAKE) -C utils install
 	$(MAKE) -C backend install
 	$(MAKE) -C interfaces install
 	$(MAKE) -C bin install
@@ -49,7 +47,6 @@ installdirs: mkinstalldirs
 	$(SRCDIR)/mkinstalldirs $(BINDIR) $(LIBDIR) $(INCLUDEDIR)
 
 clean:
-	$(MAKE) -C utils clean
 	$(MAKE) -C backend clean
 	$(MAKE) -C interfaces clean
 	$(MAKE) -C bin clean
@@ -64,7 +61,6 @@ installclean:
 .DEFAULT:
 	chmod 755 config.buildtime
 	/bin/sh -e config.buildtime
-	$(MAKE) -C utils $@
 	$(MAKE) -C backend $@
 	$(MAKE) -C interfaces $@
 	$(MAKE) -C bin $@

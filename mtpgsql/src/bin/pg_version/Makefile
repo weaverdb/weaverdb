@@ -17,15 +17,15 @@ include $(SRCDIR)/Makefile.global
 
 CFLAGS+= -I$(SRCDIR)/include
 
-OBJS= pg_version.o $(SRCDIR)/utils/version.o 
+OBJS= pg_version.o $(SRCDIR)/backend/utils/version.o 
 
 all: pg_version
 
 pg_version: $(OBJS)
 	$(CC) $(CFLAGS) -o pg_version $(OBJS) $(LDFLAGS)
 
-$(SRCDIR)/utils/version.o: $(SRCDIR)/utils/version.c $(SRCDIR)/include/version.h
-	$(MAKE) -C $(SRCDIR)/utils version.o
+$(SRCDIR)/backend/utils/version.o: $(SRCDIR)/backend/utils/version.c $(SRCDIR)/include/version.h
+	$(MAKE) -C $(SRCDIR)/backend/utils version.o
 
 install: pg_version
 	$(INSTALL) $(INSTL_EXE_OPTS) pg_version$(X) $(BINDIR)/pg_version$(X)

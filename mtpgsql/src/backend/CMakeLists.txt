@@ -66,7 +66,8 @@ add_library(mtpg STATIC
     $<TARGET_OBJECTS:sort>
     $<TARGET_OBJECTS:time>
 
-    $<TARGET_OBJECTS:utils>  
+    $<TARGET_OBJECTS:fmgrtab>  
+    $<TARGET_OBJECTS:version>  
 )
 
 add_executable(postgres 

@@ -317,12 +317,9 @@ fi
 
 TEMPLATE="$PGLIB"/local1_template1.bki.source
 GLOBAL="$PGLIB"/global1.bki.source
-PG_HBA_SAMPLE="$PGLIB"/pg_hba.conf.sample
 
 TEMPLATE_DESCR="$PGLIB"/local1_template1.description
 GLOBAL_DESCR="$PGLIB"/global1.description
-PG_GEQO_SAMPLE="$PGLIB"/pg_geqo.sample
-PG_POSTMASTER_OPTS_DEFAULT_SAMPLE="$PGLIB"/postmaster.opts.default.sample
 
 if [ "$show_setting" -eq 1 ]
 then
@@ -339,16 +336,13 @@ then
  	echo "  SUPERUSERID:    $POSTGRES_SUPERUSERID"
  	echo "  TEMPLATE:       $TEMPLATE"	 
 	echo "  GLOBAL:         $GLOBAL"
-	echo "  PG_HBA_SAMPLE:  $PG_HBA_SAMPLE"
 	echo "  TEMPLATE_DESCR: $TEMPLATE_DESCR"
 	echo "  GLOBAL_DESCR:   $GLOBAL_DESCR"
-	echo "  PG_GEQO_SAMPLE: $PG_GEQO_SAMPLE"
-	echo "  PG_POSTMASTER_OPTS_DEFAULT_SAMPLE: $PG_POSTMASTER_OPTS_DEFAULT_SAMPLE"
 	echo 
 	exit 0
 fi
 
-for PREREQ_FILE in "$TEMPLATE" "$GLOBAL" "$PG_HBA_SAMPLE"
+for PREREQ_FILE in "$TEMPLATE" "$GLOBAL"
 do
     if [ ! -f "$PREREQ_FILE" ]
 	then 
@@ -364,7 +358,6 @@ done
 if [ "$template_only" -eq 0 ]
 then
     [ "$debug" -ne 0 ] && echo "$CMDNAME: Using $GLOBAL as input to create the global classes."
-    [ "$debug" -ne 0 ] && echo "$CMDNAME: Using $PG_HBA_SAMPLE as default authentication control file."
 fi
 
 trap 'echo "Caught signal." ; exit_nicely' 1 2 3 15
@@ -460,9 +453,6 @@ then
 
     "$PGPATH"/pg_version "$PGDATA" || exit_nicely
 
-    cp "$PG_HBA_SAMPLE" "$PGDATA"/pg_hba.conf     || exit_nicely
-    cp "$PG_GEQO_SAMPLE" "$PGDATA"/pg_geqo.sample || exit_nicely
-    cp "$PG_POSTMASTER_OPTS_DEFAULT_SAMPLE" "$PGDATA"/postmaster.opts.default || exit_nicely
 
     echo "Adding template1 database to pg_database"
 
