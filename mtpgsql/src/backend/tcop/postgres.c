@@ -18,29 +18,25 @@
  */
 
 #include <unistd.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>
 #include <time.h>
 #include <pwd.h>
 #include <sys/time.h>
-#include <sys/types.h>
+
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <errno.h>
 
-#include "postgres.h"
-#include "env/env.h"
-
-
-#if HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif	 /* aix */
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
 #endif
+#include "postgres.h"
+#include "env/env.h"
 
 #include "env/dbwriter.h"
 

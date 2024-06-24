@@ -15,8 +15,6 @@
  */
 #include "postgres.h"
 
-#include <math.h>
-
 #include "access/heapam.h"
 #include "access/nbtree.h"
 #include "catalog/catname.h"

@@ -14,6 +14,7 @@
 #ifndef HSEARCH_H
 #define HSEARCH_H
 
+#include "utils/mcxt.h"
 
 /*
  * Constants

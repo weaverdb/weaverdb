@@ -4,9 +4,6 @@
 #define _FREESPACE_H_
 
 
-#include <pthread.h>
-#include <sys/types.h>
-
 #include "c.h"
 #include "postgres.h"
 #include "config.h"

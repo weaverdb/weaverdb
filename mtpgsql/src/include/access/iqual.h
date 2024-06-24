@@ -23,7 +23,7 @@
  * ----------------
  */
 
-/* extern */ int	NIndexTupleProcessed;
+extern int	NIndexTupleProcessed;
 
 /* extern */ bool index_keytest(IndexTuple tuple, TupleDesc tupdesc,
 			  int scanKeySize, ScanKey key);

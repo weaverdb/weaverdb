@@ -10,13 +10,9 @@
 #ifndef _ENV_H_
 #define _ENV_H_
 
-#include <pthread.h>
-#include <semaphore.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <setjmp.h>
 
+#include "postgres.h"
 #include "storage/fd.h"
 #include "utils/hsearch.h"
 

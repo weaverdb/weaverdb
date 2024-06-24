@@ -25,13 +25,14 @@
  *
  *-------------------------------------------------------------------------
  */
-#include <sys/types.h>
+
 #include <sys/ipc.h>
 #ifndef MACOSX
 #include <sys/sem.h>
 #endif
 #include <sys/file.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -88,6 +89,8 @@ typedef struct _PrivateMemStruct
 
 static PrivateMem IpcPrivateMem[16];
 static int	memid = 0;
+
+SLock*		SLockArray;
 
 
 static int

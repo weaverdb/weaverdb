@@ -17,6 +17,9 @@
  */
 #include <errno.h>
 #include <math.h>
+#include <stdlib.h>
+
+
 #include "postgres.h"
 
 #ifdef HAVE_LIMITS_H

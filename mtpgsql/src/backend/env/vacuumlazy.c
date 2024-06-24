@@ -38,7 +38,8 @@
 
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <sys/types.h>
+#include <stdarg.h>
+#include <stdlib.h>
 
 #include "postgres.h"
 #include "env/env.h"

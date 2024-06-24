@@ -12,10 +12,9 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "postgres.h"
 
 #include <sys/param.h>
-#include <sys/types.h>
+
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/file.h>
@@ -24,6 +23,8 @@
 #include <grp.h>
 #include <pwd.h>
 #include <stdlib.h>
+
+#include "postgres.h"
 
 #include "env/env.h"
 #include "catalog/catname.h"

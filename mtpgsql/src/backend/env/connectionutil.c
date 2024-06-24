@@ -13,7 +13,6 @@
 #include <unistd.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #ifdef SUNOS
 #include <sys/pset.h>
 #endif
@@ -23,6 +22,7 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 #include "postgres.h"  
 #include "env/env.h"

@@ -4,9 +4,6 @@
 #define _POOLSWEEP_H_
 
 
-#include <pthread.h>
-#include <sys/types.h>
-
 #include "c.h"
 #include "config.h"
 

@@ -30,8 +30,6 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
 #ifdef WIN32
 #include "win32.h"
 #else
@@ -43,9 +41,7 @@
 #include <signal.h>
 #include <time.h>
 
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
+#include "postgres.h"
 
 #include "libpq-fe.h"
 #include "libpq-int.h"

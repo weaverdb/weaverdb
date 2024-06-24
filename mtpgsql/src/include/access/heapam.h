@@ -14,9 +14,6 @@
 #ifndef HEAPAM_H
 #define HEAPAM_H
 
-#include <time.h>
-#include <sys/types.h>
-
 #include "access/htup.h"
 #include "access/relscan.h"
 #include "access/tupmacs.h"

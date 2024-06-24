@@ -6,6 +6,7 @@
  *  Copyright 2005 __MyCompanyName__. All rights reserved.
  *	this is like aset but uses palloced memory from the parent
  */
+#include <string.h>
 
 
 

@@ -33,9 +33,11 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <string.h>
 #include <ctype.h>
 #include <math.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 
 
 #include "postgres.h"

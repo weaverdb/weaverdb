@@ -20,7 +20,7 @@
 #define EXPR_COLUMN_FIRST	1
 #define EXPR_RELATION_FIRST 2
 
-PG_EXTERN int	max_expr_depth;
+extern int	max_expr_depth;
 
 PG_EXTERN Node *transformExpr(ParseState *pstate, Node *expr, int precedence);
 PG_EXTERN Oid	exprType(Node *expr);

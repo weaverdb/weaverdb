@@ -73,8 +73,8 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
-#include <sys/types.h> 
 #include <netinet/in.h>
+#include <stdlib.h>
 
 #include "postgres.h"
 #include "env/env.h"

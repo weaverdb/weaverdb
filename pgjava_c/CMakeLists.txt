@@ -15,8 +15,13 @@ target_include_directories(weaver PRIVATE ${PROJECT_BINARY_DIR}/mtpg/include)
 
 add_dependencies(weaver mtpg)
 
-if (APPLE) 
+if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+    message("Using ${CMAKE_C_COMPILER_ID} to link library")
     target_compile_definitions(weaver PRIVATE LIB_EXTERN=extern)
+    target_link_options(weaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/mac_mapfile.txt)
+elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    target_compile_definitions(weaver PRIVATE LIB_EXTERN=__attribute__((__visibility__("default"))))
+    target_link_options(weaver PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
 endif()
 
 if (JNI_FOUND)

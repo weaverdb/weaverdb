@@ -10,12 +10,12 @@
  *
  *-------------------------------------------------------------------------
  */
-
-#include <fcntl.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <fcntl.h>
 
 #include "postgres.h"
 
@@ -60,7 +60,7 @@ uint32		XLOGbuffers = 0;
 
 
 
-extern bool ReleaseDataFile(void);
+extern char ReleaseDataFile(void);
 
 
 extern VariableCache ShmemVariableCache;

@@ -13,6 +13,8 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <string.h>
+
 #include "postgres.h"
 #include "env/env.h"
 #include "access/heapam.h"

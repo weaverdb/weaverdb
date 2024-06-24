@@ -37,6 +37,11 @@ add_custom_target(templates
     COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.bki.source ${TEMPLATEDIR}/local1_template1.bki.source
     COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.description ${TEMPLATEDIR}/local1_template1.description
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    BYPRODUCTS 
+        ${TEMPLATEDIR}/global1.bki.source 
+        ${TEMPLATEDIR}/global1.description 
+        ${TEMPLATEDIR}/local1_template1.bki.source
+        ${TEMPLATEDIR}/local1_template1.description
     DEPENDS db_definition
 )
 

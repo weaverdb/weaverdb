@@ -219,14 +219,10 @@ PG_EXTERN BufferDesc *BufTableLookup(char kind, BufferTag *tagPtr);
 PG_EXTERN bool BufTableDelete(BufferDesc *buf);
 PG_EXTERN bool  BufTableReplace(BufferDesc *buf, Relation rel, BlockNumber block);
 /* bufmgr.c */
-PG_EXTERN BufferDesc *BufferDescriptors;
-
-PG_EXTERN SPINLOCK HeapBufLock;
-PG_EXTERN SPINLOCK IndexBufLock;
-PG_EXTERN SPINLOCK FreeBufMgrLock;
+extern BufferDesc *BufferDescriptors;
 
 /* localbuf.c */
-PG_EXTERN const int	NLocBuffer;
+extern const int	NLocBuffer;
 
 PG_EXTERN BufferDesc *LocalBufferAlloc(Relation reln, BlockNumber blockNum,bool *foundPtr);
 PG_EXTERN int	WriteLocalBuffer(Buffer buffer, bool release);

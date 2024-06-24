@@ -31,6 +31,10 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
 //                b.inheritIO();
 //                p = b.start();
 //                p.waitFor();
+                b = new ProcessBuilder("rm", "-rf", "build/mtpg");
+                b.inheritIO();
+                p = b.start();
+                p.waitFor();
                 b = new ProcessBuilder("cp", "-rf", "../cbuild/mtpg", "build/");
                 b.inheritIO();
                 p = b.start();

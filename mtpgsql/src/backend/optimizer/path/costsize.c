@@ -46,10 +46,9 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <math.h>
 
 #include "postgres.h"
-
-#include <math.h>
 
 #include "env/dolhelper.h"
 #include "executor/nodeHash.h"

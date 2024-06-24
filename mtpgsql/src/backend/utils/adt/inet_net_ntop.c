@@ -20,7 +20,7 @@ static const char rcsid[] = "$Id: inet_net_ntop.c,v 1.1.1.1 2006/08/12 00:21:44 
 
 #endif
 
-#include <sys/types.h>
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

@@ -12,10 +12,11 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "postgres.h"
 
-#include <unistd.h>
 #include "utils/exc.h"
 
 void

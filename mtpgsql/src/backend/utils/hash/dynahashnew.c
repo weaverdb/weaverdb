@@ -40,7 +40,7 @@
  * Modified by sullivan@postgres.berkeley.edu April 1990
  *		changed ctl structure for shared memory
  */
-#include <sys/types.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

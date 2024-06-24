@@ -45,6 +45,10 @@
 /* globals used in this file */
 IpcSemaphoreId SpinLockId;
 
+SPINLOCK HeapBufLock;
+SPINLOCK IndexBufLock;
+SPINLOCK FreeBufMgrLock;
+
 void
 CreateSpinlocks(IPCKey key)
 {

@@ -22,12 +22,11 @@ add_custom_command(
 
 add_custom_target(timestamp DEPENDS include/env/timestamp.h)
 
-add_compile_definitions(NOARRAY _REENTRANT)
+add_compile_definitions(NOARRAY _REENTRANT BYTE_ORDER=${CMAKE_C_BYTE_ORDER})
 
 if (APPLE) 
     add_compile_definitions(MACOSX)
 ENDIF()
 
 add_subdirectory(backend)
-add_subdirectory(scripts)
 add_subdirectory(bin)

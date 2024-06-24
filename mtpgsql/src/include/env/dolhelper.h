@@ -4,11 +4,6 @@
 #define _DOLHELPER_H_
 
 
-#include <pthread.h>
-#include <sys/types.h>
-
-
-
 
 typedef struct dol_connection_data * DolConnection;
 

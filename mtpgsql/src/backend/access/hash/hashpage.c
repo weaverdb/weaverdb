@@ -27,6 +27,7 @@
 #include "postgres.h"
 
 #include "env/env.h"
+#include "utils/rel.h"
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/hash.h"

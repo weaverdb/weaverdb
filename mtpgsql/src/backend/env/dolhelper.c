@@ -2,11 +2,11 @@
 
 #include <pthread.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <signal.h>
 #include <time.h>
 #include <errno.h>
 #include <math.h>
+#include <string.h>
 
 
 #include "c.h"

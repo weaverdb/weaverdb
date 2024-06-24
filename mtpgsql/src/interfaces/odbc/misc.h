@@ -10,6 +10,8 @@
 #ifndef __MISC_H__
 #define __MISC_H__
 
+#include <stdio.h>
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -19,7 +21,6 @@
 #define SQLGetPrivateProfileString(a,b,c,d,e,f) GetPrivateProfileString(a,b,c,d,e,f)
 #endif
 
-#include <stdio.h>
 
 /*	Uncomment MY_LOG define to compile in the mylog() statements.
 	Then, debug logging will occur if 'Debug' is set to 1 in the ODBCINST.INI

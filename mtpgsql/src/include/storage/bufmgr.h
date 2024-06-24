@@ -55,7 +55,7 @@ typedef bool (*buffer_check)(Relation rel, Buffer buf);
  */
 #define BufferDescriptorGetBuffer(bdesc) ((bdesc)->buf_id + 1)
 
-PG_EXTERN int	ShowPinTrace;
+extern int	ShowPinTrace;
 
 /*
  * Buffer context lock modes

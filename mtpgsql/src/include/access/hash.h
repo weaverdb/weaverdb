@@ -183,7 +183,7 @@ typedef HashMetaPageData *HashMetaPage;
 #define NKEYS			hashm_nkeys
 #define SPARES			hashm_spares
 
-/* extern */ bool BuildingHash;
+extern bool BuildingHash;
 
 typedef struct HashItemData
 {

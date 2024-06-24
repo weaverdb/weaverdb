@@ -17,9 +17,11 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
 #include <stdio.h>
+#include <string.h>
+
+
+#include "postgres.h"
 
 #include "catalog/pg_type.h"
 #include "nodes/parsenodes.h"

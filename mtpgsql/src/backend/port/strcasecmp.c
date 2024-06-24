@@ -18,7 +18,7 @@ static char sccsid[] = "@(#)strcasecmp.c	5.5 (Berkeley) 11/24/87";
 
 #endif	 /* LIBC_SCCS and not lint */
 
-#include <sys/types.h>
+
 #include <string.h>
 
 /*

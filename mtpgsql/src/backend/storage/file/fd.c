@@ -13,16 +13,12 @@
  *
  *-------------------------------------------------------------------------
  */
-#include <sys/types.h>
-#include <sys/file.h>
-#include <sys/param.h>
-#include <sys/stat.h>
+
+#include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <fcntl.h>
-#include <signal.h>
-#include <ctype.h>
 
 #include "postgres.h"
 #include "env/env.h"
@@ -30,7 +26,6 @@
 #include "env/dbwriter.h"
 #include "env/poolsweep.h"
 #include "miscadmin.h"
-#include "storage/fd.h"
 #include "storage/ipc.h"
 #include "utils/hsearch.h"
 
@@ -415,7 +410,7 @@ ActivateFile(Vfd* vfdP) {
 /*
  * Force one kernel file descriptor to be released (temporarily).
  */
-bool
+char
 ReleaseDataFile() {
     ReleaseFileIfNeeded();
     return (true);

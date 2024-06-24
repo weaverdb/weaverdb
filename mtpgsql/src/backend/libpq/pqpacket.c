@@ -13,14 +13,14 @@
  *
  *-------------------------------------------------------------------------
  */
-
+#include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <errno.h>
+
 #include "postgres.h"
 #include "env/env.h"
 #include "libpq/libpq.h"

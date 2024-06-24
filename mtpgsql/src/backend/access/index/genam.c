@@ -44,6 +44,7 @@
  *		next item pointer using the flags.
  * ----------------------------------------------------------------
  */
+#include <string.h>
 
 #include "postgres.h"
 #include "env/env.h"

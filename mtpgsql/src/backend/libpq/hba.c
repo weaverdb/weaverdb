@@ -11,7 +11,6 @@
  */
 #include <errno.h>
 #include <pwd.h>
-#include <sys/types.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

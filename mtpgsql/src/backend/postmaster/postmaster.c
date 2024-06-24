@@ -37,7 +37,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <sys/types.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -46,8 +46,6 @@
 #include <time.h>
 #include <sys/param.h>
 
-#include "postgres.h"
-#include "env/env.h"
  /* moved here to prevent double define */
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
@@ -65,9 +63,9 @@
 #endif
 #endif
 
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
+
+#include "postgres.h"
+#include "env/env.h"
 
 #ifdef HAVE_GETOPT_H
 #include "getopt.h"

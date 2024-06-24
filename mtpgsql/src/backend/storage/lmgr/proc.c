@@ -56,7 +56,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <signal.h>
-#include <sys/types.h>
+
 
 #if defined(solaris_sparc) || defined(__CYGWIN__)
 #include <sys/ipc.h>

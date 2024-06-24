@@ -18,6 +18,7 @@
  */
 
 #include <time.h>
+#include <stdlib.h>
 
 
 #include "postgres.h"
@@ -63,6 +64,8 @@
 					if (!Quiet) { EMITPROMPT; }\
 						fflush(stdout); \
 				 }
+
+Relation reldesc;
 
 extern int Int_yylex(void* stype, void* scanner);
 

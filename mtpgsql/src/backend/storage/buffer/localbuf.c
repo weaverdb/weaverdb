@@ -20,7 +20,8 @@
  *
  *-------------------------------------------------------------------------
  */
-#include <sys/types.h>
+#include <string.h>
+
 #include <sys/file.h>
 #include <math.h>
 #include <signal.h>

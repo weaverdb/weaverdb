@@ -83,6 +83,7 @@ add_custom_target(headers
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/mtpg/include/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../include/env/WeaverInterface.h ${PROJECT_BINARY_DIR}/mtpg/include/
     COMMAND ${CMAKE_COMMAND} -E copy  ${CMAKE_CURRENT_SOURCE_DIR}/../include/env/connectionutil.h ${PROJECT_BINARY_DIR}/mtpg/include/
+    BYPRODUCTS ${PROJECT_BINARY_DIR}/mtpg/include/WeaverInterface.h ${PROJECT_BINARY_DIR}/mtpg/include/connectionutil.h
 )
 
 add_dependencies(mtpg headers)

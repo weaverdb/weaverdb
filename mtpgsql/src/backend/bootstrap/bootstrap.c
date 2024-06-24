@@ -17,6 +17,7 @@
 #include <time.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <stdlib.h>
 
 #define BOOTSTRAP_INCLUDE		/* mask out stuff in tcop/tcopprot.h */
 #include "postgres.h"

@@ -33,6 +33,7 @@
  */
 
 #include <errno.h>
+#include <string.h>
 
 #include "postgres.h"
 

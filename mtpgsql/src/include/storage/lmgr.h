@@ -32,7 +32,7 @@
                                                             unqualified LOCK TABLE */
 
 
-PG_EXTERN LOCKMETHOD LockTableId;
+extern LOCKMETHOD LockTableId;
 
 
 PG_EXTERN LOCKMETHOD InitLockTable(int partitions, int maxBackends);

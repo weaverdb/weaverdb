@@ -22,9 +22,11 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <stdarg.h>
+
 #include "postgres.h"
-#include "nodes/parsenodes.h"
 #include "env/env.h"
+#include "nodes/parsenodes.h"
 /*
  *	makeList
  *

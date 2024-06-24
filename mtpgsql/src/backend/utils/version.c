@@ -15,13 +15,16 @@
  *-------------------------------------------------------------------------
  */
 #include <stdint.h>
-#include <sys/types.h>
+#include <stdlib.h>
+
 #include <sys/file.h>
 #include <fcntl.h>				/* For open() flags */
 #include <sys/stat.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
+
 
 #include "postgres.h"
 

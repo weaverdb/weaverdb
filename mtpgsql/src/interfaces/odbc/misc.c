@@ -22,7 +22,6 @@
 #if HAVE_PWD_H
 #include <pwd.h>
 #endif
-#include <sys/types.h>
 #include <unistd.h>
 #else
 #include <process.h>	/* Byron: is this where Windows keeps def. of getpid ? */

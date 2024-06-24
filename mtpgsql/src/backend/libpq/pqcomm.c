@@ -63,7 +63,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -71,6 +70,7 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <sys/file.h>
+#include <stdlib.h>
 
 #include "postgres.h"
 #include "env/env.h"

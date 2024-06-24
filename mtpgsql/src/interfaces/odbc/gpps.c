@@ -24,7 +24,6 @@
 #include <pwd.h>
 #endif
 
-#include <sys/types.h>
 #include <string.h>
 #include "gpps.h"
 #include "misc.h"

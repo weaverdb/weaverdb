@@ -13,7 +13,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include <sys/types.h>
+
 #include <fcntl.h>
 #include <errno.h>
 #include <ctype.h>

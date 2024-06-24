@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 #include <errno.h>
-#include <sys/types.h>
+
 #include "sys/ldr.h"
 #include <a.out.h>
 #include "ldfcn.h"

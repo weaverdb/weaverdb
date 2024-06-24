@@ -7,4 +7,3 @@ add_library(heap OBJECT ${SRC_FILES})
 
 add_dependencies(heap build_fmgr)
 
-target_compile_definitions(heap PUBLIC HEAP)

@@ -10,13 +10,14 @@
  * ----------
  */
 
-#include "postgres.h"
-
 #include <ctype.h>
 #include <float.h>
 #include <math.h>
 #include <errno.h>
-#include <sys/types.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "postgres.h"
 
 #include "utils/builtins.h"
 #include "utils/numeric.h"

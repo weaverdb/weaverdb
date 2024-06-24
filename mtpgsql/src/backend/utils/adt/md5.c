@@ -30,10 +30,10 @@
  *
  * contrib/pgcrypto/md5.c
  */
+#include <sys/param.h>
+#include <string.h>
 
 #include "postgres.h"
-
-#include <sys/param.h>
 
 #include "utils/md5.h"
 

@@ -12,12 +12,13 @@
  *
  *-------------------------------------------------------------------------
  */
-#include <sys/types.h>
+
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <math.h>
 #include <signal.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #include "postgres.h"
 

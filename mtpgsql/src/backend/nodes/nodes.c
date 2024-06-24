@@ -16,6 +16,8 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <string.h>
+
 #include "postgres.h"
 #include "nodes/nodes.h"
 #include "env/env.h"

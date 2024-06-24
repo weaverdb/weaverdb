@@ -36,9 +36,10 @@
 #ifndef POSTGRES_H
 #define POSTGRES_H
 
+#include "c.h"
+
 #include "postgres_ext.h"
 
-#include "c.h"
 #include "utils/elog.h"
 #include "utils/palloc.h"
 
@@ -196,14 +197,5 @@ typedef uint32_t CommandId;
 #define STATUS_NOT_DONE			(-6)
 #define STATUS_BAD_PACKET		(-7)
 #define STATUS_FOUND			(1)
-
-/* ---------------
- * Cyrillic on the fly charsets recode
- * ---------------
- */
-#ifdef CYR_RECODE
-extern void SetCharSet();
-
-#endif	 /* CYR_RECODE */
 
 #endif	 /* POSTGRES_H */

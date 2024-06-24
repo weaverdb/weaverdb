@@ -11,6 +11,8 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <string.h>
+
 #include "postgres.h"
 
 #include "optimizer/clauses.h"

@@ -4,10 +4,6 @@
 #define _DBWRITER_H_
 
 
-#include <pthread.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 #include "c.h"
 
 #include "storage/buf_internals.h"

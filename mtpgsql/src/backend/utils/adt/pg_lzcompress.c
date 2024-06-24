@@ -169,10 +169,10 @@
  * src/backend/utils/adt/pg_lzcompress.c
  * ----------
  */
-#include "postgres.h"
-
+#include <string.h>
 #include <limits.h>
 
+#include "postgres.h"
 #include "utils/pg_lzcompress.h"
 
 

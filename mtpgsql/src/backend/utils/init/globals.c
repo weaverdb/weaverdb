@@ -18,7 +18,7 @@
  */
 #include <fcntl.h>
 #include <sys/file.h>
-#include <sys/types.h>
+
 #include <math.h>
 #include <unistd.h>
 

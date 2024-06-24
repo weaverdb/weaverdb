@@ -23,6 +23,7 @@
  * columns are ******REALLY****** implemented!!!!!!!!!!!
  *
  */
+#include <string.h>
 
 #include "postgres.h"
 

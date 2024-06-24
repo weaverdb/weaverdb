@@ -17,11 +17,12 @@
 
 #include "os.h"
 
-#define PG_EXTERN
+#ifndef LIB_EXTERN
 #ifndef MACOSX
 #define LIB_EXTERN extern
 #else
 #define LIB_EXTERN __attribute__((__visibility__("default")))
+#endif
 #endif
 #define USE_GLOBAL_ENVIRONMENT
 #define PROVIDE_64BIT_CRC
@@ -345,7 +346,7 @@
 /* #undef HAVE_READLINE_READLINE_H */
 
 /* Set to 1 if  you have <sys/select.h> */
-#define HAVE_SYS_SELECT_H 1
+/* #undef  HAVE_SYS_SELECT_H  */
 
 /* Set to 1 if you have <termios.h> */
 #define HAVE_TERMIOS_H 1
@@ -354,7 +355,7 @@
 #define HAVE_VALUES_H 1
 
 /* Define if you have the ANSI C header files.  */
-#define STDC_HEADERS 1
+/* #define STDC_HEADERS 1  */
 
 /* default path for the location of the odbcinst.ini file */
 /* #undef ODBCINST */

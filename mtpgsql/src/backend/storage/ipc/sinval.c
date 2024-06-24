@@ -14,7 +14,7 @@
  */
 /* #define INVALIDDEBUG 1 */
 
-#include <sys/types.h>
+
 #include <signal.h>
 
 #include "postgres.h"

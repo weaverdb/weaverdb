@@ -15,16 +15,16 @@
 #define EXCID_H
 
 
-PG_EXTERN Exception FailedAssertion;
-PG_EXTERN Exception BadState;
-PG_EXTERN Exception BadArg;
-PG_EXTERN Exception BadAllocSize;
-PG_EXTERN Exception ExhaustedMemory;
-PG_EXTERN Exception Unimplemented;
+extern Exception FailedAssertion;
+extern Exception BadState;
+extern Exception BadArg;
+extern Exception BadAllocSize;
+extern Exception ExhaustedMemory;
+extern Exception Unimplemented;
 
-PG_EXTERN Exception CatalogFailure;/* XXX inconsistent naming style */
-PG_EXTERN Exception InternalError; /* XXX inconsistent naming style */
-PG_EXTERN Exception SemanticError; /* XXX inconsistent naming style */
-PG_EXTERN Exception SystemError;	/* XXX inconsistent naming style */
+extern Exception CatalogFailure;/* XXX inconsistent naming style */
+extern Exception InternalError; /* XXX inconsistent naming style */
+extern Exception SemanticError; /* XXX inconsistent naming style */
+extern Exception SystemError;	/* XXX inconsistent naming style */
 
 #endif	 /* EXCID_H */

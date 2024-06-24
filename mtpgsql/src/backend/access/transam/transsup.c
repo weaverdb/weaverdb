@@ -18,6 +18,8 @@
  */
 
 #include <signal.h>
+#include <string.h>
+
 
 #include "postgres.h"
 

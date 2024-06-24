@@ -199,7 +199,7 @@ do { \
  * Include check for leap year.
  */
 
-PG_EXTERN int	day_tab[2][13];
+extern int	day_tab[2][13];
 
 #define isleap(y) (((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0))
 

@@ -5,4 +5,3 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(index OBJECT ${SRC_FILES})
 
-target_compile_definitions(index PUBLIC INDEX)

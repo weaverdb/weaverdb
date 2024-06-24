@@ -14,7 +14,6 @@
 #ifndef LOCK_H_
 #define LOCK_H_
 
-#include <unistd.h>
 #include <pthread.h>
 
 #include "storage/ipc.h"

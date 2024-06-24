@@ -14,8 +14,9 @@
  */
 
 #include <pwd.h>
-
 #include <sys/param.h>
+#include <stdlib.h>
+
 #include "postgres.h"
 
 #include "miscadmin.h"

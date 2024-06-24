@@ -7,13 +7,13 @@
  *	Jon Postel RIP 16 Oct 1998
  */
 
-#include <sys/types.h>
+
 #include <sys/socket.h>
-
+#include <string.h>
 #include <errno.h>
-
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
 #include "postgres.h"
 
 #include "utils/builtins.h"

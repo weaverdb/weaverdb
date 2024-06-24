@@ -29,12 +29,13 @@
  *		careful....
  *
  */
-#include <sys/types.h>
+
 #include <errno.h>
 #include <sys/file.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #include "postgres.h"
 #include "env/env.h"

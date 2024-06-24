@@ -24,8 +24,8 @@
 /*
  * allpaths.c
  */
-PG_EXTERN const bool enable_geqo;
-PG_EXTERN const int	geqo_rels;
+extern const bool enable_geqo;
+extern const int	geqo_rels;
 
 PG_EXTERN RelOptInfo *make_one_rel(Query *root);
 

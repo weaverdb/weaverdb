@@ -20,8 +20,9 @@
  * stored here.  When a relname cache lookup is done, references to user-named
  * temp tables are converted to the internal temp table names.
  */
+#include <string.h>
 
-#include <sys/types.h>
+
 #include "postgres.h"
 #include "env/env.h"
 #include "access/heapam.h"

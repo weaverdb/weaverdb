@@ -47,10 +47,10 @@
 #include "config.h"
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #ifdef STDC_HEADERS
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <stddef.h>
 #include <stdarg.h>
 #endif

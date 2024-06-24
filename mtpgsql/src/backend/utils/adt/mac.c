@@ -4,6 +4,7 @@
  *	$Id: mac.c,v 1.1.1.1 2006/08/12 00:21:45 synmscott Exp $
  */
 
+#include <string.h>
 
 #include "postgres.h"
 

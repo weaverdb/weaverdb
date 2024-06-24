@@ -9,6 +9,8 @@
 #include <time.h>
 #include <math.h>
 #include <float.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "postgres.h"
 

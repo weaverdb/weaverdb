@@ -37,7 +37,7 @@ static char sccsid[] = "@(#)dl.c	5.4 (Berkeley) 2/23/91";
 
 #endif	 /* LIBC_SCCS and not lint */
 
-#include <sys/types.h>
+
 #include <nlist.h>
 #include "link.h"
 #include <dlfcn.h>

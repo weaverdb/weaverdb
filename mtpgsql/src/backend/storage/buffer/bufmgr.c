@@ -43,8 +43,7 @@
  *		buf_table.c -- manages the buffer lookup table
  */
 
-#include <sys/types.h>
-#include <sys/file.h>
+#include <unistd.h>
 #include <math.h>
 #include <signal.h>
 

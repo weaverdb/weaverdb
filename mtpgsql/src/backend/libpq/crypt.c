@@ -16,6 +16,9 @@
 #define _XOPEN_SOURCE
 #include <unistd.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "postgres.h"
 #include "env/env.h"
 #include "libpq/crypt.h"

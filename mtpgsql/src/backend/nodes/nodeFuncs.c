@@ -13,8 +13,6 @@
  *-------------------------------------------------------------------------
  */
 
-#include <sys/types.h>
-
 #include "postgres.h"
 #include "env/env.h"
 

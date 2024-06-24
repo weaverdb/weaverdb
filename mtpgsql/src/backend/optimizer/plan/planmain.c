@@ -18,10 +18,12 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <string.h>
+
 #include "postgres.h"
 #include "env/env.h"
 
-#include <sys/types.h>
+
 
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"

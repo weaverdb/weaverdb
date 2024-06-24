@@ -13,6 +13,7 @@
  */
 #ifndef REL_H
 #define REL_H
+#include <string.h>
 
 #include "access/strat.h"
 #include "access/tupdesc.h"

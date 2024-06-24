@@ -11,11 +11,12 @@
 #ifndef __PSQLODBC_H__
 #define __PSQLODBC_H__
 
+#include <stdio.h>	/* for FILE* pointers: see GLOBAL_VALUES */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#include <stdio.h>	/* for FILE* pointers: see GLOBAL_VALUES */
 
 #ifndef WIN32
 #define Int4 long int

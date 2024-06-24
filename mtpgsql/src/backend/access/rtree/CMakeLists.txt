@@ -5,4 +5,3 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(rtree OBJECT ${SRC_FILES})
 
-target_compile_definitions(rtree PUBLIC RTREE)

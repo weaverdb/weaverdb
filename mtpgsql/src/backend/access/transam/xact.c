@@ -137,7 +137,7 @@
  *
  *-------------------------------------------------------------------------
  */
-
+#include <string.h>
 /*
  * Large object clean up added in CommitTransaction() to prevent buffer leaks.
  * [PA, 7/17/98]

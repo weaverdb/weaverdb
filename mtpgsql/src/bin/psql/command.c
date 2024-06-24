@@ -12,7 +12,6 @@
 #include <assert.h>
 #include <ctype.h>
 #ifndef WIN32
-#include <sys/types.h>			/* for umask() */
 #include <sys/stat.h>			/* for umask(), stat() */
 #include <unistd.h>				/* for geteuid(), getpid(), stat() */
 #else

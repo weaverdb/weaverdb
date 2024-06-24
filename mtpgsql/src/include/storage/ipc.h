@@ -210,7 +210,7 @@ typedef enum _LockId_
 
 /*  interprocess locks  */
 
-SLock*		SLockArray;
+extern SLock*		SLockArray;
 
 /* ipci.c */
 #ifdef __cplusplus

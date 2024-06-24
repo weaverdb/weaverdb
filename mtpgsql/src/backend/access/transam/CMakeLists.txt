@@ -4,4 +4,3 @@ file(GLOB SRC_FILES "*.c")
 
 # create the executable
 add_library(transam OBJECT ${SRC_FILES})
-target_compile_definitions(transam PUBLIC TRANSAM)

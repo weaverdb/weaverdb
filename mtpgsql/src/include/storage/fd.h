@@ -11,9 +11,6 @@
  *
  *-------------------------------------------------------------------------
  */
-
-#include "postgres.h"
-
 /*
  * calls:
  *
@@ -36,6 +33,8 @@
  */
 #ifndef FD_H
 #define FD_H
+
+#include <stdio.h>
 
 /*
  * FileSeek uses the standard UNIX lseek(2) flags.
@@ -86,7 +85,7 @@ PG_EXTERN FILE *AllocateFile(char *name, char *mode);
 PG_EXTERN void FreeFile(FILE *);
 
 /* Miscellaneous support routines */
-PG_EXTERN bool ReleaseDataFile(void);
+PG_EXTERN char ReleaseDataFile(void);
 PG_EXTERN void AtEOXact_Files(void);
 PG_EXTERN int	pg_fsync(int fd);
 

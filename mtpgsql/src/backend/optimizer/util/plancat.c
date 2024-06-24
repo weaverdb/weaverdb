@@ -16,7 +16,6 @@
 
 #include "postgres.h"
 
-#include <math.h>
 #include "env/env.h"
 #include "access/genam.h"
 #include "access/heapam.h"

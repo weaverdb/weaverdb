@@ -45,6 +45,7 @@
  * to fetch data without conversion.
  */
 #include <errno.h>
+#include <string.h>
 
 #include "postgres.h"
 #include "env/env.h"

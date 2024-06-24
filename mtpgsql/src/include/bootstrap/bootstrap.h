@@ -27,14 +27,12 @@ typedef struct hashnode
 } hashnode;
 
 #define EMITPROMPT printf("> ")
-/*
- extern  Relation reldesc;
-*/
-Relation reldesc;
 
-Form_pg_attribute attrtypes[MAXATTR];
-/* extern */ int	numattr;
-/* extern */ int	DebugMode;
+extern Relation reldesc;
+
+extern Form_pg_attribute attrtypes[MAXATTR];
+extern  int	numattr;
+extern int	DebugMode;
 
 /* extern */ int BootstrapMain(int ac, char *av[]);
 

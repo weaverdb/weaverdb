@@ -12,9 +12,6 @@
 #ifndef TRACE_H
 #define TRACE_H
 
-#include <string.h>
-#include <time.h>
-
 #ifdef ELOG_TIMESTAMPS
 char	   *tprintf_timestamp(void);
 
@@ -68,7 +65,7 @@ enum pg_option_enum
 	NUM_PG_OPTIONS				/* must be the last item of enum */
 };
 
-PG_EXTERN int	pg_options[NUM_PG_OPTIONS];
+extern int	pg_options[NUM_PG_OPTIONS];
 
 #ifdef __GNUC__
 #define PRINTF(args...)			tprintf1(args)

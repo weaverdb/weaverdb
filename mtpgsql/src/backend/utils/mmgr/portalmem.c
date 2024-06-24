@@ -30,6 +30,7 @@
  *
  *		I hope this makes things clearer to whoever reads this -cim 2/22/91
  */
+#include <string.h>
 
 #include "postgres.h"
 

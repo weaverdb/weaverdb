@@ -6,13 +6,12 @@
 
 
 #include <pthread.h>
-#include <sys/types.h>
 #include <signal.h>
 #include <time.h>
 #include <errno.h>
+#include <stdarg.h>
+#include <stdlib.h>
 
-
-#include "c.h"
 #include "postgres.h"
 #include "env/env.h"
 #include "config.h"

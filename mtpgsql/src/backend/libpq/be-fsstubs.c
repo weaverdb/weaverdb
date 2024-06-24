@@ -31,7 +31,6 @@
  */
 
 #include <fcntl.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -44,7 +43,7 @@
 #include "storage/large_object.h"
 #include "utils/memutils.h"
 
-/* [PA] is Pascal André <andre@via.ecp.fr> */
+/* [PA] is Pascal Andrï¿½ <andre@via.ecp.fr> */
 
 /*#define FSDB 1*/
 #define MAX_LOBJ_FDS	256

@@ -22,7 +22,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <stdio.h>
 
 #include "access/heapam.h"

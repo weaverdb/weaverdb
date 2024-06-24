@@ -31,13 +31,14 @@
  */
 
 #include <ctype.h>
-#include "postgres.h"
+#include <string.h>
 
 
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
 
+#include "postgres.h"
 #include "utils/builtins.h"
 
 #ifndef SHRT_MAX

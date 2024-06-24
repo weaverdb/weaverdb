@@ -29,7 +29,8 @@
  */
 
 /* headers if any */
-
+#ifndef _REGCUSTOM_H_
+#define _REGCUSTOM_H_
 #include <ctype.h>
 #include <limits.h>
 
@@ -65,3 +66,4 @@ typedef int celt;				/* type to hold chr, MCCE number, or
 
 /* and pick up the standard header */
 #include "regex.h"
+#endif

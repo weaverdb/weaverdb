@@ -1,7 +1,8 @@
-#include <pthread.h>
 
 #ifndef _OS_H_
 #define _OS_H_
+
+#include <pthread.h>
 
 #define NO_EMPTY_STMTS
 #define SYSV_DIRENT

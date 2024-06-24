@@ -8,7 +8,7 @@
  */
 #include <ctype.h>
 #include <math.h>
-#include <sys/types.h>
+
 #include <errno.h>
 #include <jni.h>
 #include <strings.h>

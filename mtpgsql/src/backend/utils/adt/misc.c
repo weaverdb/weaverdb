@@ -12,7 +12,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#include <sys/types.h>
+
 #include <sys/file.h>
 #include <time.h>
 #include "postgres.h"

@@ -13,20 +13,23 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "env/env.h"
+
 #include <time.h>
 #include <fcntl.h>
 #ifndef O_RDONLY
 #include <sys/file.h>
 #endif	 /* O_RDONLY */
-#include <sys/types.h>
+
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
 #ifdef USE_SYSLOG
 #include <syslog.h>
 #endif
+#include <stdarg.h>
+
+#include "postgres.h"
+#include "env/env.h"
 
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"

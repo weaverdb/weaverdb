@@ -20,10 +20,6 @@
 #define MAX_ARGS 64
 #define MAX_CHILDREN 4
 
-#include <stdlib.h>  
-#include <unistd.h>
-#include <pthread.h>
-
 #include "env/env.h"
 #include "env/WeaverInterface.h"
 #include "catalog/pg_attribute.h"
