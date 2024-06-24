@@ -1,4 +1,4 @@
-#include <stdlib.h>
+
 #include <ecpgtype.h>
 #include <ecpglib.h>
 #include "extern.h"

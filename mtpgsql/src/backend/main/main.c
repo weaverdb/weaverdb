@@ -13,7 +13,7 @@
  *-------------------------------------------------------------------------
  */
 #include <unistd.h>
-#include <stdlib.h>
+
 
 #if defined(__alpha__) && !defined(linux)
 #include <sys/sysinfo.h>

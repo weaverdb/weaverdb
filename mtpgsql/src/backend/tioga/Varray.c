@@ -6,8 +6,8 @@
  * arrays.	  originally by Jiang Wu
  * ************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
+
+
 #include "Varray.h"
 
 Varray *

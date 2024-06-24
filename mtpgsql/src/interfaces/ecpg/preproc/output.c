@@ -1,4 +1,4 @@
-#include <stdarg.h>
+
 
 #include "postgres.h"
 #include "extern.h"

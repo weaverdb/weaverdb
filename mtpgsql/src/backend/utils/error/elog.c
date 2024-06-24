@@ -26,7 +26,7 @@
 #ifdef USE_SYSLOG
 #include <syslog.h>
 #endif
-#include <stdarg.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

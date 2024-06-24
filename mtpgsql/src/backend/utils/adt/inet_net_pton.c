@@ -28,7 +28,7 @@ static const char rcsid[] = "$Id: inet_net_pton.c,v 1.1.1.1 2006/08/12 00:21:44 
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
-#include <string.h>
+
 
 #include "postgres.h"
 

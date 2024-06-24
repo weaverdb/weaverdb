@@ -28,7 +28,7 @@
  * particular instance of the type and about its value.
  *
  */
-#include <string.h>
+
 
 #include "postgres.h"
 

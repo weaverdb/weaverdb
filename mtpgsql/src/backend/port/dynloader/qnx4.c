@@ -15,7 +15,7 @@
  */
 /* System includes */
 /*
-#include <stdio.h>
+
 #include <a.out.h>
 #include <dl.h>
 */

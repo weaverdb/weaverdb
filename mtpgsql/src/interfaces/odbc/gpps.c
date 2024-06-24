@@ -16,7 +16,7 @@
 #include "config.h"	// produced by configure
 #endif
 
-#include <stdio.h>
+
 #include <unistd.h>
 #include <ctype.h>
 
@@ -24,7 +24,7 @@
 #include <pwd.h>
 #endif
 
-#include <string.h>
+
 #include "gpps.h"
 #include "misc.h"
 

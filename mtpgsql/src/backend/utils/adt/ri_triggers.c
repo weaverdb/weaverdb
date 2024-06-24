@@ -18,7 +18,7 @@
  *		Add MATCH PARTIAL logic.
  * ----------
  */
-#include <string.h>
+
 
 #include "postgres.h"
 

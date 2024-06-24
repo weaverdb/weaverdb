@@ -1,7 +1,7 @@
 /* $Id: gethostname.c,v 1.1.1.1 2006/08/12 00:21:13 synmscott Exp $ */
 
 
-#include <string.h>
+
 
 #include <sys/utsname.h>
 

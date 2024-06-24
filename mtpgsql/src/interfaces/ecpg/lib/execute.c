@@ -12,7 +12,7 @@
 /* Taken over as part of PostgreSQL by Michael Meskes <meskes@postgresql.org>
    on Feb. 5th, 1998 */
 
-#include <stdio.h>
+
 #include <locale.h>
 
 #include <ecpgtype.h>

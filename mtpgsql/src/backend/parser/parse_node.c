@@ -12,11 +12,11 @@
  *
  *-------------------------------------------------------------------------
  */
-#include <string.h>
+
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
-#include <stdlib.h>
+
 
 #include "postgres.h"
 

@@ -2,8 +2,8 @@
 
 #include <pthread.h>
 #include <semaphore.h>
-#include <stdio.h>
-#include <stdlib.h>
+
+
 #include <stdint.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -11,7 +11,7 @@
 #ifdef MACOSX
 #include <semaphore.h>
 #endif
-#include <string.h>
+
 #include <signal.h>
 #ifdef SUNOS
 #include <umem.h>
@@ -19,7 +19,7 @@
 #ifdef _GNU_SOURCE
 #include <mcheck.h>
 #endif
-#include <stdarg.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

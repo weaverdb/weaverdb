@@ -37,7 +37,6 @@
  *-------------------------------------------------------------------------
  */
 #include <ctype.h>
-#include <string.h>
 
 #include "postgres.h"
 #include "env/env.h"

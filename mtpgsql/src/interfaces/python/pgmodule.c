@@ -29,9 +29,9 @@
 #include <Python.h>
 #include <libpq-fe.h>
 #include <libpq/libpq-fs.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
+
+
 
 /* really bad stuff here - I'm so naughty */
 /* If you need to you can run mkdefines to get */

@@ -9,7 +9,7 @@
 #include "common.h"
 
 #include <errno.h>
-#include <stdarg.h>
+
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
 #endif

@@ -5,11 +5,11 @@
 **		This is used to print out error messages and exit
 */
 
-#include <stdarg.h>
+
 #include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
+
+
 #include <errno.h>
 #include "halt.h"
 

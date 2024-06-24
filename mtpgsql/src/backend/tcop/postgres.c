@@ -18,8 +18,8 @@
  */
 
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
+
+
 #include <signal.h>
 #include <time.h>
 #include <pwd.h>

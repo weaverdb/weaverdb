@@ -11,8 +11,8 @@
  *
  */
 
-#include <stdio.h>
-#include <string.h>
+
+
 
 #include "mb/pg_wchar.h"
 

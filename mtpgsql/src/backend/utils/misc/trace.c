@@ -9,9 +9,9 @@
  *-------------------------------------------------------------------------
  */
 
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+
+
+
 #include <unistd.h>
 #include <signal.h>
 #include <sys/time.h>
@@ -20,7 +20,7 @@
 #ifdef USE_SYSLOG
 #include <syslog.h>
 #endif
-#include <stdarg.h>
+
 
 #include "postgres.h"
 

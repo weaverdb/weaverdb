@@ -4,8 +4,8 @@
  * Tatsuo Ishii
  * $Id: common.c,v 1.1.1.1 2006/08/12 00:22:01 synmscott Exp $ */
 
-#include <stdlib.h>
-#include <string.h>
+
+
 
 #ifdef WIN32
 #include "win32.h"

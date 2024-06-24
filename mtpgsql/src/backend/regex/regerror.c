@@ -32,8 +32,9 @@
  */
 
 #include <strings.h>
-#include <stdio.h>
-#include <stdlib.h>
+
+
+
 
 #include "regex/regguts.h"
 

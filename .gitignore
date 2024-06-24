@@ -8,3 +8,5 @@ mtpgsql/src/include/fmgr.h
 nbproject
 libweaver.dylib
 weaver
+/cbuild/
+/abuild/

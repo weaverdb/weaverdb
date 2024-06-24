@@ -55,8 +55,8 @@
 #define DEBUG_TO_FROM_CHAR
 #define DEBUG_elog_output	NOTICE
 ***/
-#include <stdio.h>
-#include <string.h>
+
+
 #include <ctype.h>
 #include <sys/time.h>
 #include <unistd.h>

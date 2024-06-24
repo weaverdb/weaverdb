@@ -15,9 +15,9 @@
 #include "columninfo.h"
 #include "connection.h"
 #include "socket.h"
-#include <stdlib.h>
+
 #include <malloc.h>
-#include <string.h>
+
 
 ColumnInfoClass *
 CI_Constructor()

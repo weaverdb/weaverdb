@@ -9,7 +9,7 @@
 
 
 #include <sys/socket.h>
-#include <string.h>
+
 #include <errno.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

@@ -49,8 +49,6 @@
 
 #define JAVA_ERROR -99
 
-JavaVM*   jvm;
-
 static          javacache*      Cache;
 
 static bool                     debug = false;
@@ -90,6 +88,7 @@ static ConnMgr allocateWeaver(JNIEnv* env,jstring username,jstring password,jstr
 
 JNIEXPORT void JNICALL Java_org_weaverdb_WeaverInitializer_init(JNIEnv *env,jobject talkerObject, jstring jd)
 {
+    JavaVM*   jvm;
     const char*    variables;
 
 	if ( (*env)->IsSameObject(env, jd, NULL) ) {

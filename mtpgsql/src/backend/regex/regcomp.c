@@ -31,9 +31,9 @@
  * $PostgreSQL: pgsql/src/backend/regex/regcomp.c,v 1.42 2004/11/24 22:56:54 tgl Exp $
  *
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
+
+
 #include "regex/regguts.h"
 
 /*

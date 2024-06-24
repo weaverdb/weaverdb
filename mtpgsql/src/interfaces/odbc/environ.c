@@ -16,7 +16,7 @@
 #include "environ.h"
 #include "connection.h"
 #include "statement.h"
-#include <stdlib.h>
+
 #include <malloc.h>
 
 /* The one instance of the handles */

@@ -7,7 +7,7 @@
  * $Id: alt.c,v 1.1.1.1 2006/08/12 00:22:00 synmscott Exp $
  */
 
-#include <stdio.h>
+
 main()
 {
 	int			i;

@@ -634,7 +634,7 @@ void FormJavaFunctionSig(char* buffer, int buflen, const char *name, int nargs, 
 
         for (x=0;x<nargs;x++) {
             sprintf(insert, argformat, types[x]);
-            insert = index(insert, '\0');
+            insert = strchr(insert, '\0');
         }
         if (*(--insert) == ',') *insert = '\0';
 
@@ -683,7 +683,7 @@ GetJavaCallArgs(const char *name, int nargs, Oid * argtypes)
                     const char*  javasig = textout((text *) sig);
                     const char*  javaname;
 
-                    mark = index(javasrc,'.');
+                    mark = strchr(javasrc,'.');
                     *mark = '\0';
                     javaname = mark + 1;
 

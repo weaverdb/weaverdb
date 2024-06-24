@@ -18,11 +18,11 @@
 #include "commands/dbcommands.h"
 #include <errno.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
+
+
 #include <unistd.h>
 #include <sys/stat.h>
-#include <stdio.h>
+
 
 #include "access/heapam.h"
 #include "access/htup.h"

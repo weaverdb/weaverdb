@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
-#include <stdio.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

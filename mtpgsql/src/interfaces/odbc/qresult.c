@@ -20,8 +20,8 @@
 
 #include "qresult.h"
 #include "misc.h"
-#include <stdio.h>
-#include <string.h>
+
+
 
 #ifndef TRUE
 #define TRUE	(BOOL)1

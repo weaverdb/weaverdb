@@ -72,13 +72,17 @@ verify_password(char *auth_arg, char *user, char *password)
 		{
 			/* we're outta here one way or the other, so close file */
 			FreeFile(pw_file);
-
+#ifdef NOCRYPT
+                        if (strcmp(password, test_pw) == 0) {
+                            return STATUS_OK;
+                        }
+#else
 			if (strcmp(crypt(password, test_pw), test_pw) == 0)
 			{
 				/* it matched. */
 				return STATUS_OK;
 			}
-
+#endif
 			snprintf(PQerrormsg, PQERRORMSG_LENGTH,
 					 "verify_password: password mismatch for '%s'.\n",
 					 user);

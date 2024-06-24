@@ -13,7 +13,7 @@
  *	  Eventually, the index information should go through here, too.
  *-------------------------------------------------------------------------
  */
-#include <string.h>
+
 
 #include "postgres.h"
 

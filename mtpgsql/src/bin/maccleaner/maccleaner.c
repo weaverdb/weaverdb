@@ -4,7 +4,7 @@ this should clean shared memory on mac systems
 
 */
 #include <unistd.h>
-#include <stdio.h>
+
 #include <sys/shm.h>
 #include <sys/semaphore.h>
 

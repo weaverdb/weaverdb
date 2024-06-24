@@ -21,8 +21,8 @@
  * NOTES
  *		These routines are compiled into the postgres backend.
  */
-#include <string.h>
-#include <stdlib.h>
+
+
 
 #include "postgres.h"
 #include "env/env.h"

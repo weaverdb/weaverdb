@@ -52,7 +52,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <signal.h>
-#include <string.h>
+
 #include <pthread.h>
 #include <errno.h>
 

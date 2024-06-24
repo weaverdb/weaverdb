@@ -2,10 +2,10 @@
 #include "libc.h"
 #else
 #include <unistd.h>
-#include <stdlib.h>
+
 #endif
 
-#include <string.h>
+
 #include <sys/signal.h>
 
 

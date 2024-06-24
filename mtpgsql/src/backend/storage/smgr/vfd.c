@@ -18,7 +18,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
-#include <stdarg.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

@@ -20,8 +20,8 @@
 #include "qresult.h"
 #include "lobj.h"
 #include "dlg_specific.h"
-#include <stdio.h>
-#include <string.h>
+
+
 
 #ifdef WIN32
 #include <odbcinst.h>

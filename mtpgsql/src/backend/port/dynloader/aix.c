@@ -4,7 +4,7 @@
  * 30159 Hannover, Germany
  */
 
-#include <stdio.h>
+
 #include <errno.h>
 
 #include "sys/ldr.h"

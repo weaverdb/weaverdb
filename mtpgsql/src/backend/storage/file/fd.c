@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
-#include <stdlib.h>
+
 #include <fcntl.h>
 
 #include "postgres.h"

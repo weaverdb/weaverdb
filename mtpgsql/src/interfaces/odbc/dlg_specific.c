@@ -21,7 +21,7 @@
 #endif
 
 #ifndef WIN32
-#include <string.h>
+
 #include "gpps.h"
 #define SQLGetPrivateProfileString(a,b,c,d,e,f) GetPrivateProfileString(a,b,c,d,e,f)
 #define SQLWritePrivateProfileString(a,b,c,d) WritePrivateProfileString(a,b,c,d)

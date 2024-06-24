@@ -16,8 +16,8 @@
  */
 
 #include "tuple.h"
-#include <string.h>
-#include <stdlib.h>
+
+
 
 void set_tuplefield_null(TupleField *tuple_field)
 {

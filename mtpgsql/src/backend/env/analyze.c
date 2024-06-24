@@ -12,10 +12,11 @@
  *
  *-------------------------------------------------------------------------
  */
-#include <string.h>
+
 #include <math.h>
 #include <sys/time.h>
-#include <stdarg.h>
+
+
 
 #include "postgres.h"
 #include "env/env.h"

@@ -31,7 +31,7 @@
  */
 
 #include <ctype.h>
-#include <string.h>
+
 
 
 #ifdef HAVE_LIMITS_H

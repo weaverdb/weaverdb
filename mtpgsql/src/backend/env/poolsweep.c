@@ -9,8 +9,8 @@
 #include <signal.h>
 #include <time.h>
 #include <errno.h>
-#include <stdarg.h>
-#include <stdlib.h>
+
+
 
 #include "postgres.h"
 #include "env/env.h"

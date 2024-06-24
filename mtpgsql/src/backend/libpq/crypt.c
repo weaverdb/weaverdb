@@ -16,8 +16,8 @@
 #define _XOPEN_SOURCE
 #include <unistd.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <string.h>
+
+
 
 #include "postgres.h"
 #include "env/env.h"
@@ -283,9 +283,12 @@ crypt_verify(Port *port, const char *user, const char *pgpass)
 	 * Compare with the encrypted or plain password depending on the
 	 * authentication method being used for this connection.
 	 */
-
+#ifdef NOCRYPT
+    crypt_pwd = passwd;
+#else
 	crypt_pwd =
 		(port->auth_method == uaCrypt ? crypt(passwd, port->salt) : passwd);
+#endif
 
 	if (!strcmp(pgpass, crypt_pwd))
 	{

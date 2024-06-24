@@ -16,8 +16,8 @@
 #include "config.h"
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
+
+
 
 #include "psqlodbc.h"
 #include "connection.h"
@@ -31,7 +31,7 @@
 #include <sqlext.h>
 #endif
 
-#include <string.h>
+
 
 #ifndef WIN32
 #define stricmp(s1,s2)	strcasecmp(s1,s2)

@@ -14,7 +14,6 @@
  *-------------------------------------------------------------------------
  */
 #include <ctype.h>
-#include <unistd.h>
 #ifndef __linux__
 #include <math.h>
 #endif

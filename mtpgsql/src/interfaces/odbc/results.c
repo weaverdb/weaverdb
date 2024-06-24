@@ -19,7 +19,7 @@
 #include "config.h"
 #endif
 
-#include <string.h>
+
 #include "psqlodbc.h"
 #include "dlg_specific.h"
 #include "environ.h"
@@ -30,7 +30,7 @@
 #include "convert.h"
 #include "pgtypes.h" 
 
-#include <stdio.h>
+
 
 #ifndef WIN32
 #include "iodbc.h"

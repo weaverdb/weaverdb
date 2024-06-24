@@ -21,7 +21,7 @@
  */
 #include <ctype.h>
 #include <math.h>
-#include <string.h>
+
 
 #include "c.h"
 #include "postgres.h"

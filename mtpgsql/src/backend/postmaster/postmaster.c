@@ -37,7 +37,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <stdlib.h>
+
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/socket.h>

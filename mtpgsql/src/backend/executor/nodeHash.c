@@ -18,7 +18,7 @@
  *		ExecEndHash		- shutdown node and subnodes
  *
  */
-#include <string.h>
+
 #include <math.h>
 
 #include "postgres.h"

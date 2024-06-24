@@ -36,7 +36,7 @@
  * contrib/pgcrypto/sha2.c
  */
 #include <sys/param.h>
-#include <string.h>
+
 
 #include "postgres.h"
 

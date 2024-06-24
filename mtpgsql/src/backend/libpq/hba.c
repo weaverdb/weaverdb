@@ -537,7 +537,7 @@ interpret_ident_response(char *ident_response,
 
 static void
 ident(const struct in_addr remote_ip_addr, const struct in_addr local_ip_addr,
-	  const ushort remote_port, const ushort local_port,
+	  const unsigned short remote_port, const unsigned short local_port,
 	  bool *ident_failed, char *ident_username)
 {
 /*--------------------------------------------------------------------------

@@ -70,7 +70,7 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <sys/file.h>
-#include <stdlib.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

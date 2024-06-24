@@ -17,12 +17,12 @@
 #include <sys/pset.h>
 #endif
 #include <sys/time.h>
-#include <stdio.h>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <ctype.h>
-#include <stdlib.h>
+
 
 #include "postgres.h"  
 #include "env/env.h"
@@ -241,13 +241,17 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 	SetProcessingMode(InitProcessing);   
 
         MemoryContextInit();
-
+#ifndef ANDROID
 	if ( shmget(IPCKeyGetBufferMemoryKey(ipc_key),0,0) < 0 ) {
 		CreateSharedMemoryAndSemaphores(ipc_key, MaxBackends);
 		master = true;
 	} else {
                 AttachSharedMemoryAndSemaphores(ipc_key); 
 	}
+#else
+        CreateSharedMemoryAndSemaphores(ipc_key, MaxBackends);
+        master = true;
+#endif
 
 /*  this code sets up the proper directory for the database 
 	most of it is lifted from postinit
@@ -376,7 +380,7 @@ if ( master ) {
         uid_t		uid;
         struct passwd*		uinfo;
         memset(un,0,sizeof(un));
-#ifndef MACOSX
+#ifndef NOCUSERID
 	cuserid(un);
 #else
         if ( strlen(un) == 0 ) {
@@ -394,7 +398,6 @@ if ( master ) {
 #endif
 
 	SetPgUserName(un);
-/*	SetUserId(); */
 }
 	sptime -= (( timer.tv_sec * 1000000 ) + timer.tv_usec);	
 	seed = timer.tv_usec;

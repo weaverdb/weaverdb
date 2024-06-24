@@ -355,7 +355,7 @@
 #define HAVE_VALUES_H 1
 
 /* Define if you have the ANSI C header files.  */
-/* #define STDC_HEADERS 1  */
+#define STDC_HEADERS 1 
 
 /* default path for the location of the odbcinst.ini file */
 /* #undef ODBCINST */
@@ -541,7 +541,9 @@ extern char *strdup(char const *);
  * System V header files so we must do it ourselves.
  */
 /* Set to 1 if you have union semun */
-/* #undef HAVE_UNION_SEMUN */
+#ifdef _GNUSOURCE
+#define HAVE_UNION_SEMUN 1
+#endif
 
 /* Set to 1 if you have F_SETLK option for fcntl() */
 /* #undef HAVE_FCNTL_SETLK */
@@ -608,6 +610,8 @@ extern char *strdup(char const *);
 #elif LINUX
 #define WHICH_CLOCK CLOCK_REALTIME
 #elif MACOSX
+#define WHICH_CLOCK CLOCK_REALTIME
+#else
 #define WHICH_CLOCK CLOCK_REALTIME
 #endif
 

@@ -19,8 +19,8 @@
 #include "socket.h"
 
 #ifndef WIN32
-#include <stdlib.h>
-#include <string.h>	/* for memset */
+
+	/* for memset */
 #endif
 
 extern GLOBAL_VALUES globals;

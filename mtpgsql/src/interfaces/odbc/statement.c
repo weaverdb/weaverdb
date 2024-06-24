@@ -22,8 +22,8 @@
 #include "qresult.h"
 #include "convert.h"
 #include "environ.h"
-#include <stdio.h>
-#include <string.h>
+
+
 
 #ifndef WIN32
 #include "iodbc.h"

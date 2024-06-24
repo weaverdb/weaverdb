@@ -17,7 +17,7 @@
 #include <errno.h>
 #include <float.h>				/* faked on sunos4 */
 #include <math.h>
-#include <string.h>
+
 
 #include "postgres.h"
 

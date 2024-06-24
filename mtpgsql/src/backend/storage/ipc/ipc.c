@@ -27,12 +27,12 @@
  */
 
 #include <sys/ipc.h>
-#ifndef MACOSX
+#ifndef PRIVATEONLY
 #include <sys/sem.h>
 #endif
 #include <sys/file.h>
 #include <errno.h>
-#include <stdlib.h>
+
 
 #include "postgres.h"
 #include "env/env.h"
@@ -272,11 +272,13 @@ IPCPrivateMemoryKill(int status,
 	}
 	else
 	{
+#ifndef PRIVATEONLY
 		if (shmctl(shmId, IPC_RMID, (struct shmid_ds *) NULL) < 0)
 		{
 			elog(NOTICE, "IPCPrivateMemoryKill: shmctl(%d, %d, 0) failed: %m",
 				 shmId, IPC_RMID);
 		}
+#endif
 	}
 }
 
@@ -298,9 +300,10 @@ IpcMemoryCreate(IpcMemoryKey memKey, uint32 size, int permission)
 		/* private */
 		shmid = PrivateMemoryCreate(memKey, size);
 	}
+#ifndef PRIVATEONLY
 	else
 		shmid = shmget(memKey, size, IPC_CREAT | permission);
-
+#endif
 	if (shmid < 0)
 	{
 		EPRINTF("IpcMemoryCreate: shmget failed (%s) "
@@ -324,7 +327,7 @@ IpcMemoryId
 IpcMemoryIdGet(IpcMemoryKey memKey, uint32 size)
 {
 	IpcMemoryId shmid;
-
+#ifndef PRIVATEONLY
 	shmid = shmget(memKey, size, 0);
 
 	if (shmid < 0)
@@ -334,7 +337,7 @@ IpcMemoryIdGet(IpcMemoryKey memKey, uint32 size)
 				strerror(errno), memKey, size, 0);
 		return IpcMemIdGetFailed;
 	}
-
+#endif
 	return shmid;
 }
 
@@ -346,8 +349,10 @@ IpcMemoryIdGet(IpcMemoryKey memKey, uint32 size)
 static void
 IpcMemoryDetach(int status, char *shmaddr)
 {
+#ifndef PRIVATEONLY
 	if (shmdt(shmaddr) < 0)
 		elog(NOTICE, "IpcMemoryDetach: shmdt(0x%p): %m", shmaddr);
+#endif
 }
 
 /****************************************************************************/
@@ -364,9 +369,10 @@ IpcMemoryAttach(IpcMemoryId memId)
 		
 	if (UsePrivateMemory)
 		memAddress = (char *) PrivateMemoryAttach(memId);
+#ifndef PRIVATEONLY
 	else
 		memAddress = (char *) shmat(memId, 0, 0);
-
+#endif
 	/* if ( *memAddress == -1) { XXX ??? */
 	if (memAddress == (char *) -1)
 	{
@@ -374,8 +380,10 @@ IpcMemoryAttach(IpcMemoryId memId)
 				strerror(errno), memId);
 		return IpcMemAttachFailed;
 	}
+#ifndef PRIVATEONLY
 	if (!UsePrivateMemory)
 		on_shmem_exit(IpcMemoryDetach, (caddr_t) memAddress);
+#endif
 	return (char *) memAddress;
 }
 
@@ -388,7 +396,7 @@ void
 IpcMemoryKill(IpcMemoryKey memKey)
 {
 	IpcMemoryId shmid;
-
+#ifndef PRIVATEONLY
 	if (!UsePrivateMemory && (shmid = shmget(memKey, 0, 0)) >= 0)
 	{
 		if (shmctl(shmid, IPC_RMID, (struct shmid_ds *) NULL) < 0)
@@ -397,6 +405,7 @@ IpcMemoryKill(IpcMemoryKey memKey)
 				 shmid, IPC_RMID);
 		}
 	}
+#endif
 }
 
 #ifdef HAS_TEST_AND_SET

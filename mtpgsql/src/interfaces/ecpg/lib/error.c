@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 
 #include <ecpgerrno.h>
 #include <ecpgtype.h>

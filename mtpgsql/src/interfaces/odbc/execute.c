@@ -18,8 +18,8 @@
 #endif
 
 #include "psqlodbc.h"
-#include <stdio.h>
-#include <string.h>
+
+
 
 #ifndef WIN32
 #include "iodbc.h"

@@ -31,8 +31,8 @@
  * interactively an ad hoc statement.
  */
 #include <sqlcli.h>
-#include <string.h>
-#include <stdlib.h>
+
+
 
 #define  MAXCOLS   100
 

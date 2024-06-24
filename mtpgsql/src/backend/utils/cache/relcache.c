@@ -35,7 +35,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <stdlib.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

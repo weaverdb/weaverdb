@@ -74,7 +74,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <netinet/in.h>
-#include <stdlib.h>
+
 
 #include "postgres.h"
 #include "env/env.h"

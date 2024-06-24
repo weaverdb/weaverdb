@@ -22,7 +22,7 @@
 #include <unistd.h>
 #include <grp.h>
 #include <pwd.h>
-#include <stdlib.h>
+
 
 #include "postgres.h"
 

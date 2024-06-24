@@ -31,7 +31,7 @@
  * contrib/pgcrypto/md5.c
  */
 #include <sys/param.h>
-#include <string.h>
+
 
 #include "postgres.h"
 

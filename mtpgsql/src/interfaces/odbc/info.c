@@ -20,8 +20,8 @@
 #include "config.h"
 #endif
 
-#include <string.h>
-#include <stdio.h>
+
+
 #include "psqlodbc.h"
 
 #ifndef WIN32
