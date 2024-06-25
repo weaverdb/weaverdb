@@ -193,8 +193,11 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                 if (desc->atttypid == CONNECTOROID ) result = DirectIntCopyValue(output,value);
                 else if (desc->atttypid == BOOLOID) result = DirectIntCopyValue(output,Int32GetDatum((value) ? 1 : 0));
                 else if ( desc->atttypid == INT8OID ) {
-                    if ( DatumGetInt64(value) > 0x7fffffff ) return false;
-                    else result = DirectIntCopyValue(output,value);
+                    int64 var = *(int64*)DatumGetPointer(value);
+                    if (var  > 0x7fffffffL ) return false;
+                    else {
+                        IndirectLongCopyValue(output,value);
+                    }
                 }
                 else return false;
                 break;

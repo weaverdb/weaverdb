@@ -13,7 +13,7 @@ import java.util.concurrent.Future;
  */
 class StreamingTransformer implements AutoCloseable {
     
-    private final ExecutorService vpool = Executors.newVirtualThreadPerTaskExecutor();
+    private final ExecutorService vpool = Executors.newCachedThreadPool();
 
     @Override
     public void close()  {

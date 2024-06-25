@@ -1,5 +1,5 @@
 #!/bin/sh
-mkdir -f abuild
+mkdir -p abuild
 OTHER_ARGS="-S .. -B ."
 cd abuild && cmake \
     -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \

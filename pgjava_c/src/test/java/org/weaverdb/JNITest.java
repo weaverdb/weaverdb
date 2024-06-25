@@ -253,7 +253,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testPiping() throws Exception {
-        ExecutorService feeder = Executors.newVirtualThreadPerTaskExecutor();
+        ExecutorService feeder = Executors.newCachedThreadPool();
         try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create schema winter");
             conn.execute("create table winter/streaming (id int4, data blob, data2 blob, data3 blob, data4 blob)");
@@ -305,7 +305,7 @@ public class JNITest {
     
         @org.junit.jupiter.api.Test
     public void testStreamingType() throws Exception {
-        ExecutorService service = Executors.newVirtualThreadPerTaskExecutor();
+        ExecutorService service = Executors.newCachedThreadPool();
         try (Connection conn = Connection.connectAnonymously("test")) {
             conn.execute("create schema streamtype");
             conn.execute("create table streamtype/foo (bar blob)");

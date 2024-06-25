@@ -174,12 +174,12 @@ class BoundInput<T> extends Bound<T> {
             return value != null ? 1 : -1;  // null check
         }
 
-        switch (value) {
-            case ReadableByteChannel readableByteChannel -> channel = readableByteChannel;
-            case InputStream inputStream -> channel = Channels.newChannel(inputStream);
-            default -> {
-                return -1;
-            }
+        if (value instanceof ReadableByteChannel readableByteChannel) {
+            channel = readableByteChannel;
+        } else if (value instanceof InputStream inputStream) {
+            channel = Channels.newChannel(inputStream);
+        } else {
+            return -1;
         }
         return channel.read(data);
     }

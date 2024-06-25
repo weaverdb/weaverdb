@@ -90,7 +90,6 @@ static bool initialized = false;
 
 static void CreateProperties(void);
 
-//static void checkDataDir(const char *DataDir, bool *DataDirOK);
 static int checklockfile(void);
 
 pthread_mutex_t    init_lock;
@@ -168,7 +167,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
             fflush(stdout);
             sleep(start_delay);
         }
-        
+
 	master = false;
 /*  this is the only route to start multithreaded, multiuser  */	
 	GoMultiuser();
@@ -570,67 +569,6 @@ wrapupweaverbackend()
     
         unlink(lock_name);
 }
-#ifdef UNUSED
-static void
-checkDataDir(const char *DataDir, bool *DataDirOK)
-{
-	if (DataDir == NULL)
-	{
-		fprintf(stderr, "%s does not know where to find the database system "
-				"data.  You must specify the directory that contains the "
-				"database system either by specifying the -D invocation "
-			 "option or by setting the PGDATA environment variable.\n\n",
-				progname);
-		*DataDirOK = false;
-	}
-	else
-	{
-		char		path[MAXPGPATH];
-		FILE	   *fp;
-
-		snprintf(path, sizeof(path), "%s%cbase%ctemplate1%cpg_class",
-				 DataDir, SEP_CHAR, SEP_CHAR, SEP_CHAR);
-#ifndef __CYGWIN32__
-		fp = AllocateFile(path, (char *)"r");
-#else
-		fp = AllocateFile(path, "rb");
-#endif
-		if (fp == NULL)
-		{
-			fprintf(stderr, "%s does not find the database system.  "
-					"Expected to find it "
-			   "in the PGDATA directory \"%s\", but unable to open file "
-					"with pathname \"%s\".\n\n",
-					progname, DataDir, path);
-			*DataDirOK = false;
-		}
-		else
-		{
-			char	   *reason;
-
-			/* reason ValidatePgVersion failed.  NULL if didn't */
-
-			FreeFile(fp);
-
-			ValidatePgVersion(DataDir, &reason);
-			if (reason)
-			{
-				fprintf(stderr,
-						"Database system in directory %s "
-						"is not compatible with this version of "
-						"Weaver, or we are unable to read the "
-						"PG_VERSION file.  "
-						"Explanation from ValidatePgVersion: %s\n\n",
-						DataDir, reason);
-				free(reason);
-				*DataDirOK = false;
-			}
-			else
-				*DataDirOK = true;
-		}
-	}
-}
-#endif
 
 static void* PropertiesAlloc(Size size,void* cxt)
 {
@@ -705,4 +643,3 @@ singleusershutdown(int code) {
         
         exit(code);
 }
-

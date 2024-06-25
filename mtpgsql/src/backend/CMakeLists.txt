@@ -27,7 +27,6 @@ add_library(mtpg STATIC
     $<TARGET_OBJECTS:nbtree>
     $<TARGET_OBJECTS:transam>
 
-    $<TARGET_OBJECTS:bootstrap>
     $<TARGET_OBJECTS:catalog>
     $<TARGET_OBJECTS:commands>
     $<TARGET_OBJECTS:env>

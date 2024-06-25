@@ -38,4 +38,4 @@ add_custom_command(
         TARGET weaver POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE:weaver>
-                ./)
+                ${CMAKE_CURRENT_SOURCE_DIR}/)

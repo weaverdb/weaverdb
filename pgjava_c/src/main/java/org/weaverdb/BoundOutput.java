@@ -87,16 +87,13 @@ class BoundOutput<T> extends Bound<T> {
     }
 
     private int pipeOut(java.nio.ByteBuffer data) throws IOException {
-        WritableByteChannel channel;
-        switch (value) {
-            case null -> {
-                return -1;
-            }
-            case OutputStream os -> channel = Channels.newChannel(os);
-            case WritableByteChannel w -> channel = w;
-            default -> {
-                return -1;
-            }
+        WritableByteChannel channel = null;
+        if (value == null) {
+            return -1;
+        } else if (value instanceof OutputStream os) {
+            channel = Channels.newChannel(os);
+        } else if (value instanceof WritableByteChannel w) {
+            channel = w;
         }
 
         if (data == null) { // close op

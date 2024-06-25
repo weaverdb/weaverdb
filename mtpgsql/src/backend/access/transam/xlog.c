@@ -1181,7 +1181,7 @@ tryAgain:
 	return;
 }
 
-unsigned long
+size_t
 XLOGShmemSize()
 {
 	if (XLOGbuffers < MinXLOGbuffers)

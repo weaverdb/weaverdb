@@ -449,7 +449,7 @@ make_const(Value *value)
 				float64		fltval = (float64) palloc(sizeof(float64data));
 
 				*fltval = floatVal(value);
-				val = Float64GetDatum(fltval);
+				val = PointerGetDatum(fltval);
 
 				typeid = FLOAT8OID;
 				typelen = sizeof(float64data);

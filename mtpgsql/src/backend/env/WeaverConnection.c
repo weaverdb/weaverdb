@@ -730,9 +730,13 @@ WFetch(OpaquePreparedStatement plan) {
 
                 if (!isnull) {
                     if (!TransferToRegistered(&plan->slot[pos], tdesc->attrs[plan->slot[pos].index - 1], val, false)) {
-                        Oid vType = plan->slot[pos].varType;
+                        Oid oType[1];
+                        Oid iType[1];
+
+                        oType[0] = plan->slot[pos].varType;
+                        iType[0] = tdesc->attrs[plan->slot[pos].index - 1]->atttypid;
                         /* field was not transfered, try and coerce to see if it should someday  */
-                        if (can_coerce_type(1, &tdesc->attrs[pos]->atttypid, &vType)) {
+                        if (can_coerce_type(1, iType, oType)) {
                             coded_elog(ERROR, 105, "Types are compatible but conversion not implemented link type: %d result type: %d",
                                     plan->slot[pos].varType, tdesc->attrs[plan->slot[pos].index - 1]->atttypid);
                             break;
