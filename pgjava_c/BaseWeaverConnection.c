@@ -30,6 +30,7 @@
 #include "org_weaverdb_BaseWeaverConnection.h"
 
 #define BINDNULL  org_weaverdb_BaseWeaverConnection_bindNull
+#define BINDSHORT  org_weaverdb_BaseWeaverConnection_bindShort
 #define BINDINTEGER  org_weaverdb_BaseWeaverConnection_bindInteger
 #define BINDSTRING  org_weaverdb_BaseWeaverConnection_bindString
 #define BINDDOUBLE  org_weaverdb_BaseWeaverConnection_bindDouble
@@ -735,6 +736,8 @@ static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
 static int translateType(jint type) {
       switch(type)
         {
+            case BINDSHORT:
+                return INT2TYPE;
             case BINDINTEGER:
                 return INT4TYPE;
             case BINDSTRING:

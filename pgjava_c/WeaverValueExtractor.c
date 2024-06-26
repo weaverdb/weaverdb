@@ -30,6 +30,7 @@ static javacache CachedClasses;
 
 static javacache*  Cache = &CachedClasses;
 
+static int ExtractShortValue(JNIEnv* env, jobject target, void* data, int len);
 static int ExtractIntValue(JNIEnv* env, jobject target, void* data, int len);
 static int ExtractStringValue(JNIEnv* env,   jobject target, void* data, int len);
 static int ExtractCharacterValue(JNIEnv* env,   jobject target, void* data, int len);
@@ -80,6 +81,10 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.booltype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/lang/Boolean"));
         CachedClasses.boolvalue = (*env)->GetMethodID(env,CachedClasses.booltype,"booleanValue","()Z");
         CachedClasses.createbool = (*env)->GetMethodID(env,CachedClasses.booltype,"<init>","(Z)V");
+
+        CachedClasses.shorttype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/lang/Short"));
+        CachedClasses.shortvalue = (*env)->GetMethodID(env,CachedClasses.shorttype,"shortValue","()S");
+        CachedClasses.createshort = (*env)->GetMethodID(env,CachedClasses.shorttype,"<init>","(S)V");
         
         CachedClasses.inttype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/lang/Integer"));
         CachedClasses.intvalue = (*env)->GetMethodID(env,CachedClasses.inttype,"intValue","()I");
@@ -128,6 +133,9 @@ int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject obj
     } else {
 	switch( passType )
 	{
+            case INT2TYPE:
+                return ExtractShortValue(env,object,data,length);
+                break;
             case INT4TYPE:
                 return ExtractIntValue(env,object,data,length);
                 break;
@@ -164,6 +172,22 @@ int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject obj
             default:
                 break;
 	    }
+    }
+    return 0;
+}
+
+int
+ExtractShortValue(JNIEnv* env, jobject target, void* data, int len) {
+    if ((*env)->IsInstanceOf(env,target,Cache->shorttype)) {
+        union {
+            char    buffer[2];
+            jshort    val;
+        }   convert;
+        convert.val = (*env)->CallShortMethod(env,target,Cache->shortvalue);
+        MoveData(data,convert.buffer,2);
+        return 2;
+    } else if (!(*env)->ExceptionOccurred(env) ) {
+        (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Number");    
     }
     return 0;
 }
@@ -325,6 +349,10 @@ static int MoveData(void* dest, const void* src, int len) {
     return len;
 }
 
+static jobject CreateShortField(jshort* var, JNIEnv* env) {
+    return (*env)->NewObject(env,Cache->shorttype,Cache->createshort,*var);
+}
+
 static jobject CreateIntField(jint* var, JNIEnv* env) {
     return (*env)->NewObject(env,Cache->inttype,Cache->createint,*var);
 }
@@ -385,6 +413,9 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
          return length;
     } else {
         switch(passType) {
+            case INT2TYPE:
+                setval = CreateShortField(data,env);
+                break;
             case INT4TYPE:
                 setval = CreateIntField(data,env);
                 break;

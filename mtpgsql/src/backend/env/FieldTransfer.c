@@ -88,6 +88,12 @@ BinaryCopyOutValue(InputOutput* output, Form_pg_attribute desc, Datum value) {
 }
 
 static int
+DirectShortCopyValue(InputOutput* output, Datum value) {
+    int32 val = DatumGetInt32(value);
+    return output->transfer(output->userargs, INT2OID, &val, 2);
+}
+
+static int
 DirectIntCopyValue(InputOutput* output, Datum value) {
     int32 val = DatumGetInt32(value);
     return output->transfer(output->userargs, INT4OID, &val, 4);
@@ -142,6 +148,9 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
             case CHAROID:
                 result = DirectCharCopyValue(output,value);
                 break;
+            case INT2OID:
+                result = DirectShortCopyValue(output,value);
+                break;
             case INT4OID:
                 result = DirectIntCopyValue(output,value);
                 break;
@@ -150,12 +159,13 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                 break;
             case TIMESTAMPOID:
             case FLOAT8OID:
-                result = IndirectDoubleCopyValue(output,value);
+                result = desc->attbyval ? DirectDoubleCopyValue(output,value) : IndirectDoubleCopyValue(output,value);
                 break;
             case INT8OID:
             case XIDOID:
             case OIDOID:
-                result = IndirectLongCopyValue(output,value);
+            case REGPROCOID:
+                result = desc->attbyval ? DirectLongCopyValue(output,value) : IndirectLongCopyValue(output,value);
                 break;
             case BLOBOID:
             case TEXTOID:
@@ -193,7 +203,7 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                 if (desc->atttypid == CONNECTOROID ) result = DirectIntCopyValue(output,value);
                 else if (desc->atttypid == BOOLOID) result = DirectIntCopyValue(output,Int32GetDatum((value) ? 1 : 0));
                 else if ( desc->atttypid == INT8OID ) {
-                    int64 var = *(int64*)DatumGetPointer(value);
+                    int64 var = desc->attbyval ? DatumGetLong(value) : *(int64*)DatumGetPointer(value);
                     if (var  > 0x7fffffffL ) return false;
                     else {
                         IndirectLongCopyValue(output,value);
@@ -206,13 +216,15 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                 else return false;
                 break;
             case INT8OID:
-                if (desc->atttypid == XIDOID) result = IndirectLongCopyValue(output,value);
-                else if (desc->atttypid == OIDOID) result = IndirectLongCopyValue(output,value);
-                else if (desc->atttypid == INT4OID) result = DirectLongCopyValue(output,DatumGetInt32(value));
-                else return false;
+                result = desc->attbyval ? DirectLongCopyValue(output,value) : IndirectLongCopyValue(output,value);
                 break;
             case FLOAT8OID:
-                if (desc->atttypid == FLOAT4OID) result = DirectDoubleCopyValue(output,(double)*(float*)DatumGetPointer(value));
+                if (desc->atttypid == FLOAT4OID) {
+                    float32 pass = DatumGetFloat32(value);
+                    result = IndirectDoubleCopyValue(output,(double)*(float*)pass);
+                } else if (desc->atttypid == FLOAT8OID) {
+                    result = desc->attbyval ? DirectDoubleCopyValue(output,(double)value) : IndirectDoubleCopyValue(output,value);
+                }
                 else return false;
                 break;
             default:

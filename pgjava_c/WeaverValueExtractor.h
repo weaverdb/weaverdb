@@ -28,6 +28,7 @@ typedef struct javacache {
     jclass                          boundout;
 
     jclass                          chartype;
+    jclass                          shorttype;
     jclass                          inttype;
     jclass                          longtype;
     jclass                          datetype;
@@ -65,6 +66,8 @@ typedef struct javacache {
     jmethodID                        createdouble;
     jmethodID                        boolvalue;
     jmethodID                        createbool;
+    jmethodID                        shortvalue;
+    jmethodID                        createshort;
     jmethodID                        intvalue;
     jmethodID                        createint;
     jmethodID                        longvalue;

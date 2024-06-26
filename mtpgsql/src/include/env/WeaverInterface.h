@@ -9,6 +9,7 @@
 
 #define BLOBSIZE  (BLCKSZ)
 
+#define INT2TYPE	21
 #define INT4TYPE	23
 #define VARCHARTYPE	1043
 #define BOOLTYPE	16

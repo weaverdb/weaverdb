@@ -15,6 +15,12 @@ dependencies {
     testImplementation 'com.drewnoakes:metadata-extractor:2.19.0'
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
 tasks.named('test', Test) {
     useJUnitPlatform()
 

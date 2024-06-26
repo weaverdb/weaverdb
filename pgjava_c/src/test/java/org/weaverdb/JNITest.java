@@ -97,6 +97,15 @@ public class JNITest {
     public void tearDown() throws Exception {
     }
     
+        @org.junit.jupiter.api.Test
+    public void testBasicFunction() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("template1")) {
+            try (Statement s = conn.statement("select xmin,xmax,oid,* from pg_type where oid = 16")) {
+                ResultSet.stream(s).flatMap(ResultSet.Row::stream).forEach(System.out::println);
+            }
+        }
+    }
+    
     @org.junit.jupiter.api.Test
     public void test() throws Exception {
         try (Connection conn = Connection.connectAnonymously("test")) {
