@@ -224,7 +224,7 @@ elog(int lev, const char *fmt,...)
 	noprefix = stpcpy(notimestamp, prefix);
 #else
         notimestamp = msg_buf;
-	noprefix = strpcpy(msg_buf, prefix);
+	noprefix = stpcpy(msg_buf, prefix);
 #endif
 	bp = fmt_buf;
 	while (indent-- > 0)

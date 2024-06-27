@@ -261,7 +261,7 @@ Env* CreateEnv(Env* parent) {
     	
 	env->UserId = 0;
 	
-	env->UserName = NULL;
+	env->UserName = "";
 	env->UserId = InvalidOid;
 		
 	env->DatabaseId = InvalidOid;

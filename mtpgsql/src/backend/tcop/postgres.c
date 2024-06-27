@@ -1291,7 +1291,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 		if (!(pw = getpwuid(geteuid())))
 			elog(FATAL, "SetPgUserName: no entry in host passwd file");
 /* I changed this b/c pw is not being setup properly
-	the way I have inplemented 
+	the way I have implemented 
 	MKS - 11.7.2000
 */
 		SetPgUserName(MyProcPort->user);
@@ -1334,12 +1334,11 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
                 InitializeElog(logpath, debug, false);
 
 
-		if (!(pw = getpwuid(geteuid())))
-			elog(FATAL, "SetPgUserName: no entry in host passwd file");
-		SetPgUserName(pw->pw_name);
-
-
-
+		if (!(pw = getpwuid(geteuid()))) {
+			elog(NOTICE, "SetPgUserName: no entry in host passwd file");
+                } else {
+                    SetPgUserName(pw->pw_name);
+                }
 
 		snprintf(XLogDir, MAXPGPATH, "%s%cpg_xlog",
 				 DataDir, SEP_CHAR);

@@ -353,11 +353,15 @@ SetUserId()
             userTup = SearchSysCacheTuple(SHADOWNAME,
                                                                       PointerGetDatum(userName),
                                                                       0, 0, 0);
-            if (!HeapTupleIsValid(userTup))
-                    elog(FATAL, "SetUserId: user '%s' is not in '%s'",
+            if (!HeapTupleIsValid(userTup)) {
+
+                    elog(NOTICE, "SetUserId: user '%s' is not in '%s'",
                              userName,
                              ShadowRelationName);
-            GetEnv()->UserId =  ((Form_pg_shadow) GETSTRUCT(userTup))->usesysid;
+                GetEnv()->UserId = 0;
+            } else {
+                GetEnv()->UserId =  ((Form_pg_shadow) GETSTRUCT(userTup))->usesysid;
+            }
         } else {
             GetEnv()->UserId = 0;
         }
