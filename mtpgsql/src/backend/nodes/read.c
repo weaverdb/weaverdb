@@ -269,6 +269,7 @@ nodeRead(bool read_car_only)
 	Node	   *this_value,
 			   *return_value;
 	bool		make_dotted_pair_cell = false;
+        int             switchType;
 
 	token = lsptok(NULL, &tok_len);
 
@@ -277,7 +278,8 @@ nodeRead(bool read_car_only)
 
 	type = nodeTokenType(token, tok_len);
 
-	switch (type)
+        switchType = type;
+	switch (switchType)
 	{
 		case PLAN_SYM:
 			this_value = parsePlanString();

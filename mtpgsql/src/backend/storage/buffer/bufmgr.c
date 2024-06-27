@@ -1439,9 +1439,11 @@ GetBufferCxt() {
         env = AllocateEnvSpace(buffer_section_id, sizeof(BufferEnv));
 
         oldcxt = MemoryContextSwitchTo(MemoryContextGetTopContext());
-        
+#ifdef _LP64
         env->guard = 0xCAFEBABECAFEBABEL;
-        
+#else
+        env->guard = 0xCAFEBABEL;
+#endif
         env->PrivateRefCount = (long *)palloc(MaxBuffers*sizeof(long));
         memset(env->PrivateRefCount, 0, MaxBuffers*sizeof(long));
         env->total_pins = 0;

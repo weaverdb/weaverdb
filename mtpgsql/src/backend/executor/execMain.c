@@ -1937,7 +1937,7 @@ EvalPlanQual(EState *estate, Index rti, ItemPointer tid)
 			TransactionId xwait = holder->SnapshotDirty->xmax;
 			if (TransactionIdIsValid(holder->SnapshotDirty->xmin))
 			{
-				elog(NOTICE, "EvalPlanQual: t_xmin:%lld is uncommitted ?!",holder->SnapshotDirty->xmin);
+				elog(NOTICE, "EvalPlanQual: t_xmin:%lld is uncommitted ?!",(uint64)holder->SnapshotDirty->xmin);
 				ReleaseBuffer(relation, buffer);
 				TransactionId xwait = GetCheckpointId();
 				XactLockTableWait(xwait);

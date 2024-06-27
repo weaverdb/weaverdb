@@ -110,8 +110,8 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
                     Env * env = GetEnv();
                     env->errorcode = 901;
                     env->tupleSize = len;
-                    elog(ERROR, "Tuple is too big: size %lu, max size %ld",
-                            len, MaxTupleSize);
+                    elog(ERROR, "Tuple is too big: size %u, max size %d",
+                         (uint32)len, (int32)MaxTupleSize);
             }
 	}
 	

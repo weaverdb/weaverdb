@@ -494,7 +494,7 @@ typedef Datum *DatumPtr;
  *		This is really a pointer, of course.
  */
 
-#define DatumGetFloat32(X) ((float32) GET_4_BYTES(X))
+#define DatumGetFloat32(X) ((float32) DatumGetPointer(X))
 
 /*
  * Float32GetDatum
@@ -502,7 +502,7 @@ typedef Datum *DatumPtr;
  *		This is really a pointer, of course.
  */
 
-#define Float32GetDatum(X) PointerGetDatum(SET_4_BYTES (X))
+#define Float32GetDatum(X) PointerGetDatum(X)
 
 /*
  * DatumGetFloat64
@@ -510,7 +510,7 @@ typedef Datum *DatumPtr;
  *		This is really a pointer, of course.
  */
 
-#define DatumGetFloat64(X) ((float64) GET_8_BYTES (X))
+#define DatumGetFloat64(X) ((float64) DatumGetPointer(X))
 
 /*
  * Float64GetDatum
@@ -518,7 +518,7 @@ typedef Datum *DatumPtr;
  *		This is really a pointer, of course.
  */
 
-#define Float64GetDatum(X) PointerGetDatum(SET_8_BYTES (X))
+#define Float64GetDatum(X) PointerGetDatum(X)
 
 /* ----------------------------------------------------------------
  *				Section 5:	IsValid macros for system types

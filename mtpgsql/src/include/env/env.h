@@ -97,7 +97,7 @@ typedef struct Environment {
 	char			errortext[256];
 	char			state[40];
 	int 			errorcode;
-	int 			tupleSize;
+	Size 			tupleSize;
         jmp_buf			errorContext;
 /*  global sets  */
 	char* 			DatabaseName;  

@@ -400,7 +400,7 @@ ActivateFile(Vfd* vfdP) {
     if (vfdP->seekPos != 0L) {
         off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
         if (check != vfdP->seekPos) {
-            elog(NOTICE, "bad file activation during seek filename:%s, current: %ld, seeked: %lld", vfdP->fileName, vfdP->seekPos, check);
+            elog(NOTICE, "bad file activation during seek filename:%s, current: %ld, seeked: %lld", vfdP->fileName, vfdP->seekPos, (int64)check);
         }
     }
 

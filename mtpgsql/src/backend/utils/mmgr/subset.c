@@ -295,8 +295,8 @@ SubSetStats(MemoryContext context, char* describe, int size)
                 store++;
         }
         if (describe != NULL) {
-            snprintf(describe, size, "::%ld used from %s",
-			hold,sub->header.parent->name);
+            snprintf(describe, size, "::%u used from %s",
+                     (uint32)hold,sub->header.parent->name);
         } else {
             user_log("%s: %ld used from %s",
 			sub->header.name,hold,sub->header.parent->name);

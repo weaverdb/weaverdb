@@ -449,7 +449,7 @@ SetPidFile(pid_t pid)
 		 * Couldn't create the pid file. Probably it already exists. Read
 		 * the file to see if the process actually exists
 		 */
-		fd = open(pidfile, O_RDONLY, 0600);
+		fd = open(pidfile, O_RDONLY);
 		if (fd < 0)
 		{
 			fprintf(stderr, "Can't open pid file: %s\n", pidfile);

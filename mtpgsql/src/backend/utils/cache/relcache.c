@@ -2263,11 +2263,11 @@ RelationClearTrigger(Relation rel) {
 void ReportTransactionStatus(int level, char* id) {
     TransactionId xid = (TransactionId) atoll(id);
     if (TransactionIdDidCommit(xid))
-        elog(level, "reporting transaction %lld did commit\n", xid);
+        elog(level, "reporting transaction %lld did commit\n", (uint64)xid);
     else if (TransactionIdDidAbort(xid))
-        elog(level, "reporting transaction %lld did abort\n", xid);
+        elog(level, "reporting transaction %lld did abort\n", (uint64)xid);
     else
-        elog(level, "reporting transaction %lld unknown\n", xid);
+        elog(level, "reporting transaction %lld unknown\n", (uint64)xid);
 }
 
 MemoryContext RelationGetCacheContext() {

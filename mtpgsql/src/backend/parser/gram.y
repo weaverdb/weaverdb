@@ -4285,8 +4285,8 @@ Bit:  bit '(' Iconst ')'
 					if ($3 < 1)
 						elog(ERROR,"length for type '%s' must be at least 1",$1);
 					else if ($3 > (MaxAttrSize * sizeof(char)))
-						elog(ERROR,"length for type '%s' cannot exceed %ld",$1,
-							 (MaxAttrSize * sizeof(char)));
+						elog(ERROR,"length for type '%s' cannot exceed %u",$1,
+							 (uint32)(MaxAttrSize * sizeof(char)));
 					$$->typmod = $3;
 				}
 		| bit
@@ -4320,8 +4320,8 @@ Character:  character '(' Iconst ')'
 					if ($3 < 1)
 						elog(ERROR,"length for type '%s' must be at least 1",$1);
 					else if ($3 > MaxAttrSize)
-						elog(ERROR,"length for type '%s' cannot exceed %ld",$1,
-							 MaxAttrSize);
+						elog(ERROR,"length for type '%s' cannot exceed %u",$1,
+							 (uint32)MaxAttrSize);
 
 					/* we actually implement these like a varlen, so
 					 * the first 4 bytes is the length. (the difference

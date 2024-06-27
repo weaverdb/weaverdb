@@ -368,7 +368,7 @@ transaction system  */
     if ( DebugLvl > 1 ) {
 	TransactionId  dd;	
 	dd = GetNewTransactionId();
-	elog(DEBUG,"Current Transaction %llu",dd);
+	elog(DEBUG,"Current Transaction %llu",(uint64)dd);
 	elog(DEBUG,"BLCKSZ size %d",BLCKSZ);
     }
 	
@@ -474,7 +474,7 @@ checklockfile(void) {
             if ( exclusive_lock < 0 ) {
                 char  check[255];
                 memset(check,0x00,255);
-                exclusive_lock = open((const char*)lock_name,(O_RDONLY),0500);
+                exclusive_lock = open((const char*)lock_name,(O_RDONLY));
                 if ( exclusive_lock < 0 ) {
                     printf("Data Directory in use.  System is Exiting...\n");
                     printf("delete %s to force startup\n",lock_name);

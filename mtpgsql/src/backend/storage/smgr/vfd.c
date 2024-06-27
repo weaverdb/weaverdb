@@ -48,9 +48,9 @@ static long     log_pos;
 
 static union  logbuffer {
     struct {
-        long    header_magic;
-        long    log_id;
-        long    segments;
+        int64    header_magic;
+        int64    log_id;
+        int64    segments;
         bool    completed;
         bool    compressed;
         pthread_t   owner;
@@ -59,9 +59,9 @@ static union  logbuffer {
 } LogBuffer;
 
 typedef struct logsegment {
-    long        segment_magic;
-    long        seg_id;
-    short         count;
+    int64        segment_magic;
+    int64        seg_id;
+    int16         count;
     SmgrData    blocks[1];
 } LogSegment;
 

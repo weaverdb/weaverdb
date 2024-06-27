@@ -255,7 +255,7 @@ PrintMemoryContextStats(MemoryContext context, CommandDest dest, int depth) {
     }
     prefix[dc] = '\0';
 
-    snprintf(report, 512, "%sContext: %s used %lu -- %s\n",prefix,context->name,used,describe); 
+    snprintf(report, 512, "%sContext: %s used %u -- %s\n",prefix,context->name,(uint32)used,describe);
     
     if (dest == Local) {
         pq_putbytes(report, strlen(report));
@@ -268,7 +268,7 @@ PrintMemoryContextStats(MemoryContext context, CommandDest dest, int depth) {
 
     if (depth == 0) {
         if (dest == Local) {
-            snprintf(report, 512, "Total memory used: %lu\n",used); 
+            snprintf(report, 512, "Total memory used: %u\n",(uint32)used);
             pq_putbytes(report, strlen(report));
             pq_flush();
         } else {

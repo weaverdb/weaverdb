@@ -59,7 +59,7 @@ SystemPortAddressCreateIPCKey(SystemPortAddress address)
 void
 CreateSharedMemoryAndSemaphores(IPCKey key, int maxBackends)
 {
-	size_t			size;
+	Size			size;
         int                     lockTables = 1;
         
         char*  tables = GetProperty("lock_tables");
@@ -97,8 +97,8 @@ CreateSharedMemoryAndSemaphores(IPCKey key, int maxBackends)
 
 	if (DebugLvl > 1)
 	{
-		fprintf(stderr, "binding ShmemCreate(key=%x, size=%ld)\n",
-				IPCKeyGetBufferMemoryKey(key), size);
+		fprintf(stderr, "binding ShmemCreate(key=%x, size=%d)\n",
+				IPCKeyGetBufferMemoryKey(key), (uint32)size);
 	}
 	ShmemCreate(IPCKeyGetBufferMemoryKey(key), size);
 	ShmemIndexReset();

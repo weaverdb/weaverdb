@@ -1164,7 +1164,7 @@ WCheckMemory(OpaqueWConn conn) {
     int err;
 
     READY(connection, err, false);
-    fprintf(stdout, "memory of connection: %ld\n", MemoryContextStats(conn->memory));    
+    fprintf(stdout, "memory of connection: %zd\n", MemoryContextStats(conn->memory));
    
     RELEASE(connection, false);
 }
@@ -1583,7 +1583,7 @@ short CheckThreadContext(WConn connection) {
     } else if (!pthread_equal(connection->transaction_owner, pthread_self())) {
         char msg[256];
         err = 454;
-        snprintf(msg, 255, "transaction is owned by thread %p, cannot make call from this context", connection->transaction_owner);
+        snprintf(msg, 255, "transaction is owned by thread %lu, cannot make call from this context", connection->transaction_owner);
         SetError(connection, err, "CONTEXT", msg);
         return 1;
     }

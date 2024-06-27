@@ -429,8 +429,8 @@ _bt_insertonpg(Relation rel,
 	 * itemsz doesn't include the ItemId.
 	 */
 	if (itemsz > BTMaxItemSize(page))
-		elog(ERROR, "btree: index item size %lu exceeds maximum %lu",
-			 (unsigned long) itemsz, BTMaxItemSize(page));
+		elog(ERROR, "btree: index item size %u exceeds maximum %u",
+			 (uint32) itemsz, (uint32) BTMaxItemSize(page));
 
 	/*
 	 * Determine exactly where new item will go.

@@ -906,10 +906,10 @@ ftoi4(float32 num)
 	if (!num)
 		return 0;				/* fmgr will return NULL anyway */
 
-	if ((*num < INT_MIN) || (*num > INT_MAX))
+	if ((lrintf(*num) < INT_MIN) || (lrintf(*num) > INT_MAX))
 		elog(ERROR, "ftoi4: integer out of range");
 
-	result = rint(*num);
+	result = lrintf(*num);
 	return result;
 }
 
