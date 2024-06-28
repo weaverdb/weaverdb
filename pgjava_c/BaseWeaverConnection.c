@@ -34,12 +34,12 @@
 #define BINDINTEGER  org_weaverdb_BaseWeaverConnection_bindInteger
 #define BINDSTRING  org_weaverdb_BaseWeaverConnection_bindString
 #define BINDDOUBLE  org_weaverdb_BaseWeaverConnection_bindDouble
+#define BINDFLOAT  org_weaverdb_BaseWeaverConnection_bindFloat
 #define BINDCHARACTER  org_weaverdb_BaseWeaverConnection_bindCharacter
 #define BINDBOOLEAN  org_weaverdb_BaseWeaverConnection_bindBoolean
 #define BINDBINARY  org_weaverdb_BaseWeaverConnection_bindBinary
 #define BINDBLOB  org_weaverdb_BaseWeaverConnection_bindBLOB
 #define BINDDATE  org_weaverdb_BaseWeaverConnection_bindDate
-#define BINDDOUBLE  org_weaverdb_BaseWeaverConnection_bindDouble
 #define BINDLONG  org_weaverdb_BaseWeaverConnection_bindLong
 #define BINDFUNCTION  org_weaverdb_BaseWeaverConnection_bindFunction
 #define BINDSLOT org_weaverdb_BaseWeaverConnection_bindSlot
@@ -758,6 +758,8 @@ static int translateType(jint type) {
                 return  TIMESTAMPTYPE;                   
             case BINDDOUBLE:
                 return  DOUBLETYPE;
+            case BINDFLOAT:
+                return  FLOATTYPE;
             case BINDLONG:
                 return  LONGTYPE;
             case BINDFUNCTION:

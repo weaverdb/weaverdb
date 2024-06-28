@@ -1461,6 +1461,17 @@ TransferExecArgs(PreparedPlan* plan) {
                     }
                     break;
                 }
+                case FLOAT4OID:{
+                    int* value = palloc(4);
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,4);
+                    paramLI->byval = false;
+                    if (paramLI->length > 0) {
+                        paramLI->value = PointerGetDatum(value);
+                    } else {
+                        paramLI->isnull = true;
+                    }
+                    break;
+                }
                 case TIMESTAMPOID:
                 case FLOAT8OID:
                 case INT8OID: {

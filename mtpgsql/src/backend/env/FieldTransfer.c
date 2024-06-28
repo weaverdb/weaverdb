@@ -110,7 +110,17 @@ DirectCharCopyValue(InputOutput* output, Datum value) {
     char val = DatumGetChar(value);
     return output->transfer(output->userargs, CHAROID, &val, 1);
 }
- 
+  
+static int
+IndirectDateCopyValue(InputOutput* output, Datum value) {
+    return output->transfer(output->userargs, TIMESTAMPOID, DatumGetPointer(value), 8);
+}
+
+static int
+DirectDateCopyValue(InputOutput* output,long value) {
+    return output->transfer(output->userargs, TIMESTAMPOID, &value, 8);
+}
+
 static int
 IndirectLongCopyValue(InputOutput* output, Datum value) {
     return output->transfer(output->userargs, INT8OID, DatumGetPointer(value), 8);
@@ -124,6 +134,11 @@ DirectLongCopyValue(InputOutput* output,long value) {
 static int
 IndirectDoubleCopyValue(InputOutput* output, Datum value) {
     return output->transfer(output->userargs, FLOAT8OID, DatumGetPointer(value), 8);
+}
+
+static int
+IndirectFloatCopyValue(InputOutput* output, Datum value) {
+    return output->transfer(output->userargs, FLOAT4OID, DatumGetPointer(value), 4);
 }
 
 static int
@@ -155,11 +170,13 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                 result = DirectIntCopyValue(output,value);
                 break;
             case FLOAT4OID:
-                result = DirectFloatCopyValue(output,value);
+                result = desc->attbyval ? DirectFloatCopyValue(output,value) : IndirectFloatCopyValue(output,value);
                 break;
-            case TIMESTAMPOID:
             case FLOAT8OID:
                 result = desc->attbyval ? DirectDoubleCopyValue(output,value) : IndirectDoubleCopyValue(output,value);
+                break;
+            case TIMESTAMPOID:
+                result = desc->attbyval ? DirectDateCopyValue(output,value) : IndirectDateCopyValue(output,value);
                 break;
             case INT8OID:
             case XIDOID:

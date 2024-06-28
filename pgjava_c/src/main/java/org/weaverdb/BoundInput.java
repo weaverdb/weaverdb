@@ -150,7 +150,14 @@ class BoundInput<T> extends Bound<T> {
                 if (value instanceof Double) {
                     this.value = value;
                 } else {
-                    throw new ExecutionException("invalid type conversion for Date from " + value.getClass().getName());
+                    throw new ExecutionException("invalid type conversion for Double from " + value.getClass().getName());
+                }
+                break;
+            case Float:
+                if (value instanceof Float) {
+                    this.value = value;
+                } else {
+                    throw new ExecutionException("invalid type conversion for Float from " + value.getClass().getName());
                 }
                 break;
             default:

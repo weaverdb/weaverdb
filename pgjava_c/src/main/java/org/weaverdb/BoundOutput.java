@@ -74,6 +74,7 @@ class BoundOutput<T> extends Bound<T> {
                 case Java:
                     return getTypeClass().cast(JavaConverter.java_out((byte[]) value));
                 case Double:
+                case Float:
                 default:
                     return getTypeClass().cast(value);
             }

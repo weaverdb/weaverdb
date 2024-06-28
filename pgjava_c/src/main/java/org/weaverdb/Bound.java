@@ -26,6 +26,8 @@ class Bound<T> {
             return Types.String;
         } else if (type.equals(Double.class)) {
             return Types.Double;
+        } else if (type.equals(Float.class)) {
+            return Types.Float;
         } else if (type.equals(Integer.class)) {
             return Types.Integer;
         } else if (type.equals(byte[].class)) {
@@ -60,6 +62,7 @@ class Bound<T> {
     protected enum Types {
         String(BaseWeaverConnection.bindString,"Ljava/lang/String;"),
         Double(BaseWeaverConnection.bindDouble,"D"),
+        Float(BaseWeaverConnection.bindFloat,"F"),
         Integer(BaseWeaverConnection.bindInteger,"I"),
         Binary(BaseWeaverConnection.bindBinary,"[B"),
         BLOB(BaseWeaverConnection.bindBLOB,"[B"),

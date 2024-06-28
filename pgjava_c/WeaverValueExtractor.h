@@ -32,6 +32,7 @@ typedef struct javacache {
     jclass                          inttype;
     jclass                          longtype;
     jclass                          datetype;
+    jclass                          floattype;
     jclass                          doubletype;
     jclass                          booltype;
     jclass                          stringtype;
@@ -60,6 +61,12 @@ typedef struct javacache {
 
     jmethodID                        charvalue;   
     jmethodID                        createchar;   
+
+    jmethodID                        floattoint;
+    jmethodID                        inttofloat;
+    jmethodID                        floatvalue;
+    jmethodID                        createfloat;
+
     jmethodID                        doubletolong;
     jmethodID                        longtodouble;
     jmethodID                        doublevalue;

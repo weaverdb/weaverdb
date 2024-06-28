@@ -18,6 +18,7 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.Date;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -1110,6 +1111,89 @@ public class JNITest {
             }
             try (Statement s = conn.statement("select prop::varchar from latebound where prop::varchar = 'this is a test'")) {
                 ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testJavaFloatTypes() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("test")) {
+            conn.execute("create table floattypes (cdouble float8, cfloat float4)");
+            try (Statement s = conn.statement("insert into floattypes (cdouble, cfloat) values ($d, $f)")) {
+                s.linkInput("d", Double.class).set(2.5);
+                s.linkInput("f", Float.class).set(3.5f);
+                s.execute();
+            }
+            try (Statement s = conn.statement("select cdouble, cfloat from floattypes")) {
+                Output<String> d = s.linkOutput(1, String.class);
+                Output<String> f = s.linkOutput(2, String.class);
+                s.execute();
+                if (s.fetch()) {
+                    System.out.println(d.get() + " " + f.get());
+                }
+            }
+            try (Statement s = conn.statement("select cdouble, cfloat from floattypes")) {
+                Output<Double> d = s.linkOutput(1, Double.class);
+                Output<Float> f = s.linkOutput(2, Float.class);
+                s.execute();
+                if (s.fetch()) {
+                    assertEquals(2.5, d.get());
+                    assertEquals(3.5f, f.get());
+                }
+            }
+
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testJavaDateTypes() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("test")) {
+            Date now = new Date();
+            conn.execute("create table datetypes (cdt datetime, cts timestamp)");
+            try (Statement s = conn.statement("insert into datetypes (cdt, cts) values ($d, $f)")) {
+                s.linkInput("d", Date.class).set(now);
+                s.linkInput("f", Date.class).set(now);
+                s.execute();
+            }
+            try (Statement s = conn.statement("select cdt, cts from datetypes")) {
+                Output<String> d = s.linkOutput(1, String.class);
+                Output<String> f = s.linkOutput(2, String.class);
+                s.execute();
+                if (s.fetch()) {
+                    System.out.println(d.get() + " " + f.get());
+                }
+            }
+            try (Statement s = conn.statement("select cdt, cts from datetypes")) {
+                Output<Date> d = s.linkOutput(1, Date.class);
+                Output<Date> f = s.linkOutput(2, Date.class);
+                s.execute();
+                if (s.fetch()) {
+                    assertEquals(now.getTime()/1000, d.get().getTime()/1000);
+                    assertEquals(now.getTime()/1000, f.get().getTime()/1000);
+                }
+            }
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testJavaIntTypes() throws Exception {
+        try (Connection conn = Connection.connectAnonymously("test")) {
+            conn.execute("create table inttypes (clong int8, cint int4)");
+            try (Statement s = conn.statement("insert into inttypes (clong, cint) values ($d, $f)")) {
+                s.linkInput("d", Long.class).set(16L);
+                s.linkInput("f", Integer.class).set(32);
+                s.execute();
+            }
+            conn.setStandardOutput(System.out);
+            conn.stream("select clong, cint from inttypes");
+            try (Statement s = conn.statement("select clong, cint from inttypes")) {
+                Output<Long> d = s.linkOutput(1, Long.class);
+                Output<Integer> f = s.linkOutput(2, Integer.class);
+                s.execute();
+                if (s.fetch()) {
+                    assertEquals(16L, d.get());
+                    assertEquals(32, f.get());
+                }
             }
         }
     }

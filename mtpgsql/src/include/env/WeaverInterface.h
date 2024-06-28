@@ -22,6 +22,7 @@
 #define NATIVEJAVATYPE         30000
 #define CONNECTORTYPE         1136
 #define TIMESTAMPTYPE    1184
+#define FLOATTYPE    700
 #define DOUBLETYPE    701
 #define LONGTYPE    20
 #define SLOTTYPE     	1901

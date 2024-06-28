@@ -25,6 +25,7 @@ class BaseWeaverConnection implements Connection {
     
     public final static int bindString = 2;
     public final static int bindDouble = 3;
+    public final static int bindFloat = 9;
     public final static int bindShort = 8;
     public final static int bindInteger = 1;
     public final static int bindBinary = 6;

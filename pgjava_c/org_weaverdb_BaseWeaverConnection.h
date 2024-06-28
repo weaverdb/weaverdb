@@ -11,6 +11,8 @@ extern "C" {
 #define org_weaverdb_BaseWeaverConnection_bindString 2L
 #undef org_weaverdb_BaseWeaverConnection_bindDouble
 #define org_weaverdb_BaseWeaverConnection_bindDouble 3L
+#undef org_weaverdb_BaseWeaverConnection_bindFloat
+#define org_weaverdb_BaseWeaverConnection_bindFloat 9L
 #undef org_weaverdb_BaseWeaverConnection_bindShort
 #define org_weaverdb_BaseWeaverConnection_bindShort 8L
 #undef org_weaverdb_BaseWeaverConnection_bindInteger

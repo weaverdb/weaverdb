@@ -35,6 +35,7 @@ static int ExtractIntValue(JNIEnv* env, jobject target, void* data, int len);
 static int ExtractStringValue(JNIEnv* env,   jobject target, void* data, int len);
 static int ExtractCharacterValue(JNIEnv* env,   jobject target, void* data, int len);
 static int ExtractBooleanValue(JNIEnv* env,   jobject target, void* data, int len);
+static int ExtractFloatValue(JNIEnv* env,   jobject target, void* data, int len);
 static int ExtractDoubleValue(JNIEnv* env,   jobject target, void* data, int len);
 static int ExtractLongValue(JNIEnv* env,   jobject target, void* data, int len);
 static int ExtractDateValue(JNIEnv* env,   jobject target, void* data, int len);
@@ -72,6 +73,12 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.itypeid = (*env)->GetMethodID(env,CachedClasses.boundin,"getTypeId","()I");
         CachedClasses.otypeid = (*env)->GetMethodID(env,CachedClasses.boundout,"getTypeId","()I");
         /*  output types */
+        CachedClasses.floattype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/lang/Float"));
+        CachedClasses.floattoint = (*env)->GetStaticMethodID(env,CachedClasses.floattype,"floatToIntBits","(F)I");
+        CachedClasses.floatvalue = (*env)->GetMethodID(env,CachedClasses.floattype,"floatValue","()F");
+        CachedClasses.inttofloat = (*env)->GetStaticMethodID(env,CachedClasses.floattype,"intBitsToFloat","(I)F");
+        CachedClasses.createfloat = (*env)->GetMethodID(env,CachedClasses.floattype,"<init>","(F)V");
+
         CachedClasses.doubletype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/lang/Double"));
         CachedClasses.doubletolong = (*env)->GetStaticMethodID(env,CachedClasses.doubletype,"doubleToLongBits","(D)J");
         CachedClasses.doublevalue = (*env)->GetMethodID(env,CachedClasses.doubletype,"doubleValue","()D");
@@ -116,6 +123,7 @@ javacache*  DropCache(JNIEnv* env) {
         (*env)->DeleteGlobalRef(env,CachedClasses.boundin);
         (*env)->DeleteGlobalRef(env,CachedClasses.boundout);
         /*  output types */
+        (*env)->DeleteGlobalRef(env,CachedClasses.floattype);       
         (*env)->DeleteGlobalRef(env,CachedClasses.doubletype);       
         (*env)->DeleteGlobalRef(env,CachedClasses.booltype);
         (*env)->DeleteGlobalRef(env,CachedClasses.inttype);
@@ -156,6 +164,9 @@ int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject obj
                 break;
             case DOUBLETYPE:
                 return ExtractDoubleValue(env,object,data,length);
+                break;
+            case FLOATTYPE:
+                return ExtractFloatValue(env,object,data,length);
                 break;
             case LONGTYPE:
                 return ExtractLongValue(env,object,data,length);
@@ -263,6 +274,23 @@ ExtractBooleanValue(JNIEnv* env, jobject target, void* data, int len) {
         return 1;
     } else if (!(*env)->ExceptionOccurred(env) ) {
         (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Boolean");    
+    }
+    return 0;
+}
+
+int
+ExtractFloatValue(JNIEnv* env, jobject target, void* data, int len) {
+    if ( (*env)->IsInstanceOf(env,target,Cache->floattype) ) {
+        union {
+            char    buffer[4];
+            jfloat  val;
+        }   convert;
+
+        convert.val = (*env)->CallFloatMethod(env,target,Cache->floatvalue);            
+        MoveData(data,convert.buffer,4);
+        return 4;
+    } else if (!(*env)->ExceptionOccurred(env) ) {
+        (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Double");    
     }
     return 0;
 }
@@ -383,7 +411,11 @@ static jobject CreateBinaryField(char* var, int length, JNIEnv* env) {
     return (jobject)jb;
 }
 static jobject CreateDoubleField(jdouble* var, JNIEnv* env) {
-    return (*env)->NewObject(env,Cache->doubletype,Cache->createdouble,var);
+    return (*env)->NewObject(env,Cache->doubletype,Cache->createdouble,*var);
+}
+
+static jobject CreateFloatField(jfloat* var, JNIEnv* env) {
+    return (*env)->NewObject(env,Cache->floattype,Cache->createfloat,*var);
 }
 
 static jobject CreateDateField(jdouble* var, JNIEnv* env) {
@@ -430,6 +462,9 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
                 break;
             case DOUBLETYPE:
                 setval = CreateDoubleField(data,env);
+                break;
+            case FLOATTYPE:
+                setval = CreateFloatField(data,env);
                 break;
             case BYTEATYPE:
             case BLOBTYPE:
