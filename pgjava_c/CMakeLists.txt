@@ -13,7 +13,7 @@ target_compile_definitions(weaver PRIVATE WEAVER_JAVA)
 
 target_include_directories(weaver PRIVATE ${PROJECT_BINARY_DIR}/mtpg/include)
 
-add_dependencies(weaver mtpg)
+add_dependencies(weaver mtpg dbhome)
 
 if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     message("Using ${CMAKE_C_COMPILER_ID} to link library")
@@ -39,3 +39,11 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE:weaver>
                 ${CMAKE_CURRENT_SOURCE_DIR}/)
+
+#set_target_properties(weaver PROPERTIES 
+#    PUBLIC_HEADER ../include/env/WeaverInterface.h ../include/env/connectionutil.h
+#    VERSION ${PROJECT_VERSION}
+#    SOVERSION 1
+#    OUTPUT_NAME "weaver"
+#    XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
+#)

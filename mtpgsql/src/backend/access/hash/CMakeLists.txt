@@ -5,3 +5,4 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(hash OBJECT ${SRC_FILES})
 
+add_dependencies(hash build_fmgr)

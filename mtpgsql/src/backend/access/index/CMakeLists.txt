@@ -5,3 +5,4 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(index OBJECT ${SRC_FILES})
 
+add_dependencies(index build_fmgr)

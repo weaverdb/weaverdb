@@ -7,6 +7,8 @@ get_property(INSTLOPTS GLOBAL PROPERTY INSTLOPTS)
 
 set(TEMPLATEDIR ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
 
+file(MAKE_DIRECTORY ${TEMPLATEDIR})
+
 set(GENBKI ./genbki.sh)
 
 set(GLOBALBKI_SRCS pg_database.h pg_variable.h pg_shadow.h pg_group.h pg_log.h)
@@ -31,11 +33,25 @@ add_custom_target(db_definition
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_custom_target(templates 
-    COMMAND ${INSTALL} ${INSTLOPTS} global1.bki.source ${TEMPLATEDIR}/global1.bki.source
-    COMMAND ${INSTALL} ${INSTLOPTS} global1.description ${TEMPLATEDIR}/global1.description
-    COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.bki.source ${TEMPLATEDIR}/local1_template1.bki.source
-    COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.description ${TEMPLATEDIR}/local1_template1.description
+#add_custom_target(templates 
+#    COMMAND ${INSTALL} ${INSTLOPTS} global1.bki.source ${TEMPLATEDIR}/global1.bki.source
+#    COMMAND ${INSTALL} ${INSTLOPTS} global1.description ${TEMPLATEDIR}/global1.description
+#    COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.bki.source ${TEMPLATEDIR}/local1_template1.bki.source
+#    COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.description ${TEMPLATEDIR}/local1_template1.description
+#    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#    BYPRODUCTS 
+#        ${TEMPLATEDIR}/global1.bki.source 
+#        ${TEMPLATEDIR}/global1.description 
+#        ${TEMPLATEDIR}/local1_template1.bki.source
+#        ${TEMPLATEDIR}/local1_template1.description
+#    DEPENDS db_definition
+#)
+
+add_custom_target(anontemplates
+    COMMAND ${CMAKE_COMMAND} -E cat global1.bki.source | sed -e "s/POSTGRES/anonymous/g" -e "s/PGUID/0/g" > ${TEMPLATEDIR}/global1.bki.source
+    COMMAND ${CMAKE_COMMAND} -E cat global1.description > ${TEMPLATEDIR}/global1.description
+    COMMAND ${CMAKE_COMMAND} -E cat local1_template1.bki.source | sed -e "s/POSTGRES/anonymous/g" -e "s/PGUID/0/g" > ${TEMPLATEDIR}/local1_template1.bki.source
+    COMMAND ${CMAKE_COMMAND} -E cat local1_template1.description > ${TEMPLATEDIR}/local1_template1.description
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     BYPRODUCTS 
         ${TEMPLATEDIR}/global1.bki.source 
@@ -47,4 +63,4 @@ add_custom_target(templates
 
 add_library(catalog OBJECT catalog.c heap.c index.c indexing.c pg_aggregate.c pg_operator.c pg_proc.c pg_type.c)
 
-add_dependencies(catalog templates)
+add_dependencies(catalog anontemplates)

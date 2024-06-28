@@ -190,8 +190,9 @@ elog(int lev, const char *fmt,...)
 		default:
 			/* temporarily use msg buf for prefix */
                         expand = false;
-			sprintf(msg_fixedbuf, "FATAL %d:  ", lev);
-			prefix = msg_fixedbuf;
+                        char* fatal_prefix = palloc(256);
+			sprintf(fatal_prefix, "FATAL %d:  ", lev);
+                        prefix = fatal_prefix;
 			break;
 	}
 
@@ -204,7 +205,7 @@ elog(int lev, const char *fmt,...)
 	 * vsnprintf won't know what to do with %m).  To keep space
 	 * calculation simple, we only allow one %m.
 	 */
-	space_needed = indent + (GetEnv()->lineno ? 24 : 0)
+	space_needed = indent + (GetEnv() != NULL && GetEnv()->lineno ? 24 : 0)
 		+ strlen(fmt) + strlen(errorstr) + 1;
 	if (expand && space_needed > (int) sizeof(fmt_fixedbuf))
 	{
@@ -231,7 +232,7 @@ elog(int lev, const char *fmt,...)
 		*bp++ = ' ';
 
 	/* If error was in CopyFrom() print the offending line number -- dz */
-	if (GetEnv()->lineno)
+	if (GetEnv() != NULL && GetEnv()->lineno)
 	{
 		sprintf(bp, "copy: line %d, ", GetEnv()->lineno);
 		bp += strlen(bp);

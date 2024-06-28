@@ -8,7 +8,7 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(executor OBJECT ${SRC_FILES})
 
-add_dependencies(executor JNI::JNI)
+add_dependencies(executor JNI::JNI build_fmgr)
 
 if (JNI_FOUND)
     message (STATUS "JNI_INCLUDE_DIRS=${JNI_INCLUDE_DIRS}")

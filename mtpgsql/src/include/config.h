@@ -92,7 +92,9 @@
  */
 /* currently must be <= 64k bjm */
 /* must also be a multiple of 8 for proper alignment */
+#ifndef BLCKSZ
 #define BLCKSZ	(1024*8)
+#endif
 
 /*
  * RELSEG_SIZE is the maximum number of blocks allowed in one disk file.

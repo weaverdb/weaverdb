@@ -15,7 +15,7 @@ add_library(adt OBJECT bool.c cash.c char.c
     ruleutils.c ri_triggers.c java.c wrapdatum.c md5.c sha2.c
 )
 
-add_dependencies(adt JNI::JNI)
+add_dependencies(adt JNI::JNI build_fmgr)
 
 if (JNI_FOUND)
     message (STATUS "JNI_INCLUDE_DIRS=${JNI_INCLUDE_DIRS}")

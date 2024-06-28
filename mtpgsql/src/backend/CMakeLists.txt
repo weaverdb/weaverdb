@@ -89,9 +89,12 @@ add_dependencies(mtpg headers)
 
 target_include_directories(mtpg INTERFACE ${PROJECT_BINARY_DIR}/mtpg/include/)
 
-set_target_properties(mtpg PROPERTIES PUBLIC_HEADER "../include/env/WeaverInterface.h,../include/env/connectionutil.h")
-
-INSTALL(TARGETS mtpg 
-        LIBRARY DESTINATION ${PROJECT_BINARY_DIR}/lib
-        PUBLIC_HEADER DESTINATION ${PROJECT_BINARY_DIR}/include
+set_target_properties(mtpg PROPERTIES 
+    PUBLIC_HEADER ../include/env/WeaverInterface.h ../include/env/connectionutil.h
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+    OUTPUT_NAME "mtpg"
+    XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
 )
+
+

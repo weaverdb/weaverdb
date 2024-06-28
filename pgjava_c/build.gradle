@@ -25,6 +25,9 @@ tasks.named('test', Test) {
     useJUnitPlatform()
 
     maxHeapSize = '1G'
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 
     testLogging {
         events "passed"
