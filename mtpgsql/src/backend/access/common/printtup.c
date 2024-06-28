@@ -22,6 +22,7 @@
 #include "access/printtup.h"
 #include "catalog/pg_type.h"
 #include "libpq/pqformat.h"
+#include "libpq/libpq.h"
 #include "utils/syscache.h"
 #include "access/blobstorage.h"
 #include "utils/relcache.h"
@@ -29,7 +30,7 @@
 static void printtup_setup(DestReceiver *self, TupleDesc typeinfo);
 static void printtup(HeapTuple tuple, TupleDesc typeinfo, DestReceiver *self);
 static void printtup_cleanup(DestReceiver *self);
-
+static void local_printtup(HeapTuple tuple, TupleDesc typeinfo, DestReceiver *self);
 /* ----------------------------------------------------------------
  *		printtup / debugtup support
  * ----------------------------------------------------------------
@@ -92,11 +93,11 @@ typedef struct
  * ----------------
  */
 DestReceiver *
-printtup_create_DR()
+printtup_create_DR(bool local)
 {
 	DR_printtup *self = (DR_printtup *) palloc(sizeof(DR_printtup));
 
-	self->pub.receiveTuple = printtup;
+	self->pub.receiveTuple = local ? local_printtup : printtup;
 	self->pub.setup = printtup_setup;
 	self->pub.cleanup = printtup_cleanup;
 
@@ -231,6 +232,64 @@ printtup(HeapTuple tuple, TupleDesc typeinfo, DestReceiver *self)
 	}
 
 	pq_endmessage(&buf);
+}
+/* ----------------
+ *		printtup
+ * ----------------
+ */
+static void
+local_printtup(HeapTuple tuple, TupleDesc typeinfo, DestReceiver *self)
+{
+	DR_printtup *myState = (DR_printtup *) self;
+	StringInfoData buf;
+	int			i,
+				j,
+				k;
+	char	   *outputstr;
+	Datum		attr;
+	bool		isnull;
+
+	/* Set or update my derived attribute info, if needed */
+	if (myState->attrinfo != typeinfo ||
+		myState->nattrs != tuple->t_data->t_natts)
+		printtup_prepare_info(myState, typeinfo, tuple->t_data->t_natts);
+
+	/* ----------------
+	 *	send the attributes of this tuple
+	 * ----------------
+	 */
+	for (i = 0; i < tuple->t_data->t_natts; ++i)
+	{
+		PrinttupAttrInfo *thisState = myState->myinfo + i;
+
+		attr = HeapGetAttr(tuple, i + 1, typeinfo, &isnull);
+
+		if (isnull)
+			continue;
+		if (OidIsValid(thisState->typoutput))
+		{
+			bool  val_is_copy = FALSE;
+
+                    if ( typeinfo->attrs[i]->attstorage == 'e' && ISINDIRECT(attr) && !isnull ) {
+			attr = PointerGetDatum(rebuild_indirect_blob(attr));
+			val_is_copy = TRUE;
+                    }
+
+                    outputstr = DatumGetPointer((*fmgr_faddr_3(&thisState->finfo))(attr, thisState->typelem, typeinfo->attrs[i]->atttypmod));
+                    pq_putbytes(outputstr, strlen(outputstr));
+                    pq_putbytes("\t", 1);
+                    pfree(outputstr);
+
+                    if ( val_is_copy ) pfree(DatumGetPointer(attr));
+		}
+		else
+		{
+			outputstr = "<unprintable>";
+			pq_sendcountedtext(&buf, outputstr, strlen(outputstr));
+		}
+	}
+        pq_putbytes("\n", 1);
+        pq_flush();
 }
 
 /* ----------------

@@ -20,7 +20,7 @@
 /* extern */ "C" {
 #endif
 
-/* extern */ DestReceiver *printtup_create_DR(void);
+/* extern */ DestReceiver *printtup_create_DR(bool);
 /* extern */ void showatts(char *name, TupleDesc attinfo);
 /* extern */ void debugtup(HeapTuple tuple, TupleDesc typeinfo,
 		 DestReceiver *self);

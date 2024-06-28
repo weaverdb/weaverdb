@@ -176,29 +176,6 @@ BeginCommand(char *pname,
 			break;
 
 		case Local:
-			/* ----------------
-			 *		prepare local portal buffer for query results
-			 *		and setup result for PQexec()
-			 * ----------------
-			 */
-			entry = be_currentportal();
-			if (pname != NULL)
-				pbuf_setportalinfo(entry, pname);
-
-			if (operation == CMD_SELECT && !isIntoRel)
-			{
-				be_typeinit(entry, tupdesc, natts);
-				p = (char *) palloc(strlen(entry->name) + 2);
-				p[0] = 'P';
-				strcpy(p + 1, entry->name);
-			}
-			else
-			{
-				p = (char *) palloc(strlen(tag) + 2);
-				p[0] = 'C';
-				strcpy(p + 1, tag);
-			}
-			entry->result = p;
 			break;
 
 		case Debug:
@@ -229,7 +206,7 @@ DestToFunction(CommandDest dest)
 	{
                 case Remote:
 			/* printtup wants a dynamically allocated DestReceiver */
-			return printtup_create_DR();
+			return printtup_create_DR(false);
 			break;
 
 		case RemoteInternal:
@@ -237,7 +214,7 @@ DestToFunction(CommandDest dest)
 			break;
 
 		case Local:
-			return &be_printtupDR;
+			return printtup_create_DR(true);
 			break;
 
 		case Debug:
