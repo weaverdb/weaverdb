@@ -25,11 +25,12 @@ set(LOCALBKI_SRCS pg_proc.h pg_type.h pg_attribute.h pg_class.h
 list(TRANSFORM GLOBALBKI_SRCS PREPEND ../../include/catalog/)
 list(TRANSFORM LOCALBKI_SRCS PREPEND ../../include/catalog/)
 
-add_custom_target(db_definition 
+add_custom_command(
+    OUTPUT global1.bki.source global1.description local1_template1.bki.source local1_template1.description
+    DEPENDS ${GLOBALBKI_SRCS} ${LOCALBKI_SRCS}
     COMMAND chmod 755 ${GENBKI}
-    COMMAND env CPP=${CMAKE_CXX_COMPILER} sh ${SHOPTS} ${GENBKI} ${BKIOPTS} ${GLOBALBKI_SRCS} > global1.bki.source 2> global1.description
-    COMMAND env CPP=${CMAKE_CXX_COMPILER} sh ${SHOPTS} ${GENBKI} ${BKIOPTS} ${LOCALBKI_SRCS} > local1_template1.bki.source 2> local1_template1.description
-    BYPRODUCTS global1.bki.source global1.description local1_template1.source local1_template1.description
+    COMMAND env CPP=${CMAKE_CXX_COMPILER} sh ${SHOPTS} ${GENBKI} ${BKIOPTS} ${GLOBALBKI_SRCS} > ${CMAKE_CURRENT_BINARY_DIR}/global1.bki.source 2> ${CMAKE_CURRENT_BINARY_DIR}/global1.description
+    COMMAND env CPP=${CMAKE_CXX_COMPILER} sh ${SHOPTS} ${GENBKI} ${BKIOPTS} ${LOCALBKI_SRCS} > ${CMAKE_CURRENT_BINARY_DIR}/local1_template1.bki.source 2> ${CMAKE_CURRENT_BINARY_DIR}/local1_template1.description
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -47,20 +48,19 @@ add_custom_target(db_definition
 #    DEPENDS db_definition
 #)
 
-add_custom_target(anontemplates
+add_custom_command( 
+    OUTPUT ${TEMPLATEDIR}/global1.bki.source ${TEMPLATEDIR}/global1.description ${TEMPLATEDIR}/local1_template1.bki.source ${TEMPLATEDIR}/local1_template1.description
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/global1.bki.source ${CMAKE_CURRENT_BINARY_DIR}/global1.description ${CMAKE_CURRENT_BINARY_DIR}/local1_template1.bki.source ${CMAKE_CURRENT_BINARY_DIR}/local1_template1.description
     COMMAND ${CMAKE_COMMAND} -E cat global1.bki.source | sed -e "s/POSTGRES/anonymous/g" -e "s/PGUID/0/g" > ${TEMPLATEDIR}/global1.bki.source
     COMMAND ${CMAKE_COMMAND} -E cat global1.description > ${TEMPLATEDIR}/global1.description
     COMMAND ${CMAKE_COMMAND} -E cat local1_template1.bki.source | sed -e "s/POSTGRES/anonymous/g" -e "s/PGUID/0/g" > ${TEMPLATEDIR}/local1_template1.bki.source
     COMMAND ${CMAKE_COMMAND} -E cat local1_template1.description > ${TEMPLATEDIR}/local1_template1.description
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    BYPRODUCTS 
-        ${TEMPLATEDIR}/global1.bki.source 
-        ${TEMPLATEDIR}/global1.description 
-        ${TEMPLATEDIR}/local1_template1.bki.source
-        ${TEMPLATEDIR}/local1_template1.description
-    DEPENDS db_definition
+    WORKING_DIRECTORY ${CMAKE_BINARY_SOURCE_DIR}
 )
 
-add_library(catalog OBJECT catalog.c heap.c index.c indexing.c pg_aggregate.c pg_operator.c pg_proc.c pg_type.c)
-
-add_dependencies(catalog anontemplates)
+add_library(catalog OBJECT catalog.c heap.c index.c indexing.c pg_aggregate.c pg_operator.c pg_proc.c pg_type.c
+    ${TEMPLATEDIR}/global1.bki.source 
+    ${TEMPLATEDIR}/global1.description 
+    ${TEMPLATEDIR}/local1_template1.bki.source 
+    ${TEMPLATEDIR}/local1_template1.description
+)

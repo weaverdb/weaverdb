@@ -5,4 +5,4 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(rewrite OBJECT ${SRC_FILES})
 
-add_dependencies(rewrite build_fmgr)
+add_dependencies(rewrite fmgrtab)

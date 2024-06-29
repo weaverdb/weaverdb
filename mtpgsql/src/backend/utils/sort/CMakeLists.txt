@@ -5,4 +5,4 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(sort OBJECT ${SRC_FILES})
 
-add_dependencies(sort build_fmgr)
+add_dependencies(sort fmgrtab)

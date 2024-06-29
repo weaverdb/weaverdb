@@ -2,7 +2,6 @@ find_package(BISON)
 find_package(FLEX)
 
 get_property(YFLAGS GLOBAL PROPERTY YFLAGS)
-message("test" ${YFLAGS})
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/parse.h ${CMAKE_CURRENT_SOURCE_DIR}/gram.c ${CMAKE_CURRENT_SOURCE_DIR}/../../include/parser/parse.h

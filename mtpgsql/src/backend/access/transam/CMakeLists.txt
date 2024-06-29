@@ -7,4 +7,4 @@ add_library(transam OBJECT ${SRC_FILES})
 
 target_compile_options(transam PRIVATE -Wno-format)
 
-add_dependencies(transam build_fmgr)
+add_dependencies(transam fmgrtab)

@@ -5,4 +5,4 @@ file(GLOB SRC_FILES "*.c")
 # create the executable
 add_library(nbtree OBJECT ${SRC_FILES})
 
-add_dependencies(nbtree build_fmgr)
+add_dependencies(nbtree fmgrtab)

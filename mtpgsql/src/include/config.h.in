@@ -17,46 +17,36 @@
 
 #include "os.h"
 
-#ifndef LIB_EXTERN
-#ifndef MACOSX
-#define LIB_EXTERN extern
-#else
-#define LIB_EXTERN __attribute__((__visibility__("default")))
-#endif
-#endif
-#define USE_GLOBAL_ENVIRONMENT
 #define PROVIDE_64BIT_CRC
-#define USE_ASSERT_CHECKING 1
-/* #define SLEEP_ON_ASSERT 1 */
-#define ABORT_ON_ASSERT 1
+#cmakedefine USE_ASSERT_CHECKING
+#cmakedefine SLEEP_ON_ASSERT
+#cmakedefine ABORT_ON_ASSERT
+
+#cmakedefine MEMORY_CONTEXT_CHECKING
+#cmakedefine CLOBBER_FREED_MEMORY 
+#cmakedefine USE_TLS 
+
 #define NO_PS_STATUS 1
 #define SUBSETISALLOC 1
-#define MEMORY_CONTEXT_CHECKING 1 
-#define CLOBBER_FREED_MEMORY 1  
-/* #define HAVE_ALLOCINFO 1 */
-/* #define CACHEDEBUG 1 */
-/*  #define EXEC_EVALDEBUG 1 */
-/*  #define MEMORY_STATS 1  */
-/*  #define TRACE_FMGR_PTR 1  */
-/*  #define MULTITHREAD_DEBUG  */
-/*  #define SPI_EXECUTOR_STATS  */
-/*  #define HASH_STATISTICS   */
-/*  #define YYERROR_VERBOSE  */
-/*  #define YYPRINT myprinter  */
-/*  #define nodeDisplay pprint  */
-/*  #define XLOG   */
+
+#cmakedefine HAVE_ALLOCINFO
+#cmakedefine CACHEDEBUG
+#cmakedefine EXEC_EVALDEBUG
+#cmakedefine MEMORY_STATS
+#cmakedefine TRACE_FMGR_PTR
+#cmakedefine MULTITHREAD_DEBUG
+#cmakedefine SPI_EXECUTOR_STATS 
+#cmakedefine HASH_STATISTICS   
+#cmakedefine YYERROR_VERBOSE  
+#cmakedefine YYPRINT myprinter  
+#cmakedefine nodeDisplay pprint  
+#cmakedefine XLOG   
+#cmakedefine USE_TLS 
 /*  how many threads can enter the executor at once   */
 
-#ifdef USEGC
-#include "gc/gc.h"
-#define os_malloc GC_MALLOC
-#define os_realloc GC_REALLOC
-#define os_free GC_FREE
-#else
 #define os_malloc base_mem_alloc
 #define os_realloc base_mem_realloc
 #define os_free base_mem_free
-#endif
 
 #ifdef USE_TLS
 #define TLS  static __thread
@@ -69,8 +59,8 @@
  * this is just the default setting for the postmaster's -N switch.
  * (Actual value is now set by configure script.)
  */
-#define DEF_MAXBACKENDS 1024
-#define MAX_PRIVATE_FILES 8
+#cmakedefine DEF_MAXBACKENDS @DEF_MAXBACKENDS@
+#cmakedefine MAX_PRIVATE_FILES @MAX_PRIVATE_FILES@
 /*
  * Hard limit on number of backend server processes per postmaster.
  * Increasing this costs about 32 bytes per process slot as of v 6.5.
@@ -92,9 +82,8 @@
  */
 /* currently must be <= 64k bjm */
 /* must also be a multiple of 8 for proper alignment */
-#ifndef BLCKSZ
-#define BLCKSZ	(1024*8)
-#endif
+
+#cmakedefine BLCKSZ	@BLCKSZ@
 
 /*
  * RELSEG_SIZE is the maximum number of blocks allowed in one disk file.
@@ -146,13 +135,13 @@
  * Enables debugging print statements in the date/time support routines.
  * Particularly useful for porting to a new platform/OS combination.
  */
-/* #define DATEDEBUG */
+#cmakedefine DATEDEBUG 
 
 /*
  * defining unsafe floats's will make float4 and float8
  * ops faster at the cost of safety, of course!        
  */
-/* #define UNSAFE_FLOATS */
+#cmakedefine UNSAFE_FLOATS 
 
 /*
  * Define this to make libpgtcl's "pg_result -assign" command process C-style
@@ -221,7 +210,7 @@
  * ELOG_TIMESTAMPS: adds a timestamp with the following format to elog
  * messages:  yymmdd.hh:mm:ss.mmm [pid] message
  */
-#define ELOG_TIMESTAMPS
+#cmakedefine ELOG_TIMESTAMPS
 
 /*
  * USE_SYSLOG: use syslog for elog and error messages printed by tprintf

@@ -24,7 +24,7 @@
 
 #include "c.h"
 
-#include "env/connectionutil.h"
+#include "interface/connectionutil.h"
 #include "env/properties.h"
 #include "env/WeaverConnection.h"
 

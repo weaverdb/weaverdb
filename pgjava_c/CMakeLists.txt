@@ -11,9 +11,7 @@ target_link_libraries(weaver PRIVATE mtpg)
 
 target_compile_definitions(weaver PRIVATE WEAVER_JAVA)
 
-target_include_directories(weaver PRIVATE ${PROJECT_BINARY_DIR}/mtpg/include)
-
-add_dependencies(weaver mtpg dbhome)
+add_dependencies(weaver mtpg)
 
 if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     message("Using ${CMAKE_C_COMPILER_ID} to link library")

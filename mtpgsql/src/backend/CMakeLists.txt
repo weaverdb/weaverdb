@@ -69,6 +69,8 @@ add_library(mtpg STATIC
     $<TARGET_OBJECTS:version>  
 )
 
+target_include_directories(mtpg INTERFACE ../include/interface)
+
 add_executable(postgres 
     $<TARGET_OBJECTS:main> 
     $<TARGET_OBJECTS:bootstrap> 
@@ -76,18 +78,12 @@ add_executable(postgres
 
 target_link_libraries(postgres PRIVATE mtpg)
 
-add_dependencies(mtpg timestamp)
-
-add_custom_target(headers
+add_custom_target(cpinterface ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/mtpg/include/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../include/env/WeaverInterface.h ${PROJECT_BINARY_DIR}/mtpg/include/
-    COMMAND ${CMAKE_COMMAND} -E copy  ${CMAKE_CURRENT_SOURCE_DIR}/../include/env/connectionutil.h ${PROJECT_BINARY_DIR}/mtpg/include/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../include/interface/WeaverInterface.h ${PROJECT_BINARY_DIR}/mtpg/include/
+    COMMAND ${CMAKE_COMMAND} -E copy  ${CMAKE_CURRENT_SOURCE_DIR}/../include/interface/connectionutil.h ${PROJECT_BINARY_DIR}/mtpg/include/
     BYPRODUCTS ${PROJECT_BINARY_DIR}/mtpg/include/WeaverInterface.h ${PROJECT_BINARY_DIR}/mtpg/include/connectionutil.h
 )
-
-add_dependencies(mtpg headers)
-
-target_include_directories(mtpg INTERFACE ${PROJECT_BINARY_DIR}/mtpg/include/)
 
 set_target_properties(mtpg PROPERTIES 
     PUBLIC_HEADER ../include/env/WeaverInterface.h ../include/env/connectionutil.h

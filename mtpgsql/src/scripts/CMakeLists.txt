@@ -3,9 +3,7 @@
 get_property(INSTALL GLOBAL PROPERTY INSTALL)
 get_property(INSTL_EXE_OPTS GLOBAL PROPERTY INSTALL_EXE_OPTS)
 
-message(WARNING "opts:" ${INSTL_EXE_OPTS})
-
-add_custom_target(scripts ALL
+add_custom_target(scripts
 #    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/comcheck.sh ${CMAKE_CURRENT_BINARY_DIR}/comcheck
 #    COMMAND ${INSTALL} ${INSTL_EXE_OPTS} comcheck ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/comcheck
     COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_CURRENT_SOURCE_DIR}/create_db.sh > ${CMAKE_CURRENT_BINARY_DIR}/create_db

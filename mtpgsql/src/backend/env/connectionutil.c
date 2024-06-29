@@ -27,7 +27,7 @@
 #include "postgres.h"  
 #include "env/env.h"
 
-#include "env/connectionutil.h"
+#include "interface/connectionutil.h"
 #include "env/properties.h"
 #include "env/timestamp.h"
 

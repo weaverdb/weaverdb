@@ -21,7 +21,7 @@
 #define MAX_CHILDREN 4
 
 #include "env/env.h"
-#include "env/WeaverInterface.h"
+#include "interface/WeaverInterface.h"
 #include "catalog/pg_attribute.h"
 #include "nodes/execnodes.h"
 #include "executor/executor.h"

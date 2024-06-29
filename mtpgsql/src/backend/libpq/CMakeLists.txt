@@ -11,4 +11,4 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_compile_definitions(libpq PRIVATE MACOSX NOCUSERID)
 endif()
 
-add_dependencies(libpq build_fmgr)
+#add_dependencies(libpq)

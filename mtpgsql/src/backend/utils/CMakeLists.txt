@@ -1,15 +1,13 @@
 
 get_property(BKIOPTS GLOBAL PROPERTY BKIOPTS)
 
-message(WARNING ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_custom_target(build_fmgr ALL
+add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/../../include/fmgr.h ${CMAKE_CURRENT_SOURCE_DIR}/fmgrtab.c
+  MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/../../include/catalog/pg_proc.h
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../../include/catalog/pg_proc.h ${CMAKE_CURRENT_BINARY_DIR}/pg_proc.hpp
   COMMAND env CPP=${CMAKE_CXX_COMPILER} sh ${SHOPTS} Gen_fmgrtab.sh ${BKIOPTS} ${CMAKE_CURRENT_BINARY_DIR}/pg_proc.hpp
   COMMAND ${CMAKE_COMMAND} -E rename fmgr.h ../../include/fmgr.h
-  BYPRODUCTS ${CMAKE_CURRENT_SOURCE_DIR}/../../include/fmgr.h ${CMAKE_CURRENT_SOURCE_DIR}/fmgrtab.c
+  BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/pg_proc.hpp
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  VERBATIM
 )
 
 add_subdirectory(adt)
@@ -33,5 +31,3 @@ add_library(version OBJECT
 )
 
 target_compile_options(fmgrtab PRIVATE -Wno-constant-conversion)
-
-add_dependencies(time build_fmgr)
