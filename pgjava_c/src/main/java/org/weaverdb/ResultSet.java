@@ -20,6 +20,7 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
 
     ResultSet(Statement stmt) throws ExecutionException {
         this.stmt = stmt;
+        this.stmt.execute();
         if (stmt.outputs().isEmpty()) {
             for (int x=1;x<=MAX_ATTRIBUTES;x++) {
                 stmt.linkOutput(x, Object.class);

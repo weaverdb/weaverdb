@@ -69,6 +69,19 @@ add_library(mtpg STATIC
     $<TARGET_OBJECTS:version>  
 )
 
+add_library(rweaver SHARED empty.c)
+
+target_link_libraries(rweaver PRIVATE mtpg)
+
+message("Using ${CMAKE_C_COMPILER_ID} to link library")
+if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+    target_link_options(rweaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+    target_link_options(rweaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    target_link_options(rweaver PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
+endif()
+
 target_include_directories(mtpg INTERFACE ../include/interface)
 
 add_executable(postgres 
@@ -78,7 +91,8 @@ add_executable(postgres
 
 target_link_libraries(postgres PRIVATE mtpg)
 
-add_custom_target(cpinterface ALL
+add_custom_command(
+    TARGET mtpg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/mtpg/include/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../include/interface/WeaverInterface.h ${PROJECT_BINARY_DIR}/mtpg/include/
     COMMAND ${CMAKE_COMMAND} -E copy  ${CMAKE_CURRENT_SOURCE_DIR}/../include/interface/connectionutil.h ${PROJECT_BINARY_DIR}/mtpg/include/

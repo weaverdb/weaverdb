@@ -94,8 +94,6 @@ LIB_EXTERN long WStreamExec(OpaqueWConn conn,const char* statement);
 LIB_EXTERN void WConnectStdIO(OpaqueWConn conn,void* pipeargs,transferfunc in,transferfunc out);
 LIB_EXTERN void* WDisconnectStdIO(OpaqueWConn conn);
 
-LIB_EXTERN int WPipeSize(OpaqueWConn conn);
-
 #ifdef __cplusplus
 }
 #endif

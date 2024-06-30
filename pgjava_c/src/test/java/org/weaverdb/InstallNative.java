@@ -66,7 +66,7 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 prop.setProperty("start_delay", "10");
                 prop.setProperty("debuglevel", "DEBUG");
                 prop.setProperty("stdlog", "TRUE");
-                prop.setProperty("logfile", System.getProperty("user.dir") + "/build/weaver_debug.txt");
+//                prop.setProperty("logfile", System.getProperty("user.dir") + "/build/weaver_debug.txt");
 //                prop.setProperty("redirecterr", "TRUE");
 //        prop.setProperty("index_corruption", "IGNORE");
 //        prop.setProperty("heap_corruption", "IGNORE");

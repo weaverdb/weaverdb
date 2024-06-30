@@ -55,11 +55,11 @@ NAMEDATALEN=`grep '#define[ 	]*NAMEDATALEN' ../../include/postgres_ext.h | awk '
 # Get OIDSIZE from postgres_ext.h
 #OIDSIZE=`grep '#define[ 	]*OIDSIZE' ../../include/postgres_ext.h | awk '{ print $3 }'`
 # Get LONGSIZE from postgres_ext.h
-#LONGSIZE=`grep '#define[ 	]*LONGSIZE' ../../include/config.h | awk '{ print $3 }'`
 
+#LONGSIZE=`grep '#define[ 	]*LONGSIZE' ${CONFIGFILE}| awk '{ print $3 }'`
 
 # Get INDEX_MAX_KEYS from config.h (who needs consistency?)
-INDEXMAXKEYS=`grep '#define[ 	]*INDEX_MAX_KEYS' ../../include/config.h | awk '{ print $3 }'`
+INDEXMAXKEYS=`grep '#define[ 	]*INDEX_MAX_KEYS' ${CONFIGFILE} | awk '{ print $3 }'`
 
 # NOTE: we assume here that FUNC_MAX_ARGS has the same value as INDEX_MAX_KEYS,
 # and don't read it separately from config.h.  This is OK because both of them

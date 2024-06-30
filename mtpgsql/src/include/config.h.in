@@ -21,6 +21,7 @@
 #cmakedefine USE_ASSERT_CHECKING
 #cmakedefine SLEEP_ON_ASSERT
 #cmakedefine ABORT_ON_ASSERT
+#cmakedefine NOARRAY
 
 #cmakedefine MEMORY_CONTEXT_CHECKING
 #cmakedefine CLOBBER_FREED_MEMORY 
@@ -129,8 +130,9 @@
  * to the 'case' statement for the additional arguments.
  */
 #define INDEX_MAX_KEYS		9
-#define FUNC_MAX_ARGS		INDEX_MAX_KEYS
+#define DOUBLE_INDEX_MAX_KEYS		9*2
 
+#define FUNC_MAX_ARGS		INDEX_MAX_KEYS
 /*
  * Enables debugging print statements in the date/time support routines.
  * Particularly useful for porting to a new platform/OS combination.

@@ -128,6 +128,7 @@ debug=0
 noclean=0
 template_only=0
 show_setting=0
+anonymous=0
 
 # Note: There is a single compelling reason that the name of the database
 #       superuser be the same as the Unix user owning the server process:
@@ -203,6 +204,12 @@ do
                 shift;;
         --encoding=*)
                 MULTIBYTE=`echo $1 | sed 's/^--encoding=//'`
+                ;;
+        --anonymous|-a)
+                anonymous=1
+                POSTGRES_SUPERUSERNAME="anonymous"
+                POSTGRES_SUPERUSERID=0
+                echo "Setting up anonymous database"
                 ;;
         -E*)
                 MULTIBYTE=`echo $1 | sed 's/^-E//'`

@@ -10,3 +10,9 @@ libweaver.dylib
 weaver
 /cbuild/
 /abuild/
+/nbuild/
+**/.idea/
+/pgjava_c/libweaver.so
+local.properties
+gradle.properties
+local_abuild.sh
