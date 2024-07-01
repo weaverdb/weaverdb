@@ -3,10 +3,5 @@ plugins {
 
 }
 
-allprojects {
-    repositories {
-        mavenCentral()
-    }
-}
 
 description = 'weaver db system'
