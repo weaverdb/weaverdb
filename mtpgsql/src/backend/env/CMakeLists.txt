@@ -8,10 +8,9 @@ add_library(env OBJECT env.c dbwriter.c poolsweep.c freespace.c
 	vacuumlazy.c bitmapset.c 
 	pg_crc.c analyze.c dolhelper.c delegatedscan.c 
 	WeaverConnection.c FieldTransfer.c connectionutil.c
-${CMAKE_CURRENT_SOURCE_DIR}/../../include/env/timestamp.h
  )
 
-add_dependencies(env JNI::JNI fmgrtab)
+add_dependencies(env JNI::JNI fmgrtab timestamp)
 
 if (JNI_FOUND)
     message (STATUS "JNI found")

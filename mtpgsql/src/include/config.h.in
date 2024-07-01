@@ -17,6 +17,7 @@
 
 #include "os.h"
 
+#cmakedefine BUILDTIME "@BUILDTIME@"
 #define PROVIDE_64BIT_CRC
 #cmakedefine USE_ASSERT_CHECKING
 #cmakedefine SLEEP_ON_ASSERT

@@ -43,10 +43,11 @@ set_property(GLOBAL PROPERTY INSTALL ${INSTALL})
 set_property(GLOBAL PROPERTY INSTALL_EXE_OPTS -m 755)
 set_property(GLOBAL PROPERTY INSTLOPTS -m 644)
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/include/env/timestamp.h
-    COMMAND chmod 755 ./config.buildtime
-    COMMAND ./config.buildtime
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+
+add_custom_target(timestamp ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory include/env
+    COMMAND sed "s/SED_TIMESTAMP/`date +'%F %T'`/" ${CMAKE_CURRENT_SOURCE_DIR}/include/env/timestamp.temp > include/env/timestamp.h
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 add_compile_definitions(_REENTRANT BYTE_ORDER=${CMAKE_C_BYTE_ORDER})
