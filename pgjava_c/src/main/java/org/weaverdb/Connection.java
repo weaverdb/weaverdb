@@ -6,7 +6,7 @@ package org.weaverdb;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Optional;
+import java.util.Iterator;
 import java.util.ServiceLoader;
 
 /**
@@ -15,7 +15,7 @@ import java.util.ServiceLoader;
  */
 public interface Connection extends AutoCloseable {
     
-    static Optional<ConnectionFactory> loader = ServiceLoader.load(ConnectionFactory.class).findFirst();
+    static ConnectionFactory loader = loadConnectionFactory();
 
     void abort();
 
@@ -48,10 +48,26 @@ public interface Connection extends AutoCloseable {
     Connection helper() throws ExecutionException;
     
     static Connection connectAnonymously(String db) {
-        return loader.orElseThrow().connectAnonymousy(db);
+        return loader.connectAnonymousy(db);
     }
     
     static Connection connectUser(String username, String password, String database) {
-        return loader.orElseThrow().connectUser(username, password, database);
+        return loader.connectUser(username, password, database);
+    }
+    
+    private static ConnectionFactory loadConnectionFactory() {
+        Runtime.Version runningVersion = Runtime.version();
+        ServiceLoader<ConnectionFactory> check = ServiceLoader.load(ConnectionFactory.class);
+        Iterator<ConnectionFactory> versions = check.iterator();
+        ConnectionFactory winner = null;
+        while (versions.hasNext()) {
+            ConnectionFactory candidate = versions.next();
+            if (candidate.builtFor().compareTo(runningVersion) <= 0) {
+                if (winner == null || winner.builtFor().compareTo(candidate.builtFor()) < 0) {
+                    winner = candidate;
+                }
+            }
+        }
+        return winner;
     }
 }

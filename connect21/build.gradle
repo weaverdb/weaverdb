@@ -3,21 +3,22 @@ plugins {
    id 'java'
 }
 
-description = 'pg connector'
+description = 'pg connector for java21'
 
 jar {
-    archiveBaseName = 'weaver'
+    archiveBaseName = 'weaver21'
 }
 
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'com.drewnoakes:metadata-extractor:2.19.0'
+    implementation project(':pgjava_c')
 }
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 

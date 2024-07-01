@@ -44,7 +44,7 @@ class BaseWeaverConnection implements Connection {
     
     private final long nativePointer;
     private final AtomicBoolean isOpen = new AtomicBoolean(true);
-    private final StreamingTransformer transformer = new StreamingTransformer();
+    private final StreamingTransformer transformer;
     
     private long transactionId;
     
@@ -59,25 +59,28 @@ class BaseWeaverConnection implements Connection {
         
     private BaseWeaverConnection(long nativePointer) {
         this.nativePointer = nativePointer;
+        this.transformer = null;
     }
 
-    private BaseWeaverConnection(String username, String password, String database) {
+    private BaseWeaverConnection(String username, String password, String database, StreamingTransformer version) {
         nativePointer = connectToDatabaseWithUsername(username, password, database);
+        this.transformer = version;
     }
     
-    private BaseWeaverConnection(String db) {
+    private BaseWeaverConnection(String db, StreamingTransformer version) {
         nativePointer = connectToDatabaseAnonymously(db);
+        this.transformer = version;
     }
     
-    static BaseWeaverConnection connectAnonymously(String db) {
+    static BaseWeaverConnection connectAnonymously(String db, StreamingTransformer version) {
         closeDiscardedConnections();
-        BaseWeaverConnection connect = new BaseWeaverConnection(db);
+        BaseWeaverConnection connect = new BaseWeaverConnection(db, version);
         if (connect.isValid()) {
             liveConnections.put(connect.nativePointer, new ConnectionRef(connect, connections));
             return connect;
         } else {
             try {
-                connect.dispose();
+                connect.close();
             } catch (ExecutionException ee) {
                 LOGGING.log(Level.WARNING, "Error disposing connection", ee);
             }
@@ -85,15 +88,15 @@ class BaseWeaverConnection implements Connection {
         }
     }
     
-    static BaseWeaverConnection connectUser(String username, String password, String database) {
+    static BaseWeaverConnection connectUser(String username, String password, String database, StreamingTransformer version) {
         closeDiscardedConnections();
-        BaseWeaverConnection connect = new BaseWeaverConnection(username, password, database);
+        BaseWeaverConnection connect = new BaseWeaverConnection(username, password, database, version);
         if (connect.isValid()) {
             liveConnections.put(connect.nativePointer, new ConnectionRef(connect, connections));
             return connect;
         } else {
             try {
-                connect.dispose();
+                connect.close();
             } catch (ExecutionException ee) {
                 LOGGING.log(Level.WARNING, "Error disposing connection", ee);
             }
