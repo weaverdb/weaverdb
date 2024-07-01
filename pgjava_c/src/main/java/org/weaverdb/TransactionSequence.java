@@ -1,12 +1,7 @@
-/*
 
- */
 package org.weaverdb;
 
-/**
- *
- * @author myronscott
- */
+
 public class TransactionSequence implements AutoCloseable {
     private final Connection connection;
     private final long current;

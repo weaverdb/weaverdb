@@ -1,16 +1,10 @@
-/*
 
- */
 package org.weaverdb;
 
 import java.io.IOException;
 import java.nio.channels.Pipe;
 import java.nio.channels.ReadableByteChannel;
 
-/**
- *
- * @author myronscott
- */
 class BoundInputChannel<T> extends BoundInput<ReadableByteChannel> {
     
     private final StreamingTransformer transformer;

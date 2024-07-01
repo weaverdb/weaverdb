@@ -1,17 +1,11 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Interface.java to edit this template
- */
+
 package org.weaverdb;
 
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.function.Supplier;
 
-/**
- *
- * @author myronscott
- */
+
 public interface Statement extends AutoCloseable {
 
     long command();

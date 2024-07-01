@@ -1,14 +1,10 @@
-/*
- */
+
 package org.weaverdb;
 
 import java.nio.channels.WritableByteChannel;
 import java.util.function.Supplier;
 
-/**
- *
- * @author myronscott
- */
+
 class BoundOutputReceiver<T> extends BoundOutput<WritableByteChannel> {
     private final Supplier<T> type;
 

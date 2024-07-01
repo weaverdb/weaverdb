@@ -14,10 +14,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-/**
- *
- * @author myronscott
- */
 
 @ExtendWith({InstallNative.class})
 public class ImageTest {

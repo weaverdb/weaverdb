@@ -1,7 +1,4 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/UnitTests/JUnit5TestClass.java to edit this template
- */
+
 package org.weaverdb;
 
 import java.lang.invoke.MethodHandle;
@@ -13,10 +10,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.BeforeAll;
 
-/**
- *
- * @author myronscott
- */
+
 public class JavaFunctionsTest {
     
     public JavaFunctionsTest() {

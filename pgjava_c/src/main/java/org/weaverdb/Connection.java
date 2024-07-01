@@ -1,7 +1,4 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Interface.java to edit this template
- */
+
 package org.weaverdb;
 
 import java.io.InputStream;
@@ -9,10 +6,6 @@ import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.ServiceLoader;
 
-/**
- *
- * @author myronscott
- */
 public interface Connection extends AutoCloseable {
     
     static ConnectionFactory loader = loadConnectionFactory();

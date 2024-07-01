@@ -7,10 +7,7 @@ import java.nio.channels.Pipe;
 import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.Future;
 
-/**
- *
- * @author myronscott
- */
+
 class BoundOutputChannel<T> extends BoundOutput<WritableByteChannel> {
     private final StreamingTransformer transformer;
     private final Output.Channel<? extends T> type;

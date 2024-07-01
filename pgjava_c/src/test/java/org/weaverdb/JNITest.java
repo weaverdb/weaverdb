@@ -32,10 +32,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-/**
- *
- * @author myronscott
- */
 @ExtendWith({InstallNative.class})
 public class JNITest {
     
