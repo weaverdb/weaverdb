@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/nodes/list.c,v 1.1.1.1 2006/08/12 00:20:42 synmscott Exp $
+ *
  *
  * NOTES
  *	  XXX a few of the following functions are duplicated to handle

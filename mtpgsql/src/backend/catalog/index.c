@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/catalog/index.c,v 1.4 2007/03/20 03:07:40 synmscott Exp $
+ *
  *
  *
  * INTERFACE ROUTINES

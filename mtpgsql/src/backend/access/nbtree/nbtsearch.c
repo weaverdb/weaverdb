@@ -8,7 +8,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/nbtree/nbtsearch.c,v 1.3 2007/04/22 23:16:49 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

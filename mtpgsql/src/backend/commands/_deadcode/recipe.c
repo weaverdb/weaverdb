@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/commands/_deadcode/recipe.c,v 1.1.1.1 2006/08/12 00:20:26 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

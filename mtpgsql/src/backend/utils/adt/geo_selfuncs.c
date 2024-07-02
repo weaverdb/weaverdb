@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/geo_selfuncs.c,v 1.1.1.1 2006/08/12 00:21:44 synmscott Exp $
+ *
  *
  *	XXX These are totally bogus.  Perhaps someone will make them do
  *	something reasonable, someday.

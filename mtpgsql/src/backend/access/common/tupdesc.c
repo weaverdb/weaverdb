@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/common/tupdesc.c,v 1.1.1.1 2006/08/12 00:19:56 synmscott Exp $
+ *
  *
  * NOTES
  *	  some of the executor utility code such as "ExecTypeFromTL" should be

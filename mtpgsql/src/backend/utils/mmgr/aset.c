@@ -11,7 +11,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/mmgr/aset.c,v 1.1.1.1 2006/08/12 00:22:03 synmscott Exp $
+ *
  *
  * NOTE:
  *	This is a new (Feb. 05, 1999) implementation of the allocation set

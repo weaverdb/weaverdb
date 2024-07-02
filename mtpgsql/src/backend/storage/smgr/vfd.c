@@ -10,7 +10,7 @@
  *  on the system
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/storage/smgr/vfd.c,v 1.4 2007/05/23 15:39:23 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

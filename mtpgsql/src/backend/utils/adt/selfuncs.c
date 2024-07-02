@@ -15,7 +15,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/selfuncs.c,v 1.2 2006/09/01 19:06:35 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

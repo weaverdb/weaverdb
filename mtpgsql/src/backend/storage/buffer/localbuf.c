@@ -16,7 +16,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/storage/buffer/localbuf.c,v 1.2 2007/04/22 23:16:49 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

@@ -10,7 +10,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/tcop/utility.c,v 1.1.1.1 2006/08/12 00:21:34 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

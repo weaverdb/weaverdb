@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/varlena.c,v 1.3 2007/03/31 20:36:54 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

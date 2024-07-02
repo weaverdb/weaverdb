@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------
  * formatting.c
  *
- * $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/formatting.c,v 1.1.1.1 2006/08/12 00:21:42 synmscott Exp $
+ *
  *
  *
  *	 Portions Copyright (c) 1999-2000, PostgreSQL, Inc

@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/commands/rename.c,v 1.2 2006/08/15 18:24:26 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
- *	$Id: nodeHash.c,v 1.1.1.1 2006/08/12 00:20:32 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

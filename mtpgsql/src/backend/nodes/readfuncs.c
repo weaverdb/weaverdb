@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/nodes/readfuncs.c,v 1.1.1.1 2006/08/12 00:20:44 synmscott Exp $
+ *
  *
  * NOTES
  *	  Most of the read functions for plan nodes are tested. (In fact, they

@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/hash/hash.c,v 1.1.1.1 2006/08/12 00:19:57 synmscott Exp $
+ *
  *
  * NOTES
  *	  This file contains only the public interface routines.

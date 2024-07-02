@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/transam/xact.c,v 1.1.1.1 2006/08/12 00:20:06 synmscott Exp $
+ *
  *
  * NOTES
  *		Transaction aborts can now occur two ways:

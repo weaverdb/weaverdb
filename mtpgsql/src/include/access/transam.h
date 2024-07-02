@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: transam.h,v 1.2 2006/08/13 00:39:43 synmscott Exp $
+ *
  *
  *	 NOTES
  *		Transaction System Version 101 now support proper oid

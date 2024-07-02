@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/optimizer/plan/setrefs.c,v 1.1.1.1 2006/08/12 00:20:52 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

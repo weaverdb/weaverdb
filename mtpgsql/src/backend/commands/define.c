@@ -10,7 +10,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/commands/define.c,v 1.1.1.1 2006/08/12 00:20:20 synmscott Exp $
+ *
  *
  * DESCRIPTION
  *	  The "DefineFoo" routines take the parse tree and pick out the

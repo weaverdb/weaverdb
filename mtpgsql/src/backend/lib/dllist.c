@@ -10,7 +10,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/lib/dllist.c,v 1.1.1.1 2006/08/12 00:20:36 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

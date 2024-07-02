@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: buf_internals.h,v 1.4 2007/04/11 00:11:14 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

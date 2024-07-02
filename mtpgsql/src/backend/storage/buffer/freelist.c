@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/storage/buffer/freelist.c,v 1.3 2007/05/23 15:39:23 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

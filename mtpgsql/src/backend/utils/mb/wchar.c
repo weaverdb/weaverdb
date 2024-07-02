@@ -1,7 +1,7 @@
 /*
  * conversion functions between pg_wchar and multi-byte streams.
  * Tatsuo Ishii
- * $Id: wchar.c,v 1.1.1.1 2006/08/12 00:22:02 synmscott Exp $
+ *
  *
  * WIN1250 client encoding updated by Pavel Behal
  *

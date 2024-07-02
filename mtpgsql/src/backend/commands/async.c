@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/commands/async.c,v 1.1.1.1 2006/08/12 00:20:17 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

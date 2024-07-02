@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/transam/transam.c,v 1.2 2006/08/13 00:39:27 synmscott Exp $
+ *
  *
  * NOTES
  *	  This file contains the high level access-method interface to the

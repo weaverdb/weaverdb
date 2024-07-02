@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/misc/database.c,v 1.1.1.1 2006/08/12 00:22:02 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

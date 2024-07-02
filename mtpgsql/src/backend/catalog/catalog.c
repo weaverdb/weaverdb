@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/catalog/catalog.c,v 1.2 2007/01/08 23:20:29 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

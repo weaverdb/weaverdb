@@ -4,7 +4,7 @@
  *
  * Tatsuo Ishii
  *
- * $Id: win.c,v 1.1.1.1 2006/08/12 00:22:02 synmscott Exp $
+ *
  */
 
 

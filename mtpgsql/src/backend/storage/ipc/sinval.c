@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/storage/ipc/sinval.c,v 1.2 2006/08/15 18:24:28 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

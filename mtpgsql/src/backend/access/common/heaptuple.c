@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/common/heaptuple.c,v 1.1.1.1 2006/08/12 00:19:55 synmscott Exp $
+ *
  *
  * NOTES
  *	  The old interface functions have been converted to macros

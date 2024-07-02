@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/nodes/makefuncs.c,v 1.1.1.1 2006/08/12 00:20:42 synmscott Exp $
+ *
  *
  * NOTES
  *	  Creator functions in POSTGRES 4.2 are generated automatically. Most of

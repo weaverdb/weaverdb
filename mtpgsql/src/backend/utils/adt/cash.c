@@ -9,7 +9,7 @@
  * workings can be found in the book "Software Solutions in C" by
  * Dale Schumacher, Academic Press, ISBN: 0-12-632360-7.
  *
- * $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/cash.c,v 1.1.1.1 2006/08/12 00:21:38 synmscott Exp $
+ *
  */
 
 #include <limits.h>

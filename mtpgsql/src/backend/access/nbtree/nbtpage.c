@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/nbtree/nbtpage.c,v 1.1.1.1 2006/08/12 00:20:02 synmscott Exp $
+ *
  *
  *	NOTES
  *	   Postgres btree pages look like ordinary relation pages.	The opaque

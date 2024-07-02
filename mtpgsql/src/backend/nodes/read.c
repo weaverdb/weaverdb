@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/nodes/read.c,v 1.1.1.1 2006/08/12 00:20:43 synmscott Exp $
+ *
  *
  * HISTORY
  *	  AUTHOR			DATE			MAJOR EVENT

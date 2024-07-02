@@ -15,7 +15,7 @@
  *	  locate group boundaries.
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/executor/nodeGroup.c,v 1.1.1.1 2006/08/12 00:20:31 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

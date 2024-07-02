@@ -2,7 +2,7 @@
  * This file contains some public functions
  * related to show/set/reset variable commands.
  * Tatsuo Ishii
- * $Id: variable.c,v 1.1.1.1 2006/08/12 00:22:02 synmscott Exp $
+ *
  */
 
 #include "postgres.h"

@@ -5,7 +5,7 @@
  *
  *	1998 Jan Wieck
  *
- * $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/numeric.c,v 1.1.1.1 2006/08/12 00:21:48 synmscott Exp $
+ *
  *
  * ----------
  */

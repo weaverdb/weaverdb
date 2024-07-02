@@ -1,7 +1,7 @@
 /* ----------
  * lztext.c -
  *
- * $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/lztext.c,v 1.1.1.1 2006/08/12 00:21:45 synmscott Exp $
+ *
  *
  *	Text type with internal LZ compressed representation. Uses the
  *	standard PostgreSQL compression method.

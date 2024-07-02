@@ -2,7 +2,7 @@
  * Headers for handling of 'SET var TO', 'SHOW var' and 'RESET var'
  * statements
  *
- * $Id: variable.h,v 1.1.1.1 2006/08/12 00:22:17 synmscott Exp $
+ *
  *
  */
 #ifndef VARIABLE_H

@@ -4,7 +4,7 @@
  *	  Functions for the built-in type bit() and varying bit().
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/varbit.c,v 1.1.1.1 2006/08/12 00:21:54 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

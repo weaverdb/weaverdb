@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/storage/buffer/buf_table.c,v 1.5 2007/05/23 15:39:23 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

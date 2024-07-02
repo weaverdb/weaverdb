@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/transam/transsup.c,v 1.3 2007/02/24 02:58:47 synmscott Exp $
+ *
  *
  * NOTES
  *	  This file contains support functions for the high

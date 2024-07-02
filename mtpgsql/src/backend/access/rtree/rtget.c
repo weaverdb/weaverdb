@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/rtree/rtget.c,v 1.1.1.1 2006/08/12 00:20:04 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

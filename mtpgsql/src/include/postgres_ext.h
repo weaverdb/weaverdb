@@ -16,7 +16,7 @@
  *	use header files that are otherwise internal to Postgres to interface
  *	with the backend.
  *
- * $Id: postgres_ext.h,v 1.1.1.1 2006/08/12 00:22:07 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

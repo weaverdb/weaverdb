@@ -27,7 +27,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/executor/execMain.c,v 1.2 2006/08/15 18:24:27 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

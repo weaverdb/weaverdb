@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/storage/lmgr/proc.c,v 1.1.1.1 2006/08/12 00:21:29 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */
@@ -48,7 +48,7 @@
  *		This is so that we can support more backends. (system-wide semaphore
  *		sets run out pretty fast.)				  -ay 4/95
  *
- * $Header: /cvs/weaver/mtpgsql/src/backend/storage/lmgr/proc.c,v 1.1.1.1 2006/08/12 00:21:29 synmscott Exp $
+ *
  */
 #include "postgres.h"
 

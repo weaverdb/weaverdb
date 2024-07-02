@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/commands/command.c,v 1.1.1.1 2006/08/12 00:20:18 synmscott Exp $
+ *
  *
  * NOTES
  *	  The PortalExecutorHeapMemory crap needs to be eliminated

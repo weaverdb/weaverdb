@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/cache/syscache.c,v 1.1.1.1 2006/08/12 00:21:58 synmscott Exp $
+ *
  *
  * NOTES
  *	  These routines allow the parser/planner/executor to perform

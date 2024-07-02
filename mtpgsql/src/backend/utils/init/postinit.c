@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/init/postinit.c,v 1.2 2006/08/15 01:37:17 synmscott Exp $
+ *
  *
  *
  *-------------------------------------------------------------------------

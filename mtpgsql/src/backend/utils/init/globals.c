@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/init/globals.c,v 1.1.1.1 2006/08/12 00:22:00 synmscott Exp $
+ *
  *
  * NOTES
  *	  Globals used all over the place should be declared here and not

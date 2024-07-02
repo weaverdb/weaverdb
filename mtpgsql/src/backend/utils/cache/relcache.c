@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/cache/relcache.c,v 1.5 2007/04/22 23:16:49 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

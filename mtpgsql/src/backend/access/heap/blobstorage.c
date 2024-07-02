@@ -6,7 +6,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/heap/blobstorage.c,v 1.6 2007/05/31 15:02:30 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
 */

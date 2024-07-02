@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/libpq/be-fsstubs.c,v 1.1.1.1 2006/08/12 00:20:37 synmscott Exp $
+ *
  *
  * NOTES
  *	  This should be moved to a more appropriate place.  It is here

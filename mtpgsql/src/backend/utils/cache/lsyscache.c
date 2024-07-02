@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/cache/lsyscache.c,v 1.1.1.1 2006/08/12 00:21:56 synmscott Exp $
+ *
  *
  * NOTES
  *	  Eventually, the index information should go through here, too.

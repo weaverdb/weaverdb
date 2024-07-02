@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/executor/execFlatten.c,v 1.1.1.1 2006/08/12 00:20:26 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

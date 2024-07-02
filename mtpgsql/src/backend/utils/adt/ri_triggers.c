@@ -6,7 +6,7 @@
  *
  *	1999 Jan Wieck
  *
- * $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/ri_triggers.c,v 1.1.1.1 2006/08/12 00:21:51 synmscott Exp $
+ *
  *
  * ----------
  */

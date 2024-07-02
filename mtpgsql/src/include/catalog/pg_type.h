@@ -8,7 +8,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: pg_type.h,v 1.3 2006/09/20 18:45:44 synmscott Exp $
+ *
  *
  * NOTES
  *	  the genbki.sh script reads this file and generates .bki

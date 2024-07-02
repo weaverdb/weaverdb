@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/executor/nodeDelegatedIndexscan.c,v 1.2 2007/02/12 00:31:28 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

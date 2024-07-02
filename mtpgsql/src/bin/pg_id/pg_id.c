@@ -6,7 +6,7 @@
  *
  * Copyright (C) 2000 by PostgreSQL Global Development Group
  *
- * $Header: /cvs/weaver/mtpgsql/src/bin/pg_id/pg_id.c,v 1.1.1.1 2006/08/12 00:11:28 synmscott Exp $
+ *
  */
 #include <postgres.h>
 

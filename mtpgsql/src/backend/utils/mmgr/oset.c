@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/mmgr/oset.c,v 1.1.1.1 2006/08/12 00:22:03 synmscott Exp $
+ *
  *
  * NOTE
  *	  XXX This is a preliminary implementation which lacks fail-fast

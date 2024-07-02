@@ -7,7 +7,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/rewrite/rewriteManip.c,v 1.1.1.1 2006/08/12 00:21:23 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

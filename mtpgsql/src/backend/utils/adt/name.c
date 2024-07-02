@@ -12,7 +12,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/adt/name.c,v 1.1.1.1 2006/08/12 00:21:46 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

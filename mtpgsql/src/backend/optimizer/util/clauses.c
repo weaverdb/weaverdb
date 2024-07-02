@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/optimizer/util/clauses.c,v 1.1.1.1 2006/08/12 00:20:55 synmscott Exp $
+ *
  *
  * HISTORY
  *	  AUTHOR			DATE			MAJOR EVENT

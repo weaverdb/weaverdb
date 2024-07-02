@@ -10,7 +10,7 @@
  *	doesn't work! - jolly 8/19/95
  *
  *
- *	$Id: version.c,v 1.1.1.1 2006/08/12 00:20:26 synmscott Exp $
+ *
  *
  * NOTES
  *	At the point the version is defined, 2 physical relations are created

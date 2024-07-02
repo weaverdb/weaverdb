@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/tcop/fastpath.c,v 1.1.1.1 2006/08/12 00:21:32 synmscott Exp $
+ *
  *
  * NOTES
  *	  This cruft is the server side of PQfn.

@@ -7,7 +7,7 @@
  *
  * 1999/1/15 Tatsuo Ishii
  *
- * $Id: big5.c,v 1.1.1.1 2006/08/12 00:22:00 synmscott Exp $
+ *
  */
 
 #include "mb/pg_wchar.h"

@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/cache/inval.c,v 1.1.1.1 2006/08/12 00:21:56 synmscott Exp $
+ *
  *
  * Note - this code is real crufty...
  *

@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/nbtree/nbtinsert.c,v 1.3 2007/05/23 15:39:24 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

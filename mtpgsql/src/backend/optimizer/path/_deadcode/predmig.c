@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/optimizer/path/_deadcode/predmig.c,v 1.1.1.1 2006/08/12 00:20:49 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

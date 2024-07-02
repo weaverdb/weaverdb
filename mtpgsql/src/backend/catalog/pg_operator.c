@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/catalog/pg_operator.c,v 1.1.1.1 2006/08/12 00:20:12 synmscott Exp $
+ *
  *
  * NOTES
  *	  these routines moved here from commands/define.c and somewhat cleaned up.

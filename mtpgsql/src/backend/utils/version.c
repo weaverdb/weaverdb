@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/utils/version.c,v 1.1.1.1 2006/08/12 00:25:28 synmscott Exp $
+ *
  *
  *	STANDALONE CODE - do not use error routines as this code is not linked
  *	with any...

@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/catalog/aclchk.c,v 1.1.1.1 2006/08/12 00:20:08 synmscott Exp $
+ *
  *
  * NOTES
  *	  See acl.h.

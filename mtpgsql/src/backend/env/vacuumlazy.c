@@ -31,7 +31,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/env/vacuumlazy.c,v 1.7 2007/05/23 15:39:24 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

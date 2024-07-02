@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/storage/lmgr/multithread.c,v 1.3 2007/03/20 03:07:39 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */
@@ -47,7 +47,7 @@
  *		This is so that we can support more backends. (system-wide semaphore
  *		sets run out pretty fast.)				  -ay 4/95
  *
- * $Header: /cvs/weaver/mtpgsql/src/backend/storage/lmgr/multithread.c,v 1.3 2007/03/20 03:07:39 synmscott Exp $
+ *
  */
 #include <time.h>
 #include <unistd.h>

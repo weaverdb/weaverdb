@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/tcop/postgres.c,v 1.2 2007/03/20 03:07:41 synmscott Exp $
+ *
  *
  * NOTES
  *	  this is the "main" module of the postgres backend and

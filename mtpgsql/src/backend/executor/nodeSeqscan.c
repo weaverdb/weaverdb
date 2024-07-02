@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/executor/nodeSeqscan.c,v 1.1.1.1 2006/08/12 00:20:34 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

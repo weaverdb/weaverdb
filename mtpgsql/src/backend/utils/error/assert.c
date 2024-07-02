@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/utils/error/assert.c,v 1.1.1.1 2006/08/12 00:21:58 synmscott Exp $
+ *
  *
  * NOTE
  *	  This should eventually work with elog(), dlog(), etc.

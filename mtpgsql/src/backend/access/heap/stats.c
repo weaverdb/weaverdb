@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/heap/stats.c,v 1.1.1.1 2006/08/12 00:20:00 synmscott Exp $
+ *
  *
  * NOTES
  *	  initam should be moved someplace else.

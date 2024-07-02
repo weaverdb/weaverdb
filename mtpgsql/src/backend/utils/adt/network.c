@@ -3,7 +3,7 @@
  *	is for IP V4 CIDR notation, but prepared for V6: just
  *	add the necessary bits where the comments indicate.
  *
- *	$Id: network.c,v 1.1.1.1 2006/08/12 00:21:46 synmscott Exp $
+ *
  *	Jon Postel RIP 16 Oct 1998
  */
 

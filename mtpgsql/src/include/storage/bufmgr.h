@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: bufmgr.h,v 1.8 2007/05/23 15:40:04 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/bin/pg_version/pg_version.c,v 1.1.1.1 2006/08/12 00:11:29 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

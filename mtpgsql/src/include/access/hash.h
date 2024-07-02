@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: hash.h,v 1.1.1.1 2006/08/12 00:22:09 synmscott Exp $
+ *
  *
  * NOTES
  *		modeled after Margo Seltzer's hash implementation for unix.

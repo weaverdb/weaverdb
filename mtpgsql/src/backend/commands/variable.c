@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/commands/variable.c,v 1.3 2006/08/15 18:24:27 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

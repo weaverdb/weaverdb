@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/access/hash/hashutil.c,v 1.1.1.1 2006/08/12 00:19:58 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

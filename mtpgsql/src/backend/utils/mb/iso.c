@@ -4,7 +4,7 @@
  *
  * Tatsuo Ishii
  *
- * $Id: iso.c,v 1.1.1.1 2006/08/12 00:22:01 synmscott Exp $
+ *
  */
 
 
