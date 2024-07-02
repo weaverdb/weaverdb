@@ -40,8 +40,8 @@ public interface Connection extends AutoCloseable {
     
     Connection helper() throws ExecutionException;
     
-    static Connection connectAnonymously(String db) {
-        return loader.connectAnonymousy(db);
+    static Connection connect(String database) {
+        return loader.connect(database);
     }
     
     static Connection connectUser(String username, String password, String database) {

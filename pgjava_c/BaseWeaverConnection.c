@@ -92,26 +92,28 @@ JNIEXPORT void JNICALL Java_org_weaverdb_WeaverInitializer_init(JNIEnv *env,jobj
     JavaVM*   jvm;
     const char*    variables;
 
-	if ( (*env)->IsSameObject(env, jd, NULL) ) {
-            (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment setup is not valid");
-            return;
-        }
+    shuttingdown = false;
 
-        variables = (*env)->GetStringUTFChars(env,jd,NULL);
+    if ( (*env)->IsSameObject(env, jd, NULL) ) {
+        (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment setup is not valid");
+        return;
+    }
 
-        bool valid = initweaverbackend(variables);
+    variables = (*env)->GetStringUTFChars(env,jd,NULL);
 
-        (*env)->ReleaseStringUTFChars(env, jd, variables);
-	if ( !valid ) {
-            (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment not valid, see db log");
-            return;
-        }
-        
-        Cache = CreateCache(env);
-		
-	(*env)->GetJavaVM(env,&jvm);
+    bool valid = initweaverbackend(variables);
 
-        SetJVM(jvm,"org/weaverdb/WeaverObjectLoader");
+    (*env)->ReleaseStringUTFChars(env, jd, variables);
+    if ( !valid ) {
+        (*env)->ThrowNew(env,(*env)->FindClass(env,"java/lang/UnsatisfiedLinkError"),"environment not valid, see db log");
+        return;
+    }
+
+    Cache = CreateCache(env);
+
+    (*env)->GetJavaVM(env,&jvm);
+
+    SetJVM(jvm,"org/weaverdb/WeaverObjectLoader");
 }
 
 JNIEXPORT void JNICALL Java_org_weaverdb_WeaverInitializer_close(JNIEnv *env,jobject talkerObject)
@@ -128,7 +130,7 @@ JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_grabConnection
   (JNIEnv * env, jobject talkerObject, jstring theName, jstring thePassword, jstring theConnect)
  {
     if ( shuttingdown ) {            
-        (*env)->ThrowNew(env,Cache->exception,"shutting down");
+        (*env)->ThrowNew(env,(*env)->FindClass(env,"org/weaverdb/ExecutionException"),"shutting down");
         return 0;
     }
 
@@ -150,7 +152,7 @@ JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_connectSubConnect
         ConnMgr  cparent = getConnMgr(env,talkerObject);
 
         if ( shuttingdown ) {
-            (*env)->ThrowNew(env,Cache->exception,"shutting down");
+            (*env)->ThrowNew(env,(*env)->FindClass(env,"org/weaverdb/ExecutionException"),"shutting down");
             return 0;
         }
         ConnMgr mgr = CreateSubConnection(cparent);

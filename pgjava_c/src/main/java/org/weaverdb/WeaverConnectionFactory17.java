@@ -5,7 +5,7 @@ public class WeaverConnectionFactory17 implements ConnectionFactory {
     StreamingTransformer transformer = new StreamingTransformer17();
     
     @Override
-    public Connection connectAnonymousy(String db) {
+    public Connection connect(String db) {
         return BaseWeaverConnection.connectAnonymously(db, transformer);
     }
     

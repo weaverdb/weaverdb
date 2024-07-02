@@ -37,6 +37,8 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
                         .filter(bo->bo.getName() != null)
                         .sorted((a, b)->Integer.compare(a.getIndex(), b.getIndex()))
                         .toArray(Output[]::new));
+            } else {
+                stmt.close();
             }
             return advanced;
         } catch (ExecutionException ee) {

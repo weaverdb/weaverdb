@@ -4,7 +4,7 @@ package org.weaverdb;
 public class WeaverConnectionFactory21 implements ConnectionFactory {
 
     @Override
-    public Connection connectAnonymousy(String db) {
+    public Connection connect(String db) {
         return BaseWeaverConnection.connectAnonymously(db, new StreamingTransformer21());
     }
 
