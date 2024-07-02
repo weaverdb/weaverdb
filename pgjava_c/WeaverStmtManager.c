@@ -60,15 +60,18 @@ typedef struct WeaverStmtManager {
     inputDef* inputLog;
     outputDef* outputLog;
 
-    short log_count;
+    short input_slots;
+    short output_slots;
 } WeaverStmtManager;
 
 static Output GetLink(ConnMgr, StmtMgr mgr, int index, short type);
 static Output AddLink(ConnMgr, StmtMgr mgr, Output bind);
 static Input GetBind(ConnMgr, StmtMgr mgr, const char * vari, short type);
 static Input AddBind(ConnMgr, StmtMgr mgr, Input bind);
-static short ExpandBindings(ConnMgr, StmtMgr mgr);
-static short ResetBindings(StmtMgr mgr);
+static short ExpandInputBindings(ConnMgr, StmtMgr mgr);
+static short ResetInputBindings(StmtMgr mgr);
+static short ExpandOutputBindings(ConnMgr, StmtMgr mgr);
+static short ResetOutputBindings(StmtMgr mgr);
 
 static int IndirectToDirect(void* userenv, int varType, void *varAdd, int varSize);
 
@@ -107,18 +110,11 @@ CreateWeaverStmtManager(ConnMgr connection) {
 
                 memset(&mgr->errordelegate, 0x00, sizeof (Error));
 
-                mgr->log_count = MAX_FIELDS;
+                mgr->input_slots = 0;
+                mgr->output_slots = 0;
 
-                if (mgr->log_count > 0) {
-                    mgr->inputLog = WAllocConnectionMemory(connection->theConn, sizeof (inputDef) * mgr->log_count);
-                    mgr->outputLog = WAllocConnectionMemory(connection->theConn, sizeof (outputDef) * mgr->log_count);
-                    /*  zero statement structures */
-                    memset(mgr->outputLog, 0, sizeof (outputDef) * mgr->log_count);
-                    memset(mgr->inputLog, 0, sizeof (inputDef) * mgr->log_count);
-                } else {
-                    mgr->inputLog = NULL;
-                    mgr->outputLog = NULL;
-                }
+                mgr->inputLog = NULL;
+                mgr->outputLog = NULL;
             }
         }
     }
@@ -336,12 +332,12 @@ Input GetBind(ConnMgr conn, StmtMgr mgr, const char * vari, short type) {
     }
 
     short x;
-    for (x = 0; x < mgr->log_count; x++) {
+    for (x = 0; x < mgr->input_slots; x++) {
         if (mgr->inputLog[x].binder[0] == '\0' || strcmp(vari, mgr->inputLog[x].binder) == 0) break;
     }
 
-    if (x == mgr->log_count) {
-        ExpandBindings(conn, mgr);
+    if (x == mgr->input_slots) {
+        mgr->input_slots = ExpandInputBindings(conn, mgr);
     }
 
     bind = &mgr->inputLog[x];
@@ -377,12 +373,12 @@ Output GetLink(ConnMgr conn, StmtMgr mgr, int index, short type) {
     Output link = NULL;
     Bound base = NULL;
 
-    for (x = 0; x < mgr->log_count; x++) {
+    for (x = 0; x < mgr->output_slots; x++) {
         if ((index == mgr->outputLog[x].index) || (mgr->outputLog[x].index == 0)) break;
     }
 
-    if (x == mgr->log_count) {
-        ExpandBindings(conn, mgr);
+    if (x == mgr->output_slots) {
+        ExpandOutputBindings(conn, mgr);
     }
 
     link = &mgr->outputLog[x];
@@ -404,51 +400,69 @@ Output AddLink(ConnMgr conn, StmtMgr mgr, Output link) {
     return link;
 }
 
-short ExpandBindings(ConnMgr conn, StmtMgr mgr) {
-    int count = mgr->log_count * 2;
+short ExpandInputBindings(ConnMgr conn, StmtMgr mgr) {
+    int count = mgr->input_slots * 2;
 
-    if (count <= 0) count = 2;
+    if (count <= 0) count = 4;
 
     inputDef* inputs = mgr->statement != NULL ? WAllocStatementMemory(mgr->statement, sizeof (inputDef) * count)
         : WAllocConnectionMemory(conn->theConn, sizeof (inputDef) * count);
     memset(inputs, 0, sizeof (inputDef) * count);
 
+    if (mgr->inputLog != NULL) {
+        memmove(inputs, mgr->inputLog, sizeof (inputDef) * mgr->input_slots);
+        WFreeMemory(conn->theConn, mgr->inputLog);
+    }
+
+    mgr->inputLog = inputs;
+    mgr->input_slots = count;
+
+    ResetInputBindings(mgr);
+
+    return count;
+}
+
+short ExpandOutputBindings(ConnMgr conn, StmtMgr mgr) {
+    int count = mgr->output_slots * 2;
+
+    if (count <= 0) count = 4;
+
     outputDef* outputs = mgr->statement != NULL ? WAllocStatementMemory(mgr->statement, sizeof (outputDef) * count)
         : WAllocConnectionMemory(conn->theConn, sizeof (outputDef) * count);
     memset(outputs, 0, sizeof (outputDef) * count);
 
-    if (mgr->inputLog != NULL) {
-        memmove(inputs, mgr->inputLog, sizeof (inputDef) * mgr->log_count);
-        WFreeMemory(conn->theConn, mgr->inputLog);
-    }
     if (mgr->outputLog != NULL) {
-        memmove(outputs, mgr->outputLog, sizeof (outputDef) * mgr->log_count);
+        memmove(outputs, mgr->outputLog, sizeof (outputDef) * mgr->output_slots);
         WFreeMemory(conn->theConn, mgr->outputLog);
     }
 
-    mgr->inputLog = inputs;
     mgr->outputLog = outputs;
-    mgr->log_count = count;
+    mgr->output_slots = count;
 
-    ResetBindings(mgr);
+    ResetOutputBindings(mgr);
 
     return 0;
 }
 
-short ResetBindings(StmtMgr mgr) {
+short ResetInputBindings(StmtMgr mgr) {
     int count = 0;
-    for (count = 0; count < mgr->log_count; count++) {
-        Output link = &mgr->outputLog[count];
-        Bound base = OutputToBound(link);
-        if (link->index != 0) {
-            WOutputTransfer(mgr->statement, link->index, base->type, &base->indirect, IndirectToDirect);
-        }
-    }
-    for (count = 0; count < mgr->log_count; count++) {
+    for (count = 0; count < mgr->input_slots; count++) {
         Input bind = &mgr->inputLog[count];
         Bound base = InputToBound(bind);
         if (bind->binder[0] != '\0') {
             WBindTransfer(mgr->statement, bind->binder, base->type, &base->indirect, IndirectToDirect);
+        }
+    }
+    return 0;
+}
+
+short ResetOutputBindings(StmtMgr mgr) {
+    int count = 0;
+    for (count = 0; count < mgr->output_slots; count++) {
+        Output link = &mgr->outputLog[count];
+        Bound base = OutputToBound(link);
+        if (link->index != 0) {
+            WOutputTransfer(mgr->statement, link->index, base->type, &base->indirect, IndirectToDirect);
         }
     }
     return 0;
