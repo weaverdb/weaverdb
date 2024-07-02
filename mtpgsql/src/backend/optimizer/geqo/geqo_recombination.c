@@ -3,7 +3,6 @@
 * geqo_recombination.c
 *	 misc recombination procedures
 *
-* $Id: geqo_recombination.c,v 1.1.1.1 2006/08/12 00:20:45 synmscott Exp $
 *
 *-------------------------------------------------------------------------
 */

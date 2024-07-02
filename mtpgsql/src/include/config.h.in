@@ -9,7 +9,6 @@
  * or in config.h afterwards.  Of course, if you edit config.h, then your
  * changes will be overwritten the next time you run configure.
  *
- * $Id: config.h,v 1.1.1.1 2006/08/12 00:22:07 synmscott Exp $
  */
 
 #ifndef CONFIG_H

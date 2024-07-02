@@ -4,7 +4,7 @@
  *	  this file contains the interface to version.c.
  *	  Also some parameters.
  *
- * $Header: /cvs/weaver/mtpgsql/src/include/version.h,v 1.2 2007/02/24 02:58:52 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

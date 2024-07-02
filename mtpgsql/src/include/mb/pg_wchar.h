@@ -1,4 +1,3 @@
-/* $Id: pg_wchar.h,v 1.1.1.1 2006/08/12 00:22:19 synmscott Exp $ */
 
 #ifndef PG_WCHAR_H
 #define PG_WCHAR_H

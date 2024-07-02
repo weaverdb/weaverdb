@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: rel.h,v 1.2 2007/02/11 00:43:33 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

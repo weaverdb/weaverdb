@@ -13,8 +13,6 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
- * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/backend/parser/gram.y,v 1.2 2006/08/15 01:37:17 synmscott Exp $
  *
  * HISTORY
  *	  AUTHOR			DATE			MAJOR EVENT

@@ -7,7 +7,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: relcache.h,v 1.3 2007/02/11 03:59:54 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

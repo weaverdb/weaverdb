@@ -6,7 +6,6 @@
 *	 OX1 operator according to Davis
 *	 (Proc Int'l Joint Conf on AI)
 *
-* $Id: geqo_ox1.c,v 1.1.1.1 2006/08/12 00:20:44 synmscott Exp $
 *
 *-------------------------------------------------------------------------
 */

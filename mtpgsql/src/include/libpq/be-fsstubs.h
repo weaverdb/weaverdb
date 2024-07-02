@@ -7,7 +7,6 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: be-fsstubs.h,v 1.1.1.1 2006/08/12 00:22:18 synmscott Exp $
  *
  *-------------------------------------------------------------------------
  */
@@ -39,7 +38,7 @@ extern struct varlena *loread(int fd, int len);
 extern int	lowrite(int fd, struct varlena * wbuf);
 
 /*
- * Added for buffer leak prevention [ Pascal André <andre@via.ecp.fr> ]
+ * Added for buffer leak prevention [ Pascal Andrï¿½ <andre@via.ecp.fr> ]
  */
 extern void lo_commit(bool isCommit);
 

@@ -6,7 +6,6 @@
 *	 PX operator according to Syswerda
 *	 (The Genetic Algorithms Handbook, L Davis, ed)
 *
-* $Id: geqo_px.c,v 1.1.1.1 2006/08/12 00:20:45 synmscott Exp $
 *
 *-------------------------------------------------------------------------
 */

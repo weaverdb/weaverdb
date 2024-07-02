@@ -6,7 +6,6 @@
 *	 CX operator according to Oliver et al
 *	 (Proc 2nd Int'l Conf on GA's)
 *
-* $Id: geqo_cx.c,v 1.1.1.1 2006/08/12 00:20:44 synmscott Exp $
 *
 *-------------------------------------------------------------------------
 */

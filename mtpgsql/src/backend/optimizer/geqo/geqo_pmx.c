@@ -6,7 +6,6 @@
 *	 PMX operator according to Goldberg & Lingle
 *	 (Proc Int'l Conf on GA's)
 *
-* $Id: geqo_pmx.c,v 1.1.1.1 2006/08/12 00:20:45 synmscott Exp $
 *
 *-------------------------------------------------------------------------
 */

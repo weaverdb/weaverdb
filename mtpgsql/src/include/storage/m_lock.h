@@ -8,7 +8,7 @@
  *
  *
  * IDENTIFICATION
- *	  $Header: /cvs/weaver/mtpgsql/src/include/storage/m_lock.h,v 1.1.1.1 2006/08/12 00:22:24 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

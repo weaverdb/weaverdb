@@ -7,8 +7,6 @@
 # Copyright (c) 1994, Regents of the University of California
 #
 #
-# IDENTIFICATION
-#    $Header: /cvs/weaver/mtpgsql/src/backend/utils/Gen_fmgrtab.sh,v 1.1.1.1 2006/08/12 00:21:34 synmscott Exp $
 #
 # NOTES
 #    Passes any -D options on to cpp prior to generating the list
@@ -86,7 +84,6 @@ cat > $HFILE <<FuNkYfMgRsTuFf
  *
  * Copyright (c) 1994, Regents of the University of California
  *
- * $Id: Gen_fmgrtab.sh,v 1.1.1.1 2006/08/12 00:21:34 synmscott Exp $
  *
  * NOTES
  *	******************************
@@ -220,8 +217,6 @@ cat > $TABCFILE <<FuNkYfMgRtAbStUfF
  * Copyright (c) 1994, Regents of the University of California
  *
  *
- * IDENTIFICATION
- *    $Header: /cvs/weaver/mtpgsql/src/backend/utils/Gen_fmgrtab.sh,v 1.1.1.1 2006/08/12 00:21:34 synmscott Exp $
  *
  * NOTES
  *

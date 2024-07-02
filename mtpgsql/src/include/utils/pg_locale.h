@@ -2,7 +2,7 @@
 /* -----------------------------------------------------------------------
  * pg_locale.h
  *
- * $Header: /cvs/weaver/mtpgsql/src/include/utils/pg_locale.h,v 1.1.1.1 2006/08/12 00:22:27 synmscott Exp $
+ *
  *
  *
  *	 Portions Copyright (c) 1999-2000, PostgreSQL, Inc

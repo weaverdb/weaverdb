@@ -1,7 +1,6 @@
 #!/bin/sh
 # unused_oids
 #
-# $Header: /cvs/weaver/mtpgsql/src/include/catalog/unused_oids,v 1.1.1.1 2006/08/12 00:22:17 synmscott Exp $
 #
 #	finds blocks of oids that have not already been claimed by 
 #	post_hackers for internal purposes.  primarily useful for

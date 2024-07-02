@@ -3,7 +3,6 @@
 * geqo_erx.c
 *	 edge recombination crossover [ER]
 *
-* $Id: geqo_erx.c,v 1.1.1.1 2006/08/12 00:20:44 synmscott Exp $
 *
 *-------------------------------------------------------------------------
 */

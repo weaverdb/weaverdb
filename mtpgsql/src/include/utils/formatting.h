@@ -2,7 +2,7 @@
 /* -----------------------------------------------------------------------
  * formatting.h
  *
- * $Id: formatting.h,v 1.1.1.1 2006/08/12 00:22:26 synmscott Exp $
+ *
  *
  *
  *	 Portions Copyright (c) 1999-2000, PostgreSQL, Inc

@@ -6,7 +6,6 @@
 *	 OX2 operator according to Syswerda
 *	 (The Genetic Algorithms Handbook, ed L Davis)
 *
-* $Id: geqo_ox2.c,v 1.1.1.1 2006/08/12 00:20:44 synmscott Exp $
 *
 *-------------------------------------------------------------------------
 */

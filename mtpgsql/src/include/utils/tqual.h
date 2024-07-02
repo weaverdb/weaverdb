@@ -8,7 +8,7 @@
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * $Id: tqual.h,v 1.2 2006/08/15 18:24:28 synmscott Exp $
+ *
  *
  *-------------------------------------------------------------------------
  */

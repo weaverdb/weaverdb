@@ -9,8 +9,6 @@
 # Copyright (c) 1994, Regents of the University of California
 #
 #
-# IDENTIFICATION
-#    $Header: /cvs/weaver/mtpgsql/src/backend/catalog/genbki.sh.in,v 1.1.1.1 2006/08/12 00:20:09 synmscott Exp $
 #
 # NOTES
 #    non-essential whitespace is removed from the generated file.
