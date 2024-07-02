@@ -39,10 +39,10 @@ add_custom_command(
 add_custom_command( 
     OUTPUT ${TEMPLATEDIR}/global1.bki.source ${TEMPLATEDIR}/global1.description ${TEMPLATEDIR}/local1_template1.bki.source ${TEMPLATEDIR}/local1_template1.description
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/global1.bki.source ${CMAKE_CURRENT_BINARY_DIR}/global1.description ${CMAKE_CURRENT_BINARY_DIR}/local1_template1.bki.source ${CMAKE_CURRENT_BINARY_DIR}/local1_template1.description
-    COMMAND ${INSTALL} ${INSTLOPTS} global1.bki.source ${TEMPLATEDIR}/global1.bki.source
-    COMMAND ${INSTALL} ${INSTLOPTS} global1.description ${TEMPLATEDIR}/global1.description
-    COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.bki.source ${TEMPLATEDIR}/local1_template1.bki.source
-    COMMAND ${INSTALL} ${INSTLOPTS} local1_template1.description ${TEMPLATEDIR}/local1_template1.description
+    COMMAND ${CMAKE_COMMAND} -E copy global1.bki.source ${TEMPLATEDIR}/global1.bki.source
+    COMMAND ${CMAKE_COMMAND} -E copy global1.description ${TEMPLATEDIR}/global1.description
+    COMMAND ${CMAKE_COMMAND} -E copy local1_template1.bki.source ${TEMPLATEDIR}/local1_template1.bki.source
+    COMMAND ${CMAKE_COMMAND} -E copy local1_template1.description ${TEMPLATEDIR}/local1_template1.description
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 

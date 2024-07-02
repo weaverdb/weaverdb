@@ -2,6 +2,7 @@
 
 find_package(JNI REQUIRED)
 
+get_property(BUILDTIME GLOBAL PROPERTY BUILDTIME)
 
 # create the executable
 add_library(env OBJECT env.c dbwriter.c poolsweep.c freespace.c 
@@ -10,7 +11,9 @@ add_library(env OBJECT env.c dbwriter.c poolsweep.c freespace.c
 	WeaverConnection.c FieldTransfer.c connectionutil.c
  )
 
-add_dependencies(env JNI::JNI fmgrtab timestamp)
+add_dependencies(env JNI::JNI fmgrtab)
+
+target_compile_definitions(env PRIVATE BUILDTIME=${BUILDTIME})
 
 if (JNI_FOUND)
     message (STATUS "JNI found")

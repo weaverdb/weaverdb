@@ -29,7 +29,7 @@
 
 #include "interface/connectionutil.h"
 #include "env/properties.h"
-#include "env/timestamp.h"
+//#include "env/timestamp.h"
 
 #include "utils/builtins.h"
 
@@ -66,9 +66,8 @@
 #endif
 
 static Env* 				env;
-static int 					PostPortName  = 5432;
-//static const char* 			progname  = "mtpg";
-static IpcMemoryKey 		ipc_key;
+static int 				PostPortName  = 5432;
+static IpcMemoryKey                     ipc_key;
 static 	bool				master;
 static  bool				isPrivate = true;
 

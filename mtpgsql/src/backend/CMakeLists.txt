@@ -87,7 +87,8 @@ target_include_directories(mtpg INTERFACE ../include/interface)
 add_executable(postgres 
     $<TARGET_OBJECTS:main> 
     $<TARGET_OBJECTS:bootstrap> 
-    $<TARGET_OBJECTS:postmaster>)
+    $<TARGET_OBJECTS:postmaster>
+)
 
 target_link_libraries(postgres PRIVATE mtpg)
 
