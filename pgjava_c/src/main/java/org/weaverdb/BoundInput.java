@@ -131,6 +131,8 @@ class BoundInput<T> extends Bound<T> {
             case Date:
                 if (value instanceof java.util.Date) {
                     this.value = value;
+                } else if (value instanceof java.time.Instant instant) {
+                    this.value = java.util.Date.from(instant);
                 } else {
                     throw new ExecutionException("invalid type conversion for Date from " + value.getClass().getName());
                 }

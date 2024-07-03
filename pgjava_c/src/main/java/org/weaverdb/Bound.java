@@ -40,6 +40,8 @@ class Bound<T> {
             return Types.Character;
         } else if (type.equals(java.util.Date.class)) {
             return Types.Date;
+        } else if (type.equals(java.time.Instant.class)) {
+            return Types.Date;
         } else if (type.equals(Long.class)) {
             return Types.Long;
         } else if (type.equals(Boolean.class)) {
