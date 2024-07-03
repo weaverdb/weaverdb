@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- *	WeaverStmtManager.cc 
+ *	WeaverStmtManager.c
  *		Statement interface and packaging for java to C
  *
  * Portions Copyright (c) 2002-2006 Myron K Scott

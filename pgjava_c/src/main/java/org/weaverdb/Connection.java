@@ -38,6 +38,9 @@ public interface Connection extends AutoCloseable {
 
     long transaction();
     
+    @Override
+    public void close() throws ExecutionException;
+        
     Connection helper() throws ExecutionException;
     
     static Connection connect(String database) {

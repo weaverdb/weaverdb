@@ -1194,6 +1194,25 @@ public class JNITest {
         }
     }
     
+    @org.junit.jupiter.api.Test
+    public void testLinkAfterExecute() throws Exception {
+        try (Connection conn = Connection.connect("test")) {
+            conn.execute("create table linkafter (clong int8, cint int4, home varchar)");
+            conn.execute("insert into linkafter (clong, cint, home) values (6000, 4, 'window')");
+            try (Statement stmt = conn.statement("select clong, cint, home from linkafter")) {
+                stmt.execute();
+                Output<Long> l = stmt.linkOutput(1, Long.class);
+                Output<Integer> i = stmt.linkOutput(2, Integer.class);
+                Output<String> h = stmt.linkOutput(3, String.class);
+                assertTrue(stmt.fetch());
+                System.out.println(l.get() + " " + i.get() + " " + h.get());
+                assertEquals(6000L, l.get());
+                assertEquals(4, i.get());
+                assertEquals("window", h.get());
+            }
+        }
+    }
+    
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;

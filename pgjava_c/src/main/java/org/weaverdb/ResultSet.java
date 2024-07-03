@@ -20,11 +20,17 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
 
     ResultSet(Statement stmt) throws ExecutionException {
         this.stmt = stmt;
-        this.stmt.execute();
-        if (stmt.outputs().isEmpty()) {
-            for (int x=1;x<=MAX_ATTRIBUTES;x++) {
-                stmt.linkOutput(x, Object.class);
+        long count = this.stmt.execute();
+        if (count == 0) {
+            // probable select statement
+            if (stmt.outputs().isEmpty()) {
+                for (int x=1;x<=MAX_ATTRIBUTES;x++) {
+                    stmt.linkOutput(x, Object.class);
+                }
             }
+        } else {
+            // not a select statement.  close
+            stmt.close();// no statement reuse
         }
     }
 
