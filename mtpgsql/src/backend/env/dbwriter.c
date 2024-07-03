@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+
+/*
  * DO NOT do any shared lock table locking here b/c  many stuctures in the Env
  * are used in locking and we are using the Env of the commiting user threads
  * to pull Relations out of caches and the file system.

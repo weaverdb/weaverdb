@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+
+/*
  * make KOI8->CP866(ALT) and CP866(ALT)->KOI8 translation table
  * from koi-alt.tab.
  *

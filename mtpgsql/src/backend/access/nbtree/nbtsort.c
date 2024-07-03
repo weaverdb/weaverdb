@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+
 /*-------------------------------------------------------------------------
  * nbtsort.c
  *		Build a btree from sorted input by loading leaf pages sequentially.

@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
+ * Use of this source code is governed by a BSD-style
+ * license that can be found in the LICENSE file.
+ */
+
+/*
  *	PostgreSQL type definitions for the INET type.	This
  *	is for IP V4 CIDR notation, but prepared for V6: just
  *	add the necessary bits where the comments indicate.
