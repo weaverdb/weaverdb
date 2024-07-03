@@ -8,11 +8,17 @@ The original PostgreSQL code (~v7) was originally ported around 2008 and is made
 
 ## Getting Started
 
+### Running
 
+The main interfaces for loading and using WeaverDB are [WeaverInitializer](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/WeaverInitializer.java) and [Connection](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/Connection.java).  Once the database directory has been created with initdb, the Java native library can be loaded via the initializer
+
+    Properties prop = new Properties();
+    prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
+    WeaverInitializer.initialize(prop);
 
 ### Dependencies
 
-Currently built with cmake and clang on MacOS for MacOS or Android.  Requires Java 17 or greater.  
+Currently built with cmake, gradle, clang and java on MacOS for MacOS or Android.  Requires Java 17 or greater.  
 
 ### Installing
 
