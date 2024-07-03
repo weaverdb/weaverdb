@@ -33,14 +33,11 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 Process p = b.start();
                 p.waitFor();
                 
-//                b = new ProcessBuilder("tar", "xvf", "../mtpgsql/src/mtpg.tar.bz2", "-C", "build");
-//                b.inheritIO();
-//                p = b.start();
-//                p.waitFor();
                 b = new ProcessBuilder("rm", "-rf", "build/mtpg");
                 b.inheritIO();
                 p = b.start();
                 p.waitFor();
+                
                 b = new ProcessBuilder("cp", "-rf", "../cbuild/mtpg", "build/");
                 b.inheritIO();
                 p = b.start();
@@ -62,22 +59,15 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                     w.append("create database test;\n").flush();
                 }
                 p.waitFor();
-//        b = new ProcessBuilder("cp","libweaver.dylib", System.getProperty("user.dir") + "/build/libs/");
-//        b.inheritIO();
-//        p = b.start();
-//        p.waitFor();
+
                 Properties prop = new Properties();
                 prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
                 prop.setProperty("allow_anonymous", "true");
                 prop.setProperty("start_delay", "10");
                 prop.setProperty("debuglevel", "DEBUG");
                 prop.setProperty("stdlog", "TRUE");
-//                prop.setProperty("logfile", System.getProperty("user.dir") + "/build/weaver_debug.txt");
-//                prop.setProperty("redirecterr", "TRUE");
-//        prop.setProperty("index_corruption", "IGNORE");
-//        prop.setProperty("heap_corruption", "IGNORE");
+
                 prop.setProperty("disable_crc", "TRUE");
-//        prop.setProperty("usegc", "FALSE");
                 WeaverInitializer.initialize(prop);
                 owner = true;
                 context.getRoot().getStore(GLOBAL).put("RunOnce", this);

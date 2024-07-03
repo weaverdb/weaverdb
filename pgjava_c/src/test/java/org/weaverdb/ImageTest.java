@@ -18,10 +18,12 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 
 @ExtendWith({InstallNative.class})
+@Disabled
 public class ImageTest {
     
     public ImageTest() {

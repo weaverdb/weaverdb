@@ -41,8 +41,6 @@ public class JavaFunctionsTest {
     
     @org.junit.jupiter.api.Test
     public void testAutoMethod() throws Exception {
-//        Field f = java.lang.reflect.Method.class.getDeclaredField("signature");
-//        f.setAccessible(true);
         MethodHandle handle = MethodHandles.lookup().findVirtual(Integer.class, "toString", MethodType.methodType(String.class));
         System.out.println(handle.toString());
         System.out.println(handle.type().toString());
