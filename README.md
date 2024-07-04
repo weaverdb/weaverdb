@@ -32,8 +32,6 @@ No binaries are currently being published.
 
 ## Authors
 
-Contributors names and contact info
-
 Myron Scott <myron@weaverdb.org>
 
 ## License
