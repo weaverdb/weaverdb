@@ -8,7 +8,7 @@ The original PostgreSQL code (~v7) was originally ported around 2008 and is made
 
 ## Getting Started
 
-###Building
+### Building
     
     % mkdir build; cmake -S . -B build; cd build; make
     % ./gradlew build
