@@ -11,6 +11,7 @@
  * bms_is_empty() in preference to testing for NULL.)
  *
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  * Copyright (c) 2003-2011, PostgreSQL Global Development Group
  *
  * src/include/nodes/bitmapset.h

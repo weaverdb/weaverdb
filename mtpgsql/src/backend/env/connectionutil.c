@@ -1,12 +1,13 @@
 /*-------------------------------------------------------------------------
  *
+ * connectionutil.c
+ *     bootstrapping for embedded
+ * 
+ * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
- * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
- * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
-*		Myron Scott, mkscott@sacadia.com, 2.05.2001 
  *
  *-------------------------------------------------------------------------
  */

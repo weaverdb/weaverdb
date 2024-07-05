@@ -9,6 +9,7 @@
  * version.c
  *	 Returns the version string
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  * IDENTIFICATION
  *
  *

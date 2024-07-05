@@ -1,10 +1,17 @@
-/*
- *  subset.c
- *  axon
+/*-------------------------------------------------------------------------
  *
- *  Created by Myron Scott on 6/25/05.
- *  Copyright 2005 __MyCompanyName__. All rights reserved.
- *	this is like aset but uses palloced memory from the parent
+ * subset.c
+ *	  memory context piggybacking a parent context
+ *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
+ * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *
+ *
+ *-------------------------------------------------------------------------
  */
 
 

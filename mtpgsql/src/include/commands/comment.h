@@ -4,6 +4,7 @@
  *
  * Prototypes for functions in commands/comment.c
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  * Copyright (c) 1999, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------

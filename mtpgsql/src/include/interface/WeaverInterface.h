@@ -1,10 +1,15 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
+/*-------------------------------------------------------------------------
+ *
+ *	WeaverInterface.h 
+ *		external embedding interface for weaverdb
+ *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
+ *
+ * IDENTIFICATION
+ *	
+ *
+ *-------------------------------------------------------------------------
  */
-
-
 
 #ifndef _WEAVERINTERFACE_H_
 #define _WEAVERINTERFACE_H_

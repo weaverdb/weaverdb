@@ -1,18 +1,11 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /*-------------------------------------------------------------------------
  *
  *      WeaverConnection.c
- *               Lowest level of Postgres interface
+ *               Lowest level of Weaverdb interface
  *
- *
+ * Copyright (c) 2000-2024, Myron Scott <weaverdb.org>
  *
  * IDENTIFICATION
- *              Myron Scott, mkscott@sacadia.com, 2.05F.2001
  *
  *-------------------------------------------------------------------------
  */

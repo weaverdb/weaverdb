@@ -1,15 +1,16 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
-/*
+/*-------------------------------------------------------------------------
  *
  * xlog.h
+ *	  
  *
- * Postgres transaction log manager
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
+ * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ *
+ *-------------------------------------------------------------------------
  */
 #ifndef XLOG_H
 #define XLOG_H

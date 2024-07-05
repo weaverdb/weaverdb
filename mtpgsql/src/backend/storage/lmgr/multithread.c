@@ -1,8 +1,9 @@
 /*-------------------------------------------------------------------------
  *
- * proc.c
- *	  routines to manage per-process shared memory data structure
+ * multithread.c
+ *	  routines to manage per-thread shared data.  ported from proc.c
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
@@ -12,43 +13,7 @@
  *
  *-------------------------------------------------------------------------
  */
-/*
- *	Each postgres backend gets one of these.  We'll use it to
- *	clean up after the process should the process suddenly die.
- *
- *
- * Interface (a):
- *		ProcSleep(), ProcWakeup(), ProcWakeupNext(),
- *		ProcQueueAlloc() -- create a shm queue for sleeping processes
- *		ProcQueueInit() -- create a queue without allocing memory
- *
- * Locking and waiting for buffers can cause the backend to be
- * put to sleep.  Whoever releases the lock, etc. wakes the
- * process up again (and gives it an error code so it knows
- * whether it was awoken on an error condition).
- *
- * Interface (b):
- *
- * ProcReleaseLocks -- frees the locks associated with this process,
- * ProcKill -- destroys the shared memory state (and locks)
- *		associated with the process.
- *
- * 5/15/91 -- removed the buffer pool based lock chain in favor
- *		of a shared memory lock chain.	The write-protection is
- *		more expensive if the lock chain is in the buffer pool.
- *		The only reason I kept the lock chain in the buffer pool
- *		in the first place was to allow the lock table to grow larger
- *		than available shared memory and that isn't going to work
- *		without a lot of unimplemented support anyway.
- *
- * 4/7/95 -- instead of allocating a set of 1 semaphore per process, we
- *		allocate a semaphore from a set of PROC_NSEMS_PER_SET semaphores
- *		shared among backends (we keep a few sets of semaphores around).
- *		This is so that we can support more backends. (system-wide semaphore
- *		sets run out pretty fast.)				  -ay 4/95
- *
- *
- */
+
 #include <time.h>
 #include <unistd.h>
 #include <signal.h>

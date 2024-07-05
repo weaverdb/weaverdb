@@ -11,6 +11,7 @@
  *	  pool. rd_islocal is reset at the end of a transaction (commit/abort).
  *	  This is useful for queries like SELECT INTO TABLE and create index.
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994-5, Regents of the University of California
  *

@@ -1,9 +1,3 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /*-------------------------------------------------------------------------
  *
  * logtape.c
@@ -66,6 +60,7 @@
  * care that all calls for a single LogicalTapeSet are made in the same
  * palloc context.
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *

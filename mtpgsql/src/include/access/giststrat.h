@@ -1,14 +1,9 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /*-------------------------------------------------------------------------
  *
  * giststrat.h
  *	  routines defined in access/gist/giststrat.c
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
  *
  * rtstrat.h,v 1.2 1995/02/12 02:54:51 andrew Exp

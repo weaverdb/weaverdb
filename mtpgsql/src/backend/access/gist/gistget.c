@@ -1,18 +1,11 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /*-------------------------------------------------------------------------
  *
  * gistget.c
  *	  fetch tuples from a GiST scan.
  *
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
- * IDENTIFICATION
- *	  /usr/local/devel/pglite/cvs/src/backend/access/gisr/gistget.c,v 1.9.1 1996/11/21 01:00:00 vadim Exp
  *
  *-------------------------------------------------------------------------
  */

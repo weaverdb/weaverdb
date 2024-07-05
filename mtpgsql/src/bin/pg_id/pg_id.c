@@ -4,6 +4,7 @@
  * A crippled id utility for use in various shell scripts in use by PostgreSQL
  * (in particular initdb)
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  * Copyright (C) 2000 by PostgreSQL Global Development Group
  *
  *
