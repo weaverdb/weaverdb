@@ -3,10 +3,9 @@
  *	WeaverValueExtractor.h
 
  *
- * Portions Copyright (c) 2002-2006, Myron K Scott
+ * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
  *
- * IDENTIFICATION
  *
  *-------------------------------------------------------------------------
  */

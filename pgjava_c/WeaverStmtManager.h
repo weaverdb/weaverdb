@@ -1,13 +1,11 @@
 /*-------------------------------------------------------------------------
  *
  *	WeaverStmtManager.h
- *		C++ interface between weaver base and java interface
+ *		C interface between weaver base and java interface
  *
- * Portions Copyright (c) 2002-2006, Myron K Scott
+ * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
  *
- * IDENTIFICATION
- *	  $Header: /cvs/weaver/Wjava/WeaverStmtManager.h,v 1.3 2006/10/12 17:20:54 synmscott Exp $
  *
  *-------------------------------------------------------------------------
  */

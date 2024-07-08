@@ -1,14 +1,16 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
+/*-------------------------------------------------------------------------
+ *
+ *	WeaverObjectLoader.java
+ *
+ * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
+ *
+ * All rights reserved.
  * Use of this source code is governed by a BSD-style
  * license that can be found in the LICENSE file.
+ *
+ *-------------------------------------------------------------------------
  */
 
-/*
- * WeaverObjectLoader.java
- *
- * Created on August 23, 2004, 3:20 PM
- */
 
 package org.weaverdb;
 

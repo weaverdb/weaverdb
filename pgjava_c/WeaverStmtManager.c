@@ -3,12 +3,9 @@
  *	WeaverStmtManager.c
  *		Statement interface and packaging for java to C
  *
- * Portions Copyright (c) 2002-2006 Myron K Scott
+ * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
  *
- * IDENTIFICATION
- *
- *	  $Header: /cvs/weaver/pgjava/WeaverStmtManager.cc,v 1.6 2007/05/31 15:03:54 synmscott Exp $
  *
  *-------------------------------------------------------------------------
  */

@@ -3,11 +3,9 @@
  * BaseWeaverConnection.cc
  *	  Base code to connect weaver to java
  *
- * Portions Copyright (c) 2002-2006, Myron K Scott
+ * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
  *
- * IDENTIFICATION
- *	  $Header: /cvs/weaver/pgjava/BaseWeaverConnection.cc,v 1.8 2007/03/21 19:09:08 synmscott Exp $
  *
  *-------------------------------------------------------------------------
  */
