@@ -1,4 +1,4 @@
-# WeaverDB
+ki# WeaverDB
 
 WeaverDB is an embeddable database engine based on a very old version (~v7) of PostgreSQL.  
 
@@ -48,5 +48,5 @@ Inspiration
 * [PostgreSQL](https://www.postgresql.org)
 
 
-See mtpgsql/README for historical README
+See [mtpgsql/README](mtpgsql/README) for historical README
 
