@@ -1,18 +1,16 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /* ----------
  * pg_lzcompress.h -
  *
- *	Definitions for the builtin LZ compressor
  *
- * src/include/utils/pg_lzcompress.h
- * ----------
+ *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
+ * Portions Copyright (c) 1996-2001, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ *
+ *-------------------------------------------------------------------------
  */
-
 #ifndef _PG_LZCOMPRESS_H_
 #define _PG_LZCOMPRESS_H_
 

@@ -1,14 +1,14 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
-/* 
- * File:   smgr_spi.h
- * Author: mscott
+/*-------------------------------------------------------------------------
  *
- * Created on July 28, 2006, 10:05 AM
+ * smgr_spi.h
+ *	  storage manager switch public interface declarations.
+ *
+ *
+ * Portions Copyright (c) 2006-2024, Myron Scott  <myron@weaverdb.org>
+ *
+ *
+ *
+ *-------------------------------------------------------------------------
  */
 
 #ifndef _smgr_spi_H

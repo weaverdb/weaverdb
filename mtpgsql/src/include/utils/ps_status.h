@@ -1,15 +1,15 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /*-------------------------------------------------------------------------
  *
  * ps_status.h
  *
  *	Defines macros to show backend status on the ps status line.
  *	Unfortunately this is system dpendent.
+ *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
+ * Portions Copyright (c) 1996-2001, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
  *
  *-------------------------------------------------------------------------
  */

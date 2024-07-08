@@ -1,9 +1,3 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /*-------------------------------------------------------------------------
  *
  * postgres_ext.h
@@ -22,6 +16,7 @@
  *	use header files that are otherwise internal to Postgres to interface
  *	with the backend.
  *
+ * Portions Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
  *
  *-------------------------------------------------------------------------

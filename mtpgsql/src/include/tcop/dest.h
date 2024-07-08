@@ -1,9 +1,3 @@
-/*
- * Copyright (c) 2024 Myron Scott <myron@weaverdb.org> All rights reserved.
- * Use of this source code is governed by a BSD-style
- * license that can be found in the LICENSE file.
- */
-
 /*-------------------------------------------------------------------------
  *
  * dest.h
@@ -48,6 +42,7 @@
  * in-line in BeginCommand and EndCommand probably should be moved out
  * to routines associated with each destination receiver type.
  *
+ * Portions Copyright (c) 2006-2024, Myron Scott  <myron@weaverdb.org>
  * Portions Copyright (c) 1996-2000, PostgreSQL, Inc
  * Portions Copyright (c) 1994, Regents of the University of California
  *
