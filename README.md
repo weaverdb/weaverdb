@@ -1,4 +1,4 @@
-ki# WeaverDB
+# WeaverDB
 
 WeaverDB is an embeddable database engine based on a very old version (~v7) of PostgreSQL.  
 
