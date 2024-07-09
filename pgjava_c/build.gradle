@@ -1,6 +1,7 @@
 
 plugins {
    id 'java'
+   id 'maven-publish'
 }
 
 description = 'pg connector'
@@ -46,5 +47,22 @@ tasks.named('test', Test) {
 task printClasspath {
     doLast {
         configurations.testRuntimeClasspath.each { println it }
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'org.weaverdb'
+            version = '1.0'
+            artifactId = 'connect'
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = "myrepo"
+            url = layout.projectDirectory.dir('repo')
+        }
     }
 }

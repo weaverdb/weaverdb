@@ -10,8 +10,17 @@ weaver
 /cbuild/
 /abuild/
 /nbuild/
+/mbuild/
 **/.idea/
 /pgjava_c/libweaver.so
 local.properties
 gradle.properties
 local_abuild.sh
+mtpgsql/src/backend/bootstrap/bootparse.c
+mtpgsql/src/backend/bootstrap/bootscanner.c
+mtpgsql/src/backend/bootstrap/bootstrap_tokens.h
+mtpgsql/src/backend/parser/gram.c
+mtpgsql/src/backend/parser/parse.h
+mtpgsql/src/backend/parser/scan.c
+mtpgsql/src/backend/utils/fmgrtab.c
+mtpgsql/src/include/parser/parse.h
