@@ -4,7 +4,7 @@ WeaverDB is an embeddable database engine based on a very old version (~v7) of P
 
 ## Description
 
-The original PostgreSQL code (~v7) was originally ported around 2008 and is made embeddable by moving the project from a process per connection model to a thread per connection in a single process.  The main binding provided here is Java via JNI.  An interface for C is also provided.  
+First forked around 2008 and is made embeddable by moving the project from a process per connection model to a thread per connection in a single process.  The main binding provided here is Java via JNI.  An interface for C is also provided.  
 
 While the bulk of the PostgreSQL code remains, there are many notable changes.  Besides the move from process per connection, WeaverDB also changes the way data is written to files.  WeaverDB uses a single writer thread to write changes to the underlying files.  New concurrency control structures have been added to buffer pages and elsewhere mainly with the use of pthread_mutex and pthread_cond.  Vacuum occurs here using an in process thread scheduler called poolsweep.  Ability to add C extensions has been removed and replaced with a basic form of Java extensions.  Networking code is mostly removed or non-functional.  
 
