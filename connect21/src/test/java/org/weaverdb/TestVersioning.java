@@ -44,7 +44,7 @@ public class TestVersioning {
     
     @org.junit.jupiter.api.Test
     public void testAutoMethod() throws Exception {
-        ConnectionFactory factory = Connection.loader;
+        DBReferenceFactory factory = DBReference.loader;
         assertNotNull(factory);
     }
 }

@@ -4,7 +4,7 @@ plugins {
    id 'maven-publish'
 }
 
-description = 'pg connector'
+description = 'weaver connector'
 
 jar {
     archiveBaseName = 'weaver'

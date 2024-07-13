@@ -20,18 +20,16 @@ import java.nio.channels.ReadableByteChannel;
 import java.util.function.Supplier;
 
 /**
- *
+ * Linked output from statement.
  */
 public class Output<T> {
     private final Supplier<String> name;
     private final Getter<T> source;
-    private final Class<? extends T> type;
     private final int index;
     
     Output(BoundOutput<? extends T> base) {
         source = base::get;
         name = base::getName;
-        type = base.getTypeClass();
         index = base.getIndex();
     }
     
@@ -39,14 +37,12 @@ public class Output<T> {
         source = base::value;
         name = base::getName;
         index = base.getIndex();
-        type = null;
     }
     
     Output(BoundOutputReceiver<? extends T> base) {
         source = base::value;
         name = base::getName;
         index = base.getIndex();
-        type = null;
     }
     
     public String getName() {
@@ -59,10 +55,6 @@ public class Output<T> {
     
     public T value() throws ExecutionException {
         return source.value();
-    }
-    
-    public Class<? extends T> getType() {
-        return type;
     }
     
     public T get() throws ExecutionException {

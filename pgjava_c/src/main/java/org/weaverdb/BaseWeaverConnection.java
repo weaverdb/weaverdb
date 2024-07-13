@@ -31,7 +31,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-class BaseWeaverConnection implements Connection {
+class BaseWeaverConnection implements DBReference {
     
     private static final Logger   LOGGING = Logger.getLogger("Connection");
     
@@ -168,8 +168,7 @@ class BaseWeaverConnection implements Connection {
         return new BaseWeaverConnection(this.connectSubConnection());
     }
     
-    @Override
-    public Connection helper() throws ExecutionException {
+    public DBReference helper() throws ExecutionException {
         return spawnHelper();
     }
 
@@ -191,7 +190,6 @@ class BaseWeaverConnection implements Connection {
         }
     }
 
-    @Override
     public void prepare() throws ExecutionException {
         prepareTransaction();
     }
@@ -411,7 +409,12 @@ class BaseWeaverConnection implements Connection {
         
         @Override
         public Collection<Output> outputs() {
-            return outputs.values().stream().map(Output::new).collect(Collectors.toList());
+            return outputs.values().stream().sorted((b1, b2)->Integer.compare(b1.getIndex(), b2.getIndex())).map(Output::new).collect(Collectors.toList());
+        }
+        
+        @Override
+        public Collection<Input> inputs() {
+            return inputs.values().stream().map(Input::new).collect(Collectors.toList());
         }
         
         @Override

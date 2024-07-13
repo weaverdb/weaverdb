@@ -13,11 +13,11 @@
 
 package org.weaverdb;
 
-public interface ConnectionFactory {
+public interface DBReferenceFactory {
 
-    Connection connect(String database);
+    DBReference connect(String database);
     
-    Connection connectUser(String username, String password, String database);
+    DBReference connectUser(String username, String password, String database);
     
     Runtime.Version builtFor();
 }

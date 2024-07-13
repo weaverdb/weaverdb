@@ -13,15 +13,15 @@
 package org.weaverdb;
 
 
-public class WeaverConnectionFactory21 implements ConnectionFactory {
+public class WeaverConnectionFactory21 implements DBReferenceFactory {
 
     @Override
-    public Connection connect(String db) {
+    public DBReference connect(String db) {
         return BaseWeaverConnection.connectAnonymously(db, new StreamingTransformer21());
     }
 
     @Override
-    public Connection connectUser(String username, String password, String database) {
+    public DBReference connectUser(String username, String password, String database) {
         return BaseWeaverConnection.connectUser(username, password, database, new StreamingTransformer21());
     }
 

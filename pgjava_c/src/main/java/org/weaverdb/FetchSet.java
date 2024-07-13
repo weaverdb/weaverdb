@@ -13,7 +13,7 @@
  */
 package org.weaverdb;
 
-import org.weaverdb.ResultSet.Row;
+import org.weaverdb.FetchSet.Row;
 import java.util.AbstractList;
 import java.util.Iterator;
 import java.util.Spliterator;
@@ -24,12 +24,12 @@ import java.util.stream.StreamSupport;
 /**
  *
  */
-public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
+public class FetchSet implements Iterable<Output[]>, Spliterator<Output[]> {
     
     private final Statement stmt;
     private final static int MAX_ATTRIBUTES = 20;
 
-    ResultSet(Statement stmt) throws ExecutionException {
+    FetchSet(Statement stmt) throws ExecutionException {
         this.stmt = stmt;
         long count = this.stmt.execute();
         if (count == 0) {
@@ -100,19 +100,19 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
         };
     }
     
-    public static ResultSet.Builder builder(Connection conn) {
+    public static FetchSet.Builder builder(DBReference conn) {
         return new Builder(conn);
     }
     
     public static Stream<Row> stream(Statement stmt) throws ExecutionException {
-        Stream<Row> rows = StreamSupport.stream(new ResultSet(stmt), false).map(Row::new);
+        Stream<Row> rows = StreamSupport.stream(new FetchSet(stmt), false).map(Row::new);
         return rows;
     }
     
     public static class Builder {
-        private final Connection connection;
+        private final DBReference connection;
         
-        Builder(Connection connection) {
+        Builder(DBReference connection) {
             this.connection = connection;
         }
         
@@ -169,7 +169,7 @@ public class ResultSet implements Iterable<Output[]>, Spliterator<Output[]> {
             if (ee != null) {
                 throw ee;
             }
-            return StreamSupport.stream(new ResultSet(stmt), false)
+            return StreamSupport.stream(new FetchSet(stmt), false)
                 .map(Row::new)
                 .onClose(stmt::close);
         }

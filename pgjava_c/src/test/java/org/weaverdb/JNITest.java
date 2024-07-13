@@ -12,8 +12,8 @@
 
 package org.weaverdb;
 
-import org.weaverdb.ResultSet.Column;
-import org.weaverdb.ResultSet.Row;
+import org.weaverdb.FetchSet.Column;
+import org.weaverdb.FetchSet.Row;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -106,16 +106,16 @@ public class JNITest {
     
         @org.junit.jupiter.api.Test
     public void testBasicFunction() throws Exception {
-        try (Connection conn = Connection.connect("template1")) {
+        try (DBReference conn = DBReference.connect("template1")) {
             try (Statement s = conn.statement("select xmin,xmax,oid,* from pg_type where oid = 16")) {
-                ResultSet.stream(s).flatMap(ResultSet.Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(FetchSet.Row::stream).forEach(System.out::println);
             }
         }
     }
     
     @org.junit.jupiter.api.Test
     public void test() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             try (Statement s = conn.statement("select * from pg_database;")) {
                 Output<String> b = s.linkOutput(1, String.class);
                 Output<String> c = s.linkOutput(2, String.class);
@@ -134,7 +134,7 @@ public class JNITest {
     }    
     @org.junit.jupiter.api.Test
     public void testBadBind() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             try (Statement s = conn.statement("select * from pg_database;")) {
                 Output<Integer> b = s.linkOutput(1, Integer.class);
                 Output<Integer> c = s.linkOutput(2, Integer.class);
@@ -157,7 +157,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testListTables() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             try (Statement s = conn.statement("select * from pg_class;")) {
                 Output<String> b = s.linkOutput(1, String.class);
                 Output<String> c = s.linkOutput(2, String.class);
@@ -191,7 +191,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testBadCloseSequence() throws Exception {
-        Connection conn = Connection.connect("test");
+        DBReference conn = DBReference.connect("test");
         Statement s = conn.statement("select * from pg_class;");
         Output<String> b = s.linkOutput(1, String.class);
         Output<String> c = s.linkOutput(2, String.class);
@@ -225,7 +225,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testInputs() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             try (Statement s = conn.statement("create schema fortune")) {
                 s.execute();
             }
@@ -270,7 +270,7 @@ public class JNITest {
     @org.junit.jupiter.api.Test
     public void testPiping() throws Exception {
         ExecutorService feeder = Executors.newCachedThreadPool();
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create schema winter");
             conn.execute("create table winter/streaming (id int4, data blob, data2 blob, data3 blob, data4 blob)");
             try (Statement s = conn.statement("insert into winter/streaming (id, data, data2, data3, data4) values ($id, $bin, $binb, $binc, $bind)")) {
@@ -280,10 +280,10 @@ public class JNITest {
                         out.writeUTF(value);
                     }
                 };
-                s.linkInputChannel("bin", df).value("hello to the panda");
-                s.linkInputChannel("binb", df).value("hello to the panda2");
-                s.linkInputChannel("binc", df).value("hello to the panda3");
-                s.linkInputChannel("bind", df).value("hello to the panda4");
+                s.linkInputChannel("bin", df).set("hello to the panda");
+                s.linkInputChannel("binb", df).set("hello to the panda2");
+                s.linkInputChannel("binc", df).set("hello to the panda3");
+                s.linkInputChannel("bind", df).set("hello to the panda4");
                 
                 s.execute();
             }
@@ -304,7 +304,7 @@ public class JNITest {
     
         @org.junit.jupiter.api.Test
     public void testNullOut() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create schema nullcheck");
             conn.execute("create table nullcheck/nullcheck (nstring varchar(256), nint int4)");
             conn.execute("insert into nullcheck/nullcheck (nstring) values ('fun times')");
@@ -322,7 +322,7 @@ public class JNITest {
         @org.junit.jupiter.api.Test
     public void testStreamingType() throws Exception {
         ExecutorService service = Executors.newCachedThreadPool();
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create schema streamtype");
             conn.execute("create table streamtype/foo (bar blob)");
             try (Statement s = conn.statement("insert into streamtype/foo (bar) values ($stream)")) {
@@ -330,7 +330,7 @@ public class JNITest {
                     try (DataOutputStream dos = new DataOutputStream(source)) {
                         dos.writeUTF(value);
                     }
-                }).value("this is a farse");
+                }).set("this is a farse");
                 s.execute();
             }
             try (Statement s = conn.statement("select bar from streamtype/foo")) {
@@ -348,17 +348,17 @@ public class JNITest {
 
     @org.junit.jupiter.api.Test
     public void testStreamSpanning() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create schema spanning");
             conn.execute("create table spanning/store (bar streaming)");
             conn.execute("create table spanning/main (id int4, data blob in spanning/store) inherits (spanning/store)");
             try (Statement s = conn.statement("insert into spanning/main (id, data) values ($id, $stream)")) {
-                s.linkInput("id", Integer.class).value(1);
+                s.linkInput("id", Integer.class).set(1);
                 s.linkInputStream("stream", (String value, OutputStream sink)->{
                     try (DataOutputStream dos = new DataOutputStream(sink)) {
                         dos.writeUTF(value);
                     }
-                }).value("this is a farse");
+                }).set("this is a farse");
                 s.execute();
             }
             try (Statement s = conn.statement("select data from spanning/main where id=$id")) {
@@ -376,10 +376,10 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNullVsZeroLen() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table zerolen (value varchar(256))");
             try (Statement s = conn.statement("insert into zerolen (value) values ($checkit)")) {
-                s.linkInput("checkit", String.class).value("");
+                s.linkInput("checkit", String.class).set("");
                 s.execute();
             }
             try (Statement s = conn.statement("select value from zerolen")) {
@@ -390,7 +390,7 @@ public class JNITest {
             }
             conn.execute("delete from zerolen");
             try (Statement s = conn.statement("insert into zerolen (value) values ($checkit)")) {
-                s.linkInput("checkit", String.class).value(null);
+                s.linkInput("checkit", String.class).set(null);
                 s.execute();
             }
             try (Statement s = conn.statement("select value from zerolen")) {
@@ -404,7 +404,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNaturalTypes() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table naturaltypes (id int4, value varchar(256))");
             conn.execute("insert into naturaltypes (id, value) values (1, 'value')");
             try (Statement s = conn.statement("select id, value from naturaltypes")) {
@@ -421,14 +421,14 @@ public class JNITest {
         
     @org.junit.jupiter.api.Test
     public void testResultSetStream() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table resultset (id int4, value varchar(256))");
             conn.execute("insert into resultset (id, value) values (1, 'value')");
             conn.execute("insert into resultset (id, value) values (2, 'value2')");
             conn.execute("insert into resultset (id, value) values (3, 'value3')");
             conn.execute("insert into resultset (id, value) values (4, 'value4')");
             conn.execute("insert into resultset (id, value) values (5, 'value5')");
-            try (Stream<Row> r = ResultSet.stream(conn.statement("select xmin, * from resultset"))) {
+            try (Stream<Row> r = FetchSet.stream(conn.statement("select xmin, * from resultset"))) {
                 Assertions.assertEquals(5, r.peek(os->{
                         for (Column o : os) {
                             System.out.println(o.getName() + "=" + o.get());
@@ -440,7 +440,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testLongStream() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             Generator generate = new Generator(1024 * 1024);
             long now = System.nanoTime();
             conn.execute("create table longstream (data streaming)");
@@ -495,7 +495,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAutoCommit() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table autocom (id int4, data varchar(256))");
             conn.execute("insert into autocom (id, data) values (1, 'fortune')");
             try (Statement s = conn.statement("select id, data from autocom")) {
@@ -507,7 +507,7 @@ public class JNITest {
                 }
             }
         }   
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             try (Statement s = conn.statement("select id, data from autocom")) {
                 Output<Integer> id = s.linkOutput(1, Integer.class);
                 Output<String> data = s.linkOutput(2, String.class);
@@ -524,7 +524,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAbort() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table test5 (id int4, data varchar(256))");
             conn.begin();
             conn.execute("insert into test5 (id, data) values (1, 'fortune')");
@@ -545,7 +545,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testExecuteCount() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table test6 (id int4, data varchar(256))");
             long result = conn.execute("insert into test6 (id, data) values (1, 'fortune')");
             Assertions.assertEquals(1, result);
@@ -565,7 +565,7 @@ public class JNITest {
         
     @org.junit.jupiter.api.Test
     public void testPrepareSpansCommits() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table test7 (id int4, data varchar(256))");
             long result = conn.execute("insert into test7 (id, data) values (1, 'fortune')");
             Assertions.assertEquals(1, result);
@@ -596,7 +596,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testCheckCommits() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             System.out.println(conn.transaction());
             long transaction = conn.begin();
             long check = conn.transaction();
@@ -610,7 +610,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNestedTransactionsNotAllowed() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.begin();
             conn.begin();
         } catch (ExecutionException ee) {
@@ -621,7 +621,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testNestedProcuduresNotAllowed() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.begin();
             conn.start();
             conn.start();
@@ -633,7 +633,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testStreamErrorMessage() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.setStandardOutput(System.out);
             conn.stream("select * from faketable");
         }
@@ -641,16 +641,10 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testPrepareFailsWithBadQuery() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.begin();
             try {
                 conn.execute("select * from faketable");
-            } catch (ExecutionException ee) {
-                ee.printStackTrace();
-                // expected
-            }
-            try {
-                conn.prepare();
             } catch (ExecutionException ee) {
                 ee.printStackTrace();
                 // expected
@@ -665,7 +659,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testResultSetStreams() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table test9 (id int4, value varchar(256))");
             conn.execute("insert into test9 (id, value) values (1, 'test1')");
             conn.execute("insert into test9 (id, value) values (2, 'test2')");
@@ -674,7 +668,7 @@ public class JNITest {
             conn.execute("insert into test9 (id, value) values (5, 'test5')");
             try (TransactionSequence ts = new TransactionSequence(conn)) {
                 try (TransactionSequence.Procedure p = ts.start()) {
-                    try (Stream<Row> set = ResultSet.stream(p.statement("select * from test9"))) {
+                    try (Stream<Row> set = FetchSet.stream(p.statement("select * from test9"))) {
                         set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
                     }
                 }
@@ -684,11 +678,11 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAutoCommitWorks() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table test10 (id int4, value varchar(256))");
             conn.execute("insert into test10 (id, value) values (1, 'fabulous')");
         }
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             try (Statement s = conn.statement("select * from test10")) {
                 s.execute();
                 Assertions.assertTrue(s.fetch());
@@ -698,7 +692,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testIndexCreation() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             try (TransactionSequence ts = new TransactionSequence(conn)) {
                 try (TransactionSequence.Procedure p = ts.start()) {
                     p.execute("create table test11 (id int4, value varchar(256))");
@@ -708,7 +702,7 @@ public class JNITest {
                     p.execute("insert into test11 (id, value) values (4, 'test4')");
                     p.execute("insert into test11 (id, value) values (5, 'test5')");
 
-                    try (Stream<Row> set = ResultSet.stream(p.statement("select * from test11"))) {
+                    try (Stream<Row> set = FetchSet.stream(p.statement("select * from test11"))) {
                         set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
                     }
                 }
@@ -737,7 +731,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testStreamExec() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.setStandardOutput(System.out);
             conn.stream("report user memory");
             try (TransactionSequence ts = new TransactionSequence(conn)) {
@@ -749,7 +743,7 @@ public class JNITest {
                     p.execute("insert into test12 (id, value) values (4, 'test4')");
                     p.execute("insert into test12 (id, value) values (5, 'test5')");
 
-                    try (Stream<Row> set = ResultSet.stream(p.statement("select * from test12"))) {
+                    try (Stream<Row> set = FetchSet.stream(p.statement("select * from test12"))) {
                         set.flatMap(Row::stream).filter(Column::isValid).forEach(System.out::println);
                     }
                 }
@@ -793,7 +787,7 @@ public class JNITest {
             conn.stream("explain select * from test12 where id = 4");
             try (Statement s = conn.statement("select id, value from test12 where id = $id")) {
                 s.linkInput("id", Integer.class).set(gen.nextInt(1000000));
-                try (Stream<Row> explain = ResultSet.stream(s)) {
+                try (Stream<Row> explain = FetchSet.stream(s)) {
                     explain.flatMap(r->r.stream()).forEach(System.out::println);
                 }
             }
@@ -804,7 +798,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testCreateIndex() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table test13 (id int4, value varchar(256))");
             conn.execute("create index test13_id_idx on test13(id)");
         }
@@ -812,7 +806,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testAbortCreate() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.begin();
             conn.execute("create table test14 (id int4, value varchar(256))");
             conn.abort();
@@ -833,7 +827,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testMemoryConsumption() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test20 (id int4, value varchar(256))");
@@ -849,7 +843,7 @@ public class JNITest {
                         p.execute("insert into test20 (id, value) values (5, 'test5')");
 
                         try (Statement s = p.statement("select * from test20")) {
-                            ResultSet.stream(s).flatMap(Row::stream).filter(Column::isValid).forEach(JNITest::blackhole);
+                            FetchSet.stream(s).flatMap(Row::stream).filter(Column::isValid).forEach(JNITest::blackhole);
                         }
                     }
                 }
@@ -871,10 +865,10 @@ public class JNITest {
                 conn.stream("explain select * from test20 where id = 4");
                 try (Statement s = conn.statement("select id, value from test20 where id = $id")) {
                     s.linkInput("id", Integer.class).set(gen.nextInt(10000));
-                    ResultSet.stream(s).flatMap(r->r.stream()).forEach(System.out::println);
+                    FetchSet.stream(s).flatMap(r->r.stream()).forEach(System.out::println);
                 }
                 try (Statement s = conn.statement("select id, value from test20")) {
-                    ResultSet.stream(s).flatMap(r->r.stream()).forEach(JNITest::blackhole);
+                    FetchSet.stream(s).flatMap(r->r.stream()).forEach(JNITest::blackhole);
                     conn.stream("report user memory");
                 }
                 conn.execute("drop index test20_id_idx");
@@ -890,7 +884,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testReportMemory() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.setStandardOutput(System.out);
             conn.stream("report user memory");
         }
@@ -898,7 +892,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testBuilder() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test21 (id int4, value varchar(256))");
@@ -912,7 +906,7 @@ public class JNITest {
                 }
             }
 
-            try (Stream<Row> r = ResultSet.builder(conn).parse("select id, value from test21")
+            try (Stream<Row> r = FetchSet.builder(conn).parse("select id, value from test21")
                     .output(1, Integer.class)
                     .output(2, String.class)
                     .execute()) {
@@ -921,7 +915,7 @@ public class JNITest {
             conn.stream("report user memory");
             Random rand = new Random();
             for (int x=0;x<1000;x++) {
-                try (Stream<Column> c = ResultSet.builder(conn).parse("select id, value from test21 where id = $id")
+                try (Stream<Column> c = FetchSet.builder(conn).parse("select id, value from test21 where id = $id")
                     .input("id", rand.nextInt(25))
                     .output(1, Integer.class)
                     .output(2, String.class)
@@ -929,7 +923,7 @@ public class JNITest {
                         c.forEach(JNITest::blackhole);
                 }
             }
-            try (Stream<Row> c = ResultSet.builder(conn).parse("select id, value from test21")
+            try (Stream<Row> c = FetchSet.builder(conn).parse("select id, value from test21")
                 .execute()) {
                     c.forEach(a->{
                         for (Column b : a) {
@@ -944,7 +938,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testBuilderFormatting() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.stream("report user memory");
             conn.setStandardOutput(System.out);
             conn.execute("create table test22 (id int4, value varchar(256))");
@@ -958,7 +952,7 @@ public class JNITest {
                 }
             }
 
-            try (Stream<Row> c = ResultSet.builder(conn).parse("select id, value from test22")
+            try (Stream<Row> c = FetchSet.builder(conn).parse("select id, value from test22")
                 .execute()) {
                     c.forEach(a->{
                         for (Column b : a) {
@@ -973,7 +967,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testJavaFunction() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("set debug_memory = on");
             MethodType type = MethodType.methodType(String.class, String.class);
             MethodHandle mh = MethodHandles.publicLookup().findStatic(System.class, "getProperty", type);
@@ -981,7 +975,7 @@ public class JNITest {
             fi.installFunction("system_property", mh);
             fi.installFunction("hex", MethodHandles.publicLookup().findStatic(Integer.class, "toHexString", MethodType.methodType(String.class, int.class)));
             try (Statement s = conn.statement("select hex(5)")) {
-                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
             fi.installFunction("to_string", MethodHandles.publicLookup().findVirtual(Object.class, "toString", MethodType.methodType(String.class)));
             conn.execute("create table test30 (item java)");
@@ -995,14 +989,14 @@ public class JNITest {
             }
             try (Statement s = conn.statement("select to_string(item) from test30")) {
                 s.linkOutput(1, String.class);
-                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
         }   
     }
 
     @org.junit.jupiter.api.Test
     public void testJavaFunctionWithParams() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             MethodHandle mh = MethodHandles.publicLookup().unreflect(System.class.getDeclaredMethod("getProperty", String.class));
             new FunctionInstaller(conn).installFunction("rickets", mh);
             new FunctionInstaller(conn).installFunction("params_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
@@ -1030,7 +1024,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testJavaFunctionInstanceAlias() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             MethodHandle mh = MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("hashCode"));
             new FunctionInstaller(conn).installFunction("alias_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
             new FunctionInstaller(conn).installFunction("java_hashcode", mh);
@@ -1056,17 +1050,17 @@ public class JNITest {
                 }
             }
             try (Statement s = conn.statement("select prop from jos where alias_tostring(prop) = 'this is a test'")) {
-                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
             try (Statement s = conn.statement("select prop from jos where prop instanceof 'java.io.File'")) {
-                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
         }
     }
     
     @org.junit.jupiter.api.Test
     public void testJavaFunctionInClause() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             new FunctionInstaller(conn).installFunction("java_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
             conn.execute("create table boss (prop java)");
             try (Statement s = conn.statement("insert into boss (prop) values ($item)")) {
@@ -1077,18 +1071,18 @@ public class JNITest {
             }
             conn.execute("create index boss_idx on boss(java_tostring(prop))");
             try (Statement s = conn.statement("select java_tostring(prop) from boss where 'this is a test' = java_tostring(prop)")) {
-                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
             try (Statement s = conn.statement("select prop from boss where prop instanceof 'java.io.File'")) {
                 s.linkOutput(1, Serializable.class);
-                ResultSet.stream(s).flatMap(Row::stream).forEach(c->System.out.println(c.get().getClass()));
+                FetchSet.stream(s).flatMap(Row::stream).forEach(c->System.out.println(c.get().getClass()));
             }
         }
     }
     
     @org.junit.jupiter.api.Test
     public void testNestedFunctions() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             new FunctionInstaller(conn).installFunction("nested_tostring", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
             new FunctionInstaller(conn).installFunction("java_touppercase", MethodHandles.publicLookup().unreflect(String.class.getDeclaredMethod("toUpperCase")));
             conn.execute("create table nested (prop java)");
@@ -1099,14 +1093,14 @@ public class JNITest {
                 s.execute();
             }
             try (Statement s = conn.statement("select java_touppercase(\"varchar\"(nested_tostring(prop), 10)) from nested")) {
-                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
         }
     }
     
     @org.junit.jupiter.api.Test
     public void testLateBoundJavaFunction() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             new FunctionInstaller(conn).installFunction("varchar", MethodHandles.publicLookup().unreflect(Object.class.getDeclaredMethod("toString")));
             conn.execute("create table latebound (prop java)");
             try (Statement s = conn.statement("insert into latebound (prop) values ($item)")) {
@@ -1116,14 +1110,14 @@ public class JNITest {
                 s.execute();
             }
             try (Statement s = conn.statement("select prop::varchar from latebound where prop::varchar = 'this is a test'")) {
-                ResultSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
+                FetchSet.stream(s).flatMap(Row::stream).forEach(System.out::println);
             }
         }
     }
     
     @org.junit.jupiter.api.Test
     public void testJavaFloatTypes() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table floattypes (cdouble float8, cfloat float4)");
             try (Statement s = conn.statement("insert into floattypes (cdouble, cfloat) values ($d, $f)")) {
                 s.linkInput("d", Double.class).set(2.5);
@@ -1153,7 +1147,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testJavaDateTypes() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             Date now = new Date();
             conn.execute("create table datetypes (cdt datetime, cts timestamp)");
             try (Statement s = conn.statement("insert into datetypes (cdt, cts) values ($d, $f)")) {
@@ -1183,7 +1177,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testJavaIntTypes() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table inttypes (clong int8, cint int4)");
             try (Statement s = conn.statement("insert into inttypes (clong, cint) values ($d, $f)")) {
                 s.linkInput("d", Long.class).set(16L);
@@ -1206,7 +1200,7 @@ public class JNITest {
     
     @org.junit.jupiter.api.Test
     public void testLinkAfterExecute() throws Exception {
-        try (Connection conn = Connection.connect("test")) {
+        try (DBReference conn = DBReference.connect("test")) {
             conn.execute("create table linkafter (clong int8, cint int4, home varchar)");
             conn.execute("insert into linkafter (clong, cint, home) values (6000, 4, 'window')");
             try (Statement stmt = conn.statement("select clong, cint, home from linkafter")) {

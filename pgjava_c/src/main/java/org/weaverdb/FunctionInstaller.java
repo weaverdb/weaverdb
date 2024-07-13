@@ -26,11 +26,11 @@ import java.util.stream.Stream;
  *
  */
 public class FunctionInstaller {
-    private final Connection connection;
+    private final DBReference connection;
     private static final Pattern clazz = Pattern.compile("L(.*);");
     
 
-    public FunctionInstaller(Connection connection) {
+    public FunctionInstaller(DBReference connection) {
         this.connection = connection;
     }
     
