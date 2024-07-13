@@ -101,7 +101,6 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 	char	   datpath[MAXPGPATH],control[MAXPGPATH],xlogdir[MAXPGPATH];
         char*       lasts;
         char       *tofree, *token, *cursor;
-        bool debug = false;
 #ifdef USEGC
         GC_INIT();
 #endif
@@ -110,7 +109,6 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         pthread_mutex_init(&init_lock, NULL);
         pthread_mutex_lock(&init_lock);
             
-	char* dbug = getenv("PG_DEBUGLEVEL");
 	char*  output = getenv("PG_LOGFILE");
 	char*  nofsync = getenv("PG_NOFSYNC");
 	char*  stdlog = getenv("PG_STDLOG");
@@ -129,9 +127,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         while ( (token = strsep(&cursor, "=")) != NULL ) {
             const char* key = token;
             char* val = strsep(&cursor, ";");
-            if ( strcmp(key,"debuglevel") == 0 ) {
-                dbug = val;
-            } else if ( strcmp(key,"logfile") == 0 ) {
+            if ( strcmp(key,"logfile") == 0 ) {
                 output = val;
             } else if ( strcmp(key,"nofsync") == 0 ) {
                 nofsync = val;
@@ -181,9 +177,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         if ( ipc_key == PrivateIPCKey ) {
             checklockfile();
 	}    
-	if ( dbug != NULL ) {
-            debug = ( strcasecmp(dbug,"DEBUG") == 0 );
-	}
+
 	if ( PropertyIsValid("buffers") ) {
 		NBuffers = GetIntProperty("buffers");
 	} else if ( PropertyIsValid("page_buffers") ) {
@@ -222,7 +216,9 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
                 SetTransactionCommitType(CAREFUL_COMMIT);
             }
         }
-        
+        //  default to no CRC
+        DisableCRC(true);
+
         if ( PropertyIsValid("disable_crc") ) {
             DisableCRC(GetBoolProperty("disable_crc"));
         }

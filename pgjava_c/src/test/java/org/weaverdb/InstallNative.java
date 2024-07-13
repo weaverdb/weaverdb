@@ -68,12 +68,11 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
 
                 Properties prop = new Properties();
                 prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
-                prop.setProperty("allow_anonymous", "true");
-                prop.setProperty("start_delay", "10");
-                prop.setProperty("debuglevel", "DEBUG");
-                prop.setProperty("stdlog", "TRUE");
 
+                prop.setProperty("start_delay", "10");
+                prop.setProperty("stdlog", "TRUE");
                 prop.setProperty("disable_crc", "TRUE");
+                
                 WeaverInitializer.initialize(prop);
                 owner = true;
                 context.getRoot().getStore(GLOBAL).put("RunOnce", this);

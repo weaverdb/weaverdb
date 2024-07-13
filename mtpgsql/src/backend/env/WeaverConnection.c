@@ -208,7 +208,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
                 winner = false;
             }
         } else {
-            if (GetBoolProperty("allow_anonymous")) {
+            if (!PropertyIsValid("allow_anonymous") || GetBoolProperty("allow_anonymous")) {
                 winner = true;
             } else {
                 strncpy(connection->env->errortext, "anonymous connections not allowed", 255);
