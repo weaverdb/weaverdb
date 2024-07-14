@@ -19,5 +19,5 @@ public interface DBReferenceFactory {
     
     DBReference connectUser(String username, String password, String database);
     
-    Runtime.Version builtFor();
+    String builtFor();
 }

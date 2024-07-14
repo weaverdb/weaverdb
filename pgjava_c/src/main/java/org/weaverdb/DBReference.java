@@ -131,18 +131,30 @@ public interface DBReference extends AutoCloseable {
     }
     
     private static DBReferenceFactory loadConnectionFactory() {
-        Runtime.Version runningVersion = Runtime.version();
-        ServiceLoader<DBReferenceFactory> check = ServiceLoader.load(DBReferenceFactory.class);
-        Iterator<DBReferenceFactory> versions = check.iterator();
-        DBReferenceFactory winner = null;
-        while (versions.hasNext()) {
-            DBReferenceFactory candidate = versions.next();
-            if (candidate.builtFor().compareTo(runningVersion) <= 0) {
-                if (winner == null || winner.builtFor().compareTo(candidate.builtFor()) < 0) {
-                    winner = candidate;
+        try {
+            Runtime.Version runningVersion = Runtime.version();
+
+            ServiceLoader<DBReferenceFactory> check = ServiceLoader.load(DBReferenceFactory.class);
+            Iterator<DBReferenceFactory> versions = check.iterator();
+            DBReferenceFactory winner = null;
+            while (versions.hasNext()) {
+                DBReferenceFactory candidate = versions.next();
+                if (Runtime.Version.parse(candidate.builtFor()).compareTo(runningVersion) <= 0) {
+                    if (winner == null || winner.builtFor().compareTo(candidate.builtFor()) < 0) {
+                        winner = candidate;
+                    }
                 }
             }
+            return winner;
+        } catch (Throwable t) {
+            System.out.println("Unable to determine running version trying minimum version");
+            ServiceLoader<DBReferenceFactory> factories = ServiceLoader.load(DBReferenceFactory.class);
+            for (DBReferenceFactory f : factories) {
+                return f;
+            }
         }
-        return winner;
+        return null;
     }
+    
+    
 }

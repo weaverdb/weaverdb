@@ -26,9 +26,7 @@ public class WeaverReferenceFactory17 implements DBReferenceFactory {
     }
 
     @Override
-    public Runtime.Version builtFor() {
-        return Runtime.Version.parse("17");
+    public String builtFor() {
+        return "17";
     }
-    
-    
 }

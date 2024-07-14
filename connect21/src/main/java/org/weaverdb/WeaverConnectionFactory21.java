@@ -26,8 +26,8 @@ public class WeaverConnectionFactory21 implements DBReferenceFactory {
     }
 
     @Override
-    public Runtime.Version builtFor() {
-        return Runtime.Version.parse("21");
+    public String builtFor() {
+        return "21";
     }
     
 }
