@@ -19,7 +19,7 @@ This project does not have all of the improvements, development, and reliablitit
 
 ### Running
 
-The main interfaces for loading and using WeaverDB are [WeaverInitializer](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/WeaverInitializer.java) and [Connection](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/Connection.java).  Once the database directory has been created with initdb, the Java native library can be loaded via the initializer
+The main interfaces for loading and using WeaverDB are [WeaverInitializer](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/WeaverInitializer.java) and [DBReference](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/DBReference.java).  Once the database directory has been created with initdb, the Java native library can be loaded via the initializer
 
     Properties prop = new Properties();
     prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
