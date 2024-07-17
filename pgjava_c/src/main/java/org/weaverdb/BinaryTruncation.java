@@ -13,7 +13,10 @@
 
 
 package org.weaverdb;
-
+/**
+ * Thrown when not enough space has been allocated to collect a binary value.
+ * @author myronscott
+ */
 
 public class BinaryTruncation extends Exception {
 
@@ -21,7 +24,6 @@ public class BinaryTruncation extends Exception {
     
     public BinaryTruncation(String s) {
         super(s);
-        maxcount = Integer.parseInt(s);
     }
     
     public BinaryTruncation(int max) {

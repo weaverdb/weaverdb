@@ -12,7 +12,11 @@
 
 
 package org.weaverdb;
-
+/**
+ * Any exception thrown by native functions will result in an ExecutionException.
+ * 
+ * @author myronscott
+ */
 
 public class ExecutionException extends Exception {
 

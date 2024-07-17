@@ -13,7 +13,7 @@
 package org.weaverdb;
 
 /**
- *
+ * Base type for Bound Input/Output.
  * @author  mscott
  */
 class Bound<T> {

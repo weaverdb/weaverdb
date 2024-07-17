@@ -23,13 +23,13 @@ import java.io.*;
  *
  * @author  mscott
  */
-public class ByteWellOutputStream extends ByteArrayOutputStream {
+class ByteWellOutputStream extends ByteArrayOutputStream {
     
-    public ByteWellOutputStream() {
+    ByteWellOutputStream() {
         super(32568);
     }
 
-    public byte[] getByteWell() {
+    byte[] getByteWell() {
         byte[] pass = new byte[count];
         System.arraycopy(buf,0,pass,0,count);
         count = 0;

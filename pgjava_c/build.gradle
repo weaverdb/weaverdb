@@ -6,8 +6,20 @@ plugins {
 
 description = 'weaver connector'
 
+base {
+    archivesName = 'weaver'
+}
+
 jar {
     archiveBaseName = 'weaver'
+}
+
+javadoc {
+    source = sourceSets.main.java
+    exclude "org/weaverdb/sample/**"
+    exclude "org/weaverdb/WeaverReferenceFactory17.java"
+    exclude "org/weaverdb/DBReferenceFactory.java"
+    exclude "org/weaverdb/WeaverCmdLine.java"
 }
 
 dependencies {
@@ -20,6 +32,8 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
     }
+    withSourcesJar()
+    withJavadocJar()
 }
 
 jar {

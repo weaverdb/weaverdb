@@ -18,7 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 
-public class StreamingTransformer21 implements StreamingTransformer {
+class StreamingTransformer21 implements StreamingTransformer {
     
     ExecutorService vpool = Executors.newVirtualThreadPerTaskExecutor();
 
