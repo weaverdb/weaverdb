@@ -156,7 +156,6 @@ int DestroySystem(void) {
 */
     if ( envcount != 0 ) {
         printf("all system environments not shutdown\n");
-        exit(-1);
     }
 	
 	pthread_mutex_destroy(&envlock);

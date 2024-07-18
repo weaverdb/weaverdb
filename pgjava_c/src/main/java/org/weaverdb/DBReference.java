@@ -147,7 +147,6 @@ public interface DBReference extends AutoCloseable {
             }
             return winner;
         } catch (Throwable t) {
-            System.out.println("Unable to determine running version trying minimum version");
             ServiceLoader<DBReferenceFactory> factories = ServiceLoader.load(DBReferenceFactory.class);
             for (DBReferenceFactory f : factories) {
                 return f;

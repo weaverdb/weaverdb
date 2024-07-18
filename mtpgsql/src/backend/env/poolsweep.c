@@ -173,11 +173,13 @@ StopPoolsweepsForDB(Oid dbid) {
         return;
     
     pthread_mutex_lock(&list_guard);
-    *position = sweeplist;
+    position = &sweeplist;
     while (*position != NULL) {
         if ( (*position)->dbid == dbid ) {
             *position = ShutdownPoolsweep(*position);
             break;
+        } else {
+            position = &(*position)->next;
         }
     }
     pthread_mutex_unlock(&list_guard);
