@@ -60,10 +60,6 @@ class BaseWeaverConnection implements DBReference {
     
     private long transactionId;
     
-    int resultField = 0;
-    String errorText = "";
-    String state = "";
-    
     private final Map<Long, StatementRef> liveStatements = new ConcurrentHashMap<>();
     private static final Map<Long, ConnectionRef> liveConnections = new ConcurrentHashMap<>();
     private final ReferenceQueue<Statement> statements = new ReferenceQueue<>();
@@ -174,10 +170,6 @@ class BaseWeaverConnection implements DBReference {
 
     public String idDatabaseRoots() {
         return "Weaver";
-    }
-
-    public void clearResult() {
-        resultField = 0;
     }
 
     @Override

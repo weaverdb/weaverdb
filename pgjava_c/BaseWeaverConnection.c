@@ -75,7 +75,6 @@ static int direct_pipein(void* args,int type,void* buff,int run);
 
 static ConnMgr getConnMgr(JNIEnv* env, jobject talker);
 static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt);
-static jlong  clearError(JNIEnv* env,jobject talker);
 static jlong  checkError(JNIEnv* env,jobject talker,StmtMgr link);
 static jlong  reportErrorToJava(JNIEnv* env,jobject talker,jlong code, const char* text, const char* state);
 static int   translateType(jint type);
@@ -195,7 +194,6 @@ JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_beginTransaction(
         checkError(env, talkerObject,NULL);
         return 0;
     } else {
-        clearError(env,talkerObject);
         return GetTransactionId(ref);
     }
 }
@@ -300,7 +298,6 @@ JNIEXPORT jlong JNICALL Java_org_weaverdb_BaseWeaverConnection_executeStatement
         checkError(env,talkerObject,ref);
         return 0;
     } else {
-        clearError(env,talkerObject);
         return Count(ref);
     }
 }
@@ -469,15 +466,6 @@ static ConnMgr getConnMgr(JNIEnv* env, jobject talker) {
     return ref;
 }
 
-static jlong clearError(JNIEnv* env,jobject talkerObject)
-{
-        if ( (*env)->ExceptionCheck(env) ) return 2;
-        
-	(*env)->SetIntField(env,talkerObject,Cache->result,0);
-	
-	return 0;
-}
-
 static jlong checkError(JNIEnv* env,jobject talkerObject,StmtMgr base)
 {
         const char* errtxt;
@@ -488,20 +476,12 @@ static jlong checkError(JNIEnv* env,jobject talkerObject,StmtMgr base)
 
 static jlong reportErrorToJava(JNIEnv* env,jobject talkerObject,jlong code, const char* errtxt, const char* statetxt)
 {
-    (*env)->SetIntField(env,talkerObject,Cache->result,code);
-
     if (code != 0 ) {
         jthrowable existing = (*env)->ExceptionOccurred(env);
         char combo[255];
 
         if ( !errtxt ) errtxt = "no error text";
         if ( !statetxt ) statetxt = "NOSTATE";
-
-        jstring et = (*env)->NewStringUTF(env,errtxt);
-        jstring st = (*env)->NewStringUTF(env,statetxt);
-
-        (*env)->SetObjectField(env,talkerObject,Cache->eText,et);
-        (*env)->SetObjectField(env,talkerObject,Cache->eState,st);
 
         snprintf(combo,255,"%s: %s -- err: %d",statetxt,errtxt,(int)code);
         if ((*env)->IsSameObject(env, existing, NULL)) {
@@ -521,8 +501,6 @@ static bool confirmAgent(JNIEnv* env,jobject talker,StmtMgr stmt) {
     if ( stmt == NULL ) return false;
     return true;
 }
-
-
 
 static int transferin(void* arg,int type, void* buff,int run)
 {

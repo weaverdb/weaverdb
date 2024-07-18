@@ -37,9 +37,6 @@ typedef struct javacache {
     jclass                          stringtype;
    /*  BaseWeaverConnection fields */
     jfieldID                        nativePointer;
-    jfieldID                        result;
-    jfieldID                        eText;
-    jfieldID                        eState;
     /*  BoundOutput fields */
     jfieldID                        oindex;
     jfieldID                        oname;

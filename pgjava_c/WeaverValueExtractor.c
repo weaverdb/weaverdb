@@ -54,9 +54,6 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.boundout = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BoundOutput"));
         /*  field ids  */
         CachedClasses.nativePointer = (*env)->GetFieldID(env,CachedClasses.talker,"nativePointer","J");
-        CachedClasses.result = (*env)->GetFieldID(env,CachedClasses.talker, "resultField","I");
-	CachedClasses.eText =  (*env)->GetFieldID(env,CachedClasses.talker,"errorText","Ljava/lang/String;");
-	CachedClasses.eState =  (*env)->GetFieldID(env,CachedClasses.talker,"state","Ljava/lang/String;");
 
 	CachedClasses.oindex = (*env)->GetFieldID(env,CachedClasses.boundout, "index","I");
 	CachedClasses.oname = (*env)->GetFieldID(env,CachedClasses.boundout, "columnName","Ljava/lang/String;");
