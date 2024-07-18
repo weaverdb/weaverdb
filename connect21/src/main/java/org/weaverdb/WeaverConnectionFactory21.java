@@ -29,5 +29,9 @@ public class WeaverConnectionFactory21 implements DBReferenceFactory {
     public String builtFor() {
         return "21";
     }
-    
+
+    @Override
+    public boolean hasLiveConnections() {
+        return BaseWeaverConnection.hasLiveConnections();
+    }
 }

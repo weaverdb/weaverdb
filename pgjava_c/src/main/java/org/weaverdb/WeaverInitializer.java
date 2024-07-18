@@ -14,6 +14,7 @@
 package org.weaverdb;
 
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class WeaverInitializer {
     
@@ -51,6 +52,19 @@ public class WeaverInitializer {
     }
     
     public static void close(boolean clean) {
+        boolean wasInterruped = false;
+        if (clean) {
+            try {
+                while (DBReference.hasLiveConnections()) {
+                    TimeUnit.SECONDS.sleep(10);
+                }
+            } catch (InterruptedException ie) {
+                wasInterruped = true;
+            }
+        }
         close();
+        if (wasInterruped) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

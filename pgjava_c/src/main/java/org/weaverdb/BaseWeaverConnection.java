@@ -280,6 +280,10 @@ class BaseWeaverConnection implements DBReference {
         }
     }
     
+    static boolean hasLiveConnections() {
+        return !liveConnections.isEmpty();
+    }
+    
     private native long grabConnection(String name, String password, String connect) throws ExecutionException;
     private native long connectSubConnection() throws ExecutionException;
     private static native void disposeConnection(long link);

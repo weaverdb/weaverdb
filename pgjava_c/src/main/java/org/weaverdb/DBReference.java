@@ -155,5 +155,7 @@ public interface DBReference extends AutoCloseable {
         return null;
     }
     
-    
+    static boolean hasLiveConnections() {
+        return loader.hasLiveConnections();
+    }
 }

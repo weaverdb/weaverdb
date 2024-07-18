@@ -254,6 +254,16 @@ CancelEnvAndJoin(Env* env) {
 }
 
 Env* CreateEnv(Env* parent) {
+        bool canproceed = false;
+
+        pthread_mutex_lock(&envlock);
+        canproceed = !IsShutdownProcessingMode();
+        pthread_mutex_unlock(&envlock);
+        
+        if (!canproceed) {
+            return NULL;
+        }
+
 	MemoryContext top = ( parent == NULL ) ? NULL : parent->global_context;
 
 	Env* env = ( top == NULL ) ? os_malloc(sizeof(Env)) : MemoryContextAlloc(top,sizeof(Env));
@@ -294,31 +304,31 @@ Env* CreateEnv(Env* parent) {
 /*  create global hashtable and migrate to this model  */
 
 /*  insert the env into envmap  */
-	{
-            int counter = 0;
-            pthread_mutex_lock(&envlock);
-            for (counter=0;counter<GetMaxBackends();counter++) {
-                if ( envmap[counter] == NULL ) break;
+    {
+        int counter = 0;
+        pthread_mutex_lock(&envlock);
+        for (counter=0;counter<GetMaxBackends();counter++) {
+            if ( envmap[counter] == NULL ) break;
+        }
+
+        if ( counter != GetMaxBackends() ) {
+            envmap[counter] = env;
+            env->eid = counter;
+            envcount++;
+        } else {
+            printf("too many connections\n");
+            pthread_mutex_destroy(env->env_guard);
+            MemoryContextDelete(env->global_context);    
+            if ( top ) {
+                pfree(env);
+            } else {
+                os_free(env);
             }
-		
-            if ( counter != GetMaxBackends() ) {
-		envmap[counter] = env;
-		env->eid = counter;
-		envcount++;
-	    } else {
-		printf("too many connections\n");
-                pthread_mutex_destroy(env->env_guard);
-                MemoryContextDelete(env->global_context);    
-                if ( top ) {
-                    pfree(env);
-                } else {
-                    os_free(env);
-                }
-		env = NULL;
-            }
-            pthread_mutex_unlock(&envlock);
-	}
-	return env;
+            env = NULL;
+        }
+        pthread_mutex_unlock(&envlock);
+    }
+    return env;
 }
 
 void DiscardAllInvalids()

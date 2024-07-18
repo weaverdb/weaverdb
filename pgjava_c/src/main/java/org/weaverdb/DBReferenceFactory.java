@@ -20,4 +20,6 @@ public interface DBReferenceFactory {
     DBReference connectUser(String username, String password, String database);
     
     String builtFor();
+    
+    boolean hasLiveConnections();
 }

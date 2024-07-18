@@ -509,20 +509,20 @@ LIB_EXTERN bool
 prepareforshutdown()
 {
     if ( !isinitialized() ) return false;
-	
-    SetEnv(env);
-        
+	        
     pthread_mutex_lock(&init_lock);
     initialized = false;
     pthread_mutex_unlock(&init_lock);
+
+    SetEnv(env);
         
-	SetProcessingMode(ShutdownProcessing);
+    SetProcessingMode(ShutdownProcessing);
 /*  stop the poolsweep processing */
   
-	PoolsweepDestroy();	
+    PoolsweepDestroy();	
 /*  wait for client threads to reach a safe spot to 
     exit */
-	MasterWriteLock(); 
+    MasterWriteLock(); 
         
     SetEnv(NULL);
     
