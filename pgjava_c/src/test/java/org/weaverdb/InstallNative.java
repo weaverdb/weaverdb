@@ -86,7 +86,7 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
     @Override
     public void close() {
         if (owner) {
-            WeaverInitializer.close(true);
+            WeaverInitializer.forceShutdown();
         }
     }
 }

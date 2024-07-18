@@ -69,7 +69,7 @@ public class WeaverSample {
         prop.setProperty("stdlog", "TRUE"); // print debug logging to stdout
         prop.setProperty("disable_crc", "TRUE"); // disable crc checking on buffer pages for now
         WeaverInitializer.initialize(prop); // start connect to the database
-        Runtime.getRuntime().addShutdownHook(new Thread(()->WeaverInitializer.close(true))); // call close when the JVM is shutdown
+        Runtime.getRuntime().addShutdownHook(new Thread(()->WeaverInitializer.forceShutdown())); // call close when the JVM is shutdown
     }
     
     private static void createSampleTable() throws Exception {

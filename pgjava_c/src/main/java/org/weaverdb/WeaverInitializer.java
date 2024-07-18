@@ -13,8 +13,11 @@
 
 package org.weaverdb;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class WeaverInitializer {
     
@@ -35,7 +38,7 @@ public class WeaverInitializer {
         java.util.Enumeration it = props.keys();
         while ( it.hasMoreElements() ) {
             String key = it.nextElement().toString();
-            vars.append(key + "=" + props.getProperty(key) + ";");
+            vars.append(key).append("=").append(props.getProperty(key)).append(";");
         }
         
         String library = props.getProperty("library");
@@ -51,20 +54,29 @@ public class WeaverInitializer {
         loaded = true;
     }
     
-    public static void close(boolean clean) {
+    public static void shutdown(Duration timeout) throws TimeoutException {
+        Instant start = Instant.now();
         boolean wasInterruped = false;
-        if (clean) {
-            try {
-                while (DBReference.hasLiveConnections()) {
-                    TimeUnit.SECONDS.sleep(10);
-                }
-            } catch (InterruptedException ie) {
-                wasInterruped = true;
+
+        try {
+            while (DBReference.hasLiveConnections() && start.plus(timeout).isAfter(Instant.now())) {
+                TimeUnit.SECONDS.sleep(1);
             }
+            if (DBReference.hasLiveConnections()) {
+                throw new TimeoutException("close timeout exceeded.  Live connections still active");
+            } else {
+                close();
+            }
+        } catch (InterruptedException ie) {
+            wasInterruped = true;
+        } finally {
+            if (wasInterruped) {
+                Thread.currentThread().interrupt();
+            }            
         }
+    }
+    
+    public static void forceShutdown() {
         close();
-        if (wasInterruped) {
-            Thread.currentThread().interrupt();
-        }
     }
 }
