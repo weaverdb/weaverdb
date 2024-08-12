@@ -23,8 +23,29 @@ class Bound<T> {
     private boolean orphaned;
 
     Bound(Class<T> type) {
-        this.type = type;
+        this.type = type.isPrimitive() ? convertPrimative(type) : type;
         this.settype = bind(this.type);
+    }
+    
+    private static <P> Class convertPrimative(Class type) {
+        if (type == Boolean.TYPE) {
+            return Boolean.class;
+        } else if (type == Byte.TYPE) {
+            return Byte.class;
+        } else if (type == Character.TYPE) {
+            return Character.class;
+        } else if (type == Short.TYPE) {
+            return Short.class;
+        } else if (type == Integer.TYPE) {
+            return Integer.class;
+        } else if (type == Long.TYPE) {
+            return Long.class;
+        } else if (type == Float.TYPE) {
+            return Float.class;
+        } else if (type== Double.TYPE) {
+            return Double.class;
+        }
+        return null;
     }
     
     private static Types bind(Class<?> type) {
