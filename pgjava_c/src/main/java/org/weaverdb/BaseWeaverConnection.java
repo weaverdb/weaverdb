@@ -331,6 +331,7 @@ class BaseWeaverConnection implements DBReference {
         private final long  link;
         private final String raw;
         private boolean executed = false;
+        private boolean closed = false;
 
         private WeaverStatement(String statement) throws ExecutionException {
             link = prepareStatement(statement);
@@ -397,6 +398,10 @@ class BaseWeaverConnection implements DBReference {
             if (!executed) {
                 execute();
             }
+            if (closed) {
+                return false;
+            }
+            
             for (BoundOutput out : outputs.values()) {
                 out.reset();
             }
@@ -438,7 +443,10 @@ class BaseWeaverConnection implements DBReference {
 
         @Override
         public void close() {
-            dispose();
+            if (!closed) {
+                dispose();
+                closed = true;
+            }
         }
 
         private void dispose() {
