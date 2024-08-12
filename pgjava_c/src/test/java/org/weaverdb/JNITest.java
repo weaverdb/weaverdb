@@ -1224,6 +1224,31 @@ public class JNITest {
         }
     }
     
+     @org.junit.jupiter.api.Test
+    public void testStatementMultiClose() throws Exception {
+        try (DBReference conn = DBReference.connect("test")) {
+            conn.execute("create table stmtclose (clong int8, cint int4, home varchar)");
+            conn.execute("insert into stmtclose (clong, cint, home) values (6000, 4, 'window')");
+            try (Statement stmt = conn.statement("select clong, cint, home from stmtclose")) {
+                stmt.execute();
+                Output<Long> l = stmt.linkOutput(1, Long.class);
+                Output<Integer> i = stmt.linkOutput(2, Integer.class);
+                Output<String> h = stmt.linkOutput(3, String.class);
+                assertTrue(stmt.fetch());
+                System.out.println(l.get() + " " + i.get() + " " + h.get());
+                stmt.close(); // actual close
+                stmt.close(); // second close does nothing
+            } // third close does nothing
+        }
+    }
+    
+    @org.junit.jupiter.api.Test
+    public void testConnectionMultiClose() throws Exception {
+        try (DBReference conn = DBReference.connect("test")) {
+            conn.close(); // closes
+        } // second close does nothing
+    }    
+    
     private static class Generator {
         private final long totalSize;
         private final MessageDigest sig;
