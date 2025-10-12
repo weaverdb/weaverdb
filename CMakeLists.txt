@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.29.0)
+cmake_minimum_required(VERSION 4.1.2)
 
 project("weaverdb")
 
