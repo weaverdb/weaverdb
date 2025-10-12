@@ -24,3 +24,5 @@ mtpgsql/src/backend/parser/parse.h
 mtpgsql/src/backend/parser/scan.c
 mtpgsql/src/backend/utils/fmgrtab.c
 mtpgsql/src/include/parser/parse.h
+**/bin/
+/pgjava_c/repo/
