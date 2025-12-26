@@ -13,7 +13,6 @@
 #ifndef _WEAVERSTMTMANAGER_H_
 #define _WEAVERSTMTMANAGER_H_
 
-#include <sys/types.h>
 #include "WeaverInterface.h"
 
   

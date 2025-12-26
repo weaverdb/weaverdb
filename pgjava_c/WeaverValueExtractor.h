@@ -10,7 +10,6 @@
  *-------------------------------------------------------------------------
  */
 #include <jni.h>
-#include <sys/types.h>
 
 #ifndef _WEAVERVALUEEXTRACTOR_H
 #define	_WEAVERVALUEEXTRACTOR_H

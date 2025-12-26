@@ -15,7 +15,9 @@
 #define TIMESTAMP_H
 
 #include <time.h>
-/* #include <math.h> */
+#ifdef NAN
+#include <math.h>
+#endif
 #include <limits.h>
 
 /*
