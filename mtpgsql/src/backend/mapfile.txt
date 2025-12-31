@@ -41,6 +41,9 @@
                 prepareforshutdown;
                 wrapupweaverbackend;
                 singleusershutdown;
+                SetJVM;
+                SetJavaObjectLoader;
+                JNI_OnLoad;
 	local:
 		*;
 };

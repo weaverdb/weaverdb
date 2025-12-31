@@ -4,39 +4,23 @@ plugins {
    id 'maven-publish'
 }
 
-description = 'weaver connector'
-
-base {
-    archivesName = 'weaver'
-}
+description = 'weaver connector for java25'
 
 jar {
-    archiveBaseName = 'weaver'
-}
-
-javadoc {
-    source = sourceSets.main.java
-    exclude "org/weaverdb/sample/**"
-    exclude "org/weaverdb/WeaverReferenceFactory17.java"
-//    exclude "org/weaverdb/DBReferenceFactory.java"
-    exclude "org/weaverdb/WeaverCmdLine.java"
-    if (JavaVersion.current().isJava8Compatible()) {
-        options.addStringOption('Xdoclint:none', '-quiet')
-    }
+    archiveBaseName = 'weaver25'
 }
 
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'com.drewnoakes:metadata-extractor:2.19.0'
+    implementation project(':pgjava_c')
 }
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(25)
     }
-    withSourcesJar()
-    withJavadocJar()
 }
 
 jar {
@@ -58,21 +42,15 @@ tasks.named('test', Test) {
         languageVersion = JavaLanguageVersion.of(25)
     }
 
-    jvmArgs '-verbose:jni', '--enable-native-access=ALL-UNNAMED'
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
     testLogging {
         events "passed"
     }
 }
 
-tasks.register('printClasspath') {
+task printClasspath {
     doLast {
         configurations.testRuntimeClasspath.each { println it }
-    }
-}
-
-tasks.register('printJavaVersion') {
-    doLast {
-        println "Java Toolchain Version: ${java.toolchain.languageVersion.get()}"
     }
 }
 
@@ -80,15 +58,16 @@ publishing {
     publications {
         maven(MavenPublication) {
             groupId = 'org.weaverdb'
-            version = '1.0.2'
-            artifactId = 'weaverdb'
+            version = '1.0'
+            artifactId = 'connect25'
+
             from components.java
         }
     }
     repositories {
         maven {
             name = "myrepo"
-            url = layout.projectDirectory.dir('repo')
+            url = layout.buildDirectory.dir('repo')
         }
     }
 }

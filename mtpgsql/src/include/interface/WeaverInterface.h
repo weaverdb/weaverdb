@@ -63,7 +63,6 @@ typedef int (*transferfunc)(void* userenv, int varType, void *varAdd, int varSiz
 
 typedef struct Connection* OpaqueWConn;
 typedef struct preparedplan* OpaquePreparedStatement;
-typedef struct commbuffer*   Pipe;
 
 LIB_EXTERN OpaqueWConn WCreateConnection(const char* name, const char * paslong, const char* connect);
 LIB_EXTERN OpaqueWConn WCreateSubConnection(OpaqueWConn  conn);

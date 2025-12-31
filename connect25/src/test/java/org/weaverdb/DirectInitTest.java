@@ -14,26 +14,13 @@ package org.weaverdb;
 
 import java.io.Writer;
 import java.util.Properties;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.ExtensionContext;
-import static org.junit.jupiter.api.extension.ExtensionContext.Namespace.GLOBAL;
+import org.junit.jupiter.api.AfterAll;
 
-@ExtendWith({InstallNative.class})
-public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.CloseableResource {
+public class DirectInitTest {
 
-    private static final Lock LOCK = new ReentrantLock();
-
-    private boolean owner = false;
-    @Override
-    public void beforeAll(ExtensionContext context) {
-        LOCK.lock();
+    @org.junit.jupiter.api.Test
+    public void testInit() throws Throwable{
         try {
-            if (context.getRoot().getStore(GLOBAL).get("RunOnce") != null) {
-                return;
-            }
                 ProcessBuilder b = new ProcessBuilder("pwd");
                 b.inheritIO();
                 Process p = b.start();
@@ -73,20 +60,14 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 prop.setProperty("stdlog", "TRUE");
                 prop.setProperty("disable_crc", "TRUE");
                 
-                WeaverInitializer.initialize(prop);
-                owner = true;
-                context.getRoot().getStore(GLOBAL).put("RunOnce", this);
-        } catch (Exception io) {
-        
+                DirectWeaverInitializer.initialize(prop);      
         } finally {
-            LOCK.unlock();
+
         }
     }
 
-    @Override
-    public void close() {
-        if (owner) {
-            WeaverInitializer.forceShutdown();
-        }
+    @AfterAll
+    public static void close() {
+            DirectWeaverInitializer.forceShutdown();
     }
 }

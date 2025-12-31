@@ -38,3 +38,6 @@ _isinitialized
 _prepareforshutdown
 _wrapupweaverbackend
 _singleusershutdown
+_SetJVM
+_SetJavaObjectLoader
+_JNI_OnLoad

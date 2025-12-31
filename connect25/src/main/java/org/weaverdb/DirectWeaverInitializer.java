@@ -1,6 +1,5 @@
 /*-------------------------------------------------------------------------
  *
- *	WeaverInitializer.java
  *
  * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
@@ -13,22 +12,63 @@
 
 package org.weaverdb;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-public class WeaverInitializer {
+public class DirectWeaverInitializer {
     
     private static boolean loaded = false;
     
-    public WeaverInitializer() {
+    private static final MethodHandle initWeaverBackend;
+    private static final MethodHandle wrapupWeaverBackend;
+
+    static {
+        System.loadLibrary("weaver");
+        Linker linker = Linker.nativeLinker();
+        SymbolLookup lookup = SymbolLookup.loaderLookup();
+        
+        initWeaverBackend = linker.downcallHandle(
+            lookup.find("initweaverbackend").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_BOOLEAN, ValueLayout.ADDRESS)
+        );
+        
+        wrapupWeaverBackend = linker.downcallHandle(
+            lookup.find("wrapupweaverbackend").orElseThrow(),
+            FunctionDescriptor.ofVoid()
+        );
+    }
+    
+    public DirectWeaverInitializer() {
         
     }
     
-    private static synchronized native void init(String database);
-    private static synchronized native void close();
+    private static synchronized void init(String database) {
+        try (Arena arena = Arena.ofConfined()) {
+            boolean success = (boolean) initWeaverBackend.invokeExact(arena.allocateFrom(database));
+            if (!success) {
+                throw new UnsatisfiedLinkError("environment not valid, see db log");
+            }
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static synchronized void close() {
+        try {
+            wrapupWeaverBackend.invokeExact();
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+    }
     
     public static void initialize(Properties props) throws java.lang.UnsatisfiedLinkError  {
         StringBuilder vars = new StringBuilder();
@@ -41,15 +81,7 @@ public class WeaverInitializer {
             vars.append(key).append("=").append(props.getProperty(key)).append(";");
         }
         
-        String library = props.getProperty("library");
-        if ( library == null ) library = "weaver_jni";
-        try {
-            init(vars.toString());
-        } catch ( UnsatisfiedLinkError us ) {
-            System.loadLibrary(library);
-            
-            init(vars.toString());
-        }
+        init(vars.toString());
         
         loaded = true;
     }

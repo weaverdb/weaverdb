@@ -26,7 +26,7 @@
 
 static          Datum
                 ConvertFromJavaArg(Oid type, jvalue val, bool* isNull);
-static JNIEnv  *GetJavaEnv(void);
+static int GetJavaEnv(JNIEnv** env);
 
 JavaVM         *jvm;
 static const char* loader = "";
@@ -34,6 +34,7 @@ static const char* loader = "";
 static MemoryContext function_cache_cxt;
 static HTAB*  function_table;
 static pthread_mutex_t   ftable_guard;
+static pthread_key_t   attaches;
 
 static jclass loader_class;
 static jmethodID loader_out;
@@ -42,9 +43,6 @@ static jmethodID loader_text_in;
 static jmethodID loader_text_out;
 static jmethodID loader_compare;
 static jmethodID loader_equals;
-
-static jclass class_class;
-static jmethodID getname;
 
 typedef struct funcdef {
     NameData     key;
@@ -60,12 +58,14 @@ static jvalue CallJavaFunction(JavaFunction def, int nargs, jvalue* args);
 static jvalue ConvertToJavaArg(Oid type, Datum val);
 static void FormJavaFunctionSig(char* buffer, int buflen, const char *name, int nargs, Oid * types);
 static JavaFunction GetJavaCallArgs(const char *name, int nargs, Oid * types);
+static void DetachThread(void* thread);
 
 static void FunctionCacheInit() {
     HASHCTL ctl;
-    JNIEnv* jenv = GetJavaEnv();
+    JNIEnv* jenv;
 
-    
+    GetJavaEnv(&jenv);
+
     function_cache_cxt = AllocSetContextCreate(NULL,
             "JavaFunctionCache",
             ALLOCSET_DEFAULT_MINSIZE,
@@ -80,22 +80,32 @@ static void FunctionCacheInit() {
     
     function_table = hash_create("java function hash", 100, &ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
     pthread_mutex_init(&ftable_guard, NULL);
+}
 
-    class_class = (*jenv)->NewGlobalRef(jenv, (*jenv)->FindClass(jenv, "java/lang/Class"));
-    getname = (*jenv)->GetMethodID(jenv, class_class, "descriptorString", "()Ljava/lang/String;");
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
+    SetJVM(jvm,"org/weaverdb/WeaverObjectLoader");
+    return JNI_VERSION_1_8;
 }
 
 void
 SetJVM(JavaVM * java, const char *ol)
 {
-	jvm = java;
+    jvm = java;
 
-        FunctionCacheInit();
-	SetJavaObjectLoader(ol);
+    FunctionCacheInit();
+    SetJavaObjectLoader(ol);
+    pthread_key_create(&attaches, DetachThread);
+}
+
+void
+DetachThread(void* thread) {
+    (*jvm)->DetachCurrentThread(jvm);
 }
 
 void SetJavaObjectLoader(const char* l) {
-    JNIEnv* jenv = GetJavaEnv();
+    JNIEnv* jenv;
+
+    GetJavaEnv(&jenv);
     
     if ( l != NULL ) loader = strdup(l);
     if (loader_class != NULL) {
@@ -111,18 +121,21 @@ void SetJavaObjectLoader(const char* l) {
     loader_equals = (*jenv)->GetStaticMethodID(jenv, loader_class, "java_equals", "([B[B)Z");
 }
 
-JNIEnv*
-GetJavaEnv()
+int
+GetJavaEnv(JNIEnv** env)
 {
-	JNIEnv         *jenv;
+        jint result;
+        
+        result = (*jvm)->GetEnv(jvm, (void**)env, JNI_VERSION_1_8);
+        if (result == JNI_EDETACHED) {
+            result = (*jvm)->AttachCurrentThread(jvm, (void**)env, NULL);
+            pthread_setspecific(attaches, *env);
+        }
 
-
-        (*jvm)->AttachCurrentThread(jvm, (void*)&jenv, NULL);
-
-	if (jenv == NULL) {
+	if (result != JNI_OK) {
 		elog(FATAL, "Java environment not attached");
 	}
-	return jenv;
+	return result;
 
 }
 
@@ -143,7 +156,7 @@ javaout(bytea * datum)
             data = VARDATA(datum);
         }
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 
         if ( ISINDIRECT(datum) ) {
             int len = 0;
@@ -184,7 +197,7 @@ javain(jobject target)
 	bytea          *data;
 	jbyteArray      jb = NULL;
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 
 	jb = (*jenv)->CallStaticObjectMethod(jenv, loader_class, loader_in, target);
 	if (jb == NULL || (*jenv)->ExceptionCheck(jenv)) {
@@ -204,13 +217,12 @@ javatextin(char *target)
 {
 	void           *env;
 	JNIEnv         *jenv;
-	int             result;
 	int             length;
 	bytea          *data;
 	jbyteArray      jb = NULL;
 	jbyte          *prim = NULL;
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 
 	(*jenv)->PushLocalFrame(jenv, 10);
 
@@ -241,7 +253,7 @@ javatextout(bytea * target)
 	jbyte          *prim = NULL;
 	jstring         result;
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 
 	jb = (*jenv)->NewByteArray(jenv, length);
 	if (jb != NULL) {
@@ -280,7 +292,7 @@ fmgr_javaA(const char* function, int nargs, Oid* types, Datum *args, Oid* return
         const char            *sig;
         int x=0;
                 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 
 	(*jenv)->PushLocalFrame(jenv, 10);
 
@@ -308,7 +320,7 @@ fmgr_javaA(const char* function, int nargs, Oid* types, Datum *args, Oid* return
 Datum
 fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, bool* isNull)
 {
-	JNIEnv         *jenv = GetJavaEnv();
+	JNIEnv         *jenv;
 	jclass          converter;
 	jmethodID       in;
 	jvalue          rval;
@@ -316,6 +328,8 @@ fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, b
         jvalue        jargs[FUNC_MAX_ARGS];
         Oid foid;
         int x;
+
+        GetJavaEnv(&jenv);
 
 	(*jenv)->PushLocalFrame(jenv, 10);
         
@@ -348,7 +362,7 @@ ConvertToJavaArg(Oid type, Datum val)
 	jvalue          rval;
 
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 
 	switch (type) {
 	case INT4OID:
@@ -393,7 +407,7 @@ ConvertFromJavaArg(Oid type, jvalue val, bool *isNull)
 	JNIEnv         *jenv;
 	Datum           ret_datum = PointerGetDatum(NULL);
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
         
 	switch (type) {
             case INT4OID:
@@ -458,7 +472,7 @@ java_instanceof(bytea * object, bytea * class)
 	char*           clazz;
         jobject         target;
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 	(*jenv)->PushLocalFrame(jenv, 10);
 
 	target = javaout(object);
@@ -496,7 +510,7 @@ java_compare(bytea * obj1, bytea * obj2)
 	jbyteArray      master1 = NULL;
 	jbyteArray      master2 = NULL;
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 	(*jenv)->PushLocalFrame(jenv, 10);
 
 	if ((*jenv)->ExceptionOccurred(jenv)) {
@@ -538,7 +552,7 @@ java_equals(bytea * obj1, bytea * obj2)
 	jbyteArray      master1 = NULL;
 	jbyteArray      master2 = NULL;
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 	(*jenv)->PushLocalFrame(jenv, 10);
 
         if (obj1 == obj2) return true;
@@ -660,7 +674,7 @@ GetJavaCallArgs(const char *name, int nargs, Oid * argtypes)
         JavaFunction            definition = NULL;            
         NameData             lookup;
 
-	jenv = GetJavaEnv();
+	GetJavaEnv(&jenv);
 
         memset(NameStr(lookup), '\0', NAMEDATALEN);
 
@@ -719,10 +733,11 @@ GetJavaCallArgs(const char *name, int nargs, Oid * argtypes)
 
 jvalue
 CallJavaFunction(JavaFunction def, int nargs, jvalue* args) {
-	JNIEnv         *jenv = GetJavaEnv();
+	JNIEnv         *jenv;
         jvalue         rval;
         jobject        target = NULL;
 
+        GetJavaEnv(&jenv);
         if (!def->isStatic) {
             target = args[0].l;
             args = args + 1;

@@ -2,6 +2,7 @@
 rootProject.name = 'weaver'
 include('pgjava_c')
 include('connect21')
+include('connect25')
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)

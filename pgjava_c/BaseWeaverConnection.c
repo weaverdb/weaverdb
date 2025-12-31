@@ -62,8 +62,6 @@ typedef struct commargs {
     int linkType;
 } CommArgs;
 
-extern void SetJVM(JavaVM* java, const char* loader);
-
 static int transferin(void* arg,int type, void* buff,int run);
 static int transferout(void* arg,int type, void* buff,int run);
 static int pipeout(void* args,int type,void* buff,int run);
@@ -107,10 +105,6 @@ JNIEXPORT void JNICALL Java_org_weaverdb_WeaverInitializer_init(JNIEnv *env,jobj
     }
 
     Cache = CreateCache(env);
-
-    (*env)->GetJavaVM(env,&jvm);
-
-    SetJVM(jvm,"org/weaverdb/WeaverObjectLoader");
 }
 
 JNIEXPORT void JNICALL Java_org_weaverdb_WeaverInitializer_close(JNIEnv *env,jobject talkerObject)
