@@ -303,7 +303,7 @@ public class JNITest {
                 });
                 s.execute();
                 s.fetch();
-                assertEquals("hello to the panda", data.value());
+                assertEquals("hello to the panda", data.get());
             }
             feeder.shutdown();
         }

@@ -10,7 +10,7 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
 
 /**
  * Base type for Bound Input/Output.

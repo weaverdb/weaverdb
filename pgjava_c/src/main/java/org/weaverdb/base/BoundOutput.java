@@ -10,12 +10,14 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
+import org.weaverdb.ExecutionException;
+import org.weaverdb.base.JavaConverter;
 
 /**
  *
@@ -23,27 +25,13 @@ import java.nio.channels.WritableByteChannel;
  */
 class BoundOutput<T> extends Bound<T> {
 
-    private final Statement owner;
     private final int index;
     private String columnName;
     private Object value;
 
-    BoundOutput(Statement fc, int index, Class<T> type) throws ExecutionException {
+    BoundOutput(int index, Class<T> type) throws ExecutionException {
         super(type);
-        owner = fc;
         this.index = index;
-    }
-
-    Statement getOwner() {
-        return owner;
-    }
-
-    void setStream(OutputStream value) {
-        this.value = value;
-    }
-
-    void setChannel(java.nio.channels.WritableByteChannel value) {
-        this.value = value;
     }
     
     String getName() {
@@ -56,6 +44,10 @@ class BoundOutput<T> extends Bound<T> {
     
     void reset() throws ExecutionException {
         value = null;
+    }
+    
+    void set(T value) {
+        this.value = value;
     }
 
     T get() throws ExecutionException {

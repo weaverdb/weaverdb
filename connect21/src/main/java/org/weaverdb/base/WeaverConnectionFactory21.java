@@ -10,7 +10,10 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
+
+import org.weaverdb.DBReference;
+import org.weaverdb.DBReferenceFactory;
 
 
 public class WeaverConnectionFactory21 implements DBReferenceFactory {

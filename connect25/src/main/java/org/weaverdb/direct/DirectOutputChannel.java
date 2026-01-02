@@ -12,31 +12,30 @@
 
 /*
  */
-package org.weaverdb;
+package org.weaverdb.direct;
 
 import java.io.IOException;
 import java.nio.channels.Pipe;
 import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.Future;
+import org.weaverdb.ExecutionException;
+import org.weaverdb.Output;
+import org.weaverdb.Statement;
+import org.weaverdb.StreamingTransformer;
 
 
-class BoundOutputChannel<T> extends BoundOutput<WritableByteChannel> {
+class DirectOutputChannel<T> extends DirectOutput<WritableByteChannel> {
     private final StreamingTransformer transformer;
     private final Output.Channel<? extends T> type;
     private Future<T> futurevalue;
 
-    BoundOutputChannel(Statement fc, StreamingTransformer engine, int index, Output.Channel<T> type) throws ExecutionException {
-        super(fc, index, WritableByteChannel.class);
+    DirectOutputChannel(Statement fc, StreamingTransformer engine, int index, Output.Channel<T> type) throws ExecutionException {
+        super(index, WritableByteChannel.class);
         this.transformer = engine;
         this.type = type;
     }
     
-    @Override
-    WritableByteChannel get() throws ExecutionException {
-        throw new ExecutionException("use value() instead");
-    }
-    
-    public T value() throws ExecutionException {
+    public T transform() throws ExecutionException {
         try {
             if (futurevalue == null) {
                 throw new ExecutionException("statement has not been fetched");
@@ -52,7 +51,7 @@ class BoundOutputChannel<T> extends BoundOutput<WritableByteChannel> {
         try {
             super.reset();
             Pipe comms = Pipe.open();
-            super.setChannel(comms.sink());
+            super.setValue(comms.sink());
             futurevalue = transformer.schedule(()->{
                 try {
                     return type.transform(comms.source());

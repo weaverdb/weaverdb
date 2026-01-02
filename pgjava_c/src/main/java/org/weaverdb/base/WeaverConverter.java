@@ -17,7 +17,7 @@
  * Created on August 23, 2004, 3:20 PM
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
 
 import java.io.*;
 /**

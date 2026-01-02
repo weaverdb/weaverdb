@@ -15,8 +15,11 @@
  * Created on August 23, 2004, 3:20 PM
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
 
+import org.weaverdb.*;
+import org.weaverdb.base.ByteWellOutputStream;
+import org.weaverdb.base.ByteWellInputStream;
 import java.io.*;
 import java.lang.reflect.*;
 /**

@@ -47,11 +47,11 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.exception = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/ExecutionException"));
         CachedClasses.ecstor = (*env)->GetMethodID(env,CachedClasses.exception,"<init>","(Ljava/lang/String;)V");
         CachedClasses.suppressed = (*env)->GetMethodID(env,CachedClasses.exception,"addSuppressed","(Ljava/lang/Throwable;)V");
-        CachedClasses.truncation = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BinaryTruncation"));
+        CachedClasses.truncation = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BinaryTruncation"));
         /*  boundary objects */
-        CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BaseWeaverConnection"));
-        CachedClasses.boundin = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BoundInput"));
-        CachedClasses.boundout = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BoundOutput"));
+        CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BaseWeaverConnection"));
+        CachedClasses.boundin = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BoundInput"));
+        CachedClasses.boundout = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BoundOutput"));
         /*  field ids  */
         CachedClasses.nativePointer = (*env)->GetFieldID(env,CachedClasses.talker,"nativePointer","J");
 

@@ -17,7 +17,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 
 
-interface StreamingTransformer extends AutoCloseable {
+public interface StreamingTransformer extends AutoCloseable {
 
     @Override
     public void close();

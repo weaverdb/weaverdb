@@ -26,14 +26,10 @@ import java.nio.channels.WritableByteChannel;
  */
 public class Input<T> {
     private final Setter<? super T> source;
-    
-    Input(BoundInput<? super T> base) {
-        source = base::set;
-    }
-    
-    Input(BoundInputChannel<? super T> base) {
-        source = base::put;
-    }    
+
+    public Input(Setter<? super T> setter) {
+        source = setter;
+    } 
     /**
      * 
      * @param value
@@ -44,7 +40,7 @@ public class Input<T> {
     }
     
     @FunctionalInterface
-    private static interface Setter<T> {
+    public static interface Setter<T> {
         void value(T value) throws ExecutionException;
     }
     

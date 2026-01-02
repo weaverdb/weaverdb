@@ -10,7 +10,7 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +23,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
@@ -30,6 +32,12 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import org.weaverdb.DBReference;
+import org.weaverdb.ExecutionException;
+import org.weaverdb.Input;
+import org.weaverdb.Output;
+import org.weaverdb.Statement;
+import org.weaverdb.StreamingTransformer;
 
 class BaseWeaverConnection implements DBReference {
     
@@ -350,23 +358,23 @@ class BaseWeaverConnection implements DBReference {
             
         @Override
         public <T> Output<T> linkOutput(int index, Class<T> type)  throws ExecutionException {
-            BoundOutput<T> bo = new BoundOutput<>(this,index, type);
+            BoundOutput<T> bo = new BoundOutput<>(index, type);
             Optional.ofNullable(outputs.put(index, bo)).ifPresent(BoundOutput::deactivate);
-            return new Output(bo);
+            return new Output<>(bo::getName, bo::get, bo.getIndex());
         }
         
         @Override
         public <T> Input<T> linkInput(String name, Class<T> type)  throws ExecutionException {
-            BoundInput<T> bi = new BoundInput<>(this, name, type);
+            BoundInput<T> bi = new BoundInput<>(name, type);
             Optional.ofNullable(inputs.put(name, bi)).ifPresent(BoundInput::deactivate);
-            return new Input<>(bi);
+            return new Input<>(bi::set);
         }
         
         @Override
         public <T> Input<T> linkInputChannel(String name, Input.Channel<T> transform) throws ExecutionException {
-            BoundInputChannel<T> channel = new BoundInputChannel<>(this, transformer, name, transform);
+            BoundInputChannel<T> channel = new BoundInputChannel<>(transformer, name, transform);
             Optional.ofNullable(inputs.put(name, channel)).ifPresent(BoundInput::deactivate);
-            return new Input<>(channel);
+            return new Input<>(channel::put);
         }
         
         @Override
@@ -376,9 +384,9 @@ class BaseWeaverConnection implements DBReference {
         
         @Override
         public <T> Output<T> linkOutputChannel(int index, Output.Channel<T> transform) throws ExecutionException {
-            BoundOutputChannel<T> channel = new BoundOutputChannel<>(this, transformer, index, transform);
+            BoundOutputChannel<T> channel = new BoundOutputChannel<>(transformer, index, transform);
             Optional.ofNullable(outputs.put(index, channel)).ifPresent(BoundOutput::deactivate);
-            return new Output<>(channel);
+            return new Output<>(channel::getName, channel::transform, channel.getIndex());
         }
         
         @Override
@@ -388,9 +396,9 @@ class BaseWeaverConnection implements DBReference {
         
         @Override
         public <T extends WritableByteChannel> Output<T> linkOutputChannel(int index, Supplier<T> cstor) throws ExecutionException {
-            BoundOutputReceiver<T> receiver = new BoundOutputReceiver<>(this, index, cstor);
+            BoundOutputReceiver<T> receiver = new BoundOutputReceiver<>(index, cstor);
             Optional.ofNullable(outputs.put(index, receiver)).ifPresent(BoundOutput::deactivate);
-            return new Output<>(receiver);
+            return new Output<>(receiver::getName, receiver::value, receiver.getIndex());
         }
         
         @Override
@@ -409,13 +417,22 @@ class BaseWeaverConnection implements DBReference {
         }
         
         @Override
-        public Collection<Output> outputs() {
-            return outputs.values().stream().sorted((b1, b2)->Integer.compare(b1.getIndex(), b2.getIndex())).map(Output::new).collect(Collectors.toList());
+        public Collection<Output<?>> outputs() {
+            List<Output<?>> values = new ArrayList<>(outputs.size());
+            for (BoundOutput out : outputs.values()) {
+                values.add(new Output<>(out::getName, out::get, out.getIndex()));
+            }
+            values.sort((i1,i2)->Integer.compare(i1.getIndex(), i2.getIndex()));
+            return values;
         }
         
         @Override
-        public Collection<Input> inputs() {
-            return inputs.values().stream().map(Input::new).collect(Collectors.toList());
+        public Collection<Input<?>> inputs() {
+            List<Input<?>> values = new ArrayList<>(inputs.size());
+            for (BoundInput in : inputs.values()) {
+                values.add(new Input<>(in::set));
+            }
+            return values;
         }
         
         @Override

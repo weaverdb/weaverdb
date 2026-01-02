@@ -125,9 +125,9 @@ public interface Statement extends AutoCloseable {
      * Currently linked outputs on this statement.
      * @return collection of currently linked outputs
      */
-    Collection<Output> outputs();
+    Collection<Output<?>> outputs();
     
-    Collection<Input> inputs();
+    Collection<Input<?>> inputs();
     
     @Override
     void close();

@@ -17,12 +17,8 @@ jar {
 javadoc {
     source = sourceSets.main.java
     exclude "org/weaverdb/sample/**"
-    exclude "org/weaverdb/WeaverReferenceFactory17.java"
-//    exclude "org/weaverdb/DBReferenceFactory.java"
+    exclude "org/weaverdb/base/WeaverReferenceFactory17.java"
     exclude "org/weaverdb/WeaverCmdLine.java"
-    if (JavaVersion.current().isJava8Compatible()) {
-        options.addStringOption('Xdoclint:none', '-quiet')
-    }
 }
 
 dependencies {

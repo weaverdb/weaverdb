@@ -11,26 +11,28 @@
  */
 
 
-package org.weaverdb;
+package org.weaverdb.direct;
 
 import java.nio.channels.WritableByteChannel;
 import java.util.function.Supplier;
+import org.weaverdb.ExecutionException;
+import org.weaverdb.Statement;
 
 
-class BoundOutputReceiver<T> extends BoundOutput<WritableByteChannel> {
+class DirectOutputReceiver<T extends WritableByteChannel> extends DirectOutput<WritableByteChannel> {
     private final Supplier<T> type;
 
-    BoundOutputReceiver(Statement fc, int index, Supplier<T> type) throws ExecutionException {
-        super(fc, index, WritableByteChannel.class);
+    DirectOutputReceiver(Statement fc, int index, Supplier<T> type) throws ExecutionException {
+        super(index, WritableByteChannel.class);
         this.type = type;
     }
     
-    T value() throws ExecutionException {
+    T transform() throws ExecutionException {
         return (T)get();
     }
     
     @Override
     void reset() throws ExecutionException {
-        setChannel((WritableByteChannel)type.get());
+        setValue((WritableByteChannel)type.get());
     }
 }

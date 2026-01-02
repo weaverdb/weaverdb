@@ -12,7 +12,7 @@
 
 
 
-package org.weaverdb;
+package org.weaverdb.base;
 /**
  * Thrown when not enough space has been allocated to collect a binary value.
  * @author myronscott

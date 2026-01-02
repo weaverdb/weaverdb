@@ -11,7 +11,7 @@
  */
 
 
-package org.weaverdb;
+package org.weaverdb.base;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.AfterAll;
@@ -47,9 +47,9 @@ public class BoundTest {
 
     @Test
     public void testPrimativeCast() throws Exception {
-        BoundInput<Integer> bi = new BoundInput<>(null, "test", int.class);
+        BoundInput<Integer> bi = new BoundInput<>("test", int.class);
         bi.set(1);
-        BoundOutput<Integer> bo = new BoundOutput(null, 1, int.class);
+        BoundOutput<Integer> bo = new BoundOutput<>(1, int.class);
         java.lang.reflect.Field f = BoundOutput.class.getDeclaredField("value");
         f.setAccessible(true);
         f.set(bo, Integer.valueOf(1));

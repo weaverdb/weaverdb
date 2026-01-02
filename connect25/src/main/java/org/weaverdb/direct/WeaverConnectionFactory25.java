@@ -1,6 +1,5 @@
 /*-------------------------------------------------------------------------
  *
- *	WeaverConnectionFactory17.java
  *
  * Copyright (c) 2000-2024, Myron Scott  <myron@weaverdb.org>
  *
@@ -11,27 +10,31 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.direct;
 
-public class WeaverReferenceFactory17 implements DBReferenceFactory {
-    
+import org.weaverdb.DBReference;
+import org.weaverdb.DBReferenceFactory;
+
+
+public class WeaverConnectionFactory25 implements DBReferenceFactory {
+
     @Override
     public DBReference connect(String db) {
-        return BaseWeaverConnection.connectAnonymously(db, new StreamingTransformer17());
+        return DirectWeaverConnection.connectAnonymously(db, new StreamingTransformer25());
     }
-    
+
     @Override
     public DBReference connectUser(String username, String password, String database) {
-        return BaseWeaverConnection.connectUser(username, password, database, new StreamingTransformer17());
+        return DirectWeaverConnection.connectUser(username, password, database, new StreamingTransformer25());
     }
 
     @Override
     public String builtFor() {
-        return "17";
+        return "25";
     }
 
     @Override
     public boolean hasLiveConnections() {
-        return BaseWeaverConnection.hasLiveConnections();
+        return DirectWeaverConnection.hasLiveConnections();
     }
 }

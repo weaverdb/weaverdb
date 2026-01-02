@@ -10,13 +10,15 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
+import org.weaverdb.ExecutionException;
+import org.weaverdb.base.JavaConverter;
 
 /**
  *
@@ -24,22 +26,16 @@ import java.nio.channels.ReadableByteChannel;
  */
 class BoundInput<T> extends Bound<T> {
 
-    private final Statement owner;
     private final String name;
     private Object value;
 
-    BoundInput(Statement fc, String name, Class<T> type) throws ExecutionException {
+    BoundInput(String name, Class<T> type) throws ExecutionException {
         super(type);
-        owner = fc;
         this.name = name;
     }  
   
     String getName() {
         return name;
-    }
-
-    Statement getOwner() {
-        return owner;
     }
     
     void setStream(InputStream value) {

@@ -10,32 +10,30 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.direct;
 
 import java.io.IOException;
 import java.nio.channels.Pipe;
 import java.nio.channels.ReadableByteChannel;
+import org.weaverdb.ExecutionException;
+import org.weaverdb.Input;
+import org.weaverdb.StreamingTransformer;
 
-class BoundInputChannel<T> extends BoundInput<ReadableByteChannel> {
+class DirectInputChannel<T> extends DirectInput<ReadableByteChannel> {
     
     private final StreamingTransformer transformer;
     private final Input.Channel<? super T> type;
 
-    BoundInputChannel(Statement fc, StreamingTransformer engine, String name, Input.Channel<T> type) throws ExecutionException {
-        super(fc, name, ReadableByteChannel.class);
+    DirectInputChannel(StreamingTransformer engine, String name, Input.Channel<T> type) throws ExecutionException {
+        super(name, ReadableByteChannel.class);
         this.transformer = engine;
         this.type = type;
-    }
-
-    @Override
-    public void set(ReadableByteChannel value) throws ExecutionException {
-        throw new ExecutionException("use put instead");
     }
     
     void put(T value) throws ExecutionException {
         try {
             Pipe comms = Pipe.open();
-            super.setChannel(comms.source());
+            super.set(comms.source());
             transformer.schedule(()->{
                 try {
                     type.transform(value, comms.sink());

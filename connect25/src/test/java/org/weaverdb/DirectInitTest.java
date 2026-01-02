@@ -12,6 +12,7 @@
 
 package org.weaverdb;
 
+import org.weaverdb.direct.DirectWeaverInitializer;
 import java.io.Writer;
 import java.util.Properties;
 import org.junit.jupiter.api.AfterAll;

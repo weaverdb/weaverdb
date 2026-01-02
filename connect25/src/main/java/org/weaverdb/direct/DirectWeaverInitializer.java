@@ -10,7 +10,7 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.direct;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.weaverdb.DBReference;
 
 public class DirectWeaverInitializer {
     

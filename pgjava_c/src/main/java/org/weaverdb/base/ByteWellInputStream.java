@@ -16,23 +16,28 @@
  * Created on September 14, 2004, 8:24 PM
  */
 
-package org.weaverdb;
+package org.weaverdb.base;
 
 import java.io.*;
 /**
  *
  * @author  mscott
  */
-class ByteWellOutputStream extends ByteArrayOutputStream {
+class ByteWellInputStream extends ByteArrayInputStream {
     
-    ByteWellOutputStream() {
-        super(32568);
+    /** Creates a new instance of ByteWellInputStream */
+    ByteWellInputStream() {
+        super(new byte[0]);
     }
-
-    byte[] getByteWell() {
-        byte[] pass = new byte[count];
-        System.arraycopy(buf,0,pass,0,count);
-        count = 0;
-        return pass;
+    
+    ByteWellInputStream(int size) {
+        super(new byte[size]);
+    }
+    
+    public void setByteWell(byte[] data) {
+        buf = data;
+        count = data.length;
+        pos = 0; 
+        mark = 0;
     }
 }
