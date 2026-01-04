@@ -12,6 +12,7 @@
 
 package org.weaverdb.direct;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.PhantomReference;
@@ -35,6 +36,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static java.lang.foreign.ValueLayout.*;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodHandles.Lookup;
+import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.List;
 import org.weaverdb.DBReference;
@@ -49,7 +53,6 @@ class DirectWeaverConnection implements DBReference {
     private static final Logger   LOGGING = Logger.getLogger("DirectWeaverConnection");
 
     private static final Linker LINKER = Linker.nativeLinker();
-    private static final SymbolLookup LOADER;
 
     private static final MethodHandle WCreateConnection;
     private static final MethodHandle WCreateSubConnection;
@@ -71,8 +74,15 @@ class DirectWeaverConnection implements DBReference {
     private static final MethodHandle WGetErrorText;
     private static final MethodHandle WBindTransfer;
     private static final MethodHandle WOutputTransfer;
+    private static final MethodHandle WConnectStdIO;
+    private static final MethodHandle WDisconnectStdIO;
+    
+    private static final MethodHandle PIPEIN;
+    private static final MethodHandle PIPEOUT;
 
     static {
+        SymbolLookup LOADER;
+        
         LOADER = SymbolLookup.loaderLookup();
 
         WCreateConnection = LINKER.downcallHandle(LOADER.find("WCreateConnection").orElseThrow(),
@@ -80,9 +90,9 @@ class DirectWeaverConnection implements DBReference {
         WCreateSubConnection = LINKER.downcallHandle(LOADER.find("WCreateSubConnection").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS));
         WDestroyConnection = LINKER.downcallHandle(LOADER.find("WDestroyConnection").orElseThrow(),
-                FunctionDescriptor.ofVoid(ADDRESS));
+                FunctionDescriptor.of(JAVA_LONG,ADDRESS));
         WDestroyPreparedStatement = LINKER.downcallHandle(LOADER.find("WDestroyPreparedStatement").orElseThrow(),
-                FunctionDescriptor.ofVoid(ADDRESS));
+                FunctionDescriptor.of(JAVA_LONG,ADDRESS));
         WPrepareStatement = LINKER.downcallHandle(LOADER.find("WPrepareStatement").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
         WExec = LINKER.downcallHandle(LOADER.find("WExec").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
@@ -92,7 +102,7 @@ class DirectWeaverConnection implements DBReference {
         WBegin = LINKER.downcallHandle(LOADER.find("WBegin").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS, JAVA_LONG));
         WRollback = LINKER.downcallHandle(LOADER.find("WRollback").orElseThrow(),
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS));
-        WCancel = LINKER.downcallHandle(LOADER.find("WCancel").orElseThrow(), FunctionDescriptor.ofVoid(ADDRESS));
+        WCancel = LINKER.downcallHandle(LOADER.find("WCancel").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WBeginProcedure = LINKER.downcallHandle(LOADER.find("WBeginProcedure").orElseThrow(),
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WEndProcedure = LINKER.downcallHandle(LOADER.find("WEndProcedure").orElseThrow(),
@@ -109,6 +119,18 @@ class DirectWeaverConnection implements DBReference {
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
         WOutputTransfer = LINKER.downcallHandle(LOADER.find("WOutputTransfer").orElseThrow(),
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS, JAVA_SHORT, JAVA_INT, ADDRESS, ADDRESS));
+        WConnectStdIO = LINKER.downcallHandle(LOADER.find("WConnectStdIO").orElseThrow(), 
+                FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+        WDisconnectStdIO = LINKER.downcallHandle(LOADER.find("WDisconnectStdIO").orElseThrow(), 
+                FunctionDescriptor.ofVoid(ADDRESS));
+
+        Lookup LOCAL = MethodHandles.lookup();
+        try {
+            PIPEIN = LOCAL.findVirtual(DirectWeaverConnection.class, "pipeIn", MethodType.methodType(int.class, MemorySegment.class, int.class, MemorySegment.class, int.class));
+            PIPEOUT = LOCAL.findVirtual(DirectWeaverConnection.class, "pipeOut", MethodType.methodType(int.class, MemorySegment.class, int.class, MemorySegment.class, int.class));
+        } catch (IllegalAccessException | NoSuchMethodException no) {
+            throw new IllegalArgumentException(no);
+        }
     }
     
     public final static int  SHORT=	21;
@@ -129,6 +151,13 @@ class DirectWeaverConnection implements DBReference {
     public final static int  SLOT=    	1901;
     public final static int  STREAM=	1834;
     public final static int GENERIC = 0;
+    
+    public final static int PIPING_ERROR=  -2;
+    public final static int NULL_VALUE=  -1;
+    public final static int TRUNCATION_VALUE= -32;
+    public final static int CLOSE_OP= -4;
+    public final static int LENGTH_QUERY_OP= -8;
+    public final static int NULL_CHECK_OP= -16;
     
     private final MemorySegment nativePointer;
     private final AtomicBoolean isOpen = new AtomicBoolean(true);
@@ -374,17 +403,22 @@ class DirectWeaverConnection implements DBReference {
 
     private static void disposeConnection(MemorySegment link) {
         try {
-            WDestroyConnection.invokeExact(link);
-        } catch (Throwable e) {
-            // ignore
+            long result = (long)WDestroyConnection.invokeExact(link);
+            if (result != 0) {
+                LOGGING.warning("error in dispose:" + result);
+            }
+        } catch (Throwable t) {
+            LOGGING.warning(t.getMessage());
         }
     }
 
     private void dispose(MemorySegment link) {
         try {
-            WDestroyPreparedStatement.invokeExact(link);
-        } catch (Throwable e) {
-            // ignore
+            check((long)WDestroyPreparedStatement.invokeExact(link));
+        } catch (ExecutionException ee) {
+            LOGGING.warning(ee.getMessage());
+        } catch (Throwable t) {
+            LOGGING.warning(t.getMessage());
         }
     }
 
@@ -402,19 +436,21 @@ class DirectWeaverConnection implements DBReference {
 
     private void prepareTransaction() throws ExecutionException {
         try {
-            if ((int) WPrepare.invokeExact(nativePointer) != 0) {
-                handleError();
-            }
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+            check((long)WPrepare.invokeExact(nativePointer));
+        } catch (ExecutionException ee) {
+            throw ee;
+        } catch (Throwable t) {
+            throw new ExecutionException(t);
         }
     }
 
     private void cancelTransaction() {
         try {
-            WCancel.invokeExact(nativePointer);
-        } catch (Throwable e) {
-            // ignore
+            check((long)WCancel.invokeExact(nativePointer));
+        } catch (ExecutionException ee) {
+            LOGGING.warning(ee.getMessage());
+        } catch (Throwable t) {
+            LOGGING.warning(t.getMessage());
         }
     }
 
@@ -432,41 +468,41 @@ class DirectWeaverConnection implements DBReference {
 
     private void commitTransaction() throws ExecutionException {
         try {
-            if ((int) WCommit.invokeExact(nativePointer) != 0) {
-                handleError();
-            }
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+            check((long)WCommit.invokeExact(nativePointer));
+        } catch (ExecutionException ee) {
+            throw ee;
+        } catch (Throwable t) {
+            throw new ExecutionException(t);
         }
     }
 
     private void abortTransaction() throws ExecutionException {
         try {
-            if ((int) WRollback.invokeExact(nativePointer) != 0) {
-                handleError();
-            }
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+            check((long)WRollback.invokeExact(nativePointer));
+        } catch (ExecutionException ee) {
+            throw ee;
+        } catch (Throwable t) {
+            throw new ExecutionException(t);
         }
-    }
+}
 
     private void beginProcedure() throws ExecutionException {
         try {
-            if ((int) WBeginProcedure.invokeExact(nativePointer) != 0) {
-                handleError();
-            }
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+            check((long)WBeginProcedure.invokeExact(nativePointer));
+        } catch (ExecutionException ee) {
+            throw ee;
+        } catch (Throwable t) {
+            throw new ExecutionException(t);
         }
     }
 
     private void endProcedure() throws ExecutionException {
         try {
-            if ((int) WEndProcedure.invokeExact(nativePointer) != 0) {
-                handleError();
-            }
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+            check((long)WEndProcedure.invokeExact(nativePointer));
+        } catch (ExecutionException ee) {
+            throw ee;
+        } catch (Throwable t) {
+            throw new ExecutionException(t);
         }
     }
 
@@ -485,31 +521,73 @@ class DirectWeaverConnection implements DBReference {
             return 0;
         }
     }
+    
+    private final int pipeOut(MemorySegment user, int type, MemorySegment buffer, int len) throws IOException {
+        if (os != null) {
+            try (Arena a = Arena.ofConfined()) {
+                byte[] data = buffer.reinterpret(len).toArray(JAVA_BYTE);
+                os.write(data);
+                os.flush();
+            }
+        }
+        return len;
+    }
 
+    private final int pipeIn(MemorySegment user, int type, MemorySegment buffer, int len) throws IOException {
+        if (is != null) {
+            try (Arena a = Arena.ofConfined()) {
+                byte[] data = new byte[len];
+                int read = is.read(data, 0, data.length);
+                MemorySegment src = MemorySegment.ofArray(data);
+                src = src.reinterpret(read);
+                buffer.copyFrom(src);
+                return read;
+            }
+        } else {
+            return 0;
+        }
+    }
+    
     private void streamExec(String statement) throws ExecutionException {
         try (Arena arena = Arena.ofConfined()) {
-            if ((int) WStreamExec.invokeExact(nativePointer, arena.allocateFrom(statement)) != 0) {
-                handleError();
+            MemorySegment in = LINKER.upcallStub(PIPEIN.bindTo(this), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), arena);
+            MemorySegment out = LINKER.upcallStub(PIPEOUT.bindTo(this), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), arena);
+            try {
+                check((long)WConnectStdIO.invokeExact(nativePointer, MemorySegment.NULL, in, out));
+                check((long)WStreamExec.invokeExact(nativePointer, arena.allocateFrom(statement)));
+                check((long)WDisconnectStdIO.invokeExact(nativePointer));
+            } catch (ExecutionException ee) {
+                throw ee;
+            } catch (Throwable t) {
+                throw new ExecutionException(t);
             }
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+        }
+    }
+    
+    private void check(long check) throws ExecutionException {
+        long result = (Long)check;
+        if (result != 0) {
+            handleError();
         }
     }
 
     private void handleError() throws ExecutionException {
+        MemorySegment text = MemorySegment.NULL;
         try {
-            MemorySegment text = (MemorySegment) WGetErrorText.invokeExact(nativePointer);
-            if (!text.equals(MemorySegment.NULL)) {
+            text = (MemorySegment)WGetErrorText.invokeExact(nativePointer);
+        } catch (Throwable e) {
+            throw new ExecutionException(e);
+        }
+        if (!text.equals(MemorySegment.NULL)) {
+            try (Arena a = Arena.ofConfined()) {
+                text = text.reinterpret(256, a, null);
                 throw new ExecutionException(text.getString(0));
             }
-        } catch (Throwable e) {
-            // ignore
         }
-        throw new ExecutionException("unknown error");
     }
     
-    OutputStream os;
-    InputStream is;
+    private OutputStream os;
+    private InputStream is;
 
     @Override
     public void setStandardOutput(OutputStream out) {
@@ -543,7 +621,9 @@ class DirectWeaverConnection implements DBReference {
             DirectOutput<T> bo = new DirectOutput(index, type);
             Optional.ofNullable(outputs.put(index, bo)).ifPresent(DirectOutput::deactivate);
             try {
-                long ret = (long)WOutputTransfer.invokeExact(link, (short)index, bo.getType(), MemorySegment.NULL, bo.createUpcallStub());
+                check((long)WOutputTransfer.invokeExact(link, (short)index, bo.getType(), MemorySegment.NULL, bo.createUpcallStub()));
+            } catch (ExecutionException ee) {
+                throw ee;
             } catch (Throwable t) {
                 throw new ExecutionException(t);
             }
@@ -555,18 +635,27 @@ class DirectWeaverConnection implements DBReference {
             DirectInput<T> bi = new DirectInput(name, type);
             Optional.ofNullable(inputs.put(name, bi)).ifPresent(DirectInput::deactivate);
             try {
-                WBindTransfer.invokeExact(link, name, bi.getType(), MemorySegment.NULL, bi.createUpcallStub());
+                check((long)WBindTransfer.invokeExact(link, name, bi.getType(), MemorySegment.NULL, bi.createUpcallStub()));
+            } catch (ExecutionException ee) {
+                throw ee;
             } catch (Throwable t) {
                 throw new ExecutionException(t);
             }
-            return new Input<>(bi::set);
+        return new Input<>(bi::set);
         }
         
         @Override
         public <T> Input<T> linkInputChannel(String name, Input.Channel<T> transform) throws ExecutionException {
             DirectInputChannel<T> channel = new DirectInputChannel<>(transformer, name, transform);
             Optional.ofNullable(inputs.put(name, channel)).ifPresent(DirectInput::deactivate);
-            return new Input<>(channel::put);
+            try {
+                check((long)WBindTransfer.invokeExact(link, name, channel.getType(), MemorySegment.NULL, channel.createUpcallStub()));
+            } catch (ExecutionException ee) {
+                throw ee;
+            } catch (Throwable t) {
+                throw new ExecutionException(t);
+            }
+            return new Input<>(channel::transform);
         }
         
         @Override
@@ -578,6 +667,13 @@ class DirectWeaverConnection implements DBReference {
         public <T> Output<T> linkOutputChannel(int index, Output.Channel<T> transform) throws ExecutionException {
             DirectOutputChannel<T> channel = new DirectOutputChannel<>(this, transformer, index, transform);
             Optional.ofNullable(outputs.put(index, channel)).ifPresent(DirectOutput::deactivate);
+            try {
+                check((long)WOutputTransfer.invokeExact(link, (short)index, channel.getType(), MemorySegment.NULL, channel.createUpcallStub()));
+            } catch (ExecutionException ee) {
+                throw ee;
+            } catch (Throwable t) {
+                throw new ExecutionException(t);
+            }
             return new Output<>(channel::getName, channel::transform, channel.getIndex());
         }
         
@@ -590,6 +686,13 @@ class DirectWeaverConnection implements DBReference {
         public <T extends WritableByteChannel> Output<T> linkOutputChannel(int index, Supplier<T> cstor) throws ExecutionException {
             DirectOutputReceiver<T> receiver = new DirectOutputReceiver<>(this, index, cstor);
             Optional.ofNullable(outputs.put(index, receiver)).ifPresent(DirectOutput::deactivate);
+            try {
+                check((long)WOutputTransfer.invokeExact(link, (short)index, receiver.getType(), MemorySegment.NULL, receiver.createUpcallStub()));
+            } catch (ExecutionException ee) {
+                throw ee;
+            } catch (Throwable t) {
+                throw new ExecutionException(t);
+            }
             return new Output<>(receiver::getName, receiver::transform, receiver.getIndex());
         }
         
@@ -605,12 +708,22 @@ class DirectWeaverConnection implements DBReference {
             for (DirectOutput<?> out : outputs.values()) {
                 out.reset();
             }
+            long result = 0;
             try {
-                long result = (long)WFetch.invokeExact(link);
-                return result == 0;
+                result = (long)WFetch.invokeExact(link);
             } catch (Throwable t) {
                 throw new ExecutionException(t);
             }
+            
+            if (result == -4) { //EOD
+                return false;
+            } else if (result != 0) {
+                handleError();
+            } else {
+                return true;
+            }
+
+            return false;
         }
         
         @Override

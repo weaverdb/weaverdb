@@ -130,7 +130,7 @@ public class JNITest {
                 Output<String> e = s.linkOutput(4, String.class);
                 Output<String> f = s.linkOutput(5, String.class);
                 System.out.println(s.execute());
-                s.fetch();
+                assertTrue(s.fetch());
                 System.out.println(b.getName() + "=" + b.get());
                 System.out.println(c.getName() + "=" + c.get());
                 System.out.println(d.getName() + "=" + d.get());

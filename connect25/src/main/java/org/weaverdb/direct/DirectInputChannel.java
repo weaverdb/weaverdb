@@ -13,6 +13,7 @@
 package org.weaverdb.direct;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -47,7 +48,7 @@ class DirectInputChannel<T> extends DirectInput<ReadableByteChannel> {
         this.type = type;
     }
     
-    void put(T value) throws ExecutionException {
+    void transform(T value) throws ExecutionException {
         try {
             Pipe comms = Pipe.open();
             super.set(comms.source());
@@ -72,14 +73,13 @@ class DirectInputChannel<T> extends DirectInput<ReadableByteChannel> {
         if (var == MemorySegment.NULL) {
             return get() != null ? 1 : -1;  // null check
         }
-                
-        ByteBuffer bb = var.asByteBuffer();
-        try {
+        try (Arena a = Arena.ofConfined()) {
+            var = var.reinterpret(varSize, a, null);
+            ByteBuffer bb = var.asByteBuffer();
             return channel.read(bb);
         } catch (IOException io) {
-            
-        }
-        return 0;
+            return -1;
+        } 
     }
     
     @Override

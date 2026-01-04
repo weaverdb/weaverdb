@@ -15,6 +15,7 @@
 package org.weaverdb.direct;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -87,23 +88,26 @@ class DirectOutputChannel<T> extends DirectOutput<WritableByteChannel> {
     private int transferOut(MemorySegment user, int type, MemorySegment var, int varSize) {
         WritableByteChannel w = super.get();
         
-        try {
-            if (var == MemorySegment.NULL) {
+        if (var == MemorySegment.NULL) {  // EOD
+            try {
                 w.close();
-                return -1;
-            } else {
+            } catch (IOException io) {
+                
+            }
+            return -1;
+        } else {
+            try (Arena arena = Arena.ofConfined()) {
+                var = var.reinterpret(varSize, arena, null);
                 ByteBuffer bb = var.asByteBuffer();
                 int size = 0;
                 while (size < varSize) {
                     size += w.write(bb);
                 }
                 return size;
+            } catch (IOException io) {
+               return -1;     
             }
-        } catch (IOException io) {
-            
-        }
-        
-        return 0;
+        }        
     }
     
     @Override
