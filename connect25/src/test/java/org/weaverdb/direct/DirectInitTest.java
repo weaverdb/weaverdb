@@ -10,12 +10,14 @@
  *-------------------------------------------------------------------------
  */
 
-package org.weaverdb;
+package org.weaverdb.direct;
 
-import org.weaverdb.direct.DirectWeaverInitializer;
 import java.io.Writer;
 import java.util.Properties;
 import org.junit.jupiter.api.AfterAll;
+import org.weaverdb.DBReference;
+import org.weaverdb.FetchSet;
+import org.weaverdb.Statement;
 
 public class DirectInitTest {
 
@@ -61,7 +63,19 @@ public class DirectInitTest {
                 prop.setProperty("stdlog", "TRUE");
                 prop.setProperty("disable_crc", "TRUE");
                 
-                DirectWeaverInitializer.initialize(prop);      
+                DirectWeaverInitializer.initialize(prop); 
+                
+                try (DBReference conn = DBReference.connect("template1")) {
+                    try (Statement s = conn.statement("select xmin,xmax,oid,* from pg_type where oid = 16")) {
+                        FetchSet.stream(s).flatMap(FetchSet.Row::stream).forEach(
+                                i-> {
+                                    System.out.println(i);
+                                }
+                                     
+                        );
+                    }
+                }
+
         } finally {
 
         }

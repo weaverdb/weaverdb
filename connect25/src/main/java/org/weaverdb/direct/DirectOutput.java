@@ -15,6 +15,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 import java.lang.invoke.MethodHandle;
@@ -41,13 +42,13 @@ class DirectOutput<T> {
     
     private final int index;
     private final TransferType type;
-    private final MemorySegment upcall;
+    private MemorySegment upcall;
     private String column;
     private T value;
 
     DirectOutput(int index, Class<T> type) {
         this.index = index;
-        this.type = TransferType.types.get(type);
+        this.type = TransferType.type(type);
         this.upcall = Linker.nativeLinker().upcallStub(transferOut.bindTo(this), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), Arena.ofAuto());
     }
     
@@ -55,9 +56,19 @@ class DirectOutput<T> {
         return type.getType();
     }
     
-    int transferOut(MemorySegment user, int type, MemorySegment var, int varSize) {
-        try {
-            value = (T)this.type.read(type, var, varSize);
+    private int transferOut(MemorySegment user, int type, MemorySegment var, int varSize) {
+        try (Arena a = Arena.ofConfined()) {
+            if (varSize < 0) {
+                value = null;
+                return 0;
+            } else {
+                var = var.reinterpret(varSize, a, null);
+                if (type == DirectWeaverConnection.META) {
+                    column = new String(var.toArray(ValueLayout.JAVA_BYTE));
+                } else {
+                    value = (T)this.type.read(type, var, varSize);
+                }
+            }
         } catch (ExecutionException ee) {
             value = null;
         }
@@ -68,12 +79,19 @@ class DirectOutput<T> {
         return value;
     }
     
-    protected void setValue(T value) {
+    protected void set(T value) {
         this.value = value;
     }
     
-    MemorySegment getUpcallStub() {
-        return upcall;
+    MemorySegment createUpcallStub() {
+        MethodHandle target = getTransferFunction();
+        target = target.bindTo(this);
+        this.upcall = Linker.nativeLinker().upcallStub(target, FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), Arena.ofAuto());
+        return this.upcall;
+    }
+    
+    MethodHandle getTransferFunction() {
+        return transferOut;
     }
     
     String getName() {

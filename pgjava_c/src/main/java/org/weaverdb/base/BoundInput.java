@@ -37,10 +37,6 @@ class BoundInput<T> extends Bound<T> {
     String getName() {
         return name;
     }
-    
-    void setStream(InputStream value) {
-        this.value = value;
-    }
 
     void setChannel(java.nio.channels.ReadableByteChannel value) {
         this.value = value;

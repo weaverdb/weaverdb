@@ -1,22 +1,22 @@
 {
 	global:
-                Java_org_weaverdb_BaseWeaverConnection_abortTransaction;
-                Java_org_weaverdb_BaseWeaverConnection_beginProcedure;
-                Java_org_weaverdb_BaseWeaverConnection_beginTransaction;
-                Java_org_weaverdb_BaseWeaverConnection_cancelTransaction;
-                Java_org_weaverdb_BaseWeaverConnection_commitTransaction;
-                Java_org_weaverdb_BaseWeaverConnection_connectSubConnection;
-                Java_org_weaverdb_BaseWeaverConnection_dispose;
-                Java_org_weaverdb_BaseWeaverConnection_disposeConnection;
-                Java_org_weaverdb_BaseWeaverConnection_endProcedure;
-                Java_org_weaverdb_BaseWeaverConnection_executeStatement;
-                Java_org_weaverdb_BaseWeaverConnection_fetchResults;
-                Java_org_weaverdb_BaseWeaverConnection_getCommandId;
-                Java_org_weaverdb_BaseWeaverConnection_getTransactionId;
-                Java_org_weaverdb_BaseWeaverConnection_grabConnection;
-                Java_org_weaverdb_BaseWeaverConnection_prepareStatement;
-                Java_org_weaverdb_BaseWeaverConnection_prepareTransaction;
-                Java_org_weaverdb_BaseWeaverConnection_streamExec;
+                Java_org_weaverdb_base_BaseWeaverConnection_abortTransaction;
+                Java_org_weaverdb_base_BaseWeaverConnection_beginProcedure;
+                Java_org_weaverdb_base_BaseWeaverConnection_beginTransaction;
+                Java_org_weaverdb_base_BaseWeaverConnection_cancelTransaction;
+                Java_org_weaverdb_base_BaseWeaverConnection_commitTransaction;
+                Java_org_weaverdb_base_BaseWeaverConnection_connectSubConnection;
+                Java_org_weaverdb_base_BaseWeaverConnection_dispose;
+                Java_org_weaverdb_base_BaseWeaverConnection_disposeConnection;
+                Java_org_weaverdb_base_BaseWeaverConnection_endProcedure;
+                Java_org_weaverdb_base_BaseWeaverConnection_executeStatement;
+                Java_org_weaverdb_base_BaseWeaverConnection_fetchResults;
+                Java_org_weaverdb_base_BaseWeaverConnection_getCommandId;
+                Java_org_weaverdb_base_BaseWeaverConnection_getTransactionId;
+                Java_org_weaverdb_base_BaseWeaverConnection_grabConnection;
+                Java_org_weaverdb_base_BaseWeaverConnection_prepareStatement;
+                Java_org_weaverdb_base_BaseWeaverConnection_prepareTransaction;
+                Java_org_weaverdb_base_BaseWeaverConnection_streamExec;
                 Java_org_weaverdb_WeaverInitializer_close;
                 Java_org_weaverdb_WeaverInitializer_init;
 	local:

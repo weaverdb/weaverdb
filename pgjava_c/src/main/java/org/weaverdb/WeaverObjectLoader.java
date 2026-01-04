@@ -12,11 +12,10 @@
  */
 
 
-package org.weaverdb.base;
+package org.weaverdb;
 
+import org.weaverdb.base.*;
 import org.weaverdb.*;
-import org.weaverdb.base.ByteWellOutputStream;
-import org.weaverdb.base.ByteWellInputStream;
 import java.io.*;
 import java.lang.reflect.*;
 

@@ -130,8 +130,8 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
     memset(connection, 0x00, sizeof (struct Connection));
 
     connection->validFlag = -1;
-    connection->password = pass == NULL ? NULL : pstrdup(pass);
-    connection->name = tName == NULL ? NULL : pstrdup(tName);
+    connection->password = pass == NULL ? pstrdup("") : pstrdup(pass);
+    connection->name = tName == NULL ? pstrdup("") : pstrdup(tName);
     connection->connect = pstrdup(conn);
 
     connection->memory = AllocSetContextCreate(GetEnvMemoryContext(),

@@ -11,7 +11,7 @@
  */
 
 
-package org.weaverdb;
+package org.weaverdb.direct;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.AfterAll;

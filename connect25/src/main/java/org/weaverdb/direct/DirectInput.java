@@ -25,8 +25,8 @@ import org.weaverdb.ExecutionException;
 /**
  *
  */
-class DirectInput<T> {
-    static final MethodHandle transferIn;
+class DirectInput<T> {    
+    private static final MethodHandle transferIn;
     
     static {
         MethodHandles.Lookup lookup = MethodHandles.lookup();
@@ -41,21 +41,20 @@ class DirectInput<T> {
     
     private final String name;
     private final TransferType type;
-    private final MemorySegment upcall;
+    private MemorySegment upcall;
     private String column;
     private T value;
 
     DirectInput(String name, Class<T> type) {
         this.name = name;
-        this.type = TransferType.types.get(type);
-        this.upcall = Linker.nativeLinker().upcallStub(transferIn.bindTo(this), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), Arena.ofAuto());
+        this.type = TransferType.type(type);
     }
     
     int getType() {
         return type.getType();
     }
     
-    int transferIn(MemorySegment user, int type, MemorySegment var, int varSize) {
+    private int transferIn(MemorySegment user, int type, MemorySegment var, int varSize) {
         try {
             return this.type.write(value, type, var, varSize);
         } catch (ExecutionException ee) {
@@ -64,12 +63,23 @@ class DirectInput<T> {
         return 0;
     }
     
-    MemorySegment getUpcallStub() {
+    MemorySegment createUpcallStub() {
+        MethodHandle target = getTransferFunction();
+        target = target.bindTo(this);
+        this.upcall = Linker.nativeLinker().upcallStub(target, FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), Arena.ofAuto());
         return this.upcall;
+    }
+    
+    MethodHandle getTransferFunction() {
+        return transferIn;
     }
     
     void set(T value) {
         this.value = value;
+    }
+    
+    T get() {
+        return value;
     }
     
     String getName() {

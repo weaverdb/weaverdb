@@ -17,9 +17,8 @@
 
 package org.weaverdb.base;
 
-import org.weaverdb.*;
-import org.weaverdb.base.ByteWellOutputStream;
-import org.weaverdb.base.ByteWellInputStream;
+import org.weaverdb.ByteWellOutputStream;
+import org.weaverdb.ByteWellInputStream;
 import java.io.*;
 import java.lang.reflect.*;
 /**

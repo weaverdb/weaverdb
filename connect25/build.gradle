@@ -43,8 +43,9 @@ tasks.named('test', Test) {
     }
 
     jvmArgs '--enable-native-access=ALL-UNNAMED'
+
     testLogging {
-        events "passed"
+        showStandardStreams = true
     }
 }
 

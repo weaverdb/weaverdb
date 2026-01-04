@@ -12,7 +12,6 @@
 
 package org.weaverdb.direct;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.PhantomReference;
@@ -36,7 +35,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static java.lang.foreign.ValueLayout.*;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import org.weaverdb.DBReference;
 import org.weaverdb.ExecutionException;
 import org.weaverdb.Input;
@@ -111,25 +111,24 @@ class DirectWeaverConnection implements DBReference {
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS, JAVA_SHORT, JAVA_INT, ADDRESS, ADDRESS));
     }
     
-    public final static int bindString = 2;
-    public final static int bindDouble = 3;
-    public final static int bindFloat = 9;
-    public final static int bindShort = 8;
-    public final static int bindInteger = 1;
-    public final static int bindBinary = 6;
-    public final static int bindBLOB = 7;
-    public final static int bindCharacter = 4;
-    public final static int bindBoolean = 5;
-    public final static int bindDate = 12;
-    public final static int bindLong = 13;
-    public final static int bindMeta = 19;
-    public final static int bindFunction = 20;
-    public final static int bindSlot = 30;
-    public final static int bindJava = 40;
-    public final static int bindText = 41;
-    public final static int bindStream = 42;
-    public final static int bindDirect = 43;
-    public final static int bindNull = 0;
+    public final static int  SHORT=	21;
+    public final static int  CHAR=	21;
+    public final static int  INT=	23;
+    public final static int  STRING=	1043;
+    public final static int  BOOLEAN=	16;
+    public final static int  BYTE=	18;
+    public final static int  META=	19;   // column name transfer
+    public final static int  BYTEA=       17;
+    public final static int  TEXT=         25;
+    public final static int  BLOB=         1803;
+    public final static int  JAVA=        1830;
+    public final static int  TIMESTAMP=    1184;
+    public final static int  FLOAT=    700;
+    public final static int  DOUBLE=    701;
+    public final static int  LONG=    20;
+    public final static int  SLOT=    	1901;
+    public final static int  STREAM=	1834;
+    public final static int GENERIC = 0;
     
     private final MemorySegment nativePointer;
     private final AtomicBoolean isOpen = new AtomicBoolean(true);
@@ -544,9 +543,9 @@ class DirectWeaverConnection implements DBReference {
             DirectOutput<T> bo = new DirectOutput(index, type);
             Optional.ofNullable(outputs.put(index, bo)).ifPresent(DirectOutput::deactivate);
             try {
-                WOutputTransfer.invokeExact(link, (short)index, bo.getType(), MemorySegment.NULL, bo.getUpcallStub());
+                long ret = (long)WOutputTransfer.invokeExact(link, (short)index, bo.getType(), MemorySegment.NULL, bo.createUpcallStub());
             } catch (Throwable t) {
-                
+                throw new ExecutionException(t);
             }
             return new Output<>(bo::getName, bo::get, index);
         }
@@ -556,9 +555,9 @@ class DirectWeaverConnection implements DBReference {
             DirectInput<T> bi = new DirectInput(name, type);
             Optional.ofNullable(inputs.put(name, bi)).ifPresent(DirectInput::deactivate);
             try {
-                WBindTransfer.invokeExact(link, name, bi.getType(), MemorySegment.NULL, bi.getUpcallStub());
+                WBindTransfer.invokeExact(link, name, bi.getType(), MemorySegment.NULL, bi.createUpcallStub());
             } catch (Throwable t) {
-                
+                throw new ExecutionException(t);
             }
             return new Input<>(bi::set);
         }
@@ -608,7 +607,7 @@ class DirectWeaverConnection implements DBReference {
             }
             try {
                 long result = (long)WFetch.invokeExact(link);
-                return result > 0;
+                return result == 0;
             } catch (Throwable t) {
                 throw new ExecutionException(t);
             }
@@ -616,12 +615,21 @@ class DirectWeaverConnection implements DBReference {
         
         @Override
         public Collection<Output<?>> outputs() {
-            return Collections.emptyList();
+            List<Output<?>> send = new ArrayList<>(outputs.size());
+            for (DirectOutput out : outputs.values()) {
+                send.add(new Output<>(out::getName, out::get, out.getIndex()));
+            }
+            send.sort((a,b)->Integer.compare(a.getIndex(), b.getIndex()));
+            return send;
         }
         
         @Override
         public Collection<Input<?>> inputs() {
-            return Collections.emptyList();
+            List<Input<?>> send = new ArrayList<>(inputs.size());
+            for (DirectInput<?> in : inputs.values()) {
+                send.add(new Input<>(in::set));
+            }
+            return send;
         }
         
         @Override
