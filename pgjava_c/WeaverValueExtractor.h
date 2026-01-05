@@ -23,7 +23,10 @@ typedef struct javacache {
     jclass                          truncation;
     jclass                          talker;
     jclass                          boundin;
+    jclass                          boundinchannel;
     jclass                          boundout;
+    jclass                          boundoutchannel;
+    jclass                          boundoutreceiver;
 
     jclass                          chartype;
     jclass                          shorttype;
@@ -80,8 +83,8 @@ typedef struct javacache {
 
 javacache* CreateCache(JNIEnv* env);
 javacache* DropCache(JNIEnv* env);
-int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length);
-int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length);
+int PassInValue(JNIEnv* env,int passType,jobject object,void* data, int length);
+int PassOutValue(JNIEnv* env,int passType,jobject object,void* data, int length);
 
 #ifdef	__cplusplus
 }

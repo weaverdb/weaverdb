@@ -50,7 +50,6 @@
 
 static          javacache*      Cache;
 
-static bool                     debug = false;
 static bool                     shuttingdown = false;
 
 extern int                      DebugLvl;
@@ -58,7 +57,6 @@ extern int                      DebugLvl;
 typedef struct commargs {
     JNIEnv*  env;
     jobject  target;
-    int bindType;
     int linkType;
 } CommArgs;
 
@@ -233,6 +231,7 @@ void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* use
 //  don't need a local ref
 //  root object is held
         jstring theVar = (*env)->GetObjectField(env, userspace->target, Cache->iname);
+        jboolean direct = (*env)->IsInstanceOf(env, userspace->target, Cache->boundinchannel);
 
         if ((*env)->IsSameObject(env, theVar, NULL)) {
             if (!(*env)->ExceptionOccurred(env) ) 
@@ -244,9 +243,9 @@ void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* use
             return;
         }
 
-	varname = (*env)->GetStringUTFChars(env,theVar,NULL); 		
+	varname = (*env)->GetStringUTFChars(env,theVar,NULL);
         
-        LinkInput(conn,base,varname,userspace->linkType,userspace,userspace->linkType == STREAMTYPE ? direct_pipein : transferin);
+        LinkInput(conn,base,varname,userspace->linkType,userspace,direct ? direct_pipein : transferin);
 
         (*env)->ReleaseStringUTFChars(env,theVar,varname); 
 //  report errors
@@ -260,8 +259,11 @@ void setOutputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* us
 
     ConnMgr        conn = getConnMgr(env, talkerObject);
     StmtMgr base = GETSTMT(linkid);
+    jboolean direct = (*env)->IsInstanceOf(env, userspace->target, Cache->boundoutchannel) || 
+        (*env)->IsInstanceOf(env, userspace->target, Cache->boundoutreceiver);
+
     
-    LinkOutput(conn,base,index,userspace->linkType,userspace,userspace->linkType == STREAMTYPE ? direct_pipeout : transferout);
+    LinkOutput(conn,base,index,userspace->linkType,userspace,direct ? direct_pipeout : transferout);
 
 //  report errors
     checkError(env,talkerObject,base);
@@ -282,8 +284,7 @@ JNIEXPORT jlong JNICALL Java_org_weaverdb_base_BaseWeaverConnection_executeState
         jobject instep = (*env)->GetObjectArrayElement(env, inputs, x);
         callData[x].env = env;
         callData[x].target = instep;
-        callData[x].bindType = (*env)->CallIntMethod(env, instep, Cache->itypeid);
-        callData[x].linkType = translateType(callData[x].bindType);
+        callData[x].linkType = translateType((*env)->CallIntMethod(env, instep, Cache->itypeid));
         setInputLink(env, talkerObject, linkid, &callData[x]);
      }     
 // exec
@@ -310,8 +311,7 @@ JNIEXPORT jboolean JNICALL Java_org_weaverdb_base_BaseWeaverConnection_fetchResu
         jobject instep = (*env)->GetObjectArrayElement(env, outputs, x);
         callData[x].env = env;
         callData[x].target = instep;
-        callData[x].bindType = (*env)->CallIntMethod(env, instep, Cache->otypeid);
-        callData[x].linkType = translateType(callData[x].bindType);
+        callData[x].linkType = translateType((*env)->CallIntMethod(env, instep, Cache->otypeid));
         setOutputLink(env, talkerObject, linkid, &callData[x]);
     }
 //	fetch        
@@ -511,7 +511,7 @@ static int transferin(void* arg,int type, void* buff,int run)
         return NULL_VALUE;
     }
 
-    int checkTrunc = PassInValue(env,comm->bindType,comm->linkType,type,value,buff, run);
+    int checkTrunc = PassInValue(env,type,value,buff,run);
     if (checkTrunc == TRUNCATION_VALUE) {
         (*env)->ThrowNew(env,Cache->truncation,"binary truncation");
     }
@@ -529,7 +529,7 @@ static int transferout(void* arg,int type, void* buff,int run)
         return NULL_VALUE;
     }
 
-    return PassOutValue(env,comm->bindType,comm->linkType,type,target, buff, run);
+    return PassOutValue(env,type,target, buff, run);
 }
 
 static int direct_pipeout(void* arg,int type, void* buff,int run)
@@ -543,7 +543,7 @@ static int direct_pipeout(void* arg,int type, void* buff,int run)
     }
 
     if (type == METANAMETYPE) {
-        return PassOutValue(env,comm->bindType,comm->linkType,type,target, buff, run);
+        return PassOutValue(env,type,target, buff, run);
     } else if (buff == NULL) {
         return (*env)->CallIntMethod(env,target,Cache->pipeout,NULL);
     } else {
