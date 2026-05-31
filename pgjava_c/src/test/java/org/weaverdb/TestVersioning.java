@@ -14,7 +14,6 @@ package org.weaverdb;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.AfterAll;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -38,12 +37,5 @@ public class TestVersioning {
     
     @AfterEach
     public void tearDown() {
-    }
-
-    
-    @org.junit.jupiter.api.Test
-    public void testAutoMethod() throws Exception {
-        DBReferenceFactory factory = DBReference.loader;
-        assertNotNull(factory);
     }
 }

@@ -15,6 +15,7 @@ package org.weaverdb.direct;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
@@ -24,6 +25,7 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.weaverdb.DBReference;
+import org.weaverdb.DBReferenceManager;
 
 public class DirectWeaverInitializer {
     
@@ -31,6 +33,7 @@ public class DirectWeaverInitializer {
     
     private static final MethodHandle initWeaverBackend;
     private static final MethodHandle wrapupWeaverBackend;
+    private static final MethodHandle registerJavaInvoker;
 
     static {
         System.loadLibrary("weaver");
@@ -46,6 +49,12 @@ public class DirectWeaverInitializer {
             lookup.find("wrapupweaverbackend").orElseThrow(),
             FunctionDescriptor.ofVoid()
         );
+
+        // New FFM path for Java function (LANGUAGE 'java') support via upcall invoker
+        registerJavaInvoker = linker.downcallHandle(
+            lookup.find("WRegisterJavaFunctionInvoker").orElseThrow(),
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+        );
     }
     
     public DirectWeaverInitializer() {
@@ -57,6 +66,16 @@ public class DirectWeaverInitializer {
             boolean success = (boolean) initWeaverBackend.invokeExact(arena.allocateFrom(database));
             if (!success) {
                 throw new UnsatisfiedLinkError("environment not valid, see db log");
+            }
+
+            // Register FFM upcall-based Java function invoker (enables LANGUAGE 'java' without JNI)
+            try {
+                JavaFunctionInvoker invoker = new JavaFunctionInvoker();
+                MemorySegment stub = invoker.createUpcallStub();
+                registerJavaInvoker.invokeExact(stub);
+            } catch (Throwable t) {
+                // Non-fatal for now — Java functions simply won't be available until this is solid
+                System.err.println("Warning: Failed to register Java function invoker (LANGUAGE 'java' will be unavailable): " + t);
             }
         } catch (Throwable e) {
             throw new RuntimeException(e);
@@ -92,10 +111,10 @@ public class DirectWeaverInitializer {
         boolean wasInterruped = false;
 
         try {
-            while (DBReference.hasLiveConnections() && start.plus(timeout).isAfter(Instant.now())) {
+            while (DBReferenceManager.hasLiveConnections()&& start.plus(timeout).isAfter(Instant.now())) {
                 TimeUnit.SECONDS.sleep(1);
             }
-            if (DBReference.hasLiveConnections()) {
+            if (DBReferenceManager.hasLiveConnections()) {
                 throw new TimeoutException("close timeout exceeded.  Live connections still active");
             } else {
                 close();

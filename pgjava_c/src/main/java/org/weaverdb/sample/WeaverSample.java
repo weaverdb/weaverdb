@@ -22,6 +22,7 @@ import org.weaverdb.FetchSet.Row;
 import org.weaverdb.Statement;
 import org.weaverdb.WeaverInitializer;
 import org.weaverdb.DBReference;
+import org.weaverdb.DBReferenceManager;
 
 /**
  *
@@ -73,7 +74,7 @@ public class WeaverSample {
     }
     
     private static void createSampleTable() throws Exception {
-        try (DBReference c = DBReference.connect("sample")) {
+        try (DBReference c = DBReferenceManager.connect("sample")) {
             c.execute("create table example (id int4, name varchar)"); // use execute if there is output expected from the statement
             // insert some values into the table
             try (Statement s = c.statement("insert into example (id, name) values ($sid, $sname)")) { 
@@ -93,7 +94,7 @@ public class WeaverSample {
     }
 
     private static void selectFromSampleTableUsingPreparedStatements() throws Exception {
-        try (DBReference c = DBReference.connect("sample")) {
+        try (DBReference c = DBReferenceManager.connect("sample")) {
             try (Statement s = c.statement("select id, name from example where id = $id")) { 
                 // link the output/input variables
                 Output<Integer> id = s.linkOutput(1, Integer.class); 
@@ -111,7 +112,7 @@ public class WeaverSample {
     }
     
     private static void selectFromSampleTableUsingResultSet() throws Exception {
-        try (DBReference c = DBReference.connect("sample")) {
+        try (DBReference c = DBReferenceManager.connect("sample")) {
             FetchSet.Builder builder = org.weaverdb.FetchSet.builder(c);
             try (Stream<Row> rs = builder.parse("select id, name from example where id = $id")
                     .input("id", 1)

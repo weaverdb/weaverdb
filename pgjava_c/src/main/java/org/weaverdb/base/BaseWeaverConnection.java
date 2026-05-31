@@ -172,6 +172,7 @@ class BaseWeaverConnection implements DBReference {
         return new BaseWeaverConnection(this.connectSubConnection());
     }
     
+    @Override
     public DBReference helper() throws ExecutionException {
         return spawnHelper();
     }

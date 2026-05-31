@@ -59,10 +59,10 @@ public class WeaverInitializer {
         boolean wasInterruped = false;
 
         try {
-            while (DBReference.hasLiveConnections() && start.plus(timeout).isAfter(Instant.now())) {
+            while (DBReferenceManager.hasLiveConnections() && start.plus(timeout).isAfter(Instant.now())) {
                 TimeUnit.SECONDS.sleep(1);
             }
-            if (DBReference.hasLiveConnections()) {
+            if (DBReferenceManager.hasLiveConnections()) {
                 throw new TimeoutException("close timeout exceeded.  Live connections still active");
             } else {
                 close();

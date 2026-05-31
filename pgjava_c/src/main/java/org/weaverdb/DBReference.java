@@ -15,8 +15,6 @@ package org.weaverdb;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Iterator;
-import java.util.ServiceLoader;
 
 /**
  * This is the main interface into the database.  Most interaction 
@@ -25,8 +23,6 @@ import java.util.ServiceLoader;
  * when they are no longer in use.
  */
 public interface DBReference extends AutoCloseable {
-    
-    static DBReferenceFactory loader = loadConnectionFactory();
     /**
      * Begin a transaction.  
      * @return transaction id.
@@ -118,44 +114,15 @@ public interface DBReference extends AutoCloseable {
      * @throws ExecutionException 
      */
     @Override
-    public void close() throws ExecutionException;
-    /**
-     * Connect and retrieve a reference to a database in the current Weaver instance.  
-     * Weaver must be loaded and initialized before this call will work.  
-     * @see org.weaverdb.WeaverInitializer#initialize
-     * @param database name of the database to connect to
-     * @return 
-     */
+    void close() throws ExecutionException;
+    
+    DBReference helper() throws ExecutionException;
+    
     static DBReference connect(String database) {
-        return loader.connect(database);
+        return DBReferenceManager.connect(database);
     }
-    
-    private static DBReferenceFactory loadConnectionFactory() {
-        try {
-            Runtime.Version runningVersion = Runtime.version();
 
-            ServiceLoader<DBReferenceFactory> check = ServiceLoader.load(DBReferenceFactory.class);
-            Iterator<DBReferenceFactory> versions = check.iterator();
-            DBReferenceFactory winner = null;
-            while (versions.hasNext()) {
-                DBReferenceFactory candidate = versions.next();
-                if (Runtime.Version.parse(candidate.builtFor()).compareTo(runningVersion) <= 0) {
-                    if (winner == null || winner.builtFor().compareTo(candidate.builtFor()) < 0) {
-                        winner = candidate;
-                    }
-                }
-            }
-            return winner;
-        } catch (Throwable t) {
-            ServiceLoader<DBReferenceFactory> factories = ServiceLoader.load(DBReferenceFactory.class);
-            for (DBReferenceFactory f : factories) {
-                return f;
-            }
-        }
-        return null;
-    }
-    
-    static boolean hasLiveConnections() {
-        return loader.hasLiveConnections();
+    static DBReference connect(String username, String password, String database) {
+        return DBReferenceManager.connect(username, password, database);
     }
 }
