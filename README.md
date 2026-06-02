@@ -19,11 +19,21 @@ This project does not have all of the improvements, development, and reliablitit
 
 ### Running
 
-The main interfaces for loading and using WeaverDB are [WeaverInitializer](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/WeaverInitializer.java) and [DBReference](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/DBReference.java).  Once the database directory has been created with initdb, the Java native library can be loaded via the initializer
+The main interfaces for loading and using WeaverDB are [DirectWeaverInitializer](https://github.com/weaverdb/weaverdb/blob/main/connect25/src/main/java/org/weaverdb/direct/DirectWeaverInitializer.java) (recommended FFM path) or the legacy [WeaverInitializer](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/WeaverInitializer.java), along with [DBReference](https://github.com/weaverdb/weaverdb/blob/main/pgjava_c/src/main/java/org/weaverdb/DBReference.java).
+
+**Recommended path (2026+):** Use `DirectWeaverInitializer` + the FFM client. This enables Java stored procedures via pure FFM upcalls (no JNI required for the client).
+
+Legacy example (still works):
 
     Properties prop = new Properties();
     prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
     WeaverInitializer.initialize(prop);
+
+Preferred (FFM) example:
+
+    Properties prop = new Properties();
+    prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
+    DirectWeaverInitializer.initialize(prop);
 
 ### Dependencies
 

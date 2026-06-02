@@ -5,6 +5,7 @@
                 WDestroyConnection;
                 WBegin;
                 WPrepareStatement;
+                WRegisterJavaFunctionInvoker;
                 WDestroyPreparedStatement;
                 WStatement;
                 WBindTransfer;

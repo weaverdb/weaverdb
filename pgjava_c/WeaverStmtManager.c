@@ -72,6 +72,8 @@ static short ResetOutputBindings(StmtMgr mgr);
 
 static int IndirectToDirect(void* userenv, int varType, void *varAdd, int varSize);
 
+/* The real implementation lives in the core (java.c). This is just the exported entry point. */
+
 ConnMgr
 CreateWeaverConnection(const char* name, const char * paslong, const char* connect) {
     OpaqueWConn conn = WCreateConnection(name, paslong, connect);

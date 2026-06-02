@@ -3,6 +3,7 @@ _WCreateSubConnection
 _WDestroyConnection
 _WBegin
 _WPrepareStatement
+_WRegisterJavaFunctionInvoker
 _WDestroyPreparedStatement
 _WStatement
 _WBindTransfer 
