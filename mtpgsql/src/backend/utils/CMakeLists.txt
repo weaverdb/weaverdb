@@ -11,6 +11,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/../../include/fmgr.h ${CMA
 )
 
 add_subdirectory(adt)
+add_subdirectory(simd)
 add_subdirectory(cache)
 add_subdirectory(error)
 add_subdirectory(fmgr)

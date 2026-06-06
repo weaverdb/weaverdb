@@ -25,6 +25,7 @@ add_library(mtpg STATIC
     $<TARGET_OBJECTS:heap>
     $<TARGET_OBJECTS:index>
     $<TARGET_OBJECTS:nbtree>
+    $<TARGET_OBJECTS:pgvector>
     $<TARGET_OBJECTS:transam>
 
     $<TARGET_OBJECTS:catalog>
@@ -84,6 +85,24 @@ endif()
 
 target_include_directories(mtpg INTERFACE ../include/interface)
 target_include_directories(weaver INTERFACE ../include/interface)
+target_include_directories(mtpg INTERFACE utils/simd)  # for SIMD helpers
+target_include_directories(weaver INTERFACE utils/simd)
+target_include_directories(mtpg INTERFACE access/pgvector)
+target_include_directories(weaver INTERFACE access/pgvector)
+target_include_directories(mtpg BEFORE INTERFACE access/pgvector/port-stubs)
+target_include_directories(weaver BEFORE INTERFACE access/pgvector/port-stubs)
+target_include_directories(mtpg INTERFACE access/pgvector/port-stubs/access)
+target_include_directories(weaver INTERFACE access/pgvector/port-stubs/access)
+target_include_directories(mtpg INTERFACE access/pgvector/port-stubs/lib)
+target_include_directories(weaver INTERFACE access/pgvector/port-stubs/lib)
+target_include_directories(mtpg INTERFACE access/pgvector/port-stubs)
+target_include_directories(weaver INTERFACE access/pgvector/port-stubs)
+target_include_directories(mtpg INTERFACE access/pgvector/port-stubs/storage)
+target_include_directories(weaver INTERFACE access/pgvector/port-stubs/storage)
+target_include_directories(mtpg INTERFACE access/pgvector/port-stubs/storage)
+target_include_directories(weaver INTERFACE access/pgvector/port-stubs/storage)
+target_include_directories(mtpg INTERFACE access/pgvector/port-stubs/utils)
+target_include_directories(weaver INTERFACE access/pgvector/port-stubs/utils)
 
 add_executable(postgres 
     $<TARGET_OBJECTS:main> 
