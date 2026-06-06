@@ -52,6 +52,7 @@
 #include "parser/parse_type.h"
 #include "utils/syscache.h"
 #include "utils/tuplesort.h"
+#include "simd.h"  /* SIMD for high-impact aggregate acceleration (from utils/simd) */
 
 /*
  * AggStatePerAggData - per-aggregate working state for the Agg scan
@@ -248,6 +249,11 @@ advance_transition_functions(AggStatePerAgg peraggstate,
 			/* apply transition function 1 */
 			args[0] = peraggstate->value1;
 			args[1] = newVal;
+
+			/* High-impact opportunity: for simple numeric SUM aggregates,
+			 * we could batch values and use simd_sum_float8 / AVX here
+			 * instead of per-tuple fmgr calls. See utils/simd/simd.h
+			 */
 			newVal = (Datum) fmgr_c(&peraggstate->xfn1,
 									(FmgrValues *) args,
 									&isNull);
