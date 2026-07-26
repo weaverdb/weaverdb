@@ -96,6 +96,12 @@ public class PgvectorOrderByTest {
         }
     }
 
+    @Test
+    @Order(8)
+    public void orderByL2DistanceLimit3WithHnswIndex() throws Exception {
+        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
+    }
+
     private static void assertIds(String sql, int... expected) throws Exception {
         List<Integer> got = queryIntColumn(sql, 1);
         Assertions.assertEquals(expected.length, got.size(), "row count for: " + sql);

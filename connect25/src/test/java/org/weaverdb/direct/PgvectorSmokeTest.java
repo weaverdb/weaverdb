@@ -7,10 +7,11 @@
 
 package org.weaverdb.direct;
 
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.weaverdb.DBReference;
+import org.weaverdb.Output;
 import org.weaverdb.Statement;
 
 public class PgvectorSmokeTest {
@@ -20,11 +21,6 @@ public class PgvectorSmokeTest {
         PgvectorWeaverTestSupport.ensureInitialized();
     }
 
-    @AfterAll
-    public static void shutdown() {
-        PgvectorWeaverTestSupport.shutdownIfInitialized();
-    }
-
     @Test
     public void vectorInsertIndexAndOrderBy() throws Exception {
         try (DBReference conn = DBReference.connect("template1")) {
@@ -32,6 +28,24 @@ public class PgvectorSmokeTest {
             exec(conn, "insert into pv_junit values (1, '[1,0,0]')");
             exec(conn, "insert into pv_junit values (2, '[0,1,0]')");
             exec(conn, "insert into pv_junit values (3, '[0,0,1]')");
+            exec(conn,
+                    "create index pv_junit_ivf on pv_junit using ivfflat (emb vector_l2_ops) with (lists = 2)");
+            exec(conn,
+                    "create index pv_junit_hnsw on pv_junit using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32)");
+            try (Statement s = conn.statement(
+                    "select id from pv_junit order by emb <-> '[1,0,0]' limit 2")) {
+                Output<Integer> out = s.linkOutput(1, Integer.class);
+                int rows = 0;
+                int first = -1;
+                while (s.fetch()) {
+                    rows++;
+                    if (first < 0) {
+                        first = out.get().intValue();
+                    }
+                }
+                Assertions.assertEquals(2, rows);
+                Assertions.assertEquals(1, first);
+            }
         }
     }
 
