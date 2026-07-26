@@ -10,13 +10,18 @@ package org.weaverdb.direct;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.Assertions;
+import org.weaverdb.FetchSet;
 import org.weaverdb.DBReference;
 import org.weaverdb.ExecutionException;
 import org.weaverdb.Output;
 import org.weaverdb.Statement;
 
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class PgvectorOrderByTest {
 
     @BeforeAll
@@ -32,6 +37,43 @@ public class PgvectorOrderByTest {
     }
 
     @Test
+    @Order(1)
+    public void plainSelectById() throws Exception {
+        assertIds("select id from pv_ob_j", 1, 2, 3, 4);
+    }
+
+    @Test
+    @Order(2)
+    public void orderByL2DistanceLimit3() throws Exception {
+        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
+    }
+
+    @Test
+    @Order(3)
+    public void orderByL2DistanceLimit1() throws Exception {
+        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 1", 1);
+    }
+
+    @Test
+    @Order(4)
+    public void orderByL2DistanceLimit3ViaFetchSet() throws Exception {
+        List<Integer> got = new ArrayList<>();
+        try (DBReference conn = DBReference.connect("template1");
+                Statement s = conn.statement(
+                        "select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3")) {
+            s.linkOutput(1, Integer.class);
+            FetchSet.stream(s).forEach(row -> {
+                Integer id = (Integer) row.get(0).get();
+                if (id != null) {
+                    got.add(id);
+                }
+            });
+        }
+        Assertions.assertEquals(List.of(1, 2, 3), got);
+    }
+
+    @Test
+    @Order(5)
     public void createIvfflatIndex() throws Exception {
         try (DBReference conn = DBReference.connect("template1")) {
             exec(conn,
@@ -40,18 +82,9 @@ public class PgvectorOrderByTest {
     }
 
     @Test
-    public void plainSelectById() throws Exception {
-        assertIds("select id from pv_ob_j", 1, 2, 3, 4);
-    }
-
-    @Test
-    public void orderByL2DistanceLimit3() throws Exception {
-        List<Integer> got = queryIntColumn(
-                "select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1);
-        Assertions.assertTrue(got.size() >= 3, "expected at least 3 rows, got " + got);
-        Assertions.assertEquals(1, got.get(0).intValue());
-        Assertions.assertEquals(2, got.get(1).intValue());
-        Assertions.assertEquals(3, got.get(2).intValue());
+    @Order(6)
+    public void orderByL2DistanceLimit3WithIvfflatIndex() throws Exception {
+        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
     }
 
     private static void assertIds(String sql, int... expected) throws Exception {

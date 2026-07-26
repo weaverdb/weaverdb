@@ -94,13 +94,24 @@ ivfflatbuild(Relation heap,
 	IndexBuildResult *result;
 
 	(void) istrat;
-	(void) pcount;
-	(void) params;
 	(void) finfo;
 	(void) predInfo;
 
-	indexInfo = pgvector_make_indexinfo(natts, attnum);
-	result = ivfflat_buildindex(heap, index, indexInfo);
+	{
+		int			lists = IVFFLAT_DEFAULT_LISTS;
+
+		if (pcount > 0 && params != NULL)
+			lists = DatumGetInt32(params[0]);
+
+		if (lists < IVFFLAT_MIN_LISTS || lists > IVFFLAT_MAX_LISTS)
+			elog(ERROR, "ivfflat lists must be between %d and %d",
+				 IVFFLAT_MIN_LISTS, IVFFLAT_MAX_LISTS);
+
+		IvfflatSetBuildLists(RelationGetRelid(index), lists);
+		indexInfo = pgvector_make_indexinfo(natts, attnum);
+		result = ivfflat_buildindex(heap, index, indexInfo);
+		IvfflatClearBuildLists(RelationGetRelid(index));
+	}
 	if (result != NULL)
 		pfree(result);
 }

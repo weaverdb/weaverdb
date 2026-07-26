@@ -40,6 +40,7 @@
 #include "tcop/pquery.h"
 #include "tcop/utility.h"
 #include "nodes/execnodes.h"
+#include "nodes/parsenodes.h"
 #include "env/dbwriter.h"
 #include "env/dolhelper.h"
 
@@ -517,6 +518,95 @@ WOutputTransfer(OpaquePreparedStatement plan, short pos, int type, void* userenv
     return err;
 }
 
+static int
+WeaverLimitIntFromNode(Node *node, EState *estate, const char *what)
+{
+	Const	   *c;
+	Param	   *p;
+	ParamListInfo paramLI;
+	int			i;
+
+	if (node == NULL)
+		return 0;
+
+	switch (nodeTag(node))
+	{
+		case T_Const:
+			c = (Const *) node;
+			return (int) (c->constvalue);
+
+		case T_Param:
+			p = (Param *) node;
+			paramLI = estate->es_param_list_info;
+
+			if (paramLI == NULL)
+				elog(ERROR, "parameter for %s not in executor state", what);
+			for (i = 0; paramLI[i].kind != PARAM_INVALID; i++)
+			{
+				if (paramLI[i].kind == PARAM_NUM && paramLI[i].id == p->paramid)
+					break;
+			}
+			if (paramLI[i].kind == PARAM_INVALID)
+				elog(ERROR, "parameter for %s not in executor state", what);
+			if (paramLI[i].isnull)
+				elog(ERROR, "%s cannot be NULL value", what);
+			return (int) (paramLI[i].value);
+
+		default:
+			elog(ERROR, "unexpected node type %d as %s", nodeTag(node), what);
+	}
+	return 0;
+}
+
+static void
+WeaverInitFetchLimit(PreparedPlan *plan, Query *querytree)
+{
+	int			offset = 0;
+	int			count = 0;
+
+	plan->limit_offset = 0;
+	plan->limit_count = 0;
+
+	if (querytree->limitOffset != NULL)
+	{
+		offset = WeaverLimitIntFromNode(querytree->limitOffset, plan->state,
+										"limit offset");
+		if (offset < 0)
+			elog(ERROR, "limit offset cannot be negative");
+	}
+
+	if (querytree->limitCount != NULL)
+	{
+		count = WeaverLimitIntFromNode(querytree->limitCount, plan->state,
+									   "limit count");
+		if (count < 0)
+			elog(ERROR, "limit count cannot be negative");
+	}
+
+	plan->limit_offset = offset;
+	plan->limit_count = count;
+}
+
+static TupleTableSlot *
+WeaverFetchNextSlot(PreparedPlan *plan)
+{
+	TupleTableSlot *slot;
+
+	for (;;)
+	{
+		slot = ExecProcNode(plan->qdesc->plantree);
+		if (TupIsNull(slot))
+			return slot;
+		if (plan->limit_offset > 0)
+		{
+			plan->limit_offset--;
+			ExecClearTuple(slot);
+			continue;
+		}
+		return slot;
+	}
+}
+
 long
 WExec(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
@@ -640,6 +730,7 @@ WExec(OpaquePreparedStatement plan) {
             } else {
                 Assert(connection->inselect == NULL);
                 connection->inselect = plan;
+                WeaverInitFetchLimit(plan, querytree);
                 plan->stage = STMT_FETCH;
             }
         }
@@ -695,7 +786,17 @@ WFetch(OpaquePreparedStatement plan) {
 
     MemoryContext old = MemoryContextSwitchTo(plan->fetch_cxt);
 
-    TupleTableSlot *slot = ExecProcNode(plan->qdesc->plantree);
+    if (plan->limit_count > 0 && plan->processed >= plan->limit_count)
+    {
+        err = 4;
+        WResetExecutor(plan);
+        Assert(plan == connection->inselect);
+        connection->inselect = NULL;
+        plan->stage = STMT_EOD;
+        goto fetch_done;
+    }
+
+    TupleTableSlot *slot = WeaverFetchNextSlot(plan);
 
     if (TupIsNull(slot)) {
         err = 4; /*  EOT ( End of Transmission ascii code */
@@ -756,6 +857,7 @@ WFetch(OpaquePreparedStatement plan) {
         plan->stage = STMT_FETCH;
     }
 
+fetch_done:
     MemoryContextSwitchTo(old);
 
     RELEASE(connection, false);

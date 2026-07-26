@@ -46,7 +46,7 @@ out=$(run_sql \
   "insert into pv_smoke values (3, '[0,0,1]');")
 check "insert rows" "$out" 'INSERT'
 
-out=$(run_sql "create index pv_smoke_ivf on pv_smoke using ivfflat (emb vector_l2_ops);")
+out=$(run_sql "create index pv_smoke_ivf on pv_smoke using ivfflat (emb vector_l2_ops) with (lists = 2);")
 if echo "$out" | grep -qi ERROR; then
   echo "FAIL: ivfflat index" >&2
   echo "$out" >&2
