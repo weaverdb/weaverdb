@@ -38,6 +38,10 @@
 #define IVFFLAT_MIN_LISTS		1
 #define IVFFLAT_MAX_LISTS		32768
 #define IVFFLAT_DEFAULT_PROBES	1
+/* In-process parallel assign (Weaver pthread workers; 1 = serial only) */
+#define IVFFLAT_DEFAULT_ASSIGN_WORKERS	4
+#define IVFFLAT_MAX_ASSIGN_WORKERS		8
+#define IVFFLAT_MIN_BLOCKS_PER_WORKER	8
 
 /* Build phases */
 /* PROGRESS_CREATEIDX_SUBPHASE_INITIALIZE is 1 */
@@ -75,6 +79,7 @@ typedef struct IvfflatGlobals
 	int			probes;
 	int			iterative_scan;
 	int			max_probes;
+	int			assign_workers;
 } IvfflatGlobals;
 
 IvfflatGlobals *IvfflatGetEnv(void);
@@ -82,6 +87,7 @@ IvfflatGlobals *IvfflatGetEnv(void);
 #define ivfflat_probes           (IvfflatGetEnv()->probes)
 #define ivfflat_iterative_scan   (IvfflatGetEnv()->iterative_scan)
 #define ivfflat_max_probes       (IvfflatGetEnv()->max_probes)
+#define ivfflat_assign_workers   (IvfflatGetEnv()->assign_workers)
 
 typedef enum IvfflatIterativeScanMode
 {

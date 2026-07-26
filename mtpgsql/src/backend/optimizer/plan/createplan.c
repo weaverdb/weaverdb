@@ -19,6 +19,7 @@
 
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/internal.h"
@@ -28,6 +29,9 @@
 #include "optimizer/tlist.h"
 #include "parser/parse_expr.h"
 #include "utils/lsyscache.h"
+#include "catalog/pg_am.h"
+#include "optimizer/tlist.h"
+#include "utils/syscache.h"
 #include "utils/syscache.h"
 #include "commands/variable.h"
 
@@ -63,9 +67,42 @@ static DelegatedSeqScan    * make_delegated_seqscan(List *qptlist,
 			 List *qpqual,
 			 Index scanrelid);
 static IndexScan *make_indexscan(List *qptlist, List *qpqual, Index scanrelid,
-			   List *indxid, List *indxqual,
-			   List *indxqualorig,
-			   ScanDirection indexscandir);
+								 List *indxid, List *indxqual, List *indxqualorig,
+								 ScanDirection indexscandir);
+
+static void
+assign_vector_index_orderexpr(Query *root, IndexPath *best_path, IndexScan *iscan)
+{
+	Oid			indexoid;
+	HeapTuple	classtup;
+	Form_pg_class cls;
+	SortClause *sortcl;
+	Expr	   *sortexpr;
+
+	if (root->sortClause == NIL || length(best_path->indexid) != 1)
+		return;
+
+	indexoid = (Oid) lfirsti(best_path->indexid);
+	classtup = SearchSysCacheTuple(RELOID, ObjectIdGetDatum(indexoid), 0, 0, 0);
+	if (!HeapTupleIsValid(classtup))
+		return;
+	cls = (Form_pg_class) GETSTRUCT(classtup);
+	if (cls->relam != IVFFLAT_AM_OID && cls->relam != HNSW_AM_OID)
+		return;
+
+	sortcl = (SortClause *) lfirst(root->sortClause);
+	sortexpr = (Expr *) get_sortgroupclause_expr(sortcl, root->targetList);
+	if (!IsA(sortexpr, Expr))
+		return;
+	{
+		Expr	   *distexpr = (Expr *) sortexpr;
+
+		if (distexpr->opType != OP_EXPR || !IsA(distexpr->oper, Oper))
+			return;
+	}
+
+	iscan->indxorderexpr = copyObject(sortexpr);
+}
 static DelegatedIndexScan *make_delegated_indexscan(List *qptlist, List *qpqual, Index scanrelid,
 			   Oid indxid, List *indxqual,
 			   List *indxqualorig,
@@ -433,6 +470,7 @@ create_indexscan_node(Query *root,
                                                                fixed_indxqual,
                                                                indxqual,
                                                                best_path->indexscandir);
+            assign_vector_index_orderexpr(root, best_path, (IndexScan *) scan_node);
         } else {
             scan_node = (Scan*)make_delegated_indexscan(tlist,
                                                                qpqual,
@@ -1224,6 +1262,7 @@ make_indexscan(List *qptlist,
 	node->indxqual = indxqual;
 	node->indxqualorig = indxqualorig;
         node->indxorderdir = indexscandir;
+	node->indxorderexpr = NULL;
  
 	node->scan.scanstate = (CommonScanState *) NULL;
 

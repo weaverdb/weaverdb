@@ -10,6 +10,8 @@
 #include "env/freespace.h"
 #include "fmgr.h"
 #include "pgvector_executor_port.h"
+#include "storage/bufmgr.h"
+#include "storage/bufpage.h"
 
 #undef tuplesort_begin_heap
 #undef tuplesort_puttupleslot
@@ -219,6 +221,68 @@ pgvector_heap_scan(Relation heap, Relation index, PgvectorIndexInfo *indexInfo,
 	return reltuples;
 }
 
+static double
+pgvector_heap_scan_block_range(Relation heap, Relation index,
+							   PgvectorIndexInfo *indexInfo,
+							   PgvectorIndexBuildCallback callback,
+							   void *callback_state,
+							   BlockNumber start_block, BlockNumber num_blocks)
+{
+	BlockNumber total_blocks;
+	BlockNumber end_block;
+	BlockNumber blk;
+	double		reltuples = 0;
+
+	total_blocks = RelationGetNumberOfBlocks(heap);
+	if (start_block >= total_blocks || num_blocks == 0)
+		return 0;
+
+	end_block = start_block + num_blocks;
+	if (end_block > total_blocks)
+		end_block = total_blocks;
+
+	for (blk = start_block; blk < end_block; blk++)
+	{
+		Buffer		buf;
+		Page		page;
+		OffsetNumber maxoff;
+		OffsetNumber offnum;
+
+		buf = ReadBuffer(heap, blk);
+		LockBuffer(heap, buf, BUFFER_LOCK_SHARE);
+		page = BufferGetPage(buf);
+		maxoff = PageGetMaxOffsetNumber(page);
+
+		for (offnum = FirstOffsetNumber; offnum <= maxoff; offnum = OffsetNumberNext(offnum))
+		{
+			HeapTupleData htup;
+			ItemId		itemid;
+			Datum		values[INDEX_MAX_KEYS];
+			bool		isnull[INDEX_MAX_KEYS];
+
+			itemid = PageGetItemId(page, offnum);
+			if (!ItemIdIsUsed(itemid))
+				continue;
+
+			htup.t_data = (HeapTupleHeader) PageGetItem(page, itemid);
+			htup.t_len = ItemIdGetLength(itemid);
+			ItemPointerSet(&htup.t_self, blk, offnum);
+			htup.t_datamcxt = NULL;
+			htup.t_datasrc = NULL;
+			htup.t_info = 0;
+
+			pgvector_form_index_datum(indexInfo, heap, &htup, values, isnull);
+			callback(index, &htup.t_self, values, isnull, true, callback_state);
+			reltuples += 1.0;
+		}
+
+		LockBuffer(heap, buf, BUFFER_LOCK_UNLOCK);
+		ReleaseBuffer(heap, buf);
+	}
+
+	return reltuples;
+}
+
 double
 pgvector_table_index_build_scan(Relation heap, Relation index,
 								PgvectorIndexInfo *indexInfo,
@@ -250,12 +314,12 @@ pgvector_table_index_build_range_scan(Relation heap, Relation index,
 									  PgvectorIndexBuildCallback callback,
 									  void *callback_state, void *scan)
 {
-	(void) start_block;
-	(void) num_blocks;
 	(void) progress;
+	(void) scan;
 
-	/* Block sampling not ported; full scan (SampleRows uses simplified path). */
-	return pgvector_table_index_build_scan(heap, index, indexInfo,
-										   allow_sync, anyvisible,
-										   callback, callback_state, scan);
+	if (num_blocks == 0)
+		return 0;
+
+	return pgvector_heap_scan_block_range(heap, index, indexInfo, callback,
+										  callback_state, start_block, num_blocks);
 }

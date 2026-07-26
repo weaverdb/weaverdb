@@ -1,6 +1,7 @@
 #include "postgres.h"
 
 #include <float.h>
+#include <pthread.h>
 
 #include "access/amapi.h"
 #include "access/genam.h"
@@ -14,12 +15,18 @@
 #include "fmgr.h"
 #include "ivfflat.h"
 #include "miscadmin.h"
+#include "env/env.h"
 #include "env/freespace.h"
 #include "pgvector_executor_port.h"
+#include "pgvector_index.h"
+#include "storage/multithread.h"
+#include "storage/sinvaladt.h"
 #include "storage/bufmgr.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/relcache.h"
 #include "utils/sampling.h"
+#include "utils/syscache.h"
 #include "utils/snapmgr.h"
 #include "utils/tuplesort.h"
 
@@ -919,11 +926,244 @@ IvfflatBeginParallel(IvfflatBuildState * buildstate, bool isconcurrent, int requ
 }
 #endif /* parallel ivfflat build */
 
+typedef struct IvfflatWeaverParallelShared
+{
+	pthread_mutex_t mutex;
+	int			nworkers;
+	double		reltuples;
+	double		indtuples;
+	Oid			heapOid;
+	Oid			indexOid;
+} IvfflatWeaverParallelShared;
+
+typedef struct IvfflatAssignWorkerArg
+{
+	Env				   *parent_env;
+	IvfflatBuildState  *leader;
+	IvfflatWeaverParallelShared *shared;
+	BlockNumber			start_block;
+	BlockNumber			num_blocks;
+	int					sortmem;
+	Tuplesortstate	   *sortstate;
+	bool				ok;
+} IvfflatAssignWorkerArg;
+
+static void
+InitWorkerAssignState(IvfflatBuildState *wstate, IvfflatBuildState *leader,
+					  Relation heap, Relation index, PgvectorIndexInfo *indexInfo,
+					  Tuplesortstate *sortstate)
+{
+	MemSet(wstate, 0, sizeof(*wstate));
+	wstate->heap = heap;
+	wstate->index = index;
+	wstate->indexInfo = indexInfo;
+	wstate->typeInfo = leader->typeInfo;
+	wstate->tupdesc = leader->tupdesc;
+	wstate->dimensions = leader->dimensions;
+	wstate->lists = leader->lists;
+	wstate->centers = leader->centers;
+	wstate->collation = leader->collation;
+	wstate->procinfo = index_getprocinfo(index, 1, IVFFLAT_DISTANCE_PROC);
+	wstate->normprocinfo = IvfflatOptionalProcInfo(index, IVFFLAT_NORM_PROC);
+	wstate->sortstate = sortstate;
+	wstate->sortdesc = leader->sortdesc;
+	wstate->slot = MakeSingleTupleTableSlot(leader->sortdesc, &TTSOpsVirtual);
+	wstate->tmpCtx = AllocSetContextCreate(CurrentMemoryContext,
+										   "Ivfflat parallel assign temporary context",
+										   ALLOCSET_DEFAULT_SIZES);
+}
+
+static int
+IvfflatChooseWorkerCount(IvfflatBuildState *buildstate)
+{
+	int			want;
+	BlockNumber nblocks;
+
+	want = ivfflat_assign_workers;
+	if (want <= 1 || buildstate->heap == NULL || GetEnv() == NULL)
+		return 0;
+
+	nblocks = RelationGetNumberOfBlocks(buildstate->heap);
+	if (nblocks < (BlockNumber) (want * IVFFLAT_MIN_BLOCKS_PER_WORKER))
+		return 0;
+	if (want > IVFFLAT_MAX_ASSIGN_WORKERS)
+		want = IVFFLAT_MAX_ASSIGN_WORKERS;
+	return want;
+}
+
+static void
+IvfflatMergeWorkerSorts(IvfflatBuildState *buildstate, Tuplesortstate **workerSorts, int nworkers)
+{
+	TupleTableSlot *slot;
+
+	buildstate->sortstate = InitBuildSortState(buildstate->sortdesc,
+											   maintenance_work_mem, NULL);
+	slot = MakeSingleTupleTableSlot(buildstate->sortdesc, &TTSOpsMinimalTuple);
+
+	for (int i = 0; i < nworkers; i++)
+	{
+		while (tuplesort_gettupleslot(workerSorts[i], true, false, slot, NULL))
+			tuplesort_puttupleslot(buildstate->sortstate, slot);
+		tuplesort_end(workerSorts[i]);
+	}
+}
+
+static void *
+IvfflatAssignWorkerMain(void *argp)
+{
+	IvfflatAssignWorkerArg *arg = (IvfflatAssignWorkerArg *) argp;
+	Env		   *env = NULL;
+	Relation	heap = NULL;
+	Relation	index = NULL;
+	PgvectorIndexInfo *indexInfo = NULL;
+	IvfflatBuildState wstate;
+	double		reltuples = 0;
+
+	arg->ok = false;
+
+	env = CreateEnv(arg->parent_env);
+	if (env == NULL)
+		return NULL;
+
+	SetEnv(env);
+	MemoryContextInit();
+	InitThread(NORMAL_THREAD);
+	if (!CallableInitInvalidationState())
+		goto worker_failed;
+	RelationInitialize();
+	InitCatalogCache();
+	SetProcessingMode(NormalProcessing);
+
+	heap = heap_open(arg->shared->heapOid, AccessShareLock);
+	index = index_open(arg->shared->indexOid);
+	indexInfo = BuildIndexInfo(index);
+
+	InitWorkerAssignState(&wstate, arg->leader, heap, index, indexInfo, arg->sortstate);
+
+	reltuples = table_index_build_range_scan(heap, index, indexInfo,
+											 true, true, false,
+											 arg->start_block, arg->num_blocks,
+											 BuildCallback, (void *) &wstate, NULL);
+
+	tuplesort_performsort(arg->sortstate);
+
+	pthread_mutex_lock(&arg->shared->mutex);
+	arg->shared->reltuples += reltuples;
+	arg->shared->indtuples += wstate.indtuples;
+	pthread_mutex_unlock(&arg->shared->mutex);
+
+	MemoryContextDelete(wstate.tmpCtx);
+	index_close(index);
+	heap_close(heap, AccessShareLock);
+	pfree(indexInfo);
+	arg->ok = true;
+
+worker_failed:
+	DestroyThread();
+	SetEnv(NULL);
+	DestroyEnv(env);
+	return NULL;
+}
+
+static void
+AssignTuplesParallel(IvfflatBuildState *buildstate, int nworkers)
+{
+	BlockNumber total_blocks;
+	BlockNumber blocks_per_worker;
+	BlockNumber extra;
+	BlockNumber blk;
+	pthread_t  *threads;
+	IvfflatAssignWorkerArg *args;
+	Tuplesortstate **worker_sorts;
+	IvfflatWeaverParallelShared shared;
+	Env		   *parent_env;
+	int			sortmem;
+	int			i;
+	bool		ok = true;
+
+	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE, PROGRESS_IVFFLAT_PHASE_ASSIGN);
+
+	parent_env = GetEnv();
+	total_blocks = RelationGetNumberOfBlocks(buildstate->heap);
+	blocks_per_worker = total_blocks / nworkers;
+	extra = total_blocks % nworkers;
+
+	sortmem = maintenance_work_mem / (nworkers + 1);
+	if (sortmem < 32)
+		sortmem = 32;
+
+	threads = palloc(sizeof(pthread_t) * nworkers);
+	args = palloc0(sizeof(IvfflatAssignWorkerArg) * nworkers);
+	worker_sorts = palloc(sizeof(Tuplesortstate *) * nworkers);
+
+	MemSet(&shared, 0, sizeof(shared));
+	pthread_mutex_init(&shared.mutex, NULL);
+	shared.nworkers = nworkers;
+	shared.heapOid = RelationGetRelid(buildstate->heap);
+	shared.indexOid = RelationGetRelid(buildstate->index);
+
+	blk = 0;
+	for (i = 0; i < nworkers; i++)
+	{
+		BlockNumber nblocks = blocks_per_worker + (i < (int) extra ? 1 : 0);
+
+		args[i].parent_env = parent_env;
+		args[i].leader = buildstate;
+		args[i].shared = &shared;
+		args[i].start_block = blk;
+		args[i].num_blocks = nblocks;
+		args[i].sortmem = sortmem;
+		args[i].sortstate = InitBuildSortState(buildstate->sortdesc, sortmem, NULL);
+		worker_sorts[i] = args[i].sortstate;
+		blk += nblocks;
+
+		if (pthread_create(&threads[i], NULL, IvfflatAssignWorkerMain, &args[i]) != 0)
+		{
+			ok = false;
+			args[i].ok = false;
+			i++;
+			break;
+		}
+	}
+
+	for (int j = 0; j < i; j++)
+		pthread_join(threads[j], NULL);
+
+	for (int j = 0; j < nworkers; j++)
+	{
+		if (j < i && !args[j].ok)
+			ok = false;
+		if (j >= i && worker_sorts[j] != NULL)
+			tuplesort_end(worker_sorts[j]);
+	}
+
+	pthread_mutex_destroy(&shared.mutex);
+
+	if (!ok)
+	{
+		for (i = 0; i < nworkers; i++)
+		{
+			if (worker_sorts[i] != NULL)
+				tuplesort_end(worker_sorts[i]);
+		}
+		ereport(ERROR,
+				(errmsg("parallel ivfflat assign failed"),
+				 errhint("Set IvfflatGetEnv()->assign_workers to 1 for serial assign.")));
+	}
+
+	buildstate->reltuples = shared.reltuples;
+	buildstate->indtuples = shared.indtuples;
+	IvfflatMergeWorkerSorts(buildstate, worker_sorts, nworkers);
+
+	ereport(DEBUG1, (errmsg("ivfflat parallel assign: %d workers, %.0f tuples",
+							nworkers, buildstate->indtuples)));
+}
+
 /*
- * Scan table for tuples to index
+ * Scan table for tuples to index (single-threaded)
  */
 static void
-AssignTuples(IvfflatBuildState * buildstate)
+AssignTuplesSerial(IvfflatBuildState * buildstate)
 {
 	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE, PROGRESS_IVFFLAT_PHASE_ASSIGN);
 
@@ -939,6 +1179,17 @@ AssignTuples(IvfflatBuildState * buildstate)
 		PrintKmeansMetrics(buildstate);
 #endif
 	}
+}
+
+static void
+AssignTuples(IvfflatBuildState * buildstate)
+{
+	int			nworkers = IvfflatChooseWorkerCount(buildstate);
+
+	if (nworkers > 1)
+		AssignTuplesParallel(buildstate, nworkers);
+	else
+		AssignTuplesSerial(buildstate);
 }
 
 /*

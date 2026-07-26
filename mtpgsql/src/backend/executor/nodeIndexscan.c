@@ -42,6 +42,10 @@
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "parser/parsetree.h"
+#include "catalog/pg_am.h"
+
+extern void pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
+										ExprContext *econtext, Snapshot snapshot);
 
 /* ----------------
  *		Misc stuff to move to executor.h soon -cim 6/5/90
@@ -52,6 +56,33 @@
 #define RIGHT_OP		2
 
 static TupleTableSlot *IndexNext(IndexScan *node);
+
+static void
+ExecBindVectorIndexOrder(IndexScan *node, IndexScanState *indexstate,
+						 EState *estate, CommonScanState *scanstate)
+{
+	int			i;
+
+	if (node->indxorderexpr == NULL)
+		return;
+
+	for (i = 0; i < indexstate->iss_NumIndices; i++)
+	{
+		Relation	irel = indexstate->iss_RelationDescs[i];
+		IndexScanDesc scandesc = indexstate->iss_ScanDescs[i];
+
+		if (irel == NULL || scandesc == NULL)
+			continue;
+		if (irel->rd_rel->relam != IVFFLAT_AM_OID &&
+			irel->rd_rel->relam != HNSW_AM_OID)
+			continue;
+
+		pgvector_bind_index_orderby(scandesc, irel->rd_rel->relam,
+									node->indxorderexpr,
+									scanstate->cstate.cs_ExprContext,
+									estate->es_snapshot);
+	}
+}
 
 /* ----------------------------------------------------------------
  *		IndexNext
@@ -395,6 +426,8 @@ ExecIndexReScan(IndexScan *node, ExprContext *exprCtxt)
 		skey = scanKeys[i];
 		index_rescan(scan, direction, skey);
 	}
+	if (node->indxorderexpr != NULL)
+		ExecBindVectorIndexOrder(node, indexstate, estate, node->scan.scanstate);
 	/* ----------------
 	 *	perhaps return something meaningful
 	 * ----------------
@@ -1059,6 +1092,8 @@ ExecInitIndexScan(IndexScan *node, EState *estate)
 
 	indexstate->iss_RelationDescs = relationDescs;
 	indexstate->iss_ScanDescs = scanDescs;
+
+	ExecBindVectorIndexOrder(node, indexstate, estate, scanstate);
 
 	indexstate->cstate.cs_TupFromTlist = false;
 

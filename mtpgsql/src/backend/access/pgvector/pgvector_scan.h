@@ -7,6 +7,7 @@
 #include "ivfflat.h"
 #include "hnsw.h"
 #include "utils/tqual.h"
+#include "nodes/primnodes.h"
 
 /*
  * Map modern pgvector scan code onto PG7 IndexScanDesc (relation, keyData, …).
@@ -99,5 +100,12 @@ pgvector_hnsw_snapshot(IndexScanDesc scan)
 		return so->xs_snapshot;
 	return SnapshotNow;
 }
+
+#include "nodes/primnodes.h"
+
+typedef struct ExprContext ExprContext;
+
+void pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
+								 ExprContext *econtext, Snapshot snapshot);
 
 #endif /* PGVECTOR_SCAN_H */
