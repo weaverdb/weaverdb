@@ -4,6 +4,19 @@ plugins {
    id 'maven-publish'
 }
 
+configurations {
+    tests
+}
+
+tasks.register('testClassesJar', Jar) {
+    archiveClassifier = 'tests'
+    from sourceSets.test.output
+}
+
+artifacts {
+    tests testClassesJar
+}
+
 description = 'weaver connector'
 
 base {

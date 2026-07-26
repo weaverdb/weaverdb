@@ -1,3 +1,6 @@
+node_modules/
+package-lock.json
+package.json
 .gradle
 build/
 /build-gcc/
@@ -28,3 +31,5 @@ mtpgsql/src/include/parser/parse.h
 **/bin/
 /pgjava_c/repo/
 /build_test/
+hs_err_*.log
+docs/

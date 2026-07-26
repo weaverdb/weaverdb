@@ -14,7 +14,9 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'com.drewnoakes:metadata-extractor:2.19.0'
+    testImplementation 'org.junit.platform:junit-platform-suite:1.10.2'
     implementation project(':pgjava_c')
+    testImplementation project(path: ':pgjava_c', configuration: 'tests')
 }
 
 java {
@@ -35,10 +37,14 @@ jar {
 tasks.named('test', Test) {
     useJUnitPlatform()
 
+    systemProperty 'java.library.path', layout.projectDirectory.dir('build/mtpg/lib').asFile.absolutePath
+
     maxHeapSize = '1G'
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(21)
     }
+
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
 
     testLogging {
         events "passed"

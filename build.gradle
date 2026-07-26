@@ -5,3 +5,9 @@ plugins {
 
 
 description = 'weaver db system'
+
+subprojects { sub ->
+    sub.tasks.withType(Test).configureEach {
+        systemProperty 'weaver.repo.root', rootDir.absolutePath
+    }
+}
