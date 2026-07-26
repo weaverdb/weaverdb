@@ -1,7 +1,6 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "access/generic_xlog.h"
 #include "commands/vacuum.h"
 #include "hnsw.h"
 #include "nodes/pg_list.h"
@@ -10,13 +9,7 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
-
-#if PG_VERSION_NUM >= 180000
-#define vacuum_delay_point() vacuum_delay_point(false)
-#endif
 
 /*
  * Check if deleted list contains an index TID
@@ -53,7 +46,6 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 	{
 		Buffer		buf;
 		Page		page;
-		GenericXLogState *state;
 		OffsetNumber offno;
 		OffsetNumber maxoffno;
 		bool		updated = false;
@@ -61,9 +53,8 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 		vacuum_delay_point();
 
 		buf = ReadBufferExtended(index, MAIN_FORKNUM, blkno, RBM_NORMAL, bas);
-		LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
-		state = GenericXLogStart(index);
-		page = GenericXLogRegisterBuffer(state, buf, 0);
+		LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
+		page = BufferGetPage(buf);
 		maxoffno = PageGetMaxOffsetNumber(page);
 
 		/* Iterate over nodes */
@@ -131,11 +122,6 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 
 		blkno = HnswPageGetOpaque(page)->nextblkno;
 
-		if (updated)
-			GenericXLogFinish(state);
-		else
-			GenericXLogAbort(state);
-
 		UnlockReleaseBuffer(buf);
 	}
 }
@@ -154,7 +140,7 @@ NeedsUpdated(HnswVacuumState * vacuumstate, HnswElement element)
 	bool		needsUpdated = false;
 
 	buf = ReadBufferExtended(index, MAIN_FORKNUM, element->neighborPage, RBM_NORMAL, bas);
-	LockBuffer(buf, BUFFER_LOCK_SHARE);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 	ntup = (HnswNeighborTuple) PageGetItem(page, PageGetItemId(page, element->neighborOffno));
 
@@ -201,7 +187,6 @@ RepairGraphElement(HnswVacuumState * vacuumstate, HnswElement element, HnswEleme
 	HnswSupport *support = &vacuumstate->support;
 	Buffer		buf;
 	Page		page;
-	GenericXLogState *state;
 	int			m = vacuumstate->m;
 	int			efConstruction = vacuumstate->efConstruction;
 	BufferAccessStrategy bas = vacuumstate->bas;
@@ -229,16 +214,15 @@ RepairGraphElement(HnswVacuumState * vacuumstate, HnswElement element, HnswEleme
 
 	/* Get neighbor page */
 	buf = ReadBufferExtended(index, MAIN_FORKNUM, element->neighborPage, RBM_NORMAL, bas);
-	LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
-	state = GenericXLogStart(index);
-	page = GenericXLogRegisterBuffer(state, buf, 0);
+	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
+
+	page = BufferGetPage(buf);
 
 	/* Overwrite tuple */
 	if (!PageIndexTupleOverwrite(page, element->neighborOffno, (Item) ntup, ntupSize))
 		elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 
 	/* Commit */
-	GenericXLogFinish(state);
 	UnlockReleaseBuffer(buf);
 
 	/* Update neighbors */
@@ -364,7 +348,7 @@ RepairGraph(HnswVacuumState * vacuumstate)
 		oldCtx = MemoryContextSwitchTo(vacuumstate->tmpCtx);
 
 		buf = ReadBufferExtended(index, MAIN_FORKNUM, blkno, RBM_NORMAL, bas);
-		LockBuffer(buf, BUFFER_LOCK_SHARE);
+		LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 		page = BufferGetPage(buf);
 		maxoffno = PageGetMaxOffsetNumber(page);
 
@@ -467,7 +451,6 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 	{
 		Buffer		buf;
 		Page		page;
-		GenericXLogState *state;
 		OffsetNumber offno;
 		OffsetNumber maxoffno;
 
@@ -483,8 +466,7 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 		 */
 		LockBufferForCleanup(buf);
 
-		state = GenericXLogStart(index);
-		page = GenericXLogRegisterBuffer(state, buf, 0);
+		page = BufferGetPage(buf);
 		maxoffno = PageGetMaxOffsetNumber(page);
 
 		/* Update element and neighbors together */
@@ -527,8 +509,8 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 			else
 			{
 				nbuf = ReadBufferExtended(index, MAIN_FORKNUM, neighborPage, RBM_NORMAL, bas);
-				LockBuffer(nbuf, BUFFER_LOCK_EXCLUSIVE);
-				npage = GenericXLogRegisterBuffer(state, nbuf, 0);
+				LockBuffer(index, nbuf, BUFFER_LOCK_EXCLUSIVE);
+				npage = BufferGetPage(nbuf);
 			}
 
 			ntup = (HnswNeighborTuple) PageGetItem(npage, PageGetItemId(npage, neighborOffno));
@@ -556,7 +538,6 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 			 */
 
 			/* Commit */
-			GenericXLogFinish(state);
 			if (nbuf != buf)
 				UnlockReleaseBuffer(nbuf);
 
@@ -565,13 +546,11 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 				insertPage = blkno;
 
 			/* Prepare new xlog */
-			state = GenericXLogStart(index);
-			page = GenericXLogRegisterBuffer(state, buf, 0);
+			page = BufferGetPage(buf);
 		}
 
 		blkno = HnswPageGetOpaque(page)->nextblkno;
 
-		GenericXLogAbort(state);
 		UnlockReleaseBuffer(buf);
 	}
 

@@ -38,4 +38,6 @@ pg_atomic_fetch_add_u32(volatile pg_atomic_uint32 *ptr, uint32_t inc)
 #endif
 }
 
+#define pg_memory_barrier()		__sync_synchronize()
+
 #endif /* PORT_ATOMICS_H */

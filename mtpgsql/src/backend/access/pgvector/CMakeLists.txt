@@ -3,14 +3,26 @@
 # Include bit/half utils+vec too so that _PG_init symbols (BitvecInit etc) are present.
 set(SRC_FILES
     pgvector_shims.c
+    pgvector_pg7_am.c
     vector.c
     sparsevec.c
+    ivfflat.c
+    ivfinsert.c
+    ivfutils.c
+    ivfkmeans.c
+    ivfvacuum.c
+    ivfbuild.c
+    ivfscan.c
+    hnswbuild.c
+    hnswscan.c
+    hnswutils.c
+    hnswinsert.c
+    pgvector_executor_port.c
+    pgvector_hnsw_stubs.c
 )
-# NOTE: full ivfflat + hnsw sources have deep dependencies on PG AM/optimizer/lock/guc internals
-# not present in this Weaver fork. Core vector type + sparse build here for the build system
-# integration. Index AM files can be enabled after more stubs or when executor/catalog wiring is ready.
-# bit/half .c excluded to avoid f16 dispatch / varbit complexity on this fork;
-# dummy inits provided in shims.c so vector.c _PG_init links.
+# pgvector_ivf_stubs.c replaced by ivfbuild.c / ivfscan.c when PG7 port complete.
+# hnsw.c excluded (modern GUC/reloptions/cost); hnswinsert.c / hnswvacuum.c deferred.
+# NOTE: bit/half .c excluded
 
 # create the library (as OBJECT so backend mtpg can link the objs)
 add_library(pgvector OBJECT ${SRC_FILES})
@@ -43,7 +55,6 @@ target_include_directories(pgvector PRIVATE
 # Note: many PG_ macro neuters and ereport now handled in pgvector_compat.h (force include)
 # for reliability. Keep here only the core version/flex/etc.
 target_compile_definitions(pgvector PRIVATE
-    PG_VERSION_NUM=130000
     FLEXIBLE_ARRAY_MEMBER=
     PGDLLEXPORT=
     ERRCODE_DATA_EXCEPTION=0

@@ -107,6 +107,14 @@ DATA(insert OID = 0 (403 1663 1636 1));
 DATA(insert OID = 0 (403 1399 1358 1));
 DATA(insert OID = 0 (403 1419 1137 1));
 DATA(insert OID = 0 (403 1989 2010 1));
+DATA(insert OID = 0 (403 1990 2242 1));
+
+/* ivfflat vector_l2_ops */
+DATA(insert OID = 0 (406 1991 2241 1));
+DATA(insert OID = 0 (406 1991 2240 3));
+
+/* hnsw vector_l2_ops */
+DATA(insert OID = 0 (407 1991 2241 1));
 
 
 /* hash */

@@ -6,9 +6,7 @@
 #include "utils/varbit.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
 
 /*
  * Allocate and initialize a new bit vector

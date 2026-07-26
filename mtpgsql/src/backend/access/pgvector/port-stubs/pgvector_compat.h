@@ -10,6 +10,10 @@
 #define errcode(x)              (0)
 #define errmsg(...)             (0)
 
+#ifndef VALGRIND_MAKE_MEM_DEFINED
+#define VALGRIND_MAKE_MEM_DEFINED(p, n) ((void) 0)
+#endif
+
 /* Dummies for varbit / float return macros used inside bitvec.c / halfvec etc (from CMake dummies + more) */
 #define PG_RETURN_FLOAT8(x)     return (Datum)0
 #define PG_GETARG_VARBIT_P(n)   ((VarBit *)0)
@@ -75,10 +79,6 @@
 #define PG_GETARG_DATUM(n)     ((Datum)0)
 #define PG_GETARG_POINTER(n)   ((void*)0)
 
-/* Define PG_VERSION_NUM high enough */
-#ifndef PG_VERSION_NUM
-#define PG_VERSION_NUM 130000
-#endif
 
 /* FLEXIBLE_ARRAY_MEMBER for old compilers */
 #ifndef FLEXIBLE_ARRAY_MEMBER
@@ -121,10 +121,9 @@ typedef unsigned long Datum;   /* common definition; project/c.h will provide eq
 struct varbita;
 typedef struct varbita VarBit;
 
-/* Index AM vacuum types referenced from hnsw.h / ivfflat etc. Provide forward decls
-   so struct fields parse without pulling the full access/genam.h or storage/bufmgr early. */
+/* Index AM vacuum types - forward decls only here (full defs after postgres.h) */
 typedef struct IndexBulkDeleteResult IndexBulkDeleteResult;
-typedef void (*IndexBulkDeleteCallback) (IndexBulkDeleteResult *stats, void *callback_state);
+typedef struct IndexVacuumInfo IndexVacuumInfo;
 
 /* Storage / access types used in hnsw.h and ivfflat.h (vacuum, newbuffer, etc) */
 typedef unsigned int ForkNumber;
@@ -176,17 +175,17 @@ typedef struct PlannerInfo PlannerInfo;
 typedef struct IndexPath IndexPath;
 typedef struct RelOptInfo RelOptInfo;
 
-#define CurrentMemoryContext ((void*)0)
-#define ALLOCSET_DEFAULT_SIZES 0,0,0
+/* CurrentMemoryContext provided by real headers */
+#ifndef CurrentMemoryContext
+#define CurrentMemoryContext (MemoryContextGetTopContext())
+#endif
+#define ALLOCSET_DEFAULT_SIZES ALLOCSET_DEFAULT_MINSIZE, ALLOCSET_DEFAULT_INITSIZE, ALLOCSET_DEFAULT_MAXSIZE
 
 /* AllocSetContextCreate provided by real headers when needed; dummy macro covers calls */
 typedef struct BufferAccessStrategyData *BufferAccessStrategy;
 
-/* Common in index AM code */
-typedef struct GenericXLogState GenericXLogState;
-
-/* Relation (core type used in index AM function signatures in the pgvector headers) */
-typedef struct RelationData *Relation;
+/* itemptr callback — full ItemPointer after postgres.h; use void* here */
+typedef bool (*IndexBulkDeleteCallback) (void *itemptr, void *callback_state);
 
 /* Other frequently referenced in index build/scan/vacuum headers */
 typedef struct List List;
@@ -203,8 +202,6 @@ typedef int IndexUniqueCheck;
 typedef struct IndexVacuumInfo IndexVacuumInfo;
 
 typedef struct Sharedsort { int dummy; } Sharedsort;
-typedef struct BlockSamplerData { int dummy; } BlockSamplerData;
-typedef struct ReservoirStateData { int dummy; } ReservoirStateData;
 
 /* Ensure VARSIZE_ANY visible even if varatt.h include is version-guarded in ivfflat.h */
 #ifndef VARSIZE_ANY
@@ -241,6 +238,33 @@ typedef struct ReservoirStateData { int dummy; } ReservoirStateData;
 #include "fmgr.h"
 #include "utils/array.h"
 #include "catalog/pg_type.h"
+#include "access/itup.h"
+#include "access/tupdesc.h"
+
+#define TupleDescAttr(tupdesc, i) ((tupdesc)->attrs[(i)])
+
+/* Complete vacuum/AM result types now that BlockNumber/Relation exist */
+struct IndexBulkDeleteResult
+{
+	BlockNumber num_pages;
+	double		num_index_tuples;
+	BlockNumber pages_removed;
+	double		tuples_removed;
+	BlockNumber pages_deleted;
+	BlockNumber pages_newly_deleted;
+	BlockNumber pages_free;
+};
+
+struct IndexVacuumInfo
+{
+	Relation	index;
+	bool		analyze_only;
+	bool		report_progress;
+	bool		estimated_count;
+	int			message_level;
+	double		num_heap_tuples;
+	BufferAccessStrategy strategy;
+};
 
 /* ---- ArrayType / ARR_* shims to let pgvector code parse and do basic 1-d float work ---- */
 /* The project's ArrayType is different (chunked/LOB oriented). We provide the
@@ -320,4 +344,244 @@ extern Datum  Float8GetDatum(float8 X);
 #ifndef DatumGetPointer
 #define DatumGetPointer(X)  ((Pointer) (X))
 #endif
+
+/* ----------------------------------------------------------------
+ * Weaver buffer manager compatibility (no GenericXLog / ReadBufferExtended)
+ * ---------------------------------------------------------------- */
+#ifndef BUFFER_UNLOCK
+#define BUFFER_UNLOCK BUFFER_LOCK_UNLOCK
+#endif
+#ifndef BUFFER_NOLOCK
+#define BUFFER_NOLOCK BUFFER_LOCK_UNLOCK
+#endif
+#ifndef RBM_NORMAL
+#define RBM_NORMAL 0
+#endif
+
+/* Forks ignored on Weaver (single-fork storage); P_NEW works via ReadBuffer */
+#ifndef ReadBufferExtended
+#define ReadBufferExtended(rel, forkNum, blockNum, mode, strategy) \
+	ReadBuffer((rel), (blockNum))
+#endif
+
+#ifndef MarkBufferDirty
+#define MarkBufferDirty(buf) ((void) (buf))
+#endif
+
+/* Prefer call-site rewrites with Relation; these macros assume `index` in scope */
+#ifndef UnlockReleaseBuffer
+#define UnlockReleaseBuffer(buf) \
+	do { \
+		LockBuffer(index, (buf), BUFFER_LOCK_UNLOCK); \
+		ReleaseBuffer(index, (buf)); \
+	} while (0)
+#endif
+
+#ifndef LockBufferForCleanup
+#define LockBufferForCleanup(buf) \
+	LockBuffer(index, (buf), BUFFER_LOCK_EXCLUSIVE)
+#endif
+
+
+
+/* === PGVECTOR_AM_COMPAT_EXTRA === */
+#ifndef CHECK_FOR_INTERRUPTS
+#define CHECK_FOR_INTERRUPTS() ((void)0)
+#endif
+#ifndef unlikely
+#define unlikely(x) (x)
+#endif
+#ifndef likely
+#define likely(x) (x)
+#endif
+
+#ifndef maintenance_work_mem
+#define maintenance_work_mem (1024)
+#endif
+#ifndef work_mem
+#define work_mem maintenance_work_mem
+#endif
+
+#ifndef MCXT_ALLOC_HUGE
+#define MCXT_ALLOC_HUGE 0
+#endif
+#ifndef MCXT_ALLOC_ZERO
+#define MCXT_ALLOC_ZERO 1
+#endif
+
+#ifndef SizeOfPageHeaderData
+#define SizeOfPageHeaderData sizeof(PageHeaderData)
+#endif
+
+#ifndef BAS_BULKREAD
+#define BAS_BULKREAD 1
+#endif
+
+#ifndef index_form_tuple
+#define index_form_tuple index_formtuple
+#endif
+
+#ifndef RelationGetNumberOfBlocksInFork
+#define RelationGetNumberOfBlocksInFork(rel, fork) RelationGetNumberOfBlocks(rel)
+#endif
+
+#ifndef Float4ToHalfUnchecked
+#define Float4ToHalfUnchecked(f) Float4ToHalf(f)
+#endif
+
+/* Relation fields missing on Weaver */
+#ifndef InvalidOid
+/* provided by postgres headers later */
+#endif
+
+/* Collation / options not present on RelationData — rewrite via macros on common exprs is hard;
+ * provide helper macros used after source patches. */
+
+static inline void *
+palloc_extended(Size size, int flags)
+{
+	void *p = palloc(size);
+	if ((flags) & MCXT_ALLOC_ZERO)
+		MemSet(p, 0, size);
+	return p;
+}
+
+static inline void
+MemoryContextReset(MemoryContext context)
+{
+	(void) context;
+	/* Weaver has ResetAndDeleteChildren; no-op is enough for compile-first */
+}
+
+#ifndef FunctionCall0Coll
+#define FunctionCall0Coll(flinfo, collation) \
+	(DirectFunctionCall1((flinfo)->fn_addr, (Datum)0))
+#endif
+#ifndef FunctionCall1Coll
+#define FunctionCall1Coll(flinfo, collation, arg1) \
+	(DirectFunctionCall1((flinfo)->fn_addr, (arg1)))
+#endif
+
+static inline Datum
+FunctionCall2Coll(FmgrInfo *flinfo, Oid collation, Datum arg1, Datum arg2)
+{
+	typedef Datum (*pgvector_fn2) (Datum, Datum);
+	pgvector_fn2 fn = (pgvector_fn2) fmgr_faddr(flinfo);
+
+	(void) collation;
+	return fn(arg1, arg2);
+}
+
+static inline BufferAccessStrategy
+GetAccessStrategy(int purpose)
+{
+	(void) purpose;
+	return (BufferAccessStrategy) 0;
+}
+
+static inline void
+FreeAccessStrategy(BufferAccessStrategy strategy)
+{
+	(void) strategy;
+}
+
+static inline void
+LockRelationForExtension(Relation rel, LOCKMODE mode)
+{
+	(void) rel; (void) mode;
+}
+
+static inline void
+UnlockRelationForExtension(Relation rel, LOCKMODE mode)
+{
+	(void) rel; (void) mode;
+}
+
+static inline void
+vacuum_delay_point(void)
+{
+}
+
+static inline void
+PageIndexMultiDelete(Page page, OffsetNumber *itemnos, int nitems)
+{
+	(void) page; (void) itemnos; (void) nitems;
+}
+
+static inline bool
+PageIndexTupleOverwrite(Page page, OffsetNumber off, Item item, Size size)
+{
+	(void) page; (void) off; (void) item; (void) size;
+	return true;
+}
+
+static inline Size
+PageGetExactFreeSpace(Page page)
+{
+	return PageGetFreeSpace(page);
+}
+
+static inline void
+log_newpage_range(Relation rel, ForkNumber fork, BlockNumber start, BlockNumber end, bool page_std)
+{
+	(void) rel; (void) fork; (void) start; (void) end; (void) page_std;
+}
+
+static inline void
+pgstat_progress_update_param(int index, int64 val)
+{
+	(void) index; (void) val;
+}
+
+static inline Size
+MemoryContextMemAllocated(MemoryContext context, bool recurse)
+{
+	(void) context;
+	(void) recurse;
+	return 0;
+}
+
+#include "pgvector_index.h"
+#include "access/itup.h"
+
+/* Parallel / progress stubs; index build scan in pgvector_executor_port.h */
+
+static inline int
+plan_create_index_workers(Oid heapId, Oid indexId)
+{
+	(void) heapId; (void) indexId;
+	return 0;
+}
+
+static inline Size
+ParallelEstimateShared(Relation heap, void *snapshot)
+{
+	(void) heap; (void) snapshot;
+	return 0;
+}
+
+static inline void
+table_parallelscan_initialize(Relation heap, void *pscan, void *snapshot)
+{
+	(void) heap; (void) pscan; (void) snapshot;
+}
+
+typedef struct MemoryContextData *MemoryContext; /* may already exist */
+
+#ifndef GenerationContextCreate
+#define GenerationContextCreate(parent, name, blockSize) \
+	AllocSetContextCreate((parent), (name), ALLOCSET_DEFAULT_SIZES)
+#endif
+
+#ifndef INT64_FORMAT
+#define INT64_FORMAT "%lld"
+#endif
+
+#ifndef Max
+#define Max(x,y) ((x) > (y) ? (x) : (y))
+#endif
+#ifndef Min
+#define Min(x,y) ((x) < (y) ? (x) : (y))
+#endif
+
 

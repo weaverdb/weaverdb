@@ -45,6 +45,12 @@ RelationSetIndexSupport(Relation relation,
 	Assert(PointerIsValid(relation));
 	Assert(IndexStrategyIsValid(strategy));
 
+	if (relation->rd_procinfo)
+	{
+		pfree(relation->rd_procinfo);
+		relation->rd_procinfo = NULL;
+	}
+
 	relation->rd_istrat = strategy;
 	relation->rd_support = support;
 }

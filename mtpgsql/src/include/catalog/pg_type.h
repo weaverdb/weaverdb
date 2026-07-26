@@ -168,6 +168,14 @@ DESCR("single character");
 DATA(insert OID = 1841 (	schar	   PGUID  1   1 t b t \x2C 0   0 charin charout charin charout c _null_ ));
 DESCR("single character");
 
+DATA(insert OID = 1842 (	vector	   PGUID -1  -1 f b t \x2C 0  18 vector_in vector_out vector_in vector_out i _null_ ));
+DESCR("float vector for similarity search");
+#define VECTOROID		1842
+
+DATA(insert OID = 1843 (  _vector	 PGUID -1  -1 f b t \x2C 0 1842 array_in array_out array_in array_out i _null_ ));
+DESCR("array of vector");
+#define VECTORARRAYOID	1843
+
 DATA(insert OID = 19 (	name	   PGUID NAMEDATALEN NAMEDATALEN  f b t \x2C 0	18 namein nameout namein nameout i _null_ ));
 DESCR("64-character type for storing system identifiers");
 #define NAMEOID			19

@@ -6,7 +6,13 @@
 #ifndef LIB_PAIRINGHEAP_H
 #define LIB_PAIRINGHEAP_H
 
-#include <stddef.h>   /* for offsetof in the container macros */
+#include <stddef.h>
+
+struct pairingheap;
+
+#ifndef palloc0
+extern void *palloc0(size_t size);
+#endif
 
 typedef struct pairingheap_node
 {
@@ -34,5 +40,42 @@ struct pairingheap
 /* The node embedded in candidate structs */
 #define pairingheap_node_init(node)		((void)0)
 #define pairingheap_is_empty(h)			((h)->root == NULL)
+
+static inline pairingheap *
+pairingheap_allocate(int (*compare) (const pairingheap_node *, const pairingheap_node *, void *),
+					 void *arg)
+{
+	(void) compare;
+	(void) arg;
+	return (pairingheap *) palloc0(sizeof(pairingheap));
+}
+
+static inline void
+pairingheap_add(pairingheap *heap, pairingheap_node *node)
+{
+	(void) heap;
+	(void) node;
+}
+
+static inline pairingheap_node *
+pairingheap_first(pairingheap *heap)
+{
+	return heap->root;
+}
+
+static inline pairingheap_node *
+pairingheap_remove_first(pairingheap *heap)
+{
+	pairingheap_node *n = heap->root;
+	heap->root = NULL;
+	return n;
+}
+
+static inline void
+pairingheap_reset(pairingheap *heap)
+{
+	if (heap)
+		heap->root = NULL;
+}
 
 #endif /* LIB_PAIRINGHEAP_H */

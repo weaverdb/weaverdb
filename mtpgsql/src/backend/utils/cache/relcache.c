@@ -1446,6 +1446,9 @@ RelationClearRelation(Relation relation, bool rebuildIt) {
         pfree(relation->rd_istrat);
     if (relation->rd_support)
         pfree(relation->rd_support);
+    if (relation->rd_procinfo)
+        pfree(relation->rd_procinfo);
+    relation->rd_procinfo = NULL;
     if (relation->rd_indexlist) {
         freeList(relation->rd_indexlist);
     }

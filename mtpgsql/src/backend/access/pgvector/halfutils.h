@@ -12,6 +12,4 @@ static inline float HalfvecInnerProduct(int dim, half *ax, half *bx) { return 0.
 static inline double HalfvecCosineSimilarity(int dim, half *ax, half *bx) { return 0.0; }
 static inline float HalfvecL1Distance(int dim, half *ax, half *bx) { return 0.0f; }
 
-void HalfvecInit(void) { }
-
 #endif /* HALFUTILS_H */

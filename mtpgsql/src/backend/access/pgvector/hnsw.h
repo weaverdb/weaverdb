@@ -8,8 +8,7 @@
 #include "access/genam.h"
 #include "access/parallel.h"
 #include "lib/pairingheap.h"
-#include "nodes/execnodes.h"
-#include "port.h"				/* for random() */
+#include "pgvector_index.h"
 #include "storage/bufpage.h"
 #include "storage/condition_variable.h"
 #include "storage/lwlock.h"
@@ -18,9 +17,6 @@
 #include "utils/sampling.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM >= 190000
-typedef Pointer Item;
-#endif
 
 #define HNSW_MAX_DIM 2000
 #define HNSW_MAX_NNZ 1000
@@ -78,13 +74,8 @@ typedef Pointer Item;
 #define HnswPageGetOpaque(page)	((HnswPageOpaque) PageGetSpecialPointer(page))
 #define HnswPageGetMeta(page)	((HnswMetaPageData *) PageGetContents(page))
 
-#if PG_VERSION_NUM >= 150000
-#define RandomDouble() pg_prng_double(&pg_global_prng_state)
-#define SeedRandom(seed) pg_prng_seed(&pg_global_prng_state, seed)
-#else
 #define RandomDouble() (((double) random()) / MAX_RANDOM_VALUE)
 #define SeedRandom(seed) srandom(seed)
-#endif
 
 #define HnswIsElementTuple(tup) ((tup)->type == HNSW_ELEMENT_TUPLE_TYPE)
 #define HnswIsNeighborTuple(tup) ((tup)->type == HNSW_NEIGHBOR_TUPLE_TYPE)
@@ -103,9 +94,7 @@ typedef Pointer Item;
 
 #define HnswGetValue(base, element) PointerGetDatum(HnswPtrAccess(base, (element)->value))
 
-#if PG_VERSION_NUM < 140005
 #define relptr_offset(rp) ((rp).relptr_off - 1)
-#endif
 
 /* Pointer macros */
 #define HnswPtrAccess(base, hp) ((base) == NULL ? (hp).ptr : relptr_access(base, (hp).relptr))
@@ -117,19 +106,30 @@ typedef Pointer Item;
 #define HnswPtrPointer(hp) (hp).ptr
 #define HnswPtrOffset(hp) relptr_offset((hp).relptr)
 
-/* Variables */
-extern int	hnsw_ef_search;
-extern int	hnsw_iterative_scan;
-extern int	hnsw_max_scan_tuples;
-extern double hnsw_scan_mem_multiplier;
-extern int	hnsw_lock_tranche_id;
-
 typedef enum HnswIterativeScanMode
 {
 	HNSW_ITERATIVE_SCAN_OFF,
 	HNSW_ITERATIVE_SCAN_RELAXED,
 	HNSW_ITERATIVE_SCAN_STRICT
 }			HnswIterativeScanMode;
+
+typedef struct HnswGlobals
+{
+	int			ef_search;
+	int			iterative_scan;
+	int			max_scan_tuples;
+	double		scan_mem_multiplier;
+} HnswGlobals;
+
+HnswGlobals *HnswGetEnv(void);
+
+#define hnsw_ef_search           (HnswGetEnv()->ef_search)
+#define hnsw_iterative_scan      (HnswGetEnv()->iterative_scan)
+#define hnsw_max_scan_tuples     (HnswGetEnv()->max_scan_tuples)
+#define hnsw_scan_mem_multiplier (HnswGetEnv()->scan_mem_multiplier)
+
+/* Process-wide LWLock tranche (shared memory), not per-thread */
+extern int	hnsw_lock_tranche_id;
 
 typedef struct HnswElementData HnswElementData;
 typedef struct HnswNeighborArray HnswNeighborArray;
@@ -278,7 +278,7 @@ typedef struct HnswBuildState
 	/* Info */
 	Relation	heap;
 	Relation	index;
-	IndexInfo  *indexInfo;
+	PgvectorIndexInfo  *indexInfo;
 	ForkNumber	forkNum;
 	const		HnswTypeInfo *typeInfo;
 
@@ -388,6 +388,11 @@ typedef struct HnswScanOpaqueData
 
 	/* Support functions */
 	HnswSupport support;
+
+	/* PG7 scan bridge (order-by / snapshot not on IndexScanDescData) */
+	ScanKeyData orderByData;
+	int			numberOfOrderBys;
+	Snapshot	xs_snapshot;
 }			HnswScanOpaqueData;
 
 typedef HnswScanOpaqueData * HnswScanOpaque;
@@ -425,6 +430,7 @@ void		HnswInitSupport(HnswSupport * support, Relation index);
 Datum		HnswNormValue(const HnswTypeInfo * typeInfo, Oid collation, Datum value);
 bool		HnswCheckNorm(HnswSupport * support, Datum value);
 Buffer		HnswNewBuffer(Relation index, ForkNumber forkNum);
+void            HnswWriteBuffer(Relation index, Buffer buf);
 void		HnswInitPage(Buffer buf, Page page);
 void		HnswInit(void);
 List	   *HnswSearchLayer(char *base, HnswQuery * q, List *ep, int ef, int lc, Relation index, HnswSupport * support, int m, bool inserting, HnswElement skipElement, visited_hash * v, pairingheap **discarded, bool initVisited, int64 *tuples);
@@ -452,21 +458,18 @@ void		HnswInitLockTranche(void);
 const		HnswTypeInfo *HnswGetTypeInfo(Relation index);
 PGDLLEXPORT void HnswParallelBuildMain(dsm_segment *seg, shm_toc *toc);
 
-/* Index access methods */
-IndexBuildResult *hnswbuild(Relation heap, Relation index, IndexInfo *indexInfo);
-void		hnswbuildempty(Relation index);
-bool		hnswinsert(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid, Relation heap, IndexUniqueCheck checkUnique
-#if PG_VERSION_NUM >= 140000
-					   ,bool indexUnchanged
-#endif
-					   ,IndexInfo *indexInfo
-);
-IndexBulkDeleteResult *hnswbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback, void *callback_state);
-IndexBulkDeleteResult *hnswvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats);
-IndexScanDesc hnswbeginscan(Relation index, int nkeys, int norderbys);
-void		hnswrescan(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys);
-bool		hnswgettuple(IndexScanDesc scan, ScanDirection dir);
-void		hnswendscan(IndexScanDesc scan);
+/* Index access method implementation (PG7 entry points in pgvector_pg7_am.c) */
+IndexBuildResult *hnsw_buildindex(Relation heap, Relation index, PgvectorIndexInfo *indexInfo);
+void		hnsw_buildemptyindex(Relation index);
+bool		hnsw_insertindex(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid,
+						  Relation heap, IndexUniqueCheck checkUnique, PgvectorIndexInfo *indexInfo);
+IndexBulkDeleteResult *hnsw_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
+											IndexBulkDeleteCallback callback, void *callback_state);
+IndexBulkDeleteResult *hnsw_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats);
+IndexScanDesc hnsw_beginscanindex(Relation index, int nkeys, int norderbys);
+void		hnsw_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys);
+bool		hnsw_gettupleindex(IndexScanDesc scan, ScanDirection dir);
+void		hnsw_endscanindex(IndexScanDesc scan);
 
 static inline HnswNeighborArray *
 HnswGetNeighbors(char *base, HnswElement element, int lc)

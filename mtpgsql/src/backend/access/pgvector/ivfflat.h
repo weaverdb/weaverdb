@@ -4,30 +4,16 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "access/generic_xlog.h"
 #include "access/parallel.h"
 #include "lib/pairingheap.h"
-#include "nodes/execnodes.h"
-#include "port.h"				/* for random() */
+#include "pgvector_index.h"
 #include "storage/condition_variable.h"
 #include "utils/sampling.h"
 #include "utils/tuplesort.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM >= 160000
-#include "varatt.h"
-#endif
-
-#if PG_VERSION_NUM >= 150000
-#include "common/pg_prng.h"
-#endif
-
 #ifdef IVFFLAT_BENCH
 #include "portability/instr_time.h"
-#endif
-
-#if PG_VERSION_NUM >= 190000
-typedef Pointer Item;
 #endif
 
 #define IVFFLAT_MAX_DIM 2000
@@ -79,20 +65,23 @@ typedef Pointer Item;
 #define IvfflatBench(name, code) (code)
 #endif
 
-#if PG_VERSION_NUM >= 150000
-#define RandomDouble() pg_prng_double(&pg_global_prng_state)
-#define RandomInt() pg_prng_uint32(&pg_global_prng_state)
-#define SeedRandom(seed) pg_prng_seed(&pg_global_prng_state, seed)
-#else
 #define RandomDouble() (((double) random()) / MAX_RANDOM_VALUE)
 #define RandomInt() random()
 #define SeedRandom(seed) srandom(seed)
-#endif
 
-/* Variables */
-extern int	ivfflat_probes;
-extern int	ivfflat_iterative_scan;
-extern int	ivfflat_max_probes;
+/* Per-thread scan settings (via IvfflatGetEnv) */
+typedef struct IvfflatGlobals
+{
+	int			probes;
+	int			iterative_scan;
+	int			max_probes;
+} IvfflatGlobals;
+
+IvfflatGlobals *IvfflatGetEnv(void);
+
+#define ivfflat_probes           (IvfflatGetEnv()->probes)
+#define ivfflat_iterative_scan   (IvfflatGetEnv()->iterative_scan)
+#define ivfflat_max_probes       (IvfflatGetEnv()->max_probes)
 
 typedef enum IvfflatIterativeScanMode
 {
@@ -182,7 +171,7 @@ typedef struct IvfflatBuildState
 	/* Info */
 	Relation	heap;
 	Relation	index;
-	IndexInfo  *indexInfo;
+	PgvectorIndexInfo  *indexInfo;
 	const		IvfflatTypeInfo *typeInfo;
 	TupleDesc	tupdesc;
 
@@ -292,6 +281,11 @@ typedef struct IvfflatScanOpaqueData
 	BlockNumber *listPages;
 	int			listIndex;
 	IvfflatScanList *lists;
+
+	/* PG7 scan bridge: order-by / snapshot not in IndexScanDescData */
+	ScanKeyData orderByData;
+	int			numberOfOrderBys;
+	Snapshot	xs_snapshot;
 }			IvfflatScanOpaqueData;
 
 typedef IvfflatScanOpaqueData * IvfflatScanOpaque;
@@ -322,29 +316,26 @@ bool		IvfflatCheckNorm(FmgrInfo *procinfo, Oid collation, Datum value);
 int			IvfflatGetLists(Relation index);
 void		IvfflatGetMetaPageInfo(Relation index, int *lists, int *dimensions);
 void		IvfflatUpdateList(Relation index, ListInfo listInfo, BlockNumber insertPage, BlockNumber originalInsertPage, BlockNumber startPage, ForkNumber forkNum);
-void		IvfflatCommitBuffer(Buffer buf, GenericXLogState *state);
-void		IvfflatAppendPage(Relation index, Buffer *buf, Page *page, GenericXLogState **state, ForkNumber forkNum);
+void		IvfflatCommitBuffer(Relation index, Buffer buf);
+void		IvfflatAppendPage(Relation index, Buffer *buf, Page *page, ForkNumber forkNum);
 Buffer		IvfflatNewBuffer(Relation index, ForkNumber forkNum);
 void		IvfflatInitPage(Buffer buf, Page page);
-void		IvfflatInitRegisterPage(Relation index, Buffer *buf, Page *page, GenericXLogState **state);
+void		IvfflatInitRegisterPage(Relation index, Buffer *buf, Page *page);
 void		IvfflatInit(void);
 const		IvfflatTypeInfo *IvfflatGetTypeInfo(Relation index);
 PGDLLEXPORT void IvfflatParallelBuildMain(dsm_segment *seg, shm_toc *toc);
 
-/* Index access methods */
-IndexBuildResult *ivfflatbuild(Relation heap, Relation index, IndexInfo *indexInfo);
-void		ivfflatbuildempty(Relation index);
-bool		ivfflatinsert(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid, Relation heap, IndexUniqueCheck checkUnique
-#if PG_VERSION_NUM >= 140000
-						  ,bool indexUnchanged
-#endif
-						  ,IndexInfo *indexInfo
-);
-IndexBulkDeleteResult *ivfflatbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback, void *callback_state);
-IndexBulkDeleteResult *ivfflatvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats);
-IndexScanDesc ivfflatbeginscan(Relation index, int nkeys, int norderbys);
-void		ivfflatrescan(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys);
-bool		ivfflatgettuple(IndexScanDesc scan, ScanDirection dir);
-void		ivfflatendscan(IndexScanDesc scan);
+/* Index access method implementation (called from pgvector_pg7_am.c entry points) */
+IndexBuildResult *ivfflat_buildindex(Relation heap, Relation index, PgvectorIndexInfo *indexInfo);
+void		ivfflat_buildemptyindex(Relation index);
+bool		ivfflat_insertindex(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid, Relation heap, IndexUniqueCheck checkUnique,
+							PgvectorIndexInfo *indexInfo);
+IndexBulkDeleteResult *ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
+											   IndexBulkDeleteCallback callback, void *callback_state);
+IndexBulkDeleteResult *ivfflat_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats);
+IndexScanDesc ivfflat_beginscanindex(Relation index, int nkeys, int norderbys);
+void		ivfflat_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys);
+bool		ivfflat_gettupleindex(IndexScanDesc scan, ScanDirection dir);
+void		ivfflat_endscanindex(IndexScanDesc scan);
 
 #endif

@@ -13,22 +13,14 @@
 #include "ivfflat.h"
 #include "lib/stringinfo.h"
 #include "libpq/pqformat.h"
-#include "port.h"				/* for strtof() */
 #include "sparsevec.h"
 #include "utils/array.h"
 #include "utils/float.h"
-#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/varbit.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
-
-#if PG_VERSION_NUM >= 170000
-#include "parser/scansup.h"
-#endif
 
 #define STATE_DIMS(x) (ARR_DIMS(x)[0] - 1)
 #define CreateStateDatums(dim) palloc(sizeof(Datum) * (dim + 1))
@@ -39,11 +31,7 @@
 #define VECTOR_TARGET_CLONES
 #endif
 
-#if PG_VERSION_NUM >= 180000
-PG_MODULE_MAGIC_EXT(.name = "vector", .version = "0.8.2");
-#else
 PG_MODULE_MAGIC;
-#endif
 
 /*
  * Initialize index options and variables
@@ -133,9 +121,6 @@ InitVector(int dim)
 	return result;
 }
 
-#if PG_VERSION_NUM >= 170000
-#define vector_isspace(ch) scanner_isspace(ch)
-#else
 static inline bool
 vector_isspace(char ch)
 {
@@ -148,7 +133,6 @@ vector_isspace(char ch)
 		return true;
 	return false;
 }
-#endif
 
 /*
  * Check state array

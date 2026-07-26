@@ -180,7 +180,9 @@ typedef struct Environment {
     GlobalsCache                 tuplesort_globals;
     GlobalsCache                 xlog_globals;
     GlobalsCache                 pathcat_globals;
-    GlobalsCache                 smgr_globals;    
+    GlobalsCache                 smgr_globals;
+    GlobalsCache                 hnsw_globals;
+    GlobalsCache                 ivfflat_globals;
 #endif
     HTAB*   			global_hash;
     EnvPointer                  parent;
