@@ -63,7 +63,6 @@ typedef int (*transferfunc)(void* userenv, int varType, void *varAdd, int varSiz
 
 typedef struct Connection* OpaqueWConn;
 typedef struct preparedplan* OpaquePreparedStatement;
-typedef struct commbuffer*   Pipe;
 
 LIB_EXTERN OpaqueWConn WCreateConnection(const char* name, const char * paslong, const char* connect);
 LIB_EXTERN OpaqueWConn WCreateSubConnection(OpaqueWConn  conn);
@@ -104,6 +103,13 @@ LIB_EXTERN long WStreamExec(OpaqueWConn conn,const char* statement);
 
 LIB_EXTERN void WConnectStdIO(OpaqueWConn conn,void* pipeargs,transferfunc in,transferfunc out);
 LIB_EXTERN void* WDisconnectStdIO(OpaqueWConn conn);
+
+/*
+ * FFM / pure-Java function invoker support.
+ * Registers a function pointer (upcall stub from Java) that the engine will use
+ * to invoke LANGUAGE 'java' procedures instead of (or in addition to) the old JNI path.
+ */
+LIB_EXTERN void WRegisterJavaFunctionInvoker(void* invokerFn);
 
 #ifdef __cplusplus
 }

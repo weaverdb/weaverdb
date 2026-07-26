@@ -24,25 +24,13 @@ import java.util.function.Supplier;
  */
 public class Output<T> {
     private final Supplier<String> name;
-    private final Getter<T> source;
+    private final Getter<? extends T> source;
     private final int index;
     
-    Output(BoundOutput<? extends T> base) {
-        source = base::get;
-        name = base::getName;
-        index = base.getIndex();
-    }
-    
-    Output(BoundOutputChannel<? extends T> base) {
-        source = base::value;
-        name = base::getName;
-        index = base.getIndex();
-    }
-    
-    Output(BoundOutputReceiver<? extends T> base) {
-        source = base::value;
-        name = base::getName;
-        index = base.getIndex();
+    public Output(Supplier<String> column, Getter<? extends T> source, int index) {
+        this.name = column;
+        this.source = source;
+        this.index = index;
     }
     
     public String getName() {
@@ -53,16 +41,12 @@ public class Output<T> {
         return index;
     }
     
-    public T value() throws ExecutionException {
-        return source.value();
-    }
-    
     public T get() throws ExecutionException {
         return source.value();
     }
     
     @FunctionalInterface
-    private static interface Getter<T> {
+    public static interface Getter<T> {
         T value() throws ExecutionException;
     }
 

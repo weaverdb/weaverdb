@@ -17,8 +17,7 @@ jar {
 javadoc {
     source = sourceSets.main.java
     exclude "org/weaverdb/sample/**"
-    exclude "org/weaverdb/WeaverReferenceFactory17.java"
-    exclude "org/weaverdb/DBReferenceFactory.java"
+    exclude "org/weaverdb/base/WeaverReferenceFactory17.java"
     exclude "org/weaverdb/WeaverCmdLine.java"
 }
 
@@ -48,19 +47,28 @@ jar {
 tasks.named('test', Test) {
     useJUnitPlatform()
 
+    systemProperty 'java.library.path', project.file('build/mtpg/lib').absolutePath
+
     maxHeapSize = '1G'
     javaLauncher = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 
+    jvmArgs '-verbose:jni', '--enable-native-access=ALL-UNNAMED'
     testLogging {
         events "passed"
     }
 }
 
-task printClasspath {
+tasks.register('printClasspath') {
     doLast {
         configurations.testRuntimeClasspath.each { println it }
+    }
+}
+
+tasks.register('printJavaVersion') {
+    doLast {
+        println "Java Toolchain Version: ${java.toolchain.languageVersion.get()}"
     }
 }
 

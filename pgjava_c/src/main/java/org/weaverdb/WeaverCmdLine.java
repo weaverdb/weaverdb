@@ -14,9 +14,9 @@
 package org.weaverdb;
 
 class WeaverCmdLine {
-    private static native int cmd(String args[]);
+    private static native int cmd(String[] args);
     
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         cmd(args);
     }
 }

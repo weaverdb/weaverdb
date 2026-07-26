@@ -3,6 +3,7 @@ _WCreateSubConnection
 _WDestroyConnection
 _WBegin
 _WPrepareStatement
+_WRegisterJavaFunctionInvoker
 _WDestroyPreparedStatement
 _WStatement
 _WBindTransfer 
@@ -38,3 +39,6 @@ _isinitialized
 _prepareforshutdown
 _wrapupweaverbackend
 _singleusershutdown
+_SetJVM
+_SetJavaObjectLoader
+_JNI_OnLoad

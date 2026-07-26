@@ -14,6 +14,8 @@
 
 package org.weaverdb;
 
+import org.weaverdb.base.*;
+import org.weaverdb.*;
 import java.io.*;
 import java.lang.reflect.*;
 

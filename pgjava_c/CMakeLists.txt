@@ -1,41 +1,40 @@
 
 find_package(JNI REQUIRED)
 
-add_library(weaver SHARED 
+add_library(weaver_jni SHARED 
         WeaverStmtManager.c 
 	BaseWeaverConnection.c 
 	WeaverValueExtractor.c
 )
 
-target_link_libraries(weaver PRIVATE mtpg)
+target_link_libraries(weaver_jni PRIVATE weaver)
 
-target_compile_definitions(weaver PRIVATE WEAVER_JAVA)
+target_compile_definitions(weaver_jni PRIVATE WEAVER_JAVA)
 
-add_dependencies(weaver mtpg)
 
 message("Using ${CMAKE_C_COMPILER_ID} to link library")
 if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
-    target_compile_definitions(weaver PRIVATE LIB_EXTERN=extern)
-    target_link_options(weaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+    target_compile_definitions(weaver_jni PRIVATE LIB_EXTERN=extern)
+    target_link_options(weaver_jni PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
 elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    target_compile_definitions(weaver PRIVATE LIB_EXTERN=extern)
-    target_link_options(weaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+    target_compile_definitions(weaver_jni PRIVATE LIB_EXTERN=extern)
+    target_link_options(weaver_jni PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
 elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    target_compile_definitions(weaver PRIVATE LIB_EXTERN=__attribute__((__visibility__("default"))))
-    target_link_options(weaver PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
+    target_compile_definitions(weaver_jni PRIVATE LIB_EXTERN=__attribute__((__visibility__("default"))))
+    target_link_options(weaver_jni PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
 endif()
 
 if (JNI_FOUND)
     message (STATUS "JNI_INCLUDE_DIRS=${JNI_INCLUDE_DIRS}")
     message (STATUS "JNI_LIBRARIES=${JNI_LIBRARIES}")
-    target_include_directories(weaver PRIVATE ${JNI_INCLUDE_DIRS})
+    target_include_directories(weaver_jni PRIVATE ${JNI_INCLUDE_DIRS})
 endif()
 
-add_custom_command(
-        TARGET weaver POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-                $<TARGET_FILE:weaver>
-                ${CMAKE_CURRENT_SOURCE_DIR}/)
+#add_custom_command(
+#        TARGET weaver_jni POST_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E copy
+#                $<TARGET_FILE:weaver_jni>
+#                ${CMAKE_CURRENT_SOURCE_DIR}/)
 
 #set_target_properties(weaver PROPERTIES 
 #    PUBLIC_HEADER ../include/env/WeaverInterface.h ../include/env/connectionutil.h

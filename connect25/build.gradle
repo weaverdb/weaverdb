@@ -1,0 +1,74 @@
+
+plugins {
+   id 'java'
+   id 'maven-publish'
+}
+
+description = 'weaver connector for java25'
+
+jar {
+    archiveBaseName = 'weaver25'
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'com.drewnoakes:metadata-extractor:2.19.0'
+    implementation project(':pgjava_c')
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+jar {
+    manifest {
+        attributes (
+            "Runtime-Version": Runtime.version(),
+            "Language-Version": project.java.toolchain.languageVersion
+        )
+    }
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+
+    systemProperty 'java.library.path', project.file('build/mtpg/lib').absolutePath
+
+    maxHeapSize = '1G'
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+
+    testLogging {
+        showStandardStreams = true
+    }
+}
+
+task printClasspath {
+    doLast {
+        configurations.testRuntimeClasspath.each { println it }
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'org.weaverdb'
+            version = '1.0'
+            artifactId = 'connect25'
+
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = "myrepo"
+            url = layout.buildDirectory.dir('repo')
+        }
+    }
+}

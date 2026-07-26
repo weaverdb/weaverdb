@@ -44,7 +44,8 @@ public class TestVersioning {
     
     @org.junit.jupiter.api.Test
     public void testAutoMethod() throws Exception {
-        DBReferenceFactory factory = DBReference.loader;
-        assertNotNull(factory);
+        // lack of loading will result in NPE
+        boolean fa = DBReferenceManager.hasLiveConnections();
+        assertNotNull(fa);
     }
 }

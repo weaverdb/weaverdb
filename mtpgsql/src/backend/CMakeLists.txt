@@ -69,20 +69,21 @@ add_library(mtpg STATIC
     $<TARGET_OBJECTS:version>  
 )
 
-#add_library(rweaver SHARED empty.c)
+add_library(weaver SHARED empty.c)
 
-#target_link_libraries(rweaver PRIVATE mtpg)
+target_link_libraries(weaver PRIVATE mtpg)
 
 #message("Using ${CMAKE_C_COMPILER_ID} to link library")
-#if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
-#    target_link_options(rweaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
-#elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-#    target_link_options(rweaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
-#elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-#    target_link_options(rweaver PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
-#endif()
+if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+    target_link_options(weaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+    target_link_options(weaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    target_link_options(weaver PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
+endif()
 
 target_include_directories(mtpg INTERFACE ../include/interface)
+target_include_directories(weaver INTERFACE ../include/interface)
 
 add_executable(postgres 
     $<TARGET_OBJECTS:main> 

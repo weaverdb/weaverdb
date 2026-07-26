@@ -47,11 +47,14 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.exception = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/ExecutionException"));
         CachedClasses.ecstor = (*env)->GetMethodID(env,CachedClasses.exception,"<init>","(Ljava/lang/String;)V");
         CachedClasses.suppressed = (*env)->GetMethodID(env,CachedClasses.exception,"addSuppressed","(Ljava/lang/Throwable;)V");
-        CachedClasses.truncation = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BinaryTruncation"));
+        CachedClasses.truncation = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BinaryTruncation"));
         /*  boundary objects */
-        CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BaseWeaverConnection"));
-        CachedClasses.boundin = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BoundInput"));
-        CachedClasses.boundout = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/BoundOutput"));
+        CachedClasses.talker = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BaseWeaverConnection"));
+        CachedClasses.boundin = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BoundInput"));
+        CachedClasses.boundinchannel = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BoundInputChannel"));
+        CachedClasses.boundout = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BoundOutput"));
+        CachedClasses.boundoutchannel = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BoundOutputChannel"));
+        CachedClasses.boundoutreceiver = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"org/weaverdb/base/BoundOutputReceiver"));
         /*  field ids  */
         CachedClasses.nativePointer = (*env)->GetFieldID(env,CachedClasses.talker,"nativePointer","J");
 
@@ -131,7 +134,7 @@ javacache*  DropCache(JNIEnv* env) {
         return &CachedClasses;
 }
 
-int PassInValue(JNIEnv* env,int bindType, int linkType, int passType,jobject object,void* data, int length) {
+int PassInValue(JNIEnv* env,int passType,jobject object,void* data, int length) {
     if ( (*env)->IsSameObject(env,NULL,object) ) {
         return NULL_VALUE;
     } else {
@@ -424,7 +427,7 @@ static jobject CreateLongField(jlong* var, JNIEnv* env) {
     return (*env)->NewObject(env,Cache->longtype,Cache->createlong,*var);
 }
 
-int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject target, void* data, int length) {
+int PassOutValue(JNIEnv* env,int passType, jobject target, void* data, int length) {
     jobject setval = NULL;
 
     if (target == NULL ) return 0;
@@ -479,7 +482,7 @@ int PassOutValue(JNIEnv* env,int bindType, int linkType, int passType, jobject t
                 break;
             default: {
                 char err[256];
-                snprintf(err,256,"unable to understand type bound:%d link:%d pass:%d",bindType,linkType,passType);
+                snprintf(err,256,"unable to understand type:%d",passType);
                 (*env)->ThrowNew(env,Cache->exception,err);    
                 return 745;
             }

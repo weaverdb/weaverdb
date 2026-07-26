@@ -23,14 +23,14 @@ import java.io.*;
  *
  * @author  mscott
  */
-class ByteWellInputStream extends ByteArrayInputStream {
+public class ByteWellInputStream extends ByteArrayInputStream {
     
     /** Creates a new instance of ByteWellInputStream */
-    ByteWellInputStream() {
+    public ByteWellInputStream() {
         super(new byte[0]);
     }
     
-    ByteWellInputStream(int size) {
+    public ByteWellInputStream(int size) {
         super(new byte[size]);
     }
     

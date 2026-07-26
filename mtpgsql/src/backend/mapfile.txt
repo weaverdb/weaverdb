@@ -5,6 +5,7 @@
                 WDestroyConnection;
                 WBegin;
                 WPrepareStatement;
+                WRegisterJavaFunctionInvoker;
                 WDestroyPreparedStatement;
                 WStatement;
                 WBindTransfer;
@@ -41,6 +42,9 @@
                 prepareforshutdown;
                 wrapupweaverbackend;
                 singleusershutdown;
+                SetJVM;
+                SetJavaObjectLoader;
+                JNI_OnLoad;
 	local:
 		*;
 };
