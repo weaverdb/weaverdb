@@ -954,7 +954,10 @@ InitIndexStrategy(int numatts,
 	 */
 	strsize = AttributeNumberGetIndexStrategySize(numatts, amstrategies);
 
-	strategy = (IndexStrategy)palloc(strsize);
+	if (strsize > 0)
+		strategy = (IndexStrategy) palloc(strsize);
+	else
+		strategy = (IndexStrategy) NULL;
 
 	if (amsupport > 0)
 	{

@@ -166,7 +166,7 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 	}
 
 	/* Add to next offset */
-	if (PageAddItem(page, (Item) itup, itemsz, InvalidOffsetNumber, false) == InvalidOffsetNumber)
+	if (PageAddItem(page, (Item) itup, itemsz, InvalidOffsetNumber, LP_USED) == InvalidOffsetNumber)
 		elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 
 	IvfflatCommitBuffer(index, buf);

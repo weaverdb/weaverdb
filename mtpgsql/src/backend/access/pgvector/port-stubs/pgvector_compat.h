@@ -241,6 +241,8 @@ typedef struct Sharedsort { int dummy; } Sharedsort;
 #include "access/itup.h"
 #include "access/tupdesc.h"
 
+extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
+
 /*
  * PG7 fmgr passes SQL function args as (long, long, ...) and expects char *
  * returns.  pgvector sources use PG13-style PG_GETARG_* / PG_RETURN_* on a
@@ -308,7 +310,15 @@ typedef struct Sharedsort { int dummy; } Sharedsort;
 #define errmsg(...) ""
 #define errdetail(...) ""
 #define ereport(elevel, rest) \
-	elog(ERROR, "pgvector: operation failed")
+	do { \
+		int _pgv_ereport_level = (elevel); \
+		if (_pgv_ereport_level == FATAL || _pgv_ereport_level == REALLYFATAL) \
+			elog(FATAL, "pgvector: operation failed"); \
+		else if (_pgv_ereport_level == ERROR) \
+			elog(ERROR, "pgvector: operation failed"); \
+		else if (_pgv_ereport_level >= NOTICE) \
+			elog(NOTICE, "pgvector notice"); \
+	} while (0)
 
 #undef DirectFunctionCall1
 #undef DirectFunctionCall1Coll
@@ -547,31 +557,34 @@ MemoryContextReset(MemoryContext context)
 static inline Datum
 FunctionCall0Coll(FmgrInfo *flinfo, Oid collation)
 {
-	typedef char *(*pgvector_fn0) (void);
-	pgvector_fn0 fn = (pgvector_fn0) fmgr_faddr(flinfo);
+	FmgrValues	values;
+	bool		isNull = false;
 
 	(void) collation;
-	return (Datum) (long) fn();
+	return (Datum) (long) fmgr_c(flinfo, &values, &isNull);
 }
 #undef FunctionCall1Coll
 static inline Datum
 FunctionCall1Coll(FmgrInfo *flinfo, Oid collation, Datum arg1)
 {
-	typedef char *(*pgvector_fn1) (long);
-	pgvector_fn1 fn = (pgvector_fn1) fmgr_faddr(flinfo);
+	FmgrValues	values;
+	bool		isNull = false;
 
 	(void) collation;
-	return (Datum) (long) fn((long) arg1);
+	values.data[0] = arg1;
+	return (Datum) (long) fmgr_c(flinfo, &values, &isNull);
 }
 
 static inline Datum
 FunctionCall2Coll(FmgrInfo *flinfo, Oid collation, Datum arg1, Datum arg2)
 {
-	typedef char *(*pgvector_fn2) (long, long);
-	pgvector_fn2 fn = (pgvector_fn2) fmgr_faddr_2(flinfo);
+	FmgrValues	values;
+	bool		isNull = false;
 
 	(void) collation;
-	return (Datum) (long) fn((long) arg1, (long) arg2);
+	values.data[0] = arg1;
+	values.data[1] = arg2;
+	return (Datum) (long) fmgr_c(flinfo, &values, &isNull);
 }
 
 static inline BufferAccessStrategy

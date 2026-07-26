@@ -12,6 +12,7 @@
 #include "pgvector_executor_port.h"
 #include "storage/bufmgr.h"
 #include "storage/bufpage.h"
+#include "utils/lsyscache.h"
 
 #undef tuplesort_begin_heap
 #undef tuplesort_puttupleslot
@@ -98,10 +99,16 @@ pgvector_fill_scankey(int nkeys, AttrNumber *attNums, Oid *sortOperators,
 
 	for (i = 0; i < nkeys; i++)
 	{
+		RegProcedure sortproc = get_opcode(sortOperators[i]);
+
+		if (!RegProcedureIsValid(sortproc))
+			elog(ERROR, "pgvector_fill_scankey: no procedure for sort operator %lu",
+				 sortOperators[i]);
+
 		ScanKeyEntryInitialize(&scankeys[i],
 							   0,
 							   attNums[i],
-							   sortOperators[i],
+							   sortproc,
 							   (Datum) 0);
 	}
 }

@@ -32,6 +32,14 @@ public class PgvectorOrderByTest {
     }
 
     @Test
+    public void createIvfflatIndex() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            exec(conn,
+                    "create index pv_ob_j_ivf on pv_ob_j using ivfflat (emb vector_l2_ops) with (lists = 2)");
+        }
+    }
+
+    @Test
     public void plainSelectById() throws Exception {
         assertIds("select id from pv_ob_j", 1, 2, 3, 4);
     }

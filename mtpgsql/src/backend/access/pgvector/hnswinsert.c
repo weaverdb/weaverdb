@@ -291,10 +291,10 @@ AddElementOnDisk(Relation index, HnswElement e, int m, BlockNumber insertPage, B
 	}
 	else
 	{
-		if (PageAddItem(page, (Item) etup, etupSize, InvalidOffsetNumber, false) != e->offno)
+		if (PageAddItem(page, (Item) etup, etupSize, InvalidOffsetNumber, LP_USED) != e->offno)
 			elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 
-		if (PageAddItem(npage, (Item) ntup, ntupSize, InvalidOffsetNumber, false) != e->neighborOffno)
+		if (PageAddItem(npage, (Item) ntup, ntupSize, InvalidOffsetNumber, LP_USED) != e->neighborOffno)
 			elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 	}
 

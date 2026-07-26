@@ -293,7 +293,7 @@ InsertTuples(Relation index, IvfflatBuildState * buildstate, ForkNumber forkNum)
 				IvfflatAppendPage(index, &buf, &page, forkNum);
 
 			/* Add the item */
-			if (PageAddItem(page, (Item) itup, itemsz, InvalidOffsetNumber, false) == InvalidOffsetNumber)
+			if (PageAddItem(page, (Item) itup, itemsz, InvalidOffsetNumber, LP_USED) == InvalidOffsetNumber)
 				elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 
 			pfree(itup);
@@ -329,7 +329,12 @@ InitBuildState(IvfflatBuildState * buildstate, Relation heap, Relation index, Pg
 
 	if (buildstate->dimensions < 0)
 	{
-		AttrNumber	heapatt = TupleDescAttr(buildstate->tupdesc, 0)->attnum;
+		AttrNumber	heapatt;
+
+		if (indexInfo != NULL && indexInfo->ii_KeyAttributeNumbers != NULL)
+			heapatt = indexInfo->ii_KeyAttributeNumbers[0];
+		else
+			heapatt = TupleDescAttr(buildstate->tupdesc, 0)->attnum;
 
 		buildstate->dimensions = IvfflatInferIndexDimensions(heap, heapatt);
 	}
@@ -510,7 +515,7 @@ CreateListPages(Relation index, VectorArray centers, int lists,
 			IvfflatAppendPage(index, &buf, &page, forkNum);
 
 		/* Add the item */
-		offno = PageAddItem(page, (Item) list, listSize, InvalidOffsetNumber, false);
+		offno = PageAddItem(page, (Item) list, listSize, InvalidOffsetNumber, LP_USED);
 		if (offno == InvalidOffsetNumber)
 			elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 

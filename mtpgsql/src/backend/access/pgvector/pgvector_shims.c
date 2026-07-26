@@ -289,9 +289,9 @@ Float4GetDatum(float4 X)
 float8
 DatumGetFloat8(Datum X)
 {
-	float8 f;
-	memcpy(&f, &X, sizeof(float8));
-	return f;
+	if (X == (Datum) 0)
+		return (float8) 0;
+	return *((float8 *) (long) X);
 }
 
 Datum

@@ -645,6 +645,8 @@ IndexSupportInitialize(IndexStrategy indexStrategy,
 		heap_close(relation, AccessShareLock);
 	}
 
+	if (maxStrategyNumber > 0 && indexStrategy != NULL)
+	{
 	ScanKeyEntryInitialize(&entry[0], 0,
 						   Anum_pg_amop_amopid,
 						   F_OIDEQ,
@@ -689,6 +691,7 @@ IndexSupportInitialize(IndexStrategy indexStrategy,
 
 	heap_close(operatorRelation, AccessShareLock);
 	heap_close(relation, AccessShareLock);
+	}
 }
 
 /* ----------------
