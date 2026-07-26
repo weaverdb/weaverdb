@@ -102,6 +102,12 @@ public class PgvectorOrderByTest {
         assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
     }
 
+    @Test
+    @Order(9)
+    public void orderByLimitWithOffset() throws Exception {
+        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 2 offset 1", 2, 3);
+    }
+
     private static void assertIds(String sql, int... expected) throws Exception {
         List<Integer> got = queryIntColumn(sql, 1);
         Assertions.assertEquals(expected.length, got.size(), "row count for: " + sql);
@@ -117,6 +123,7 @@ public class PgvectorOrderByTest {
         try (DBReference conn = DBReference.connect("template1");
                 Statement s = conn.statement(sql)) {
             Output<Integer> out = s.linkOutput(columnIndex, Integer.class);
+            s.execute();
             while (s.fetch()) {
                 Integer v = out.get();
                 if (v != null) {

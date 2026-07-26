@@ -68,6 +68,12 @@ out=$(run_sql "select id from pv_smoke order by emb <-> '[1,0,0]' limit 2;")
 check "order by distance returns id=1" "$out" 'id = "1"'
 check "order by distance returns id=2" "$out" 'id = "2"'
 
+out=$(run_sql \
+  "insert into pv_smoke values (10, '[1,1,0]');" \
+  "update pv_smoke set emb = '[1,0,0]' where id = 2;" \
+  "delete from pv_smoke where id = 3;")
+check "mutations after indexes" "$out" 'INSERT|UPDATE|DELETE|backend>'
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$SCRIPT_DIR/pgvector_orderby_smoke.sh"
 
