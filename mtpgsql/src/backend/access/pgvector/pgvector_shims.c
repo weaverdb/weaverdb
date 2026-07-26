@@ -21,6 +21,8 @@
 #include "lib/stringinfo.h"    /* in case */
 #include "utils/varbit.h"
 #include "bitvec.h"
+#include "hnsw.h"
+#include "ivfflat.h"
 #include <math.h>
 #include <errno.h>
 #include <string.h>
@@ -33,6 +35,15 @@
  * vector.c _PG_init calls them unconditionally. */
 void BitvecInit(void) {}
 void HalfvecInit(void) {}
+
+void
+PgvectorModuleInit(void)
+{
+	BitvecInit();
+	HalfvecInit();
+	HnswInit();
+	IvfflatInit();
+}
 
 VarBit *
 InitBitVector(int dim)

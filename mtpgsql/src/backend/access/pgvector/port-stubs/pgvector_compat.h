@@ -241,6 +241,96 @@ typedef struct Sharedsort { int dummy; } Sharedsort;
 #include "access/itup.h"
 #include "access/tupdesc.h"
 
+/*
+ * PG7 fmgr passes SQL function args as (long, long, ...) and expects char *
+ * returns.  pgvector sources use PG13-style PG_GETARG_* / PG_RETURN_* on a
+ * fake fcinfo; wire those macros to the real register args at runtime.
+ */
+#undef PG_FUNCTION_ARGS
+#define PG_FUNCTION_ARGS char *pgvector_arg0, long pgvector_arg1, long pgvector_arg2
+
+#undef PG_GETARG_CSTRING
+#define PG_GETARG_CSTRING(n) \
+	((char *) ((n) == 0 ? (long) pgvector_arg0 : \
+	 (n) == 1 ? pgvector_arg1 : pgvector_arg2))
+
+#undef PG_GETARG_INT32
+#define PG_GETARG_INT32(n) \
+	((int32) ((n) == 2 ? pgvector_arg2 : (n) == 1 ? pgvector_arg1 : 0))
+
+#undef PG_GETARG_INT16
+#define PG_GETARG_INT16(n) ((int16) PG_GETARG_INT32(n))
+
+#undef PG_GETARG_BOOL
+#define PG_GETARG_BOOL(n) ((bool) PG_GETARG_INT32(n))
+
+#undef PG_GETARG_DATUM
+#define PG_GETARG_DATUM(n) \
+	((Datum) (long) (((n) == 0) ? (long) pgvector_arg0 : \
+	 (((n) == 1) ? (long) pgvector_arg1 : (long) pgvector_arg2)))
+
+#undef PG_GETARG_POINTER
+#define PG_GETARG_POINTER(n) ((void *) PG_GETARG_DATUM(n))
+
+#undef PG_RETURN_POINTER
+#define PG_RETURN_POINTER(x) return (Datum) (long) (x)
+
+#undef PG_RETURN_CSTRING
+#define PG_RETURN_CSTRING(x) return (Datum) (long) (x)
+
+#undef PG_RETURN_NULL
+#define PG_RETURN_NULL() return (Datum) 0
+
+#undef PG_RETURN_INT32
+#define PG_RETURN_INT32(x) \
+	do { \
+		int32 *_pgv_r = (int32 *) palloc(sizeof(int32)); \
+		*_pgv_r = (x); \
+		return (Datum) (long) _pgv_r; \
+	} while (0)
+
+#undef PG_RETURN_FLOAT8
+#define PG_RETURN_FLOAT8(x) \
+	do { \
+		float64 _pgv_r = (float64) palloc(sizeof(float64data)); \
+		*_pgv_r = (double) (x); \
+		return (Datum) (long) _pgv_r; \
+	} while (0)
+
+#undef PG_RETURN_BOOL
+#define PG_RETURN_BOOL(x) PG_RETURN_INT32((int32) ((x) ? 1 : 0))
+
+#undef ereport
+#undef errcode
+#undef errmsg
+#undef errdetail
+#define errcode(code) 0
+#define errmsg(...) ""
+#define errdetail(...) ""
+#define ereport(elevel, rest) \
+	elog(ERROR, "pgvector: operation failed")
+
+#undef DirectFunctionCall1
+#undef DirectFunctionCall1Coll
+
+static inline Datum
+pgvector_direct_call1(void *fn, Datum arg1)
+{
+	typedef char *(*pgvector_fn1) (long);
+
+	return (Datum) (long) ((pgvector_fn1) fn)((long) arg1);
+}
+
+#define DirectFunctionCall1(func, arg1) \
+	pgvector_direct_call1((void *) (func), (arg1))
+
+static inline Datum
+DirectFunctionCall1Coll(void *func, Oid coll, Datum arg1)
+{
+	(void) coll;
+	return pgvector_direct_call1(func, arg1);
+}
+
 #define TupleDescAttr(tupdesc, i) ((tupdesc)->attrs[(i)])
 
 /* Complete vacuum/AM result types now that BlockNumber/Relation exist */
@@ -453,23 +543,35 @@ MemoryContextReset(MemoryContext context)
 	/* Weaver has ResetAndDeleteChildren; no-op is enough for compile-first */
 }
 
-#ifndef FunctionCall0Coll
-#define FunctionCall0Coll(flinfo, collation) \
-	(DirectFunctionCall1((flinfo)->fn_addr, (Datum)0))
-#endif
-#ifndef FunctionCall1Coll
-#define FunctionCall1Coll(flinfo, collation, arg1) \
-	(DirectFunctionCall1((flinfo)->fn_addr, (arg1)))
-#endif
+#undef FunctionCall0Coll
+static inline Datum
+FunctionCall0Coll(FmgrInfo *flinfo, Oid collation)
+{
+	typedef char *(*pgvector_fn0) (void);
+	pgvector_fn0 fn = (pgvector_fn0) fmgr_faddr(flinfo);
+
+	(void) collation;
+	return (Datum) (long) fn();
+}
+#undef FunctionCall1Coll
+static inline Datum
+FunctionCall1Coll(FmgrInfo *flinfo, Oid collation, Datum arg1)
+{
+	typedef char *(*pgvector_fn1) (long);
+	pgvector_fn1 fn = (pgvector_fn1) fmgr_faddr(flinfo);
+
+	(void) collation;
+	return (Datum) (long) fn((long) arg1);
+}
 
 static inline Datum
 FunctionCall2Coll(FmgrInfo *flinfo, Oid collation, Datum arg1, Datum arg2)
 {
-	typedef Datum (*pgvector_fn2) (Datum, Datum);
-	pgvector_fn2 fn = (pgvector_fn2) fmgr_faddr(flinfo);
+	typedef char *(*pgvector_fn2) (long, long);
+	pgvector_fn2 fn = (pgvector_fn2) fmgr_faddr_2(flinfo);
 
 	(void) collation;
-	return fn(arg1, arg2);
+	return (Datum) (long) fn((long) arg1, (long) arg2);
 }
 
 static inline BufferAccessStrategy

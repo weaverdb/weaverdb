@@ -46,6 +46,8 @@
 #include "env/freespace.h"
 #include "env/poolsweep.h"
 
+extern void PgvectorModuleInit(void);
+
 #ifdef MULTIBYTE
 #include "mb/pg_wchar.h"
 #endif
@@ -366,6 +368,7 @@ InitPostgres(const char *dbname)
 	 */
 	initam();
 
+	PgvectorModuleInit();
 
 	/*
 	 * Does not touch files since all routines are builtins (?) - thomas

@@ -47,6 +47,7 @@
 #include "catalog/index.h"
 #include "commands/progress.h"
 #include "hnsw.h"
+#include "ivfflat.h"
 #include "miscadmin.h"
 #include "env/env.h"
 #include "env/freespace.h"
@@ -674,6 +675,14 @@ InitBuildState(HnswBuildState * buildstate, Relation heap, Relation index, Pgvec
 	buildstate->m = HnswGetM(index);
 	buildstate->efConstruction = HnswGetEfConstruction(index);
 	buildstate->dimensions = TupleDescAttr(index->rd_att, 0)->atttypmod;
+
+	if (buildstate->dimensions < 0)
+	{
+		TupleDesc	inddesc = RelationGetDescr(index);
+		AttrNumber	heapatt = TupleDescAttr(inddesc, 0)->attnum;
+
+		buildstate->dimensions = IvfflatInferIndexDimensions(heap, heapatt);
+	}
 
 	/* Disallow varbit since require fixed dimensions */
 	if (TupleDescAttr(index->rd_att, 0)->atttypid == VARBITOID)
