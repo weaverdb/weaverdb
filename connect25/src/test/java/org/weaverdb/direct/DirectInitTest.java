@@ -73,6 +73,14 @@ public class DirectInitTest {
     }
     
     @org.junit.jupiter.api.Test
+    public void testStreamExec() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            conn.setStandardOutput(System.out);
+            conn.stream("select 1 as one");
+        }
+    }
+
+    @org.junit.jupiter.api.Test
     public void testBind() throws Exception {
         try (DBReference conn = DBReference.connect("template1")) {
             try (Statement s = conn.statement("select xmin,xmax,oid,* from pg_type where oid = 16")) {

@@ -124,10 +124,10 @@ class DirectWeaverConnection implements DBReference {
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
         WOutputTransfer = LINKER.downcallHandle(LOADER.find("WOutputTransfer").orElseThrow(),
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS, JAVA_SHORT, JAVA_INT, ADDRESS, ADDRESS));
-        WConnectStdIO = LINKER.downcallHandle(LOADER.find("WConnectStdIO").orElseThrow(), 
+        WConnectStdIO = LINKER.downcallHandle(LOADER.find("WConnectStdIO").orElseThrow(),
                 FunctionDescriptor.ofVoid(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
-        WDisconnectStdIO = LINKER.downcallHandle(LOADER.find("WDisconnectStdIO").orElseThrow(), 
-                FunctionDescriptor.ofVoid(ADDRESS));
+        WDisconnectStdIO = LINKER.downcallHandle(LOADER.find("WDisconnectStdIO").orElseThrow(),
+                FunctionDescriptor.of(ADDRESS, ADDRESS));
 
         Lookup LOCAL = MethodHandles.lookup();
         try {
@@ -527,44 +527,69 @@ class DirectWeaverConnection implements DBReference {
         }
     }
     
-    private final int pipeOut(MemorySegment user, int type, MemorySegment buffer, int len) throws IOException {
-        if (os != null) {
-            try (Arena a = Arena.ofConfined()) {
+    private int pipeOut(MemorySegment user, int type, MemorySegment buffer, int len) {
+        try {
+            if (len <= 0 || buffer == null || buffer.equals(MemorySegment.NULL)) {
+                if (os != null) {
+                    os.flush();
+                }
+                return 0;
+            }
+            if (os != null) {
                 byte[] data = buffer.reinterpret(len).toArray(JAVA_BYTE);
                 os.write(data);
                 os.flush();
             }
+            return len;
+        } catch (IOException e) {
+            return PIPING_ERROR;
         }
-        return len;
     }
 
-    private final int pipeIn(MemorySegment user, int type, MemorySegment buffer, int len) throws IOException {
-        if (is != null) {
-            try (Arena a = Arena.ofConfined()) {
-                byte[] data = new byte[len];
-                int read = is.read(data, 0, data.length);
-                MemorySegment src = MemorySegment.ofArray(data);
-                src = src.reinterpret(read);
-                buffer.copyFrom(src);
-                return read;
-            }
-        } else {
+    private int pipeIn(MemorySegment user, int type, MemorySegment buffer, int len) {
+        if (len <= 0 || buffer == null || buffer.equals(MemorySegment.NULL)) {
             return 0;
         }
+        try {
+            if (is != null) {
+                byte[] data = new byte[len];
+                int read = is.read(data, 0, data.length);
+                if (read > 0) {
+                    MemorySegment src = MemorySegment.ofArray(data).reinterpret(read);
+                    buffer.copyFrom(src);
+                }
+                return Math.max(read, 0);
+            }
+            return 0;
+        } catch (IOException e) {
+            return PIPING_ERROR;
+        }
     }
-    
+
     private void streamExec(String statement) throws ExecutionException {
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment in = LINKER.upcallStub(PIPEIN.bindTo(this), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), arena);
-            MemorySegment out = LINKER.upcallStub(PIPEOUT.bindTo(this), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), arena);
+            MemorySegment in = LINKER.upcallStub(PIPEIN.bindTo(this),
+                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), arena);
+            MemorySegment out = LINKER.upcallStub(PIPEOUT.bindTo(this),
+                    FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), arena);
+            MemorySegment stmtSeg = arena.allocateFrom(statement);
             try {
-                check((long)WConnectStdIO.invokeExact(nativePointer, MemorySegment.NULL, in, out));
-                check((long)WStreamExec.invokeExact(nativePointer, arena.allocateFrom(statement)));
-                check((long)WDisconnectStdIO.invokeExact(nativePointer));
+                WConnectStdIO.invokeExact(nativePointer, MemorySegment.NULL, in, out);
+                check((long) WStreamExec.invokeExact(nativePointer, stmtSeg));
+                long errCode = (long) WGetErrorCode.invokeExact(nativePointer);
+                if (errCode != 0) {
+                    handleError(0);
+                }
             } catch (ExecutionException ee) {
                 throw ee;
             } catch (Throwable t) {
                 throw new ExecutionException(t);
+            } finally {
+                try {
+                    WDisconnectStdIO.invokeExact(nativePointer);
+                } catch (Throwable t) {
+                    LOGGING.log(Level.FINE, "WDisconnectStdIO failed", t);
+                }
             }
         }
     }
