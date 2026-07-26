@@ -64,6 +64,16 @@ typedef struct IvfflatBulkDelState
 	int			cursor;
 } IvfflatBulkDelState;
 
+static InsertIndexResult
+pgvector_new_insert_result(void)
+{
+	InsertIndexResult res;
+
+	res = (InsertIndexResult) palloc(sizeof(InsertIndexResultData));
+	res->result = INDEX_INSERTED;
+	return res;
+}
+
 static bool
 ivfflat_bulkdel_callback(void *tid, void *state)
 {
@@ -137,11 +147,14 @@ ivfflatinsert(Relation rel,
 	for (int i = 0; i < natts; i++)
 		isnull[i] = (nulls[i] == 'n');
 
+	if (isnull[0])
+		return (InsertIndexResult) NULL;
+
 	indexInfo = BuildIndexInfo(rel);
 	(void) ivfflat_insertindex(rel, datum, isnull, ht_ctid, heapRel,
 							   UNIQUE_CHECK_NO, indexInfo);
 	pfree(indexInfo);
-	return (InsertIndexResult) NULL;
+	return pgvector_new_insert_result();
 }
 
 bool
@@ -309,11 +322,14 @@ hnswinsert(Relation rel,
 	for (int i = 0; i < natts; i++)
 		isnull[i] = (nulls[i] == 'n');
 
+	if (isnull[0])
+		return (InsertIndexResult) NULL;
+
 	indexInfo = BuildIndexInfo(rel);
 	(void) hnsw_insertindex(rel, datum, isnull, ht_ctid, heapRel,
 							UNIQUE_CHECK_NO, indexInfo);
 	pfree(indexInfo);
-	return (InsertIndexResult) NULL;
+	return pgvector_new_insert_result();
 }
 
 bool
