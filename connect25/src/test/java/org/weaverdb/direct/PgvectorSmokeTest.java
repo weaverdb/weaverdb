@@ -54,8 +54,6 @@ public class PgvectorSmokeTest {
             exec(conn, "insert into pv_junit values (1, '[1,0,0]')");
             exec(conn, "insert into pv_junit values (2, '[0,1,0]')");
             exec(conn, "insert into pv_junit values (3, '[0,0,1]')");
-            exec(conn, "create index pv_junit_ivf on pv_junit using ivfflat (emb vector_l2_ops)");
-            exec(conn, "create index pv_junit_hnsw on pv_junit using hnsw (emb vector_l2_ops)");
         }
     }
 

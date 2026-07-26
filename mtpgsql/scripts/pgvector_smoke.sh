@@ -68,6 +68,9 @@ out=$(run_sql "select id from pv_smoke order by emb <-> '[1,0,0]' limit 2;")
 check "order by distance returns id=1" "$out" 'id = "1"'
 check "order by distance returns id=2" "$out" 'id = "2"'
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPT_DIR/pgvector_orderby_smoke.sh"
+
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures check(s) failed" >&2
   exit 1
