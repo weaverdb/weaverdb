@@ -39,12 +39,16 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 Process p = b.start();
                 p.waitFor();
                 
+                String repoRoot = System.getProperty("weaver.repo.root",
+                        new java.io.File(System.getProperty("user.dir")).getParent());
+                String mtpgSource = repoRoot + "/build_test/mtpg";
+
                 b = new ProcessBuilder("rm", "-rf", "build/mtpg");
                 b.inheritIO();
                 p = b.start();
                 p.waitFor();
-                
-                b = new ProcessBuilder("cp", "-rf", "../build/mtpg", "build/");
+
+                b = new ProcessBuilder("cp", "-rf", mtpgSource, "build/mtpg");
                 b.inheritIO();
                 p = b.start();
                 p.waitFor();
