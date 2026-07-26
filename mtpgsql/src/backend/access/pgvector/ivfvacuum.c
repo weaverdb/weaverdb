@@ -1,22 +1,20 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "access/generic_xlog.h"
 #include "access/itup.h"
 #include "commands/vacuum.h"
 #include "ivfflat.h"
+#include "env/freespace.h"
 #include "storage/bufmgr.h"
+#include "utils/rel.h"
 #include "utils/relcache.h"
 
-#if PG_VERSION_NUM >= 180000
-#define vacuum_delay_point() vacuum_delay_point(false)
-#endif
 
 /*
  * Bulk delete tuples from the index
  */
 IndexBulkDeleteResult *
-ivfflatbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
+ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 				  IndexBulkDeleteCallback callback, void *callback_state)
 {
 	Relation	index = info->index;
@@ -37,7 +35,7 @@ ivfflatbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 		ListInfo	listInfo;
 
 		cbuf = ReadBuffer(index, blkno);
-		LockBuffer(cbuf, BUFFER_LOCK_SHARE);
+		LockBuffer(index, cbuf, BUFFER_LOCK_SHARE);
 		cpage = BufferGetPage(cbuf);
 
 		cmaxoffno = PageGetMaxOffsetNumber(cpage);
@@ -65,7 +63,6 @@ ivfflatbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 			{
 				Buffer		buf;
 				Page		page;
-				GenericXLogState *state;
 				OffsetNumber offno;
 				OffsetNumber maxoffno;
 				OffsetNumber deletable[MaxOffsetNumber];
@@ -83,8 +80,7 @@ ivfflatbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 				 */
 				LockBufferForCleanup(buf);
 
-				state = GenericXLogStart(index);
-				page = GenericXLogRegisterBuffer(state, buf, 0);
+				page = BufferGetPage(buf);
 
 				maxoffno = PageGetMaxOffsetNumber(page);
 				ndeletable = 0;
@@ -115,10 +111,7 @@ ivfflatbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 				{
 					/* Delete tuples */
 					PageIndexMultiDelete(page, deletable, ndeletable);
-					GenericXLogFinish(state);
 				}
-				else
-					GenericXLogAbort(state);
 
 				UnlockReleaseBuffer(buf);
 			}
@@ -146,7 +139,7 @@ ivfflatbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
  * Clean up after a VACUUM operation
  */
 IndexBulkDeleteResult *
-ivfflatvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
+ivfflat_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 {
 	Relation	rel = info->index;
 

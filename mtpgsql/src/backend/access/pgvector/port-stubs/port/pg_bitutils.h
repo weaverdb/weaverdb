@@ -66,4 +66,19 @@ pg_popcount64_8(const uint64_t *buf, int n)
     return count;
 }
 
+static inline uint64
+pg_nextpower2_64(uint64 size)
+{
+	if (size == 0)
+		return 1;
+	size--;
+	size |= size >> 1;
+	size |= size >> 2;
+	size |= size >> 4;
+	size |= size >> 8;
+	size |= size >> 16;
+	size |= size >> 32;
+	return size + 1;
+}
+
 #endif /* PORT_PG_BITUTILS_H */

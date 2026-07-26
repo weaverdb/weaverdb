@@ -128,6 +128,7 @@ typedef struct RelationData
 	List*		rd_indexlist;
 	IndexStrategy   rd_istrat;
 	RegProcedure *  rd_support;
+	FmgrInfo       *rd_procinfo;	/* cached support procs (parallel to rd_support) */
 	TriggerDesc *   trigdesc;		/* Trigger info, or NULL if rel has none */
         BufferTrigger * readtrigger;
 } RelationData;

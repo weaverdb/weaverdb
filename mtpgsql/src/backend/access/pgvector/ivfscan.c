@@ -10,7 +10,9 @@
 #include "catalog/pg_type_d.h"
 #include "fmgr.h"
 #include "lib/pairingheap.h"
-#include "ivfflat.h"
+#include "access/heapam.h"
+#include "pgvector_executor_port.h"
+#include "pgvector_scan.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "storage/bufmgr.h"
@@ -19,9 +21,7 @@
 #include "utils/snapmgr.h"
 #include "utils/tuplesort.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
 
 #define GetScanList(ptr) pairingheap_container(IvfflatScanList, ph_node, ptr)
 #define GetScanListConst(ptr) pairingheap_const_container(IvfflatScanList, ph_node, ptr)
@@ -59,8 +59,8 @@ GetScanLists(IndexScanDesc scan, Datum value)
 		Page		cpage;
 		OffsetNumber maxoffno;
 
-		cbuf = ReadBuffer(scan->indexRelation, nextblkno);
-		LockBuffer(cbuf, BUFFER_LOCK_SHARE);
+		cbuf = ReadBuffer(pgvector_scan_index_rel(scan), nextblkno);
+		LockBuffer(pgvector_scan_index_rel(scan), cbuf, BUFFER_LOCK_SHARE);
 		cpage = BufferGetPage(cbuf);
 
 		maxoffno = PageGetMaxOffsetNumber(cpage);
@@ -108,7 +108,10 @@ GetScanLists(IndexScanDesc scan, Datum value)
 
 		nextblkno = IvfflatPageGetOpaque(cpage)->nextblkno;
 
-		UnlockReleaseBuffer(cbuf);
+		do {
+			LockBuffer(pgvector_scan_index_rel(scan), cbuf, BUFFER_LOCK_UNLOCK);
+			ReleaseBuffer(pgvector_scan_index_rel(scan), cbuf);
+		} while (0);
 	}
 
 	for (int i = listCount - 1; i >= 0; i--)
@@ -124,7 +127,7 @@ static void
 GetScanItems(IndexScanDesc scan, Datum value)
 {
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
-	TupleDesc	tupdesc = RelationGetDescr(scan->indexRelation);
+	TupleDesc	tupdesc = RelationGetDescr(pgvector_scan_index_rel(scan));
 	TupleTableSlot *slot = so->vslot;
 	int			batchProbes = 0;
 
@@ -142,8 +145,8 @@ GetScanItems(IndexScanDesc scan, Datum value)
 			Page		page;
 			OffsetNumber maxoffno;
 
-			buf = ReadBufferExtended(scan->indexRelation, MAIN_FORKNUM, searchPage, RBM_NORMAL, so->bas);
-			LockBuffer(buf, BUFFER_LOCK_SHARE);
+			buf = ReadBufferExtended(pgvector_scan_index_rel(scan), MAIN_FORKNUM, searchPage, RBM_NORMAL, so->bas);
+			LockBuffer(pgvector_scan_index_rel(scan), buf, BUFFER_LOCK_SHARE);
 			page = BufferGetPage(buf);
 			maxoffno = PageGetMaxOffsetNumber(page);
 
@@ -164,10 +167,10 @@ GetScanItems(IndexScanDesc scan, Datum value)
 				 * performance
 				 */
 				ExecClearTuple(slot);
-				slot->tts_values[0] = so->distfunc(so->procinfo, so->collation, datum, value);
-				slot->tts_isnull[0] = false;
-				slot->tts_values[1] = PointerGetDatum(&itup->t_tid);
-				slot->tts_isnull[1] = false;
+				pgvector_slot_set_attr(slot, 1,
+									   so->distfunc(so->procinfo, so->collation, datum, value),
+									   false);
+				pgvector_slot_set_attr(slot, 2, PointerGetDatum(&itup->t_tid), false);
 				ExecStoreVirtualTuple(slot);
 
 				tuplesort_puttupleslot(so->sortstate, slot);
@@ -175,7 +178,7 @@ GetScanItems(IndexScanDesc scan, Datum value)
 
 			searchPage = IvfflatPageGetOpaque(page)->nextblkno;
 
-			UnlockReleaseBuffer(buf);
+			do { LockBuffer(pgvector_scan_index_rel(scan), buf, BUFFER_LOCK_UNLOCK); ReleaseBuffer(pgvector_scan_index_rel(scan), buf); } while (0);
 		}
 	}
 
@@ -204,14 +207,14 @@ GetScanValue(IndexScanDesc scan)
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
 	Datum		value;
 
-	if (scan->orderByData->sk_flags & SK_ISNULL)
+	if (pgvector_ivfflat_orderby(scan)->sk_flags & SK_ISNULL)
 	{
 		value = PointerGetDatum(NULL);
 		so->distfunc = ZeroDistance;
 	}
 	else
 	{
-		value = scan->orderByData->sk_argument;
+		value = pgvector_ivfflat_orderby(scan)->sk_argument;
 		so->distfunc = FunctionCall2Coll;
 
 		/* Value should not be compressed or toasted */
@@ -250,7 +253,7 @@ InitScanSortState(TupleDesc tupdesc)
  * Prepare for an index scan
  */
 IndexScanDesc
-ivfflatbeginscan(Relation index, int nkeys, int norderbys)
+ivfflat_beginscanindex(Relation index, int nkeys, int norderbys)
 {
 	IndexScanDesc scan;
 	IvfflatScanOpaque so;
@@ -260,9 +263,13 @@ ivfflatbeginscan(Relation index, int nkeys, int norderbys)
 	int			maxProbes;
 	MemoryContext oldCtx;
 
-	scan = RelationGetIndexScan(index, nkeys, norderbys);
+	scan = RelationGetIndexScan(index, false, (uint16) nkeys, NULL);
+	so = (IvfflatScanOpaque) palloc(sizeof(IvfflatScanOpaqueData));
+	memset(so, 0, sizeof(IvfflatScanOpaqueData));
+	so->numberOfOrderBys = norderbys;
+	so->xs_snapshot = SnapshotNow;
+	scan->opaque = so;
 
-	/* Get lists and dimensions from metapage */
 	IvfflatGetMetaPageInfo(index, &lists, &dimensions);
 
 	if (ivfflat_iterative_scan != IVFFLAT_ITERATIVE_SCAN_OFF)
@@ -276,7 +283,6 @@ ivfflatbeginscan(Relation index, int nkeys, int norderbys)
 	if (maxProbes > lists)
 		maxProbes = lists;
 
-	so = (IvfflatScanOpaque) palloc(sizeof(IvfflatScanOpaqueData));
 	so->typeInfo = IvfflatGetTypeInfo(index);
 	so->first = true;
 	so->probes = probes;
@@ -286,7 +292,7 @@ ivfflatbeginscan(Relation index, int nkeys, int norderbys)
 	/* Set support functions */
 	so->procinfo = index_getprocinfo(index, 1, IVFFLAT_DISTANCE_PROC);
 	so->normprocinfo = IvfflatOptionalProcInfo(index, IVFFLAT_NORM_PROC);
-	so->collation = index->rd_indcollation[0];
+	so->collation = InvalidOid;
 
 	so->tmpCtx = AllocSetContextCreate(CurrentMemoryContext,
 									   "Ivfflat scan temporary context",
@@ -296,11 +302,8 @@ ivfflatbeginscan(Relation index, int nkeys, int norderbys)
 
 	/* Create tuple description for sorting */
 	so->tupdesc = CreateTemplateTupleDesc(2);
-	TupleDescInitEntry(so->tupdesc, (AttrNumber) 1, "distance", FLOAT8OID, -1, 0);
-	TupleDescInitEntry(so->tupdesc, (AttrNumber) 2, "heaptid", TIDOID, -1, 0);
-#if PG_VERSION_NUM >= 190000
-	TupleDescFinalize(so->tupdesc);
-#endif
+	TupleDescInitEntry(so->tupdesc, (AttrNumber) 1, "distance", FLOAT8OID, -1, 0, false);
+	TupleDescInitEntry(so->tupdesc, (AttrNumber) 2, "heaptid", TIDOID, -1, 0, false);
 
 	/* Prep sort */
 	so->sortstate = InitScanSortState(so->tupdesc);
@@ -323,8 +326,6 @@ ivfflatbeginscan(Relation index, int nkeys, int norderbys)
 
 	MemoryContextSwitchTo(oldCtx);
 
-	scan->opaque = so;
-
 	return scan;
 }
 
@@ -332,7 +333,7 @@ ivfflatbeginscan(Relation index, int nkeys, int norderbys)
  * Start or restart an index scan
  */
 void
-ivfflatrescan(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys)
+ivfflat_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys)
 {
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
 
@@ -343,15 +344,15 @@ ivfflatrescan(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int
 	if (keys && scan->numberOfKeys > 0)
 		memmove(scan->keyData, keys, scan->numberOfKeys * sizeof(ScanKeyData));
 
-	if (orderbys && scan->numberOfOrderBys > 0)
-		memmove(scan->orderByData, orderbys, scan->numberOfOrderBys * sizeof(ScanKeyData));
+	if (orderbys && norderbys > 0)
+		pgvector_ivfflat_set_orderbys(scan, orderbys, norderbys);
 }
 
 /*
  * Fetch the next tuple in the given scan
  */
 bool
-ivfflatgettuple(IndexScanDesc scan, ScanDirection dir)
+ivfflat_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 {
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
 	ItemPointer heaptid;
@@ -368,19 +369,12 @@ ivfflatgettuple(IndexScanDesc scan, ScanDirection dir)
 		Datum		value;
 
 		/* Count index scan for stats */
-		pgstat_count_index_scan(scan->indexRelation);
-#if PG_VERSION_NUM >= 180000
-		if (scan->instrument)
-			scan->instrument->nsearches++;
-#endif
+		pgstat_count_index_scan(pgvector_scan_index_rel(scan));
 
-		/* Safety check */
-		if (scan->orderByData == NULL)
+		if (pgvector_ivfflat_norderbys(scan) <= 0)
 			elog(ERROR, "cannot scan ivfflat index without order");
 
-		/* Requires MVCC-compliant snapshot as not able to pin during sorting */
-		/* https://www.postgresql.org/docs/current/index-locking.html */
-		if (!IsMVCCSnapshot(scan->xs_snapshot))
+		if (!IsMVCCSnapshot(pgvector_scan_snapshot(scan)))
 			elog(ERROR, "non-MVCC snapshots are not supported with ivfflat");
 
 		value = GetScanValue(scan);
@@ -400,9 +394,7 @@ ivfflatgettuple(IndexScanDesc scan, ScanDirection dir)
 
 	heaptid = (ItemPointer) DatumGetPointer(slot_getattr(so->mslot, 2, &isnull));
 
-	scan->xs_heaptid = *heaptid;
-	scan->xs_recheck = false;
-	scan->xs_recheckorderby = false;
+	scan->currentItemData = *heaptid;
 	return true;
 }
 
@@ -410,7 +402,7 @@ ivfflatgettuple(IndexScanDesc scan, ScanDirection dir)
  * End a scan and release resources
  */
 void
-ivfflatendscan(IndexScanDesc scan)
+ivfflat_endscanindex(IndexScanDesc scan)
 {
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
 

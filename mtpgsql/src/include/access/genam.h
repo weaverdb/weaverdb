@@ -19,6 +19,7 @@
 #include "access/itup.h"
 #include "access/relscan.h"
 #include "access/sdir.h"
+#include "fmgr.h"
 
 typedef struct index_globals {
 /*   from hash.c    */
@@ -61,6 +62,8 @@ BlockNumber index_recoverpage(Relation rel,BlockNumber page);
 /* extern */  bool index_getnext(IndexScanDesc scan, ScanDirection dir);
 /* extern */  RegProcedure index_cost_estimator(Relation relation);
 /* extern */  RegProcedure index_getprocid(Relation irel, AttrNumber attnum,
+				uint16 procnum);
+/* extern */  FmgrInfo *index_getprocinfo(Relation irel, AttrNumber attnum,
 				uint16 procnum);
 /* extern */  Datum GetIndexValue(HeapTuple tuple, TupleDesc hTupDesc,
 			  int attOff, AttrNumber *attrNums, FuncIndexInfo *fInfo,

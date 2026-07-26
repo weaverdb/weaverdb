@@ -450,4 +450,23 @@ DATA(insert OID = 0 (  403 1989	2004 2 ));
 DATA(insert OID = 0 (  403 1989	2001 3 ));
 DATA(insert OID = 0 (  403 1989	2005 4 ));
 DATA(insert OID = 0 (  403 1989	2003 5 ));
+
+/*
+ *	nbtree vector_ops
+ */
+DATA(insert OID = 0 (  403 1990 2304 1 ));
+DATA(insert OID = 0 (  403 1990 2306 2 ));
+DATA(insert OID = 0 (  403 1990 2308 3 ));
+DATA(insert OID = 0 (  403 1990 2307 4 ));
+DATA(insert OID = 0 (  403 1990 2305 5 ));
+
+/*
+ *	ivfflat vector_l2_ops
+ */
+DATA(insert OID = 0 (  406 1991 2301 1 ));
+
+/*
+ *	hnsw vector_l2_ops
+ */
+DATA(insert OID = 0 (  407 1991 2301 1 ));
 #endif	 /* PG_AMOP_H */

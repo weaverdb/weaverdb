@@ -2,6 +2,8 @@
 
 #include <float.h>
 
+#include "env/env.h"
+
 #include "access/amapi.h"
 #include "access/genam.h"
 #include "access/reloptions.h"
@@ -17,13 +19,32 @@
 #include "utils/spccache.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM < 150000
 #define MarkGUCPrefixReserved(x) EmitWarningsOnPlaceholders(x)
+
+static SectionId ivfflat_env_id = SECTIONID("IVFL");
+
+#ifdef TLS
+TLS IvfflatGlobals *ivfflat_globals = NULL;
+#else
+#define ivfflat_globals GetEnv()->ivfflat_globals
 #endif
 
-int			ivfflat_probes;
-int			ivfflat_iterative_scan;
-int			ivfflat_max_probes;
+IvfflatGlobals *
+IvfflatGetEnv(void)
+{
+	IvfflatGlobals *info = ivfflat_globals;
+
+	if (info == NULL)
+	{
+		info = (IvfflatGlobals *) AllocateEnvSpace(ivfflat_env_id, sizeof(IvfflatGlobals));
+		info->probes = IVFFLAT_DEFAULT_PROBES;
+		info->iterative_scan = IVFFLAT_ITERATIVE_SCAN_OFF;
+		info->max_probes = IVFFLAT_DEFAULT_LISTS;
+		ivfflat_globals = info;
+	}
+	return info;
+}
+
 static relopt_kind ivfflat_relopt_kind;
 
 static const struct config_enum_entry ivfflat_iterative_scan_options[] = {
@@ -38,7 +59,8 @@ static const struct config_enum_entry ivfflat_iterative_scan_options[] = {
 void
 IvfflatInit(void)
 {
-	/* Stubs for relopt/GUC registration - build system only; full options later */
+	(void) IvfflatGetEnv();
+	/* reloptions/GUC registration deferred until ivfflat GUC APIs are ported */
 	(void) ivfflat_iterative_scan_options;
 }
 

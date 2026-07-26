@@ -14,17 +14,9 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/float.h"
-#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "vector.h"
-
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
-
-#if PG_VERSION_NUM >= 170000
-#include "parser/scansup.h"
-#endif
 
 typedef struct SparseInputElement
 {
@@ -159,9 +151,6 @@ InitSparseVector(int dim, int nnz)
 	return result;
 }
 
-#if PG_VERSION_NUM >= 170000
-#define sparsevec_isspace(ch) scanner_isspace(ch)
-#else
 static inline bool
 sparsevec_isspace(char ch)
 {
@@ -174,7 +163,6 @@ sparsevec_isspace(char ch)
 		return true;
 	return false;
 }
-#endif
 
 /*
  * Compare indices
@@ -401,16 +389,12 @@ sparsevec_in(PG_FUNCTION_ARGS)
 #define AppendChar(ptr, c) (*(ptr)++ = (c))
 #define AppendFloat(ptr, f) ((ptr) += float_to_shortest_decimal_bufn((f), (ptr)))
 
-#if PG_VERSION_NUM >= 140000
-#define AppendInt(ptr, i) ((ptr) += pg_ltoa((i), (ptr)))
-#else
 #define AppendInt(ptr, i) \
 	do { \
 		pg_ltoa(i, ptr); \
 		while (*ptr != '\0') \
 			ptr++; \
 	} while (0)
-#endif
 
 /*
  * Convert internal representation to textual representation

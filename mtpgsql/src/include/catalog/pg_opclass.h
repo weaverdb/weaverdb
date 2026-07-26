@@ -132,5 +132,10 @@ DATA(insert OID = 1399 (	timetz_ops	   1266   ));
 DESCR("");
 DATA(insert OID = 1989 ( java_ops	   1830   ));
 DESCR("");
+DATA(insert OID = 1990 (	vector_ops	   1842   ));
+DESCR("vector btree operators");
+DATA(insert OID = 1991 (	vector_l2_ops    1842   ));
+DESCR("vector L2 distance for ivfflat/hnsw");
+#define VECTOR_L2_OPS_OID 1991
 
 #endif	 /* PG_OPCLASS_H */

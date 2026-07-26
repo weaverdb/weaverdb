@@ -70,6 +70,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/blobstorage.h"
+#include "fmgr.h"
 #include "utils/relcache.h"
 #include "miscadmin.h"
 
@@ -420,6 +421,49 @@ index_getprocid(Relation irel,
 	Assert(loc != NULL);
 
 	return loc[(natts * (procnum - 1)) + (attnum - 1)];
+}
+
+/*
+ * index_getprocinfo
+ *		Return a cached FmgrInfo for an index support procedure (pg_amproc).
+ */
+FmgrInfo *
+index_getprocinfo(Relation irel, AttrNumber attnum, uint16 procnum)
+{
+	FmgrInfo   *loc;
+	int			natts;
+	int			amsupport;
+	int			idx;
+	RegProcedure procid;
+
+	natts = irel->rd_rel->relnatts;
+	amsupport = irel->rd_am->amsupport;
+
+	Assert(irel->rd_support != NULL);
+	Assert(attnum >= 1 && attnum <= natts);
+	Assert(procnum >= 1 && procnum <= amsupport);
+
+	if (irel->rd_procinfo == NULL)
+	{
+		Size		size = (Size) natts * amsupport * sizeof(FmgrInfo);
+
+		loc = (FmgrInfo *) palloc(size);
+		MemSet(loc, 0, size);
+		irel->rd_procinfo = loc;
+	}
+	else
+		loc = irel->rd_procinfo;
+
+	idx = (natts * (procnum - 1)) + (attnum - 1);
+
+	if (loc[idx].fn_oid == InvalidOid && loc[idx].fn_addr == NULL)
+	{
+		procid = index_getprocid(irel, attnum, procnum);
+		if (RegProcedureIsValid(procid))
+			fmgr_info(procid, &loc[idx]);
+	}
+
+	return &loc[idx];
 }
 
 Datum

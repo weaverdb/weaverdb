@@ -803,6 +803,18 @@ DATA(insert OID =  2203 ( ">"		   PGUID 0 b t f  28  23  16  2202 2204  0  0 xid
 DATA(insert OID =  2204 ( "<="		   PGUID 0 b t f  28  23  16  2205 2203  0  0 xidint4_lteq eqsel eqjoinsel ));
 DATA(insert OID =  2205 ( ">="		   PGUID 0 b t f  28  23  16  2204 2202  0  0 xidint4_gteq eqsel eqjoinsel ));
 DATA(insert OID =  2206 ( "<>"		   PGUID 0 b t f  28  23  16  2206 2201  0  0 xidint4_noteq eqsel eqjoinsel ));
+
+/* vector similarity / ordering operators */
+DATA(insert OID = 2301 (  "<->"	   PGUID 0 b t f 1842 1842 701 2301   0   0   0 l2_distance - - ));
+DATA(insert OID = 2302 (  "<#>"	   PGUID 0 b t f 1842 1842 701 2302   0   0   0 vector_negative_inner_product - - ));
+DATA(insert OID = 2303 (  "<=>"	   PGUID 0 b t f 1842 1842 701 2303   0   0   0 cosine_distance - - ));
+DATA(insert OID = 2304 (  "<"	   PGUID 0 b t f 1842 1842 16 2305 2307  0  0 vector_lt - - ));
+DATA(insert OID = 2305 (  ">"	   PGUID 0 b t f 1842 1842 16 2304 2306  0  0 vector_gt - - ));
+DATA(insert OID = 2306 (  "<="	   PGUID 0 b t f 1842 1842 16 2307 2305  0  0 vector_le - - ));
+DATA(insert OID = 2307 (  ">="	   PGUID 0 b t f 1842 1842 16 2306 2304  0  0 vector_ge - - ));
+DATA(insert OID = 2308 (  "="	   PGUID 0 b t f 1842 1842 16 2308 2309  0  0 vector_eq eqsel eqjoinsel ));
+DATA(insert OID = 2309 (  "<>"	   PGUID 0 b t f 1842 1842 16 2309 2308  0  0 vector_ne eqsel eqjoinsel ));
+
 /*
  * function prototypes
  */

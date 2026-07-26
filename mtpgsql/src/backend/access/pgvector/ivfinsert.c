@@ -3,7 +3,6 @@
 #include <float.h>
 
 #include "access/genam.h"
-#include "access/generic_xlog.h"
 #include "access/itup.h"
 #include "fmgr.h"
 #include "ivfflat.h"
@@ -29,7 +28,7 @@ FindInsertPage(Relation index, Datum *values, BlockNumber *insertPage, ListInfo 
 	listInfo->offno = FirstOffsetNumber;
 
 	procinfo = index_getprocinfo(index, 1, IVFFLAT_DISTANCE_PROC);
-	collation = index->rd_indcollation[0];
+	collation = InvalidOid;
 
 	/* Search all list pages */
 	while (BlockNumberIsValid(nextblkno))
@@ -39,7 +38,7 @@ FindInsertPage(Relation index, Datum *values, BlockNumber *insertPage, ListInfo 
 		OffsetNumber maxoffno;
 
 		cbuf = ReadBuffer(index, nextblkno);
-		LockBuffer(cbuf, BUFFER_LOCK_SHARE);
+		LockBuffer(index, cbuf, BUFFER_LOCK_SHARE);
 		cpage = BufferGetPage(cbuf);
 		maxoffno = PageGetMaxOffsetNumber(cpage);
 
@@ -78,7 +77,6 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 	FmgrInfo   *normprocinfo;
 	Buffer		buf;
 	Page		page;
-	GenericXLogState *state;
 	Size		itemsz;
 	BlockNumber insertPage = InvalidBlockNumber;
 	ListInfo	listInfo;
@@ -91,7 +89,7 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 	normprocinfo = IvfflatOptionalProcInfo(index, IVFFLAT_NORM_PROC);
 	if (normprocinfo != NULL)
 	{
-		Oid			collation = index->rd_indcollation[0];
+		Oid			collation = InvalidOid;
 
 		if (!IvfflatCheckNorm(normprocinfo, collation, value))
 			return;
@@ -119,10 +117,9 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 	for (;;)
 	{
 		buf = ReadBuffer(index, insertPage);
-		LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
+		LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 
-		state = GenericXLogStart(index);
-		page = GenericXLogRegisterBuffer(state, buf, 0);
+		page = BufferGetPage(buf);
 
 		if (PageGetFreeSpace(page) >= itemsz)
 			break;
@@ -132,8 +129,8 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 		if (BlockNumberIsValid(insertPage))
 		{
 			/* Move to next page */
-			GenericXLogAbort(state);
-			UnlockReleaseBuffer(buf);
+                        LockBuffer(index, buf, BUFFER_NOLOCK);
+			ReleaseBuffer(index, buf);
 		}
 		else
 		{
@@ -146,7 +143,7 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 			UnlockRelationForExtension(index, ExclusiveLock);
 
 			/* Init new page */
-			newpage = GenericXLogRegisterBuffer(state, newbuf, GENERIC_XLOG_FULL_IMAGE);
+			newpage = BufferGetPage(newbuf);
 			IvfflatInitPage(newbuf, newpage);
 
 			/* Update insert page */
@@ -156,24 +153,23 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 			IvfflatPageGetOpaque(page)->nextblkno = insertPage;
 
 			/* Commit */
-			GenericXLogFinish(state);
 
 			/* Unlock previous buffer */
-			UnlockReleaseBuffer(buf);
+                        LockBuffer(index, buf, BUFFER_NOLOCK);
+			WriteBuffer(index, buf);
 
 			/* Prepare new buffer */
-			state = GenericXLogStart(index);
 			buf = newbuf;
-			page = GenericXLogRegisterBuffer(state, buf, 0);
+			page = BufferGetPage(buf);
 			break;
 		}
 	}
 
 	/* Add to next offset */
-	if (PageAddItem(page, (Item) itup, itemsz, InvalidOffsetNumber, false, false) == InvalidOffsetNumber)
+	if (PageAddItem(page, (Item) itup, itemsz, InvalidOffsetNumber, false) == InvalidOffsetNumber)
 		elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 
-	IvfflatCommitBuffer(buf, state);
+	IvfflatCommitBuffer(index, buf);
 
 	/* Update the insert page */
 	if (insertPage != originalInsertPage)
@@ -184,12 +180,9 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
  * Insert a tuple into the index
  */
 bool
-ivfflatinsert(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid,
+ivfflat_insertindex(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid,
 			  Relation heap, IndexUniqueCheck checkUnique
-#if PG_VERSION_NUM >= 140000
-			  ,bool indexUnchanged
-#endif
-			  ,IndexInfo *indexInfo
+			  ,PgvectorIndexInfo *indexInfo
 )
 {
 	MemoryContext oldCtx;

@@ -11,9 +11,7 @@
 #include "utils/memutils.h"
 #include "utils/relcache.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
 
 /*
  * Initialize with kmeans++
@@ -31,7 +29,7 @@ InitCenters(Relation index, VectorArray samples, VectorArray centers, float *low
 	int			numSamples = samples->length;
 
 	procinfo = index_getprocinfo(index, 1, IVFFLAT_KMEANS_DISTANCE_PROC);
-	collation = index->rd_indcollation[0];
+	collation = InvalidOid;
 
 	/* Choose an initial center uniformly at random */
 	VectorArraySet(centers, 0, VectorArrayGet(samples, RandomInt() % samples->length));
@@ -126,7 +124,7 @@ RandomCenters(Relation index, VectorArray centers, const IvfflatTypeInfo * typeI
 {
 	int			dimensions = centers->dim;
 	FmgrInfo   *normprocinfo = IvfflatOptionalProcInfo(index, IVFFLAT_KMEANS_NORM_PROC);
-	Oid			collation = index->rd_indcollation[0];
+	Oid			collation = InvalidOid;
 	float	   *x = (float *) palloc(sizeof(float) * dimensions);
 
 	/* Fill with random data */
@@ -307,7 +305,7 @@ ElkanKmeans(Relation index, VectorArray samples, VectorArray centers, const Ivff
 	/* Set support functions */
 	procinfo = index_getprocinfo(index, 1, IVFFLAT_KMEANS_DISTANCE_PROC);
 	normprocinfo = IvfflatOptionalProcInfo(index, IVFFLAT_KMEANS_NORM_PROC);
-	collation = index->rd_indcollation[0];
+	collation = InvalidOid;
 
 	/* Allocate space */
 	/* Use float instead of double to save memory */
@@ -530,7 +528,7 @@ CheckNorms(VectorArray centers, Relation index)
 {
 	/* Check NORM_PROC instead of KMEANS_NORM_PROC */
 	FmgrInfo   *normprocinfo = IvfflatOptionalProcInfo(index, IVFFLAT_NORM_PROC);
-	Oid			collation = index->rd_indcollation[0];
+	Oid			collation = InvalidOid;
 
 	if (normprocinfo == NULL)
 		return;

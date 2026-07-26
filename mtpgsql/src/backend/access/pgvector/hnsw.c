@@ -10,6 +10,7 @@
 #include "commands/progress.h"
 #include "commands/vacuum.h"
 #include "fmgr.h"
+#include "env/env.h"
 #include "hnsw.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
@@ -21,9 +22,7 @@
 #include "utils/spccache.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM < 150000
 #define MarkGUCPrefixReserved(x) EmitWarningsOnPlaceholders(x)
-#endif
 
 static const struct config_enum_entry hnsw_iterative_scan_options[] = {
 	{"off", HNSW_ITERATIVE_SCAN_OFF, false},
@@ -32,10 +31,6 @@ static const struct config_enum_entry hnsw_iterative_scan_options[] = {
 	{NULL, 0, false}
 };
 
-int			hnsw_ef_search;
-int			hnsw_iterative_scan;
-int			hnsw_max_scan_tuples;
-double		hnsw_scan_mem_multiplier;
 int			hnsw_lock_tranche_id;
 static relopt_kind hnsw_relopt_kind;
 
@@ -60,19 +55,10 @@ HnswInitLockTranche(void)
 								  &found);
 	if (!found)
 	{
-#if PG_VERSION_NUM >= 190000
-		tranche_ids[0] = LWLockNewTrancheId("HnswBuild");
-#else
 		tranche_ids[0] = LWLockNewTrancheId();
-#endif
 	}
 	hnsw_lock_tranche_id = tranche_ids[0];
 	LWLockRelease(AddinShmemInitLock);
-
-#if PG_VERSION_NUM < 190000
-	/* Per-backend registration of the tranche ID */
-	LWLockRegisterTranche(hnsw_lock_tranche_id, "HnswBuild");
-#endif
 }
 
 /*
@@ -81,6 +67,8 @@ HnswInitLockTranche(void)
 void
 HnswInit(void)
 {
+	(void) HnswGetEnv();
+
 	if (!process_shared_preload_libraries_in_progress)
 		HnswInitLockTranche();
 
@@ -110,6 +98,14 @@ HnswInit(void)
 
 	MarkGUCPrefixReserved("hnsw");
 }
+
+void
+HnswWriteBuffer(Relation index, Buffer buf)
+{
+	LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+	WriteBuffer(index, buf);
+}
+
 
 /*
  * Get the name of index build phase
@@ -152,10 +148,7 @@ hnswcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,
 		*indexSelectivity = 0;
 		*indexCorrelation = 0;
 		*indexPages = 0;
-#if PG_VERSION_NUM >= 180000
-		/* See "On disable_cost" thread on pgsql-hackers */
-		path->path.disabled_nodes = 2;
-#endif
+
 		return;
 	}
 
@@ -267,64 +260,6 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(hnswhandler);
 Datum
 hnswhandler(PG_FUNCTION_ARGS)
 {
-#if PG_VERSION_NUM >= 190000
-	static const IndexAmRoutine amroutine = {
-		.type = T_IndexAmRoutine,
-		.amstrategies = 0,
-		.amsupport = 3,
-		.amoptsprocnum = 0,
-		.amcanorder = false,
-		.amcanorderbyop = true,
-		.amcanhash = false,
-		.amconsistentequality = false,
-		.amconsistentordering = false,
-		.amcanbackward = false,
-		.amcanunique = false,
-		.amcanmulticol = false,
-		.amoptionalkey = true,
-		.amsearcharray = false,
-		.amsearchnulls = false,
-		.amstorage = false,
-		.amclusterable = false,
-		.ampredlocks = false,
-		.amcanparallel = false,
-		.amcanbuildparallel = true,
-		.amcaninclude = false,
-		.amusemaintenanceworkmem = false,
-		.amsummarizing = false,
-		.amparallelvacuumoptions = VACUUM_OPTION_PARALLEL_BULKDEL,
-		.amkeytype = InvalidOid,
-
-		.ambuild = hnswbuild,
-		.ambuildempty = hnswbuildempty,
-		.aminsert = hnswinsert,
-		.aminsertcleanup = NULL,
-		.ambulkdelete = hnswbulkdelete,
-		.amvacuumcleanup = hnswvacuumcleanup,
-		.amcanreturn = NULL,
-		.amcostestimate = hnswcostestimate,
-		.amgettreeheight = NULL,
-		.amoptions = hnswoptions,
-		.amproperty = NULL,
-		.ambuildphasename = hnswbuildphasename,
-		.amvalidate = hnswvalidate,
-		.amadjustmembers = NULL,
-		.ambeginscan = hnswbeginscan,
-		.amrescan = hnswrescan,
-		.amgettuple = hnswgettuple,
-		.amgetbitmap = NULL,
-		.amendscan = hnswendscan,
-		.ammarkpos = NULL,
-		.amrestrpos = NULL,
-		.amestimateparallelscan = NULL,
-		.aminitparallelscan = NULL,
-		.amparallelrescan = NULL,
-		.amtranslatestrategy = NULL,
-		.amtranslatecmptype = NULL,
-	};
-
-	PG_RETURN_POINTER(&amroutine);
-#else
 	IndexAmRoutine *amroutine = makeNode(IndexAmRoutine);
 
 	amroutine->amstrategies = 0;
@@ -332,11 +267,6 @@ hnswhandler(PG_FUNCTION_ARGS)
 	amroutine->amoptsprocnum = 0;
 	amroutine->amcanorder = false;
 	amroutine->amcanorderbyop = true;
-#if PG_VERSION_NUM >= 180000
-	amroutine->amcanhash = false;
-	amroutine->amconsistentequality = false;
-	amroutine->amconsistentordering = false;
-#endif
 	amroutine->amcanbackward = false;	/* can change direction mid-scan */
 	amroutine->amcanunique = false;
 	amroutine->amcanmulticol = false;
@@ -347,14 +277,8 @@ hnswhandler(PG_FUNCTION_ARGS)
 	amroutine->amclusterable = false;
 	amroutine->ampredlocks = false;
 	amroutine->amcanparallel = false;
-#if PG_VERSION_NUM >= 170000
-	amroutine->amcanbuildparallel = true;
-#endif
 	amroutine->amcaninclude = false;
 	amroutine->amusemaintenanceworkmem = false; /* not used during VACUUM */
-#if PG_VERSION_NUM >= 160000
-	amroutine->amsummarizing = false;
-#endif
 	amroutine->amparallelvacuumoptions = VACUUM_OPTION_PARALLEL_BULKDEL;
 	amroutine->amkeytype = InvalidOid;
 
@@ -362,23 +286,14 @@ hnswhandler(PG_FUNCTION_ARGS)
 	amroutine->ambuild = hnswbuild;
 	amroutine->ambuildempty = hnswbuildempty;
 	amroutine->aminsert = hnswinsert;
-#if PG_VERSION_NUM >= 170000
-	amroutine->aminsertcleanup = NULL;
-#endif
 	amroutine->ambulkdelete = hnswbulkdelete;
 	amroutine->amvacuumcleanup = hnswvacuumcleanup;
 	amroutine->amcanreturn = NULL;
 	amroutine->amcostestimate = hnswcostestimate;
-#if PG_VERSION_NUM >= 180000
-	amroutine->amgettreeheight = NULL;
-#endif
 	amroutine->amoptions = hnswoptions;
 	amroutine->amproperty = NULL;	/* TODO AMPROP_DISTANCE_ORDERABLE */
 	amroutine->ambuildphasename = hnswbuildphasename;
 	amroutine->amvalidate = hnswvalidate;
-#if PG_VERSION_NUM >= 140000
-	amroutine->amadjustmembers = NULL;
-#endif
 	amroutine->ambeginscan = hnswbeginscan;
 	amroutine->amrescan = hnswrescan;
 	amroutine->amgettuple = hnswgettuple;
@@ -392,11 +307,5 @@ hnswhandler(PG_FUNCTION_ARGS)
 	amroutine->aminitparallelscan = NULL;
 	amroutine->amparallelrescan = NULL;
 
-#if PG_VERSION_NUM >= 180000
-	amroutine->amtranslatestrategy = NULL;
-	amroutine->amtranslatecmptype = NULL;
-#endif
-
 	PG_RETURN_POINTER(amroutine);
-#endif
 }

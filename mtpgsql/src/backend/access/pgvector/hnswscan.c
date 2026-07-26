@@ -8,16 +8,16 @@
 #include "lib/pairingheap.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
-#include "pgstat.h"
+#include "pgvector_scan.h"
 #include "storage/lmgr.h"
 #include "utils/float.h"
 #include "utils/memutils.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
+
+#include "pgstat.h"
 
 /*
  * Algorithm 5 from paper
@@ -26,7 +26,7 @@ static List *
 GetScanItems(IndexScanDesc scan, Datum value)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
-	Relation	index = scan->indexRelation;
+	Relation	index = pgvector_hnsw_index_rel(scan);
 	HnswSupport *support = &so->support;
 	List	   *ep;
 	List	   *w;
@@ -62,7 +62,7 @@ static List *
 ResumeScanItems(IndexScanDesc scan)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
-	Relation	index = scan->indexRelation;
+	Relation	index = pgvector_hnsw_index_rel(scan);
 	List	   *ep = NIL;
 	char	   *base = NULL;
 	int			batch_size = hnsw_ef_search;
@@ -94,12 +94,13 @@ GetScanValue(IndexScanDesc scan)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
 	Datum		value;
+	ScanKey		orderby = pgvector_hnsw_orderby(scan);
 
-	if (scan->orderByData->sk_flags & SK_ISNULL)
+	if (orderby->sk_flags & SK_ISNULL)
 		value = PointerGetDatum(NULL);
 	else
 	{
-		value = scan->orderByData->sk_argument;
+		value = orderby->sk_argument;
 
 		/* Value should not be compressed or toasted */
 		Assert(!VARATT_IS_COMPRESSED(DatumGetPointer(value)));
@@ -128,15 +129,20 @@ ShowMemoryUsage(HnswScanOpaque so)
  * Prepare for an index scan
  */
 IndexScanDesc
-hnswbeginscan(Relation index, int nkeys, int norderbys)
+hnsw_beginscanindex(Relation index, int nkeys, int norderbys)
 {
 	IndexScanDesc scan;
 	HnswScanOpaque so;
 	double		maxMemory;
 
-	scan = RelationGetIndexScan(index, nkeys, norderbys);
+	scan = RelationGetIndexScan(index, false, (uint16) nkeys, NULL);
 
 	so = (HnswScanOpaque) palloc(sizeof(HnswScanOpaqueData));
+	memset(so, 0, sizeof(HnswScanOpaqueData));
+	so->numberOfOrderBys = norderbys;
+	so->xs_snapshot = SnapshotNow;
+	scan->opaque = so;
+
 	so->typeInfo = HnswGetTypeInfo(index);
 
 	/* Set support functions */
@@ -155,8 +161,6 @@ hnswbeginscan(Relation index, int nkeys, int norderbys)
 	maxMemory = (double) work_mem * hnsw_scan_mem_multiplier * 1024.0 + 256;
 	so->maxMemory = Min(maxMemory, (double) (SIZE_MAX / 2));
 
-	scan->opaque = so;
-
 	return scan;
 }
 
@@ -164,7 +168,7 @@ hnswbeginscan(Relation index, int nkeys, int norderbys)
  * Start or restart an index scan
  */
 void
-hnswrescan(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys)
+hnsw_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
 
@@ -179,15 +183,15 @@ hnswrescan(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int no
 	if (keys && scan->numberOfKeys > 0)
 		memmove(scan->keyData, keys, scan->numberOfKeys * sizeof(ScanKeyData));
 
-	if (orderbys && scan->numberOfOrderBys > 0)
-		memmove(scan->orderByData, orderbys, scan->numberOfOrderBys * sizeof(ScanKeyData));
+	if (orderbys && norderbys > 0)
+		pgvector_hnsw_set_orderbys(scan, orderbys, norderbys);
 }
 
 /*
  * Fetch the next tuple in the given scan
  */
 bool
-hnswgettuple(IndexScanDesc scan, ScanDirection dir)
+hnsw_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
 	MemoryContext oldCtx = MemoryContextSwitchTo(so->tmpCtx);
@@ -203,19 +207,13 @@ hnswgettuple(IndexScanDesc scan, ScanDirection dir)
 		Datum		value;
 
 		/* Count index scan for stats */
-		pgstat_count_index_scan(scan->indexRelation);
-#if PG_VERSION_NUM >= 180000
-		if (scan->instrument)
-			scan->instrument->nsearches++;
-#endif
+		pgstat_count_index_scan(pgvector_hnsw_index_rel(scan));
 
 		/* Safety check */
-		if (scan->orderByData == NULL)
+		if (pgvector_hnsw_norderbys(scan) <= 0)
 			elog(ERROR, "cannot scan hnsw index without order");
 
-		/* Requires MVCC-compliant snapshot as not able to maintain a pin */
-		/* https://www.postgresql.org/docs/current/index-locking.html */
-		if (!IsMVCCSnapshot(scan->xs_snapshot))
+		if (!IsMVCCSnapshot(pgvector_hnsw_snapshot(scan)))
 			elog(ERROR, "non-MVCC snapshots are not supported with hnsw");
 
 		/* Get scan value */
@@ -225,12 +223,12 @@ hnswgettuple(IndexScanDesc scan, ScanDirection dir)
 		 * Get a shared lock. This allows vacuum to ensure no in-flight scans
 		 * before marking tuples as deleted.
 		 */
-		LockPage(scan->indexRelation, HNSW_SCAN_LOCK, ShareLock);
+		LockPage(pgvector_hnsw_index_rel(scan), HNSW_SCAN_LOCK, ShareLock);
 
 		so->w = GetScanItems(scan, value);
 
 		/* Release shared lock */
-		UnlockPage(scan->indexRelation, HNSW_SCAN_LOCK, ShareLock);
+		UnlockPage(pgvector_hnsw_index_rel(scan), HNSW_SCAN_LOCK, ShareLock);
 
 		so->first = false;
 
@@ -266,20 +264,11 @@ hnswgettuple(IndexScanDesc scan, ScanDirection dir)
 			}
 			else
 			{
-				/*
-				 * Locking ensures when neighbors are read, the elements they
-				 * reference will not be deleted (and replaced) during the
-				 * iteration.
-				 *
-				 * Elements loaded into memory on previous iterations may have
-				 * been deleted (and replaced), so when reading neighbors, the
-				 * element version must be checked.
-				 */
-				LockPage(scan->indexRelation, HNSW_SCAN_LOCK, ShareLock);
+				LockPage(pgvector_hnsw_index_rel(scan), HNSW_SCAN_LOCK, ShareLock);
 
 				so->w = ResumeScanItems(scan);
 
-				UnlockPage(scan->indexRelation, HNSW_SCAN_LOCK, ShareLock);
+				UnlockPage(pgvector_hnsw_index_rel(scan), HNSW_SCAN_LOCK, ShareLock);
 
 #if defined(HNSW_MEMORY)
 				ShowMemoryUsage(so);
@@ -320,9 +309,7 @@ hnswgettuple(IndexScanDesc scan, ScanDirection dir)
 
 		MemoryContextSwitchTo(oldCtx);
 
-		scan->xs_heaptid = *heaptid;
-		scan->xs_recheck = false;
-		scan->xs_recheckorderby = false;
+		scan->currentItemData = *heaptid;
 		return true;
 	}
 
@@ -334,7 +321,7 @@ hnswgettuple(IndexScanDesc scan, ScanDirection dir)
  * End a scan and release resources
  */
 void
-hnswendscan(IndexScanDesc scan)
+hnsw_endscanindex(IndexScanDesc scan)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
 

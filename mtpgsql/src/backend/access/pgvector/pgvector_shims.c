@@ -19,6 +19,8 @@
 #include "utils/palloc.h"      /* ensure palloc0 visible even if postgres.h chain differs */
 #include "catalog/pg_type.h"
 #include "lib/stringinfo.h"    /* in case */
+#include "utils/varbit.h"
+#include "bitvec.h"
 #include <math.h>
 #include <errno.h>
 #include <string.h>
@@ -31,8 +33,28 @@
  * vector.c _PG_init calls them unconditionally. */
 void BitvecInit(void) {}
 void HalfvecInit(void) {}
-void IvfflatInit(void) {}
-void HnswInit(void) {}
+
+VarBit *
+InitBitVector(int dim)
+{
+	VarBit	   *result;
+	int			size;
+
+	size = VARBITDATALEN(dim);
+	result = (VarBit *) palloc0(size);
+	SET_VARSIZE(result, size);
+	VARBITLEN(result) = dim;
+	return result;
+}
+
+Datum
+halfvec_l2_normalize(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("halfvec is not built in this configuration")));
+	PG_RETURN_NULL();
+}
 
 /* ----------------------------------------------------------------
  * Minimal deconstruct_array / construct_array for pgvector's needs.

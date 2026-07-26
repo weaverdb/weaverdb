@@ -862,6 +862,72 @@ DATA(insert OID = 447 (  hashrestrpos	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  
 DESCR("hash(internal)");
 DATA(insert OID = 448 (  hashbuild		   PGUID 11 f t f 9 f 23 "0" 100 0 0 100  hashbuild - ));
 DESCR("hash(internal)");
+
+DATA(insert OID = 2219 (  ivfflatcostestimate PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  ivfflatcostestimate - ));
+DESCR("ivfflat index cost estimator");
+DATA(insert OID = 2220 (  ivfflatgettuple	   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  ivfflatgettuple - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2221 (  ivfflatinsert		   PGUID 11 f t f 6 f 23 "0" 100 0 0 100  ivfflatinsert - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2222 (  ivfflatdelete		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  ivfflatdelete - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2223 (  ivfflatbulkdelete	   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  ivfflatbulkdelete - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2224 (  ivfflatbeginscan	   PGUID 11 f t f 4 f 23 "0" 100 0 0 100  ivfflatbeginscan - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2225 (  ivfflatrescan		   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  ivfflatrescan - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2226 (  ivfflatendscan	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  ivfflatendscan - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2227 (  ivfflatbuild		   PGUID 11 f t f 9 f 23 "0" 100 0 0 100  ivfflatbuild - ));
+DESCR("ivfflat(internal)");
+DATA(insert OID = 2228 (  hnswcostestimate PGUID 11 f t f 7 f 0 "0 0 0 0 0 0 0" 100 0 0 100  hnswcostestimate - ));
+DESCR("hnsw index cost estimator");
+DATA(insert OID = 2229 (  hnswgettuple	   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  hnswgettuple - ));
+DESCR("hnsw(internal)");
+DATA(insert OID = 2230 (  hnswinsert		   PGUID 11 f t f 6 f 23 "0" 100 0 0 100  hnswinsert - ));
+DESCR("hnsw(internal)");
+DATA(insert OID = 2231 (  hnswdelete		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  hnswdelete - ));
+DESCR("hnsw(internal)");
+DATA(insert OID = 2232 (  hnswbulkdelete	   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  hnswbulkdelete - ));
+DESCR("hnsw(internal)");
+DATA(insert OID = 2233 (  hnswbeginscan	   PGUID 11 f t f 4 f 23 "0" 100 0 0 100  hnswbeginscan - ));
+DESCR("hnsw(internal)");
+DATA(insert OID = 2234 (  hnswrescan		   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  hnswrescan - ));
+DESCR("hnsw(internal)");
+DATA(insert OID = 2235 (  hnswendscan	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  hnswendscan - ));
+DESCR("hnsw(internal)");
+DATA(insert OID = 2236 (  hnswbuild		   PGUID 11 f t f 9 f 23 "0" 100 0 0 100  hnswbuild - ));
+DESCR("hnsw(internal)");
+
+DATA(insert OID = 2237 (  vector_in		   PGUID 11 f t t 3 f 1842 "0 0 23" 100 0 0 100  vector_in - ));
+DESCR("vector input");
+DATA(insert OID = 2238 (  vector_out		   PGUID 11 f t t 1 f 23 "1842" 100 0 0 100  vector_out - ));
+DESCR("vector output");
+DATA(insert OID = 2239 (  vector_typmod_in	   PGUID 11 f t t 1 f 23 "0" 100 0 0 100  vector_typmod_in - ));
+DESCR("vector typmod input");
+DATA(insert OID = 2240 (  l2_distance		   PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  l2_distance - ));
+DESCR("vector L2 distance");
+DATA(insert OID = 2241 (  vector_l2_squared_distance PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  vector_l2_squared_distance - ));
+DESCR("vector squared L2 distance");
+DATA(insert OID = 2242 (  vector_cmp		   PGUID 11 f t t 2 f 23 "1842 1842" 100 0 0 100  vector_cmp - ));
+DESCR("vector compare");
+DATA(insert OID = 2243 (  vector_negative_inner_product PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  vector_negative_inner_product - ));
+DESCR("vector negative inner product");
+DATA(insert OID = 2244 (  vector_norm		   PGUID 11 f t t 1 f 701 "1842" 100 0 0 100  vector_norm - ));
+DESCR("vector L2 norm");
+DATA(insert OID = 2245 (  vector_spherical_distance PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  vector_spherical_distance - ));
+DESCR("vector spherical distance");
+DATA(insert OID = 2246 (  l2_normalize		   PGUID 11 f t t 1 f 1842 "1842" 100 0 0 100  l2_normalize - ));
+DESCR("vector L2 normalize");
+DATA(insert OID = 2247 (  cosine_distance	   PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  cosine_distance - ));
+DESCR("vector cosine distance");
+
+#define F_VECTORIN	2237
+#define F_VECTOROUT	2238
+#define F_L2_DISTANCE	2240
+#define F_VECTOR_L2_SQUARED_DISTANCE 2241
+
 DATA(insert OID = 449 (  hashint2		   PGUID 11 f t t 1 f 23 "21" 100 0 0 100  hashint2 - ));
 DESCR("hash");
 DATA(insert OID = 450 (  hashint4		   PGUID 11 f t t 1 f 23 "23" 100 0 0 100  hashint4 - ));

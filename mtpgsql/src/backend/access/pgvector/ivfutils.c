@@ -1,7 +1,6 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "access/generic_xlog.h"
 #include "fmgr.h"
 #include "halfutils.h"
 #include "halfvec.h"
@@ -11,9 +10,7 @@
 #include "utils/varbit.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
 
 /*
  * Allocate a vector array
@@ -50,7 +47,7 @@ VectorArrayFree(VectorArray arr)
 int
 IvfflatGetLists(Relation index)
 {
-	IvfflatOptions *opts = (IvfflatOptions *) index->rd_options;
+	IvfflatOptions *opts = (IvfflatOptions *) ((bytea *) NULL);
 
 	if (opts)
 		return opts->lists;
@@ -96,7 +93,7 @@ IvfflatNewBuffer(Relation index, ForkNumber forkNum)
 {
 	Buffer		buf = ReadBufferExtended(index, forkNum, P_NEW, RBM_NORMAL, NULL);
 
-	LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
+	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 	return buf;
 }
 
@@ -115,10 +112,9 @@ IvfflatInitPage(Buffer buf, Page page)
  * Init and register page
  */
 void
-IvfflatInitRegisterPage(Relation index, Buffer *buf, Page *page, GenericXLogState **state)
+IvfflatInitRegisterPage(Relation index, Buffer *buf, Page *page)
 {
-	*state = GenericXLogStart(index);
-	*page = GenericXLogRegisterBuffer(*state, *buf, GENERIC_XLOG_FULL_IMAGE);
+	*page = BufferGetPage(*buf);
 	IvfflatInitPage(*buf, *page);
 }
 
@@ -126,10 +122,10 @@ IvfflatInitRegisterPage(Relation index, Buffer *buf, Page *page, GenericXLogStat
  * Commit buffer
  */
 void
-IvfflatCommitBuffer(Buffer buf, GenericXLogState *state)
+IvfflatCommitBuffer(Relation index, Buffer buff)
 {
-	GenericXLogFinish(state);
-	UnlockReleaseBuffer(buf);
+	LockBuffer(index, buff, BUFFER_LOCK_UNLOCK);
+	WriteBuffer(index, buff);
 }
 
 /*
@@ -138,11 +134,11 @@ IvfflatCommitBuffer(Buffer buf, GenericXLogState *state)
  * The order is very important!!
  */
 void
-IvfflatAppendPage(Relation index, Buffer *buf, Page *page, GenericXLogState **state, ForkNumber forkNum)
+IvfflatAppendPage(Relation index, Buffer *buf, Page *page, ForkNumber forkNum)
 {
 	/* Get new buffer */
 	Buffer		newbuf = IvfflatNewBuffer(index, forkNum);
-	Page		newpage = GenericXLogRegisterBuffer(*state, newbuf, GENERIC_XLOG_FULL_IMAGE);
+	Page		newpage = BufferGetPage(newbuf);
 
 	/* Update the previous buffer */
 	IvfflatPageGetOpaque(*page)->nextblkno = BufferGetBlockNumber(newbuf);
@@ -150,14 +146,11 @@ IvfflatAppendPage(Relation index, Buffer *buf, Page *page, GenericXLogState **st
 	/* Init new page */
 	IvfflatInitPage(newbuf, newpage);
 
-	/* Commit */
-	GenericXLogFinish(*state);
+	/* Commit previous page */
+	LockBuffer(index, *buf, BUFFER_LOCK_UNLOCK);
+	WriteBuffer(index, *buf);
 
-	/* Unlock */
-	UnlockReleaseBuffer(*buf);
-
-	*state = GenericXLogStart(index);
-	*page = GenericXLogRegisterBuffer(*state, newbuf, GENERIC_XLOG_FULL_IMAGE);
+	*page = BufferGetPage(newbuf);
 	*buf = newbuf;
 }
 
@@ -172,7 +165,7 @@ IvfflatGetMetaPageInfo(Relation index, int *lists, int *dimensions)
 	IvfflatMetaPage metap;
 
 	buf = ReadBuffer(index, IVFFLAT_METAPAGE_BLKNO);
-	LockBuffer(buf, BUFFER_LOCK_SHARE);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 	metap = IvfflatPageGetMeta(page);
 
@@ -185,7 +178,8 @@ IvfflatGetMetaPageInfo(Relation index, int *lists, int *dimensions)
 	if (dimensions != NULL)
 		*dimensions = metap->dimensions;
 
-	UnlockReleaseBuffer(buf);
+	LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+	ReleaseBuffer(index, buf);
 }
 
 /*
@@ -198,14 +192,12 @@ IvfflatUpdateList(Relation index, ListInfo listInfo,
 {
 	Buffer		buf;
 	Page		page;
-	GenericXLogState *state;
 	IvfflatList list;
 	bool		changed = false;
 
 	buf = ReadBufferExtended(index, forkNum, listInfo.blkno, RBM_NORMAL, NULL);
-	LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
-	state = GenericXLogStart(index);
-	page = GenericXLogRegisterBuffer(state, buf, 0);
+	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
+	page = BufferGetPage(buf);
 	list = (IvfflatList) PageGetItem(page, PageGetItemId(page, listInfo.offno));
 
 	if (BlockNumberIsValid(insertPage) && insertPage != list->insertPage)
@@ -227,11 +219,11 @@ IvfflatUpdateList(Relation index, ListInfo listInfo,
 
 	/* Only commit if changed */
 	if (changed)
-		IvfflatCommitBuffer(buf, state);
+		IvfflatCommitBuffer(index, buf);
 	else
 	{
-		GenericXLogAbort(state);
-		UnlockReleaseBuffer(buf);
+		LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+		ReleaseBuffer(index, buf);
 	}
 }
 

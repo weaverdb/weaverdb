@@ -3,7 +3,6 @@
 #include <math.h>
 
 #include "access/genam.h"
-#include "access/generic_xlog.h"
 #include "common/hashfn.h"
 #include "fmgr.h"
 #include "hnsw.h"
@@ -17,11 +16,8 @@
 #include "utils/rel.h"
 #include "vector.h"
 
-#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
-#endif
 
-#if PG_VERSION_NUM < 170000
 static inline uint64
 murmurhash64(uint64 data)
 {
@@ -35,7 +31,6 @@ murmurhash64(uint64 data)
 
 	return h;
 }
-#endif
 
 /* TID hash table */
 static uint32
@@ -112,7 +107,7 @@ hash_offset(Size offset)
 int
 HnswGetM(Relation index)
 {
-	HnswOptions *opts = (HnswOptions *) index->rd_options;
+	HnswOptions *opts = (HnswOptions *) ((bytea *) NULL);
 
 	if (opts)
 		return opts->m;
@@ -126,7 +121,7 @@ HnswGetM(Relation index)
 int
 HnswGetEfConstruction(Relation index)
 {
-	HnswOptions *opts = (HnswOptions *) index->rd_options;
+	HnswOptions *opts = (HnswOptions *) ((bytea *) NULL);
 
 	if (opts)
 		return opts->efConstruction;
@@ -153,7 +148,7 @@ void
 HnswInitSupport(HnswSupport * support, Relation index)
 {
 	support->procinfo = index_getprocinfo(index, 1, HNSW_DISTANCE_PROC);
-	support->collation = index->rd_indcollation[0];
+	support->collation = InvalidOid;
 	support->normprocinfo = HnswOptionalProcInfo(index, HNSW_NORM_PROC);
 }
 
@@ -183,7 +178,7 @@ HnswNewBuffer(Relation index, ForkNumber forkNum)
 {
 	Buffer		buf = ReadBufferExtended(index, forkNum, P_NEW, RBM_NORMAL, NULL);
 
-	LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
+	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 	return buf;
 }
 
@@ -303,7 +298,7 @@ HnswGetMetaPageInfo(Relation index, int *m, HnswElement * entryPoint)
 	HnswMetaPage metap;
 
 	buf = ReadBuffer(index, HNSW_METAPAGE_BLKNO);
-	LockBuffer(buf, BUFFER_LOCK_SHARE);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 	metap = HnswPageGetMeta(page);
 
@@ -376,28 +371,17 @@ HnswUpdateMetaPage(Relation index, int updateEntry, HnswElement entryPoint, Bloc
 {
 	Buffer		buf;
 	Page		page;
-	GenericXLogState *state;
+
+	(void) building;
 
 	buf = ReadBufferExtended(index, forkNum, HNSW_METAPAGE_BLKNO, RBM_NORMAL, NULL);
-	LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
-	if (building)
-	{
-		state = NULL;
-		page = BufferGetPage(buf);
-	}
-	else
-	{
-		state = GenericXLogStart(index);
-		page = GenericXLogRegisterBuffer(state, buf, 0);
-	}
+	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
+
+	page = BufferGetPage(buf);
 
 	HnswUpdateMetaPageInfo(page, updateEntry, entryPoint, insertPage);
 
-	if (building)
-		MarkBufferDirty(buf);
-	else
-		GenericXLogFinish(state);
-	UnlockReleaseBuffer(buf);
+	HnswWriteBuffer(index, buf);
 }
 
 /*
@@ -512,7 +496,7 @@ HnswLoadElementFromTuple(HnswElement element, HnswElementTuple etup, bool loadHe
 	if (loadVec)
 	{
 		char	   *base = NULL;
-		Datum		value = datumCopy(PointerGetDatum(&etup->data), false, -1);
+		Datum		value = datumCopy(PointerGetDatum(&etup->data), (Oid) 0, false, (Size) -1);
 
 		HnswPtrStore(base, element->value, (char *) DatumGetPointer(value));
 	}
@@ -539,7 +523,7 @@ HnswLoadElementImpl(BlockNumber blkno, OffsetNumber offno, double *distance, Hns
 
 	/* Read vector */
 	buf = ReadBuffer(index, blkno);
-	LockBuffer(buf, BUFFER_LOCK_SHARE);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 
 	etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, offno));
@@ -762,7 +746,7 @@ HnswLoadNeighborTids(HnswElement element, ItemPointerData *indextids, Relation i
 	int			start;
 
 	buf = ReadBuffer(index, element->neighborPage);
-	LockBuffer(buf, BUFFER_LOCK_SHARE);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 
 	ntup = (HnswNeighborTuple) PageGetItem(page, PageGetItemId(page, element->neighborOffno));
@@ -1077,9 +1061,9 @@ SelectNeighbors(char *base, List *c, int lm, HnswSupport * support, bool *closer
 	if (sortCandidates)
 	{
 		if (base == NULL)
-			list_sort(w, CompareCandidateDistances);
+			w = list_sort(w, CompareCandidateDistances);
 		else
-			list_sort(w, CompareCandidateDistancesOffset);
+			w = list_sort(w, CompareCandidateDistancesOffset);
 	}
 
 	while (list_length(w) > 0 && list_length(r) < lm)
