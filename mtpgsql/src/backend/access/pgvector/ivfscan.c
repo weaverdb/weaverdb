@@ -160,6 +160,9 @@ GetScanItems(IndexScanDesc scan, Datum value)
 				itup = (IndexTuple) PageGetItem(page, itemid);
 				datum = index_getattr(itup, 1, tupdesc, &isnull);
 
+				if (isnull)
+					continue;
+
 				/*
 				 * Add virtual tuple
 				 *
