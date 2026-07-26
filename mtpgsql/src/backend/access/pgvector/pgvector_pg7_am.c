@@ -261,13 +261,29 @@ hnswbuild(Relation heap,
 	IndexBuildResult *result;
 
 	(void) istrat;
-	(void) pcount;
-	(void) params;
 	(void) finfo;
 	(void) predInfo;
 
-	indexInfo = pgvector_make_indexinfo(natts, attnum);
-	result = hnsw_buildindex(heap, index, indexInfo);
+	{
+		int			m = 0;
+		int			ef = 0;
+
+		if (pcount > 0 && params != NULL)
+			m = DatumGetInt32(params[0]);
+		if (pcount > 1 && params != NULL)
+			ef = DatumGetInt32(params[1]);
+
+		if (m != 0 && (m < HNSW_MIN_M || m > HNSW_MAX_M))
+			elog(ERROR, "hnsw m must be between %d and %d", HNSW_MIN_M, HNSW_MAX_M);
+		if (ef != 0 && (ef < HNSW_MIN_EF_CONSTRUCTION || ef > HNSW_MAX_EF_CONSTRUCTION))
+			elog(ERROR, "hnsw ef_construction must be between %d and %d",
+				 HNSW_MIN_EF_CONSTRUCTION, HNSW_MAX_EF_CONSTRUCTION);
+
+		HnswSetBuildParams(RelationGetRelid(index), m, ef);
+		indexInfo = pgvector_make_indexinfo(natts, attnum);
+		result = hnsw_buildindex(heap, index, indexInfo);
+		HnswClearBuildParams(RelationGetRelid(index));
+	}
 	if (result != NULL)
 		pfree(result);
 }

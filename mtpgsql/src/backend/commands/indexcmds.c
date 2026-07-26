@@ -101,6 +101,10 @@ DefineIndex(char *heapRelationName,
 	bool		deferred = FALSE;
 	bool		ivfflat_lists_set = FALSE;
 	int32		ivfflat_lists = 0;
+	bool		hnsw_m_set = FALSE;
+	bool		hnsw_ef_set = FALSE;
+	int32		hnsw_m = 0;
+	int32		hnsw_ef = 0;
 	List	   *pl;
 
 	/*
@@ -173,6 +177,38 @@ DefineIndex(char *heapRelationName,
 			ivfflat_lists = val;
 			ivfflat_lists_set = TRUE;
 		}
+		else if (!strcasecmp(param->defname, "m"))
+		{
+			int			val;
+
+			if (strcasecmp(accessMethodName, "hnsw") != 0)
+				elog(ERROR, "index option \"m\" is only valid for hnsw indexes");
+			if (hnsw_m_set)
+				elog(ERROR, "index option \"m\" specified more than once");
+			if (param->arg == NULL || !IsA(param->arg, Integer))
+				elog(ERROR, "index option \"m\" must be an integer");
+			val = intVal(param->arg);
+			if (val < 2 || val > 100)
+				elog(ERROR, "index option \"m\" must be between 2 and 100");
+			hnsw_m = val;
+			hnsw_m_set = TRUE;
+		}
+		else if (!strcasecmp(param->defname, "ef_construction"))
+		{
+			int			val;
+
+			if (strcasecmp(accessMethodName, "hnsw") != 0)
+				elog(ERROR, "index option \"ef_construction\" is only valid for hnsw indexes");
+			if (hnsw_ef_set)
+				elog(ERROR, "index option \"ef_construction\" specified more than once");
+			if (param->arg == NULL || !IsA(param->arg, Integer))
+				elog(ERROR, "index option \"ef_construction\" must be an integer");
+			val = intVal(param->arg);
+			if (val < 4 || val > 1000)
+				elog(ERROR, "index option \"ef_construction\" must be between 4 and 1000");
+			hnsw_ef = val;
+			hnsw_ef_set = TRUE;
+		}
 		else
 			elog(NOTICE, "Unrecognized index attribute \"%s\" ignored",
 				 param->defname);
@@ -183,6 +219,13 @@ DefineIndex(char *heapRelationName,
 		parameterCount = 1;
 		parameterA = (Datum *) palloc(sizeof(Datum));
 		parameterA[0] = Int32GetDatum(ivfflat_lists);
+	}
+	else if (hnsw_m_set || hnsw_ef_set)
+	{
+		parameterCount = 2;
+		parameterA = (Datum *) palloc(2 * sizeof(Datum));
+		parameterA[0] = Int32GetDatum(hnsw_m_set ? hnsw_m : 0);
+		parameterA[1] = Int32GetDatum(hnsw_ef_set ? hnsw_ef : 0);
 	}
 
 	/*

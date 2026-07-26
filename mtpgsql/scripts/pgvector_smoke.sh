@@ -55,7 +55,7 @@ else
   echo "OK: ivfflat index"
 fi
 
-out=$(run_sql "create index pv_smoke_hnsw on pv_smoke using hnsw (emb vector_l2_ops);")
+out=$(run_sql "create index pv_smoke_hnsw on pv_smoke using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32);")
 if echo "$out" | grep -qi ERROR; then
   echo "FAIL: hnsw index" >&2
   echo "$out" >&2

@@ -87,6 +87,15 @@ public class PgvectorOrderByTest {
         assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
     }
 
+    @Test
+    @Order(7)
+    public void createHnswIndexWithOptions() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            exec(conn,
+                    "create index pv_ob_j_hnsw on pv_ob_j using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32)");
+        }
+    }
+
     private static void assertIds(String sql, int... expected) throws Exception {
         List<Integer> got = queryIntColumn(sql, 1);
         Assertions.assertEquals(expected.length, got.size(), "row count for: " + sql);
