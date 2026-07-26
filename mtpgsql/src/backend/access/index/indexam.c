@@ -72,6 +72,7 @@
 #include "access/blobstorage.h"
 #include "fmgr.h"
 #include "utils/relcache.h"
+#include "utils/mcxt.h"
 #include "miscadmin.h"
 
 /* ----------------------------------------------------------------
@@ -447,10 +448,18 @@ index_getprocinfo(Relation irel, AttrNumber attnum, uint16 procnum)
 	if (irel->rd_procinfo == NULL)
 	{
 		Size		size = (Size) natts * amsupport * sizeof(FmgrInfo);
+		MemoryContext oldcxt;
 
+		/*
+		 * Cached for the lifetime of the relcache entry (see relcache.c).
+		 * pgvector index AMs call index_getprocinfo from short-lived insert
+		 * or scan memory contexts; must not allocate rd_procinfo there.
+		 */
+		oldcxt = MemoryContextSwitchTo(MemoryContextGetEnv()->CacheMemoryContext);
 		loc = (FmgrInfo *) palloc(size);
 		MemSet(loc, 0, size);
 		irel->rd_procinfo = loc;
+		MemoryContextSwitchTo(oldcxt);
 	}
 	else
 		loc = irel->rd_procinfo;

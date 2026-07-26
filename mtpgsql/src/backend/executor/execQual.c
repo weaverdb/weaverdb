@@ -770,12 +770,33 @@ ExecMakeFunctionResult(Node * node,
 		return fmgr_cached_javaA(info,fcache->nargs, args, &returnType, isNull);
         } else {
 		int             i;
+		bool            hasNullArg = false;
 
 		if (isDone)
 			*isDone = true;
 		for (i = 0; i < fcache->nargs; i++)
+		{
+			if (fcache->nullVect[i] == true)
+				hasNullArg = true;
+		}
+
+		/*
+		 * Strict functions must not be invoked with NULL arguments.
+		 * nullvalue()/nonnullvalue() are the PG7 IS NULL implementation
+		 * and must still run (they read *isNull, not the Datum).
+		 */
+		if (hasNullArg && fcache->foid != F_NULLVALUE && fcache->foid != F_NONNULLVALUE)
+		{
+			*isNull = true;
+			return (Datum) 0;
+		}
+
+		*isNull = false;
+		for (i = 0; i < fcache->nargs; i++)
+		{
 			if (fcache->nullVect[i] == true)
 				*isNull = true;
+		}
 
 		return (Datum) fmgr_c(&fcache->func, (FmgrValues *) argV, isNull);
 	}
