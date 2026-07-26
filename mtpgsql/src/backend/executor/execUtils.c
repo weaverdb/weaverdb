@@ -1120,6 +1120,9 @@ ExecInsertIndexTuples(TupleTableSlot *slot,
 							  &(heapTuple->t_self),		/* tid of heap tuple */
 							  heapRelation,is_put);
 
+		if (result == NULL)
+			continue;
+
                 while ( result->result == INDEX_UNIQUE_VIOLATION ) {
                     if ( is_put ) {
                         IndexProp  atts = IndexProperties(RelationGetRelid(relationDescs[i]));

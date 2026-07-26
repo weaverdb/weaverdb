@@ -23,6 +23,7 @@
 #include "catalog/pg_proc.h"
 #include "commands/trigger.h"
 #include "utils/builtins.h"
+#include "fmgr.h"
 #include "utils/fmgrtab.h"
 #include "utils/syscache.h"
 #include "utils/java.h"
@@ -105,8 +106,15 @@ fmgr_c(FmgrInfo *finfo,
 			returnValue = (*fmgr_faddr(finfo)) ();
 			break;
 		case 1:
-			/* NullValue() uses isNull to check if args[0] is NULL */
-			returnValue = (*fmgr_faddr_1(finfo)) (values->data[0]);
+			/*
+			 * nullvalue()/nonnullvalue() take (Datum, bool *isNull) but are
+			 * registered with pronargs = 1; pass the executor null flag.
+			 */
+			if (finfo->fn_oid == F_NULLVALUE || finfo->fn_oid == F_NONNULLVALUE)
+				returnValue = (*fmgr_faddr_2(finfo)) (values->data[0],
+													   (long) isNull);
+			else
+				returnValue = (*fmgr_faddr_1(finfo)) (values->data[0]);
 			break;
 		case 2:
 			returnValue = (*fmgr_faddr_2(finfo)) (values->data[0], values->data[1]);
