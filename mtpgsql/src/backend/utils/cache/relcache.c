@@ -1022,7 +1022,10 @@ IndexedAccessMethodInitialize(Relation relation) {
     natts = relation->rd_rel->relnatts;
     relamstrategies = relation->rd_am->amstrategies;
     stratSize = AttributeNumberGetIndexStrategySize(natts, relamstrategies);
-    strategy = (IndexStrategy) palloc(stratSize);
+    if (stratSize > 0)
+        strategy = (IndexStrategy) palloc(stratSize);
+    else
+        strategy = (IndexStrategy) NULL;
     relamsupport = relation->rd_am->amsupport;
 
     if (relamsupport > 0) {

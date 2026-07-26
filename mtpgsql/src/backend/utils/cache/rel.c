@@ -43,7 +43,7 @@ RelationSetIndexSupport(Relation relation,
 						RegProcedure *support)
 {
 	Assert(PointerIsValid(relation));
-	Assert(IndexStrategyIsValid(strategy));
+	Assert(strategy == NULL || IndexStrategyIsValid(strategy));
 
 	if (relation->rd_procinfo)
 	{

@@ -20,7 +20,7 @@ trap cleanup EXIT
 "$INITDB" -D "$TESTDIR" >/dev/null
 
 run_session() {
-  printf '%s\n' "$@" | "$PG" -D "$TESTDIR" -o /dev/null template1 2>&1
+  printf '%s\n' "$@" | "$PG" -D "$TESTDIR" template1 2>&1
 }
 
 ids_from_output() {
@@ -56,7 +56,6 @@ assert_ids() {
 }
 
 setup_out=$(run_session \
-  "drop table if exists pv_ob;" \
   "create table pv_ob (id int, emb vector);" \
   "insert into pv_ob values (1, '[1,0,0]');" \
   "insert into pv_ob values (2, '[0,1,0]');" \

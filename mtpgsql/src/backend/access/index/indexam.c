@@ -412,15 +412,16 @@ index_getprocid(Relation irel,
 				uint16 procnum)
 {
 	RegProcedure *loc;
-	int			natts;
+	int			amsupport;
 
-	natts = irel->rd_rel->relnatts;
-
+	amsupport = irel->rd_am->amsupport;
 	loc = irel->rd_support;
 
 	Assert(loc != NULL);
+	Assert(attnum >= 1 && attnum <= irel->rd_rel->relnatts);
+	Assert(procnum >= 1 && procnum <= amsupport);
 
-	return loc[(natts * (procnum - 1)) + (attnum - 1)];
+	return loc[(attnum - 1) * amsupport + (procnum - 1)];
 }
 
 /*
@@ -454,7 +455,7 @@ index_getprocinfo(Relation irel, AttrNumber attnum, uint16 procnum)
 	else
 		loc = irel->rd_procinfo;
 
-	idx = (natts * (procnum - 1)) + (attnum - 1);
+	idx = (attnum - 1) * amsupport + (procnum - 1);
 
 	if (loc[idx].fn_oid == InvalidOid && loc[idx].fn_addr == NULL)
 	{

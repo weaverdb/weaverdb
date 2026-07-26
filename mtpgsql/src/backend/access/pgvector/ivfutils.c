@@ -62,12 +62,17 @@ IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum)
 		val = heap_getattr(tup, attnum, RelationGetDescr(heap), &isnull);
 		if (!isnull)
 		{
-			Vector	   *vec = (Vector *) DatumGetPointer(val);
+			Vector	   *vec = (Vector *) PG_DETOAST_DATUM(val);
+			int			dim;
 
 			heap_endscan(scan);
-			if (vec != NULL && vec->dim > 0)
-				return (int) vec->dim;
-			return -1;
+			if (vec != NULL && vec->dim > 0 && vec->dim <= VECTOR_MAX_DIM)
+				dim = (int) vec->dim;
+			else
+				return -1;
+			if ((Pointer) vec != DatumGetPointer(val))
+				pfree(vec);
+			return dim;
 		}
 	}
 	heap_endscan(scan);

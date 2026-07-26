@@ -209,7 +209,7 @@ CreateGraphPages(HnswBuildState * buildstate)
 		ItemPointerSet(&etup->neighbortid, element->neighborPage, element->neighborOffno);
 
 		/* Add element */
-		if (PageAddItem(page, (Item) etup, etupSize, InvalidOffsetNumber, false) != element->offno)
+		if (PageAddItem(page, (Item) etup, etupSize, InvalidOffsetNumber, LP_USED) != element->offno)
 			elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 
 		/* Add new page if needed */
@@ -217,7 +217,7 @@ CreateGraphPages(HnswBuildState * buildstate)
 			HnswBuildAppendPage(index, &buf, &page, forkNum);
 
 		/* Add placeholder for neighbors */
-		if (PageAddItem(page, (Item) ntup, ntupSize, InvalidOffsetNumber, false) != element->neighborOffno)
+		if (PageAddItem(page, (Item) ntup, ntupSize, InvalidOffsetNumber, LP_USED) != element->neighborOffno)
 			elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 	}
 
@@ -679,7 +679,12 @@ InitBuildState(HnswBuildState * buildstate, Relation heap, Relation index, Pgvec
 	if (buildstate->dimensions < 0)
 	{
 		TupleDesc	inddesc = RelationGetDescr(index);
-		AttrNumber	heapatt = TupleDescAttr(inddesc, 0)->attnum;
+		AttrNumber	heapatt;
+
+		if (indexInfo != NULL && indexInfo->ii_KeyAttributeNumbers != NULL)
+			heapatt = indexInfo->ii_KeyAttributeNumbers[0];
+		else
+			heapatt = TupleDescAttr(inddesc, 0)->attnum;
 
 		buildstate->dimensions = IvfflatInferIndexDimensions(heap, heapatt);
 	}

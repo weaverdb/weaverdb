@@ -20,7 +20,7 @@ trap cleanup EXIT
 "$INITDB" -D "$TESTDIR" >/dev/null
 
 run_sql() {
-  printf '%s\n' "$@" | "$PG" -D "$TESTDIR" -o /dev/null template1 2>&1
+  printf '%s\n' "$@" | "$PG" -D "$TESTDIR" template1 2>&1
 }
 
 failures=0
