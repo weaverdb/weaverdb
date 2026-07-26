@@ -60,6 +60,7 @@ class DirectWeaverConnection implements DBReference {
     private static final MethodHandle WDestroyPreparedStatement;
     private static final MethodHandle WPrepareStatement;
     private static final MethodHandle WExec;
+    private static final MethodHandle WExecCount;
     private static final MethodHandle WFetch;
     private static final MethodHandle WPrepare;
     private static final MethodHandle WCommit;
@@ -72,6 +73,7 @@ class DirectWeaverConnection implements DBReference {
     private static final MethodHandle WGetCommandId;
     private static final MethodHandle WStreamExec;
     private static final MethodHandle WGetErrorText;
+    private static final MethodHandle WGetErrorCode;
     private static final MethodHandle WBindTransfer;
     private static final MethodHandle WOutputTransfer;
     private static final MethodHandle WConnectStdIO;
@@ -96,6 +98,7 @@ class DirectWeaverConnection implements DBReference {
         WPrepareStatement = LINKER.downcallHandle(LOADER.find("WPrepareStatement").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
         WExec = LINKER.downcallHandle(LOADER.find("WExec").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
+        WExecCount = LINKER.downcallHandle(LOADER.find("WExecCount").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WFetch = LINKER.downcallHandle(LOADER.find("WFetch").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WPrepare = LINKER.downcallHandle(LOADER.find("WPrepare").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WCommit = LINKER.downcallHandle(LOADER.find("WCommit").orElseThrow(), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
@@ -115,6 +118,8 @@ class DirectWeaverConnection implements DBReference {
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS));
         WGetErrorText = LINKER.downcallHandle(LOADER.find("WGetErrorText").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS));
+        WGetErrorCode = LINKER.downcallHandle(LOADER.find("WGetErrorCode").orElseThrow(),
+                FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WBindTransfer = LINKER.downcallHandle(LOADER.find("WBindTransfer").orElseThrow(),
                 FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
         WOutputTransfer = LINKER.downcallHandle(LOADER.find("WOutputTransfer").orElseThrow(),
@@ -565,25 +570,39 @@ class DirectWeaverConnection implements DBReference {
     }
     
     private void check(long check) throws ExecutionException {
-        long result = (Long)check;
-        if (result != 0) {
-            handleError();
+        if (check != 0) {
+            handleError(check);
         }
     }
 
     private void handleError() throws ExecutionException {
+        handleError(0);
+    }
+
+    private void handleError(long fetchCode) throws ExecutionException {
+        long code = 0;
         MemorySegment text = MemorySegment.NULL;
         try {
-            text = (MemorySegment)WGetErrorText.invokeExact(nativePointer);
+            code = (long) WGetErrorCode.invokeExact(nativePointer);
+            text = (MemorySegment) WGetErrorText.invokeExact(nativePointer);
         } catch (Throwable e) {
             throw new ExecutionException(e);
         }
+        String msg = null;
         if (!text.equals(MemorySegment.NULL)) {
             try (Arena a = Arena.ofConfined()) {
                 text = text.reinterpret(256, a, null);
-                throw new ExecutionException(text.getString(0));
+                msg = text.getString(0);
             }
         }
+        if (msg == null || msg.isEmpty()) {
+            if (fetchCode != 0) {
+                msg = "Weaver database error (native return " + fetchCode + ", code " + code + ")";
+            } else {
+                msg = "Weaver database error (code " + code + ")";
+            }
+        }
+        throw new ExecutionException(msg);
     }
     
     private OutputStream os;
@@ -715,10 +734,10 @@ class DirectWeaverConnection implements DBReference {
                 throw new ExecutionException(t);
             }
             
-            if (result == -4) { //EOD
+            if (result == 4) { /* EOT (End of Transmission) */
                 return false;
             } else if (result != 0) {
-                handleError();
+                handleError(result);
             } else {
                 return true;
             }
@@ -750,14 +769,16 @@ class DirectWeaverConnection implements DBReference {
             long processed = 0;
             
             try {
-                processed = (long)WExec.invokeExact(link);
+                processed = (long) WExec.invokeExact(link);
+                check(processed);
+                return (long) WExecCount.invokeExact(link);
+            } catch (ExecutionException ee) {
+                throw ee;
             } catch (Throwable t) {
                 throw new ExecutionException(t);
             } finally {
                 executed = true;
             }
-
-            return processed;
         }
         
         @Override
