@@ -434,6 +434,8 @@ typedef struct HnswVacuumState
 /* Methods */
 int			HnswGetM(Relation index);
 int			HnswGetEfConstruction(Relation index);
+void		HnswSetBuildParams(Oid indexId, int m, int efConstruction);
+void		HnswClearBuildParams(Oid indexId);
 FmgrInfo   *HnswOptionalProcInfo(Relation index, uint16 procnum);
 void		HnswInitSupport(HnswSupport * support, Relation index);
 Datum		HnswNormValue(const HnswTypeInfo * typeInfo, Oid collation, Datum value);

@@ -62,7 +62,7 @@ setup_out=$(run_session \
   "insert into pv_ob values (3, '[0,0,1]');" \
   "insert into pv_ob values (4, '[9,0,0]');" \
   "create index pv_ob_ivf on pv_ob using ivfflat (emb vector_l2_ops) with (lists = 2);" \
-  "create index pv_ob_hnsw on pv_ob using hnsw (emb vector_l2_ops);")
+  "create index pv_ob_hnsw on pv_ob using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32);")
 if echo "$setup_out" | grep -qi ERROR; then
   echo "FAIL: setup" >&2
   echo "$setup_out" >&2

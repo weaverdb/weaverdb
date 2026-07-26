@@ -6,6 +6,7 @@
 #include "common/hashfn.h"
 #include "fmgr.h"
 #include "hnsw.h"
+#include "env/freespace.h"
 #include "lib/pairingheap.h"
 #include "nodes/pg_list.h"
 #include "port/atomics.h"
@@ -104,13 +105,67 @@ hash_offset(Size offset)
 /*
  * Get the max number of connections in an upper layer for each element in the index
  */
+static Oid		hnsw_build_indexid = InvalidOid;
+static int		hnsw_build_m = 0;
+static int		hnsw_build_ef = 0;
+
+void
+HnswSetBuildParams(Oid indexId, int m, int efConstruction)
+{
+	hnsw_build_indexid = indexId;
+	hnsw_build_m = m;
+	hnsw_build_ef = efConstruction;
+}
+
+void
+HnswClearBuildParams(Oid indexId)
+{
+	if (hnsw_build_indexid == indexId)
+	{
+		hnsw_build_indexid = InvalidOid;
+		hnsw_build_m = 0;
+		hnsw_build_ef = 0;
+	}
+}
+
+static void
+HnswReadMetaParams(Relation index, int *m, int *efConstruction)
+{
+	Buffer		buf;
+	Page		page;
+	HnswMetaPage metap;
+
+	buf = ReadBuffer(index, HNSW_METAPAGE_BLKNO);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
+	page = BufferGetPage(buf);
+	metap = HnswPageGetMeta(page);
+
+	if (unlikely(metap->magicNumber != HNSW_MAGIC_NUMBER))
+		elog(ERROR, "hnsw index is not valid");
+
+	if (m != NULL)
+		*m = (int) metap->m;
+
+	if (efConstruction != NULL)
+		*efConstruction = (int) metap->efConstruction;
+
+	UnlockReleaseBuffer(buf);
+}
+
 int
 HnswGetM(Relation index)
 {
-	HnswOptions *opts = (HnswOptions *) ((bytea *) NULL);
+	if (hnsw_build_indexid == RelationGetRelid(index) && hnsw_build_m > 0)
+		return hnsw_build_m;
 
-	if (opts)
-		return opts->m;
+	if (RelationGetNumberOfBlocks(index) > 0)
+	{
+		int			m = 0;
+
+		HnswReadMetaParams(index, &m, NULL);
+		if (m > 0)
+			return m;
+	}
 
 	return HNSW_DEFAULT_M;
 }
@@ -121,10 +176,17 @@ HnswGetM(Relation index)
 int
 HnswGetEfConstruction(Relation index)
 {
-	HnswOptions *opts = (HnswOptions *) ((bytea *) NULL);
+	if (hnsw_build_indexid == RelationGetRelid(index) && hnsw_build_ef > 0)
+		return hnsw_build_ef;
 
-	if (opts)
-		return opts->efConstruction;
+	if (RelationGetNumberOfBlocks(index) > 0)
+	{
+		int			ef = 0;
+
+		HnswReadMetaParams(index, NULL, &ef);
+		if (ef > 0)
+			return ef;
+	}
 
 	return HNSW_DEFAULT_EF_CONSTRUCTION;
 }
