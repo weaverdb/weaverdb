@@ -327,6 +327,13 @@ InitBuildState(IvfflatBuildState * buildstate, Relation heap, Relation index, Pg
 	buildstate->lists = IvfflatGetLists(index);
 	buildstate->dimensions = TupleDescAttr(index->rd_att, 0)->atttypmod;
 
+	if (buildstate->dimensions < 0)
+	{
+		AttrNumber	heapatt = TupleDescAttr(buildstate->tupdesc, 0)->attnum;
+
+		buildstate->dimensions = IvfflatInferIndexDimensions(heap, heapatt);
+	}
+
 	/* Disallow varbit since require fixed dimensions */
 	if (TupleDescAttr(index->rd_att, 0)->atttypid == VARBITOID)
 		ereport(ERROR,

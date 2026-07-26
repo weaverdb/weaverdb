@@ -1,6 +1,7 @@
 #include "postgres.h"
 
 #include "access/genam.h"
+#include "access/heapam.h"
 #include "fmgr.h"
 #include "halfutils.h"
 #include "halfvec.h"
@@ -39,6 +40,38 @@ VectorArrayFree(VectorArray arr)
 {
 	pfree(arr->items);
 	pfree(arr);
+}
+
+/*
+ * Infer vector dimensions from heap data when atttypmod is unset (-1).
+ */
+int
+IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum)
+{
+	HeapScanDesc scan;
+	HeapTuple	tup;
+	bool		isnull = false;
+	Datum		val;
+
+	if (heap == NULL || !RelationIsValid(heap))
+		return -1;
+
+	scan = heap_beginscan(heap, SnapshotNow, 0, (ScanKey) NULL);
+	while ((tup = heap_getnext(scan)) != NULL)
+	{
+		val = heap_getattr(tup, attnum, RelationGetDescr(heap), &isnull);
+		if (!isnull)
+		{
+			Vector	   *vec = (Vector *) DatumGetPointer(val);
+
+			heap_endscan(scan);
+			if (vec != NULL && vec->dim > 0)
+				return (int) vec->dim;
+			return -1;
+		}
+	}
+	heap_endscan(scan);
+	return -1;
 }
 
 /*
