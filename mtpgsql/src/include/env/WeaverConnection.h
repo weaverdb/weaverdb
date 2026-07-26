@@ -106,6 +106,8 @@ typedef struct preparedplan {
         EState*		state;
         QueryDesc*	qdesc;
         int             processed;
+        int             limit_offset;
+        int             limit_count;
 
         short           slots;
 

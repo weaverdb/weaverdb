@@ -99,6 +99,8 @@ DefineIndex(char *heapRelationName,
 	List	   *cnfPred = NULL;
 	bool		lossy = FALSE;
 	bool		deferred = FALSE;
+	bool		ivfflat_lists_set = FALSE;
+	int32		ivfflat_lists = 0;
 	List	   *pl;
 
 	/*
@@ -153,11 +155,34 @@ DefineIndex(char *heapRelationName,
 
 		if (!strcasecmp(param->defname, "islossy"))
 			lossy = TRUE;
-		if (!strcasecmp(param->defname, "deferred"))
+		else if (!strcasecmp(param->defname, "deferred"))
 			deferred = TRUE;
-                else
+		else if (!strcasecmp(param->defname, "lists"))
+		{
+			int			val;
+
+			if (strcasecmp(accessMethodName, "ivfflat") != 0)
+				elog(ERROR, "index option \"lists\" is only valid for ivfflat indexes");
+			if (ivfflat_lists_set)
+				elog(ERROR, "index option \"lists\" specified more than once");
+			if (param->arg == NULL || !IsA(param->arg, Integer))
+				elog(ERROR, "index option \"lists\" must be an integer");
+			val = intVal(param->arg);
+			if (val < 1 || val > 32768)
+				elog(ERROR, "index option \"lists\" must be between 1 and 32768");
+			ivfflat_lists = val;
+			ivfflat_lists_set = TRUE;
+		}
+		else
 			elog(NOTICE, "Unrecognized index attribute \"%s\" ignored",
 				 param->defname);
+	}
+
+	if (ivfflat_lists_set)
+	{
+		parameterCount = 1;
+		parameterA = (Datum *) palloc(sizeof(Datum));
+		parameterA[0] = Int32GetDatum(ivfflat_lists);
 	}
 
 	/*

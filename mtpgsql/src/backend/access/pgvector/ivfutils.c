@@ -6,6 +6,7 @@
 #include "halfutils.h"
 #include "halfvec.h"
 #include "ivfflat.h"
+#include "env/freespace.h"
 #include "storage/bufmgr.h"
 #include "utils/relcache.h"
 #include "utils/varbit.h"
@@ -79,16 +80,44 @@ IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum)
 	return -1;
 }
 
+static Oid		ivfflat_build_indexid = InvalidOid;
+static int		ivfflat_build_lists = 0;
+
+void
+IvfflatSetBuildLists(Oid indexId, int lists)
+{
+	ivfflat_build_indexid = indexId;
+	ivfflat_build_lists = lists;
+}
+
+void
+IvfflatClearBuildLists(Oid indexId)
+{
+	if (ivfflat_build_indexid == indexId)
+	{
+		ivfflat_build_indexid = InvalidOid;
+		ivfflat_build_lists = 0;
+	}
+}
+
 /*
  * Get the number of lists in the index
  */
 int
 IvfflatGetLists(Relation index)
 {
-	IvfflatOptions *opts = (IvfflatOptions *) ((bytea *) NULL);
+	if (ivfflat_build_indexid == RelationGetRelid(index) && ivfflat_build_lists > 0)
+		return ivfflat_build_lists;
 
-	if (opts)
-		return opts->lists;
+	if (RelationGetNumberOfBlocks(index) > 0)
+	{
+		int			lists = 0;
+		int			dimensions = 0;
+
+		IvfflatGetMetaPageInfo(index, &lists, &dimensions);
+		if (lists > 0)
+			return lists;
+	}
 
 	return IVFFLAT_DEFAULT_LISTS;
 }
