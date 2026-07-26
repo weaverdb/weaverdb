@@ -1,13 +1,12 @@
 /*-------------------------------------------------------------------------
  *
- * Smoke test for pgvector: inserts, ivfflat/hnsw indexes, ORDER BY distance.
+ * Smoke test for pgvector via Weaver (inserts; indexes covered by shell tests).
  *
  *-------------------------------------------------------------------------
  */
 
 package org.weaverdb.direct;
 
-import java.util.Properties;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -16,35 +15,14 @@ import org.weaverdb.Statement;
 
 public class PgvectorSmokeTest {
 
-    private static final String DB_DIR =
-            System.getProperty("user.dir") + "/build/pgvector_testdb";
-
     @BeforeAll
     public static void setup() throws Throwable {
-        ProcessBuilder b = new ProcessBuilder(
-                "rm", "-rf", System.getProperty("user.dir") + "/build/mtpg");
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("cp", "-rf", "../build_test/mtpg", "build/");
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("rm", "-rf", DB_DIR);
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("build/mtpg/bin/initdb", "-D", DB_DIR);
-        b.inheritIO().start().waitFor();
-
-        Properties prop = new Properties();
-        prop.setProperty("datadir", DB_DIR);
-        prop.setProperty("start_delay", "10");
-        prop.setProperty("stdlog", "TRUE");
-        prop.setProperty("disable_crc", "TRUE");
-        DirectWeaverInitializer.initialize(prop);
+        PgvectorWeaverTestSupport.ensureInitialized();
     }
 
     @AfterAll
     public static void shutdown() {
-        DirectWeaverInitializer.forceShutdown();
+        PgvectorWeaverTestSupport.shutdownIfInitialized();
     }
 
     @Test
