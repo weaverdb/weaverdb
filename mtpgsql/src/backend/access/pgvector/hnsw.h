@@ -48,6 +48,10 @@
 #define HNSW_DEFAULT_EF_SEARCH	40
 #define HNSW_MIN_EF_SEARCH		1
 #define HNSW_MAX_EF_SEARCH		1000
+/* In-process parallel graph build (Weaver pthread workers; 1 = serial only) */
+#define HNSW_DEFAULT_BUILD_WORKERS		4
+#define HNSW_MAX_BUILD_WORKERS			8
+#define HNSW_MIN_BLOCKS_PER_WORKER		8
 
 /* Tuple types */
 #define HNSW_ELEMENT_TUPLE_TYPE  1
@@ -119,6 +123,7 @@ typedef struct HnswGlobals
 	int			iterative_scan;
 	int			max_scan_tuples;
 	double		scan_mem_multiplier;
+	int			build_workers;
 } HnswGlobals;
 
 HnswGlobals *HnswGetEnv(void);
@@ -127,6 +132,7 @@ HnswGlobals *HnswGetEnv(void);
 #define hnsw_iterative_scan      (HnswGetEnv()->iterative_scan)
 #define hnsw_max_scan_tuples     (HnswGetEnv()->max_scan_tuples)
 #define hnsw_scan_mem_multiplier (HnswGetEnv()->scan_mem_multiplier)
+#define hnsw_build_workers       (HnswGetEnv()->build_workers)
 
 /* Process-wide LWLock tranche (shared memory), not per-thread */
 extern int	hnsw_lock_tranche_id;
@@ -248,6 +254,8 @@ typedef struct HnswLeader
 	char	   *hnswarea;
 }			HnswLeader;
 
+typedef struct HnswWeaverParallelShared HnswWeaverParallelShared;
+
 typedef struct HnswAllocator
 {
 	void	   *(*alloc) (Size size, void *state);
@@ -309,6 +317,7 @@ typedef struct HnswBuildState
 	HnswLeader *hnswleader;
 	HnswShared *hnswshared;
 	char	   *hnswarea;
+	HnswWeaverParallelShared *weaverParallel;
 }			HnswBuildState;
 
 typedef struct HnswMetaPageData

@@ -272,6 +272,7 @@ _copyIndexScan(IndexScan *from)
 	Node_Copy(from, newnode, indxqual);
 	Node_Copy(from, newnode, indxqualorig);
 	newnode->indxorderdir = from->indxorderdir;
+	Node_Copy(from, newnode, indxorderexpr);
 
 	/*
 	 * We must add subplans in index quals to the new plan's subPlan list
@@ -282,6 +283,8 @@ _copyIndexScan(IndexScan *from)
 							  pull_subplans((Node *) newnode->indxqual));
 		newnode->scan.plan.subPlan = nconc(newnode->scan.plan.subPlan,
 						  pull_subplans((Node *) newnode->indxqualorig));
+		newnode->scan.plan.subPlan = nconc(newnode->scan.plan.subPlan,
+						  pull_subplans((Node *) newnode->indxorderexpr));
 	}
 
 	return newnode;

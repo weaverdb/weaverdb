@@ -32,6 +32,7 @@ HnswGetEnv(void)
 		info->iterative_scan = HNSW_ITERATIVE_SCAN_OFF;
 		info->max_scan_tuples = 20000;
 		info->scan_mem_multiplier = 1.0;
+		info->build_workers = HNSW_DEFAULT_BUILD_WORKERS;
 		hnsw_globals = info;
 	}
 	return info;

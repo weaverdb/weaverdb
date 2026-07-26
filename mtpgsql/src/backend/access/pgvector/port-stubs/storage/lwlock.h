@@ -1,11 +1,14 @@
-/* Stub lwlock.h for pgvector (single-threaded build; locks are no-ops) */
+/* pgvector lwlock shim: pthread-backed locks for in-process parallel builds */
 
 #ifndef STORAGE_LWLOCK_H
 #define STORAGE_LWLOCK_H
 
+#include "os.h"
+#include "storage/m_lock.h"
+
 struct LWLock
 {
-	int			dummy;
+	slock_t		lock;
 };
 typedef struct LWLock LWLock;
 
@@ -15,21 +18,21 @@ typedef struct LWLock LWLock;
 static inline void
 LWLockInitialize(LWLock *lock, int trancheId)
 {
-	(void) lock;
 	(void) trancheId;
+	m_init(&lock->lock);
 }
 
 static inline void
 LWLockAcquire(LWLock *lock, int mode)
 {
-	(void) lock;
 	(void) mode;
+	m_lock(&lock->lock);
 }
 
 static inline void
 LWLockRelease(LWLock *lock)
 {
-	(void) lock;
+	m_unlock(&lock->lock);
 }
 
 #ifndef AddinShmemInitLock
@@ -41,12 +44,6 @@ LWLockNewTrancheId(void)
 {
 	return 1;
 }
-
-#include "os.h"
-
-PG_EXTERN void m_init(slock_t *lock);
-PG_EXTERN void m_lock(slock_t *lock);
-PG_EXTERN void m_unlock(slock_t *lock);
 
 #ifndef SpinLockInit
 #define SpinLockInit(lock)		m_init(lock)

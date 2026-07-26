@@ -37,6 +37,7 @@
 #include "postgres.h"
 
 #include <limits.h>
+#include <pthread.h>
 
 #include "access/amapi.h"
 #include "access/genam.h"
@@ -47,13 +48,18 @@
 #include "commands/progress.h"
 #include "hnsw.h"
 #include "miscadmin.h"
+#include "env/env.h"
 #include "env/freespace.h"
 #include "pgvector_executor_port.h"
 #include "pgvector_index.h"
 #include "storage/bufmgr.h"
+#include "storage/multithread.h"
+#include "storage/sinvaladt.h"
 #include "utils/datum.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/relcache.h"
+#include "utils/syscache.h"
 
 #include "varatt.h"
 #include "pgstat.h"
@@ -714,7 +720,29 @@ InitBuildState(HnswBuildState * buildstate, Relation heap, Relation index, Pgvec
 	buildstate->hnswleader = NULL;
 	buildstate->hnswshared = NULL;
 	buildstate->hnswarea = NULL;
+	buildstate->weaverParallel = NULL;
 }
+
+struct HnswWeaverParallelShared
+{
+	pthread_mutex_t mutex;
+	double		reltuples;
+	HnswGraph	graphData;
+	char	   *hnswarea;
+	Size		hnswarea_size;
+	Oid			heapOid;
+	Oid			indexOid;
+};
+
+typedef struct HnswBuildWorkerArg
+{
+	Env						*parent_env;
+	HnswBuildState			*leader;
+	HnswWeaverParallelShared *shared;
+	BlockNumber				start_block;
+	BlockNumber				num_blocks;
+	bool					ok;
+} HnswBuildWorkerArg;
 
 /*
  * Free resources
@@ -722,6 +750,16 @@ InitBuildState(HnswBuildState * buildstate, Relation heap, Relation index, Pgvec
 static void
 FreeBuildState(HnswBuildState * buildstate)
 {
+	if (buildstate->weaverParallel != NULL)
+	{
+		pfree(buildstate->weaverParallel->hnswarea);
+		pthread_mutex_destroy(&buildstate->weaverParallel->mutex);
+		pfree(buildstate->weaverParallel);
+		buildstate->weaverParallel = NULL;
+		buildstate->hnswarea = NULL;
+		buildstate->graph = &buildstate->graphData;
+	}
+
 	MemoryContextDelete(buildstate->graphCtx);
 	MemoryContextDelete(buildstate->tmpCtx);
 }
@@ -1032,8 +1070,195 @@ HnswBeginParallel(HnswBuildState * buildstate, bool isconcurrent, int request)
 
 #endif /* PG7: parallel hnsw build not ported */
 
+static Size
+HnswSharedGraphBytes(void)
+{
+	Size		est;
+
+	est = (Size) maintenance_work_mem * 1024L;
+	if (est > 3 * 1024 * 1024)
+		est -= 3 * 1024 * 1024;
+	return Min(est, HNSW_MAX_GRAPH_MEMORY);
+}
+
+static void
+HnswAttachWeaverParallelGraph(HnswBuildState *buildstate, HnswWeaverParallelShared *shared)
+{
+	buildstate->weaverParallel = shared;
+	buildstate->graph = &shared->graphData;
+	buildstate->hnswarea = shared->hnswarea;
+	InitAllocator(&buildstate->allocator, HnswSharedMemoryAlloc, buildstate);
+}
+
+static void
+InitWorkerHnswBuildState(HnswBuildState *wstate, HnswBuildState *leader,
+						 Relation heap, Relation index, PgvectorIndexInfo *indexInfo,
+						 HnswWeaverParallelShared *shared)
+{
+	InitBuildState(wstate, heap, index, indexInfo, leader->forkNum);
+	HnswAttachWeaverParallelGraph(wstate, shared);
+}
+
+static int
+HnswChooseWorkerCount(HnswBuildState *buildstate)
+{
+	int			want;
+	BlockNumber nblocks;
+
+	want = hnsw_build_workers;
+	if (want <= 1 || buildstate->heap == NULL || GetEnv() == NULL)
+		return 0;
+
+	nblocks = RelationGetNumberOfBlocks(buildstate->heap);
+	if (nblocks < (BlockNumber) (want * HNSW_MIN_BLOCKS_PER_WORKER))
+		return 0;
+	if (want > HNSW_MAX_BUILD_WORKERS)
+		want = HNSW_MAX_BUILD_WORKERS;
+	return want;
+}
+
+static void *
+HnswBuildWorkerMain(void *argp)
+{
+	HnswBuildWorkerArg	   *arg = (HnswBuildWorkerArg *) argp;
+	Env					   *env = NULL;
+	Relation				heap = NULL;
+	Relation				index = NULL;
+	PgvectorIndexInfo	   *indexInfo = NULL;
+	HnswBuildState			wstate;
+	double					reltuples = 0;
+
+	arg->ok = false;
+
+	env = CreateEnv(arg->parent_env);
+	if (env == NULL)
+		return NULL;
+
+	SetEnv(env);
+	MemoryContextInit();
+	InitThread(NORMAL_THREAD);
+	if (!CallableInitInvalidationState())
+		goto worker_failed;
+	RelationInitialize();
+	InitCatalogCache();
+	SetProcessingMode(NormalProcessing);
+
+	heap = heap_open(arg->shared->heapOid, AccessShareLock);
+	index = index_open(arg->shared->indexOid);
+	indexInfo = BuildIndexInfo(index);
+
+	InitWorkerHnswBuildState(&wstate, arg->leader, heap, index, indexInfo, arg->shared);
+
+	reltuples = table_index_build_range_scan(heap, index, indexInfo,
+											 true, true, false,
+											 arg->start_block, arg->num_blocks,
+											 BuildCallback, (void *) &wstate, NULL);
+
+	pthread_mutex_lock(&arg->shared->mutex);
+	arg->shared->reltuples += reltuples;
+	pthread_mutex_unlock(&arg->shared->mutex);
+
+	MemoryContextDelete(wstate.tmpCtx);
+	MemoryContextDelete(wstate.graphCtx);
+	index_close(index);
+	heap_close(heap, AccessShareLock);
+	pfree(indexInfo);
+	arg->ok = true;
+
+worker_failed:
+	DestroyThread();
+	SetEnv(NULL);
+	DestroyEnv(env);
+	return NULL;
+}
+
+static void
+BuildGraphParallel(HnswBuildState *buildstate, int nworkers)
+{
+	BlockNumber total_blocks;
+	BlockNumber blocks_per_worker;
+	BlockNumber extra;
+	BlockNumber blk;
+	pthread_t  *threads;
+	HnswBuildWorkerArg *args;
+	HnswWeaverParallelShared *shared;
+	Env		   *parent_env;
+	Size		hnswarea_size;
+	int			i;
+	bool		ok = true;
+
+	parent_env = GetEnv();
+	total_blocks = RelationGetNumberOfBlocks(buildstate->heap);
+	blocks_per_worker = total_blocks / nworkers;
+	extra = total_blocks % nworkers;
+	hnswarea_size = HnswSharedGraphBytes();
+
+	shared = (HnswWeaverParallelShared *) palloc0(sizeof(HnswWeaverParallelShared));
+	pthread_mutex_init(&shared->mutex, NULL);
+	shared->hnswarea_size = hnswarea_size;
+	shared->hnswarea = (char *) palloc(hnswarea_size);
+	shared->heapOid = RelationGetRelid(buildstate->heap);
+	shared->indexOid = RelationGetRelid(buildstate->index);
+	InitGraph(&shared->graphData, shared->hnswarea, hnswarea_size);
+	shared->graphData.memoryUsed += MAXALIGN(1);
+
+	HnswAttachWeaverParallelGraph(buildstate, shared);
+
+	threads = palloc(sizeof(pthread_t) * nworkers);
+	args = palloc0(sizeof(HnswBuildWorkerArg) * nworkers);
+
+	blk = 0;
+	for (i = 0; i < nworkers; i++)
+	{
+		BlockNumber nblocks = blocks_per_worker + (i < (int) extra ? 1 : 0);
+
+		args[i].parent_env = parent_env;
+		args[i].leader = buildstate;
+		args[i].shared = shared;
+		args[i].start_block = blk;
+		args[i].num_blocks = nblocks;
+		blk += nblocks;
+
+		if (pthread_create(&threads[i], NULL, HnswBuildWorkerMain, &args[i]) != 0)
+		{
+			ok = false;
+			args[i].ok = false;
+			i++;
+			break;
+		}
+	}
+
+	for (int j = 0; j < i; j++)
+		pthread_join(threads[j], NULL);
+
+	for (int j = 0; j < i; j++)
+	{
+		if (!args[j].ok)
+			ok = false;
+	}
+
+	if (!ok)
+		ereport(ERROR,
+				(errmsg("parallel hnsw build failed"),
+				 errhint("Set HnswGetEnv()->build_workers to 1 for serial build.")));
+
+	buildstate->reltuples = shared->reltuples;
+
+	ereport(DEBUG1, (errmsg("hnsw parallel build: %d workers, %.0f index tuples",
+							nworkers, buildstate->graph->indtuples)));
+}
+
+static void
+BuildGraphSerial(HnswBuildState * buildstate)
+{
+	buildstate->reltuples = table_index_build_scan(buildstate->heap, buildstate->index,
+												   buildstate->indexInfo,
+												   true, true, BuildCallback,
+												   (void *) buildstate, NULL);
+}
+
 /*
- * Compute parallel workers
+ * Compute parallel workers (legacy; Weaver uses hnsw_build_workers)
  */
 static int
 ComputeParallelWorkers(Relation heap, Relation index)
@@ -1049,14 +1274,17 @@ ComputeParallelWorkers(Relation heap, Relation index)
 static void
 BuildGraph(HnswBuildState * buildstate)
 {
+	int			nworkers;
+
 	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE, PROGRESS_HNSW_PHASE_LOAD);
 
 	if (buildstate->heap != NULL)
 	{
-		buildstate->reltuples = table_index_build_scan(buildstate->heap, buildstate->index,
-													   buildstate->indexInfo,
-													   true, true, BuildCallback,
-													   (void *) buildstate, NULL);
+		nworkers = HnswChooseWorkerCount(buildstate);
+		if (nworkers > 1)
+			BuildGraphParallel(buildstate, nworkers);
+		else
+			BuildGraphSerial(buildstate);
 		buildstate->indtuples = buildstate->graph->indtuples;
 	}
 

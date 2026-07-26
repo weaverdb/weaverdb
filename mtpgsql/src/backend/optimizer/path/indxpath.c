@@ -18,6 +18,7 @@
 #include "access/heapam.h"
 #include "access/nbtree.h"
 #include "catalog/catname.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_amop.h"
 #include "catalog/pg_operator.h"
 #include "executor/executor.h"
@@ -34,6 +35,7 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_oper.h"
 #include "parser/parsetree.h"
+#include "nodes/primnodes.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -77,6 +79,8 @@ static bool useful_for_mergejoin(RelOptInfo *rel, IndexOptInfo *index,
 static bool useful_for_ordering(Query *root, RelOptInfo *rel,
 					IndexOptInfo *index,
 					ScanDirection scandir);
+static bool pgvector_useful_for_ordering(Query *root, RelOptInfo *rel,
+						   IndexOptInfo *index);
 static bool match_index_to_operand(int indexkey, Var *operand,
 					   RelOptInfo *rel, IndexOptInfo *index);
 static bool function_index_operand(Expr *funcOpnd, RelOptInfo *rel,
@@ -182,6 +186,10 @@ create_index_paths(Query *root,
                         add_path(rel, (Path *) create_delegated_index_path(root, rel, index,
 								restrictclauses,
 								NoMovementScanDirection));
+			if (pgvector_useful_for_ordering(root, rel, index))
+				add_path(rel, (Path *) create_index_path(root, rel, index,
+														 restrictclauses,
+														 ForwardScanDirection));
                 }
 
 		/*
@@ -907,12 +915,63 @@ useful_for_mergejoin(RelOptInfo *rel,
  * 'scandir' is the contemplated scan direction
  */
 static bool
+pgvector_useful_for_ordering(Query *root,
+							 RelOptInfo *rel,
+							 IndexOptInfo *index)
+{
+	List	   *sublist;
+	PathKeyItem *pki;
+	Expr	   *expr;
+	Oper	   *oper;
+	List	   *arglist;
+
+	if (index->relam != IVFFLAT_AM_OID && index->relam != HNSW_AM_OID)
+		return false;
+	if (root->query_pathkeys == NIL)
+		return false;
+	if (!index->ordering || index->ordering[0] == InvalidOid)
+		return false;
+	if (!index->indexkeys || index->indexkeys[0] == 0)
+		return false;
+
+	sublist = lfirst(root->query_pathkeys);
+	if (sublist == NIL)
+		return false;
+	pki = (PathKeyItem *) lfirst(sublist);
+	if (pki->sortop != index->ordering[0])
+		return false;
+	if (!IsA(pki->key, Expr))
+		return false;
+
+	expr = (Expr *) pki->key;
+	if (expr->opType != OP_EXPR || !IsA(expr->oper, Oper))
+		return false;
+
+	oper = (Oper *) expr->oper;
+	if (oper->opno != index->ordering[0])
+		return false;
+
+	foreach(arglist, expr->args)
+	{
+		Node	   *arg = (Node *) lfirst(arglist);
+
+		if (IsA(arg, Var) &&
+			match_index_to_operand(index->indexkeys[0], (Var *) arg, rel, index))
+			return true;
+	}
+	return false;
+}
+
+static bool
 useful_for_ordering(Query *root,
 					RelOptInfo *rel,
 					IndexOptInfo *index,
 					ScanDirection scandir)
 {
 	List	   *index_pathkeys;
+
+	if (index->relam == IVFFLAT_AM_OID || index->relam == HNSW_AM_OID)
+		return pgvector_useful_for_ordering(root, rel, index);
 
 	if (root->query_pathkeys == NIL)
 		return false;			/* no special ordering requested */

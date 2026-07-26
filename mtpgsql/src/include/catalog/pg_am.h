@@ -115,10 +115,10 @@ DESCR("");
 DATA(insert OID = 405 (  hash PGUID 1 1 0 hashgettuple hashinsert hashdelete - - - - hashbeginscan hashrescan hashendscan hashmarkpos hashrestrpos - - hashbuild - - hashcostestimate ));
 DESCR("");
 #define HASH_AM_OID 405
-DATA(insert OID = 406 (  ivfflat PGUID 0 5 0 ivfflatgettuple ivfflatinsert ivfflatdelete ivfflatbulkdelete - - - ivfflatbeginscan ivfflatrescan ivfflatendscan - - - - ivfflatbuild - - ivfflatcostestimate ));
+DATA(insert OID = 406 (  ivfflat PGUID 0 5 1 ivfflatgettuple ivfflatinsert ivfflatdelete ivfflatbulkdelete - - - ivfflatbeginscan ivfflatrescan ivfflatendscan - - - - ivfflatbuild - - ivfflatcostestimate ));
 DESCR("");
 #define IVFFLAT_AM_OID 406
-DATA(insert OID = 407 (  hnsw PGUID 0 3 0 hnswgettuple hnswinsert hnswdelete hnswbulkdelete - - - hnswbeginscan hnswrescan hnswendscan - - - - hnswbuild - - hnswcostestimate ));
+DATA(insert OID = 407 (  hnsw PGUID 0 3 1 hnswgettuple hnswinsert hnswdelete hnswbulkdelete - - - hnswbeginscan hnswrescan hnswendscan - - - - hnswbuild - - hnswcostestimate ));
 DESCR("");
 #define HNSW_AM_OID 407
 //DATA(insert OID = 783 (  gist PGUID 100 7 0 gistgettuple gistinsert gistdelete - - - - gistbeginscan gistrescan gistendscan gistmarkpos gistrestrpos - - gistbuild - - gistcostestimate ));

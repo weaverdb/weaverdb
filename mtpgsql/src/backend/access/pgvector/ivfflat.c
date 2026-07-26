@@ -40,6 +40,7 @@ IvfflatGetEnv(void)
 		info->probes = IVFFLAT_DEFAULT_PROBES;
 		info->iterative_scan = IVFFLAT_ITERATIVE_SCAN_OFF;
 		info->max_probes = IVFFLAT_DEFAULT_LISTS;
+		info->assign_workers = IVFFLAT_DEFAULT_ASSIGN_WORKERS;
 		ivfflat_globals = info;
 	}
 	return info;

@@ -12,17 +12,23 @@
 #include "access/funcindex.h"
 #include "access/genam.h"
 #include "access/istrat.h"
+#include "access/skey.h"
 #include "catalog/index.h"
 #include "fmgr.h"
 #include "hnsw.h"
 #include "ivfflat.h"
 #include "pgvector_index.h"
 #include "pgvector_scan.h"
+#include "nodes/primnodes.h"
 #include "nodes/relation.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
 #include "catalog/pg_am.h"
+#include "nodes/execnodes.h"
+
+extern Datum ExecEvalExpr(Node *expression, ExprContext *econtext, Oid *returnType,
+						  bool *isNull, bool *isDone);
 
 PgvectorIndexInfo *
 BuildIndexInfo(Relation index)
@@ -359,4 +365,59 @@ hnswcostestimate(Query *root,
 		*indexTotalCost = 0;
 	if (indexSelectivity)
 		*indexSelectivity = 0;
+}
+
+void
+pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
+							ExprContext *econtext, Snapshot snapshot)
+{
+	ScanKeyData orderKey;
+	Expr	   *expr;
+	Oper	   *oper;
+	List	   *arglist;
+	Datum		val;
+	bool		isnull;
+	bool		isDone;
+
+	if (scan == NULL || orderExpr == NULL || !IsA(orderExpr, Expr))
+		return;
+
+	expr = (Expr *) orderExpr;
+	if (expr->opType != OP_EXPR || !IsA(expr->oper, Oper))
+		return;
+
+	oper = (Oper *) expr->oper;
+	val = (Datum) 0;
+	isnull = true;
+
+	foreach(arglist, expr->args)
+	{
+		Node	   *arg = (Node *) lfirst(arglist);
+
+		if (IsA(arg, Var))
+			continue;
+
+		val = ExecEvalExpr(arg, econtext, NULL, &isnull, &isDone);
+		break;
+	}
+
+	ScanKeyEntryInitialize(&orderKey, isnull ? SK_ISNULL : 0,
+						   (AttrNumber) 1, InvalidOid, val);
+
+	if (relam == IVFFLAT_AM_OID)
+	{
+		IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
+
+		if (snapshot != NULL)
+			so->xs_snapshot = snapshot;
+		ivfflat_rescanindex(scan, scan->keyData, scan->numberOfKeys, &orderKey, 1);
+	}
+	else if (relam == HNSW_AM_OID)
+	{
+		HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
+
+		if (snapshot != NULL)
+			so->xs_snapshot = snapshot;
+		hnsw_rescanindex(scan, scan->keyData, scan->numberOfKeys, &orderKey, 1);
+	}
 }

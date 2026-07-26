@@ -193,6 +193,7 @@ typedef struct IndexScan
 	List	   *indxqual;
 	List	   *indxqualorig;
 	ScanDirection indxorderdir;
+	Expr	   *indxorderexpr;	/* ORDER BY distance expr (<->), ivfflat/hnsw */
 	IndexScanState *indxstate;
 } IndexScan;
 
