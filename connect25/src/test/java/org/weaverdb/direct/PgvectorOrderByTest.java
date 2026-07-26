@@ -9,11 +9,9 @@ package org.weaverdb.direct;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assertions;
 import org.weaverdb.DBReference;
 import org.weaverdb.ExecutionException;
 import org.weaverdb.Output;
@@ -21,31 +19,9 @@ import org.weaverdb.Statement;
 
 public class PgvectorOrderByTest {
 
-    private static final String DB_DIR =
-            System.getProperty("user.dir") + "/build/pgvector_orderby_testdb";
-
     @BeforeAll
     public static void setup() throws Throwable {
-        ProcessBuilder b = new ProcessBuilder(
-                "rm", "-rf", System.getProperty("user.dir") + "/build/mtpg");
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("cp", "-rf", "../build_test/mtpg", "build/");
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("rm", "-rf", DB_DIR);
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("build/mtpg/bin/initdb", "-D", DB_DIR);
-        b.inheritIO().start().waitFor();
-
-        Properties prop = new Properties();
-        prop.setProperty("datadir", DB_DIR);
-        prop.setProperty("start_delay", "10");
-        prop.setProperty("stdlog", "TRUE");
-        prop.setProperty("disable_crc", "TRUE");
-        DirectWeaverInitializer.initialize(prop);
-
+        PgvectorWeaverTestSupport.ensureInitialized();
         try (DBReference conn = DBReference.connect("template1")) {
             exec(conn, "create table pv_ob_j (id int, emb vector)");
             exec(conn, "insert into pv_ob_j values (1, '[1,0,0]')");
@@ -53,11 +29,6 @@ public class PgvectorOrderByTest {
             exec(conn, "insert into pv_ob_j values (3, '[0,0,1]')");
             exec(conn, "insert into pv_ob_j values (4, '[9,0,0]')");
         }
-    }
-
-    @AfterAll
-    public static void shutdown() {
-        DirectWeaverInitializer.forceShutdown();
     }
 
     @Test
