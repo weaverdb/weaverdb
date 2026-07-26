@@ -7,12 +7,16 @@
 
 package org.weaverdb.direct;
 
+import java.nio.file.Path;
 import java.util.Properties;
+import org.weaverdb.DBReference;
+import org.weaverdb.ExecutionException;
+import org.weaverdb.Statement;
 
 final class PgvectorWeaverTestSupport {
 
     static final String DB_DIR =
-            System.getProperty("user.dir") + "/build/pgvector_junit_testdb";
+            System.getProperty("user.dir") + "/build/testdb";
 
     private static boolean initialized;
 
@@ -20,29 +24,45 @@ final class PgvectorWeaverTestSupport {
     }
 
     static synchronized void ensureInitialized() throws Throwable {
-        if (initialized) {
-            return;
+        if (!initialized) {
+        Path connect25 = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+        if (!DirectWeaverInitializer.isBackendLoaded()) {
+            ProcessBuilder b = new ProcessBuilder(
+                    "rm", "-rf", connect25.resolve("build/mtpg").toString());
+            b.inheritIO().start().waitFor();
+
+            b = new ProcessBuilder("cp", "-rf",
+                    connect25.getParent().resolve("build_test/mtpg").toString(),
+                    connect25.resolve("build/mtpg").toString());
+            b.inheritIO().start().waitFor();
+
+            b = new ProcessBuilder("rm", "-rf", DB_DIR);
+            b.inheritIO().start().waitFor();
+
+            b = new ProcessBuilder(
+                    connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", DB_DIR);
+            b.inheritIO().start().waitFor();
+
+            Properties prop = new Properties();
+            prop.setProperty("datadir", DB_DIR);
+            prop.setProperty("start_delay", "10");
+            prop.setProperty("stdlog", "TRUE");
+            prop.setProperty("disable_crc", "TRUE");
+            DirectWeaverInitializer.initialize(prop);
         }
-        ProcessBuilder b = new ProcessBuilder(
-                "rm", "-rf", System.getProperty("user.dir") + "/build/mtpg");
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("cp", "-rf", "../build_test/mtpg", "build/");
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("rm", "-rf", DB_DIR);
-        b.inheritIO().start().waitFor();
-
-        b = new ProcessBuilder("build/mtpg/bin/initdb", "-D", DB_DIR);
-        b.inheritIO().start().waitFor();
-
-        Properties prop = new Properties();
-        prop.setProperty("datadir", DB_DIR);
-        prop.setProperty("start_delay", "10");
-        prop.setProperty("stdlog", "TRUE");
-        prop.setProperty("disable_crc", "TRUE");
-        DirectWeaverInitializer.initialize(prop);
         initialized = true;
+        }
+        resetAbortedTransaction();
+    }
+
+    /** Clear failed txn state left by earlier tests (e.g. DirectInitTest.testBadBind). */
+    private static void resetAbortedTransaction() {
+        try (DBReference conn = DBReference.connect("template1");
+                Statement s = conn.statement("rollback")) {
+            s.execute();
+        } catch (Exception ignored) {
+            /* no open transaction */
+        }
     }
 
     static synchronized void shutdownIfInitialized() {

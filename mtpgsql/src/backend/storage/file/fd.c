@@ -123,6 +123,7 @@ static int vfdblockcount = MAXVFDBLOCKS;
 static int vfdmax = MAXVIRTUALFILES;
 static bool vfdoptimize = false;
 static bool vfdautotune = false;
+static bool vfs_platform_inited = false;
 
 static struct {
     Vfd ** pointers;
@@ -194,6 +195,8 @@ static long pg_nofile(void);
 static bool CheckRealFileCount(void);
 
 static void closeAllVfds(void);
+static void DestroyVfdPlatformState(void);
+static Vfd *GetVirtualFD(int index);
 
 /*
  * pg_fsync --- same as fsync except does nothing if -F switch was given
@@ -419,7 +422,10 @@ ReleaseDataFile() {
 
 void
 ShutdownVirtualFileSystem() {
+    if (!vfs_platform_inited)
+        return;
     closeAllVfds();
+    DestroyVfdPlatformState();
 }
 
 void
@@ -478,6 +484,34 @@ InitVirtualFileSystem() {
     GetVirtualFD(vfdmultiple - 1)->nextFree = 0;
     GetVirtualFD(0)->nextFree = 1;
 
+    vfs_platform_inited = true;
+}
+
+static void
+DestroyVfdPlatformState(void)
+{
+    Index		i;
+
+    if (!vfs_platform_inited)
+        return;
+
+    if (VfdCache.size > 0 && VfdCache.pointers != NULL)
+    {
+        for (i = 0; i < VfdCache.size; i++)
+        {
+            Vfd	   *target = GetVirtualFD(i);
+
+            pthread_mutex_destroy(&target->pin);
+        }
+    }
+    pthread_mutex_destroy(&VfdCache.guard);
+    pthread_mutex_destroy(&VfdPool.guard);
+    pthread_mutex_destroy(&RealFiles.guard);
+    pthread_mutexattr_destroy(&pinattr);
+    VfdCache.size = 0;
+    VfdCache.pointers = NULL;
+    VfdPool.hash = NULL;
+    vfs_platform_inited = false;
 }
 
 static Vfd*

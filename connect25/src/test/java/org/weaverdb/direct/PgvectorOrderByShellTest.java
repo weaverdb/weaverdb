@@ -18,13 +18,15 @@ public class PgvectorOrderByShellTest {
     @BeforeAll
     public static void ensureMtpgBuild() throws Exception {
         Path connect25 = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-        Path mtpg = connect25.resolve("build/mtpg/bin/postgres");
-        if (Files.isExecutable(mtpg)) {
-            return;
-        }
-        Path src = connect25.getParent().resolve("build_test/mtpg");
+        Path repoRoot = connect25.getParent();
+        Path src = repoRoot.resolve("build_test/mtpg");
+        Assertions.assertTrue(Files.isExecutable(src.resolve("bin/postgres")),
+                "build_test/mtpg missing; run: cmake --build build_test --target postgres");
+        ProcessBuilder rm = new ProcessBuilder("rm", "-rf", connect25.resolve("build/mtpg").toString());
+        rm.inheritIO();
+        Assertions.assertEquals(0, rm.start().waitFor());
         ProcessBuilder cp = new ProcessBuilder("cp", "-rf", src.toString(),
-                connect25.resolve("build").toString());
+                connect25.resolve("build/mtpg").toString());
         cp.inheritIO();
         Assertions.assertEquals(0, cp.start().waitFor(), "copy build_test/mtpg into connect25/build");
     }

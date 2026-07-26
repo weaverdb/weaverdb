@@ -111,6 +111,10 @@ public class DirectWeaverInitializer {
         }
     }
     
+    public static boolean isBackendLoaded() {
+        return loaded;
+    }
+    
     public static void initialize(Properties props) throws java.lang.UnsatisfiedLinkError  {
         StringBuilder vars = new StringBuilder();
         
@@ -128,6 +132,9 @@ public class DirectWeaverInitializer {
     }
     
     public static void shutdown(Duration timeout) throws TimeoutException {
+        if (!loaded) {
+            return;
+        }
         Instant start = Instant.now();
         boolean wasInterruped = false;
 
@@ -139,6 +146,7 @@ public class DirectWeaverInitializer {
                 throw new TimeoutException("close timeout exceeded.  Live connections still active");
             } else {
                 close();
+                loaded = false;
             }
         } catch (InterruptedException ie) {
             wasInterruped = true;
@@ -150,7 +158,11 @@ public class DirectWeaverInitializer {
     }
     
     public static void forceShutdown() {
+        if (!loaded) {
+            return;
+        }
         close();
+        loaded = false;
     }
 
     /**

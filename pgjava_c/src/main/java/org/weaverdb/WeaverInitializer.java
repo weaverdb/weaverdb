@@ -63,6 +63,9 @@ public class WeaverInitializer {
     }
     
     public static void shutdown(Duration timeout) throws TimeoutException {
+        if (!loaded) {
+            return;
+        }
         Instant start = Instant.now();
         boolean wasInterruped = false;
 
@@ -74,6 +77,7 @@ public class WeaverInitializer {
                 throw new TimeoutException("close timeout exceeded.  Live connections still active");
             } else {
                 close();
+                loaded = false;
             }
         } catch (InterruptedException ie) {
             wasInterruped = true;
@@ -85,6 +89,10 @@ public class WeaverInitializer {
     }
     
     public static void forceShutdown() {
+        if (!loaded) {
+            return;
+        }
         close();
+        loaded = false;
     }
 }
