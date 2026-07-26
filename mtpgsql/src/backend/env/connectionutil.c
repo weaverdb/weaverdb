@@ -92,7 +92,7 @@ static void CreateProperties(void);
 
 static int checklockfile(void);
 
-pthread_mutex_t    init_lock;
+pthread_mutex_t    init_lock = PTHREAD_MUTEX_INITIALIZER;
 
 LIB_EXTERN bool initweaverbackend(const char* vars)
 {    
@@ -106,7 +106,6 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 #endif
         tofree = cursor = strdup(vars);
 
-        pthread_mutex_init(&init_lock, NULL);
         pthread_mutex_lock(&init_lock);
             
 	char*  output = getenv("PG_LOGFILE");

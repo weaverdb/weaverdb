@@ -12,9 +12,7 @@
 
 package org.weaverdb.direct;
 
-import java.io.Writer;
 import java.util.Properties;
-import org.junit.jupiter.api.AfterAll;
 import org.weaverdb.DBReference;
 import org.weaverdb.ExecutionException;
 import org.weaverdb.FetchSet;
@@ -25,47 +23,42 @@ public class DirectInitTest {
 
     @org.junit.jupiter.api.BeforeAll
     public static void setup() throws Throwable {
+        if (DirectWeaverInitializer.isBackendLoaded()) {
+            return;
+        }
         try {
-                ProcessBuilder b = new ProcessBuilder("pwd");
-                b.inheritIO();
-                Process p = b.start();
-                p.waitFor();
-                
-                b = new ProcessBuilder("rm", "-rf", "build/mtpg");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                
-                b = new ProcessBuilder("cp", "-rf", "../build/mtpg", "build/");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
+                java.nio.file.Path connect25 = java.nio.file.Path.of(System.getProperty("user.dir")).toAbsolutePath();
+                java.nio.file.Path repoRoot = connect25.getParent();
+                java.nio.file.Path mtpgSrc = repoRoot.resolve("build_test/mtpg");
 
-                b = new ProcessBuilder("rm", "-rf", System.getProperty("user.dir") + "/build/testdb");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/initdb","-D", System.getProperty("user.dir") + "/build/testdb");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "-o", "/dev/null", "template1");
-                b.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                b.redirectError(ProcessBuilder.Redirect.INHERIT);
-                p = b.start();
-                try (Writer w = p.outputWriter()) {
-                    w.append("create database test;\n").flush();
-                }
-                p.waitFor();
+                ProcessBuilder b = new ProcessBuilder("rm", "-rf", connect25.resolve("build/mtpg").toString());
+                b.inheritIO().start().waitFor();
+
+                b = new ProcessBuilder("cp", "-rf", mtpgSrc.toString(),
+                        connect25.resolve("build/mtpg").toString());
+                b.inheritIO().start().waitFor();
+
+                String dbDir = connect25.resolve("build/testdb").toString();
+                b = new ProcessBuilder("rm", "-rf", dbDir);
+                b.inheritIO().start().waitFor();
+                b = new ProcessBuilder(connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", dbDir);
+                b.inheritIO().start().waitFor();
 
                 Properties prop = new Properties();
-                prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
+                prop.setProperty("datadir", dbDir);
 
                 prop.setProperty("start_delay", "10");
                 prop.setProperty("stdlog", "TRUE");
                 prop.setProperty("disable_crc", "TRUE");
                 
-                DirectWeaverInitializer.initialize(prop); 
+                DirectWeaverInitializer.initialize(prop);
+
+                try (DBReference conn = DBReference.connect("template1");
+                        Statement s = conn.statement("create database test")) {
+                    s.execute();
+                } catch (ExecutionException e) {
+                    /* database may already exist on re-run */
+                }
 
         } finally {
 
@@ -116,8 +109,8 @@ public class DirectInitTest {
             }
         }
     }
-    @AfterAll
-    public static void close() {
-            DirectWeaverInitializer.forceShutdown();
-    }
+    /*
+     * Leave the embedded backend up for later test classes (pgvector suite).
+     * JVM exit cleans up; forceShutdown here breaks re-init in the same process.
+     */
 }

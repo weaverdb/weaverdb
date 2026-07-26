@@ -59,6 +59,7 @@ jar {
 
 tasks.named('test', Test) {
     useJUnitPlatform()
+    maxParallelForks = 1
 
     // Native libs are produced by the top-level CMake build (mkdir build; cmake ...).
     systemProperty 'java.library.path', rootProject.file('build/mtpg/lib').absolutePath

@@ -71,8 +71,12 @@ check "order by distance returns id=2" "$out" 'id = "2"'
 out=$(run_sql \
   "insert into pv_smoke values (10, '[1,1,0]');" \
   "update pv_smoke set emb = '[1,0,0]' where id = 2;" \
-  "delete from pv_smoke where id = 3;")
-check "mutations after indexes" "$out" 'INSERT|UPDATE|DELETE|backend>'
+  "delete from pv_smoke where id = 3;" \
+  "insert into pv_smoke (id, emb) values (11, null);" \
+  "select count(*) from pv_smoke where emb is null;" \
+  "vacuum pv_smoke;")
+check "mutations after indexes" "$out" 'INSERT|UPDATE|DELETE|VACUUM|backend>'
+check "null emb count" "$out" 'count = "1"'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$SCRIPT_DIR/pgvector_orderby_smoke.sh"

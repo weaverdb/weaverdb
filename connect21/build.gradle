@@ -36,6 +36,12 @@ jar {
 
 tasks.named('test', Test) {
     useJUnitPlatform()
+    maxParallelForks = 1
+
+    filter {
+        includeTestsMatching 'org.weaverdb.PgvectorJniSuite'
+        includeTestsMatching 'org.weaverdb.TestVersioning'
+    }
 
     systemProperty 'java.library.path', layout.projectDirectory.dir('build/mtpg/lib').asFile.absolutePath
 

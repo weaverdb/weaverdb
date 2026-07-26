@@ -12,7 +12,7 @@
 
 package org.weaverdb;
 
-import java.io.Writer;
+import java.nio.file.Path;
 import java.util.Properties;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -27,70 +27,68 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
     private static final Lock LOCK = new ReentrantLock();
 
     private boolean owner = false;
+
     @Override
     public void beforeAll(ExtensionContext context) {
         LOCK.lock();
         try {
             if (context.getRoot().getStore(GLOBAL).get("RunOnce") != null) {
+                rollbackQuiet();
                 return;
             }
-                ProcessBuilder b = new ProcessBuilder("pwd");
-                b.inheritIO();
-                Process p = b.start();
-                p.waitFor();
-                
-                String repoRoot = System.getProperty("weaver.repo.root",
-                        new java.io.File(System.getProperty("user.dir")).getParent());
-                String mtpgSource = repoRoot + "/build_test/mtpg";
+            Path moduleDir = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+            String repoRoot = System.getProperty("weaver.repo.root", moduleDir.getParent().toString());
+            Path mtpgSource = Path.of(repoRoot).resolve("build_test/mtpg");
+            String dbDir = moduleDir.resolve("build/testdb").toString();
 
-                b = new ProcessBuilder("rm", "-rf", "build/mtpg");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
+            ProcessBuilder b = new ProcessBuilder("rm", "-rf", moduleDir.resolve("build/mtpg").toString());
+            b.inheritIO().start().waitFor();
 
-                b = new ProcessBuilder("cp", "-rf", mtpgSource, "build/mtpg");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
+            b = new ProcessBuilder("cp", "-rf", mtpgSource.toString(),
+                    moduleDir.resolve("build/mtpg").toString());
+            b.inheritIO().start().waitFor();
 
-                b = new ProcessBuilder("rm", "-rf", System.getProperty("user.dir") + "/build/testdb");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/initdb","-D", System.getProperty("user.dir") + "/build/testdb");
-                b.inheritIO();
-                p = b.start();
-                p.waitFor();
-                b = new ProcessBuilder("build/mtpg/bin/postgres", "-D", System.getProperty("user.dir") + "/build/testdb", "-o", "/dev/null", "template1");
-                b.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                b.redirectError(ProcessBuilder.Redirect.INHERIT);
-                p = b.start();
-                try (Writer w = p.outputWriter()) {
-                    w.append("create database test;\n").flush();
-                }
-                p.waitFor();
+            b = new ProcessBuilder("rm", "-rf", dbDir);
+            b.inheritIO().start().waitFor();
 
-                Properties prop = new Properties();
-                prop.setProperty("datadir", System.getProperty("user.dir") + "/build/testdb");
+            b = new ProcessBuilder(moduleDir.resolve("build/mtpg/bin/initdb").toString(), "-D", dbDir);
+            b.inheritIO().start().waitFor();
 
-                prop.setProperty("start_delay", "10");
-                prop.setProperty("stdlog", "TRUE");
-                prop.setProperty("disable_crc", "TRUE");
-                
-                WeaverInitializer.initialize(prop);
-                owner = true;
-                context.getRoot().getStore(GLOBAL).put("RunOnce", this);
-        } catch (Exception io) {
-        
+            Properties prop = new Properties();
+            prop.setProperty("datadir", dbDir);
+            prop.setProperty("start_delay", "10");
+            prop.setProperty("stdlog", "TRUE");
+            prop.setProperty("disable_crc", "TRUE");
+
+            WeaverInitializer.initialize(prop);
+
+            try (DBReference conn = DBReferenceManager.connect("template1");
+                    Statement s = conn.statement("create database test")) {
+                s.execute();
+            } catch (ExecutionException e) {
+                /* may already exist */
+            }
+
+            owner = true;
+            context.getRoot().getStore(GLOBAL).put("RunOnce", this);
+            rollbackQuiet();
+        } catch (Exception e) {
+            throw new RuntimeException("InstallNative setup failed", e);
         } finally {
             LOCK.unlock();
         }
     }
 
+    private static void rollbackQuiet() {
+        try (DBReference conn = DBReferenceManager.connect("template1");
+                Statement s = conn.statement("rollback")) {
+            s.execute();
+        } catch (Exception ignored) {
+        }
+    }
+
     @Override
     public void close() {
-        if (owner) {
-            WeaverInitializer.forceShutdown();
-        }
+        /* Do not wrapup here: Gradle JVM teardown after all tests is enough. */
     }
 }
