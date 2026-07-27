@@ -2,7 +2,6 @@
 
 #include "bitutils.h"
 #include "bitvec.h"
-#include "pgvector_module.h"
 #include "fmgr.h"
 #include "utils/varbit.h"
 #include "vector.h"
@@ -45,7 +44,6 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(hamming_distance);
 Datum
 hamming_distance(PG_FUNCTION_ARGS)
 {
-	PgvectorEnsureInit();
 	VarBit	   *a = PG_GETARG_VARBIT_P(0);
 	VarBit	   *b = PG_GETARG_VARBIT_P(1);
 
@@ -61,7 +59,6 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(jaccard_distance);
 Datum
 jaccard_distance(PG_FUNCTION_ARGS)
 {
-	PgvectorEnsureInit();
 	VarBit	   *a = PG_GETARG_VARBIT_P(0);
 	VarBit	   *b = PG_GETARG_VARBIT_P(1);
 

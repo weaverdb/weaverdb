@@ -11,7 +11,6 @@
 #include "commands/vacuum.h"
 #include "fmgr.h"
 #include "ivfflat.h"
-#include "pgvector_module.h"
 #include "nodes/pg_list.h"
 #include "utils/float.h"
 #include "utils/guc.h"
@@ -32,7 +31,6 @@ TLS IvfflatGlobals *ivfflat_globals = NULL;
 IvfflatGlobals *
 IvfflatGetEnv(void)
 {
-	PgvectorEnsureInit();
 	IvfflatGlobals *info = ivfflat_globals;
 
 	if (info == NULL)

@@ -3,9 +3,8 @@
 
 /*
  * One-time pgvector setup (CPU dispatch, HNSW/IVF env, lock tranche).
- * Safe to call from any thread; uses pthread_once.
+ * Invoked from InitPostgres and initweaverbackend; pthread_once makes repeat calls safe.
  */
 extern void PgvectorModuleInit(void);
-extern void PgvectorEnsureInit(void);
 
 #endif

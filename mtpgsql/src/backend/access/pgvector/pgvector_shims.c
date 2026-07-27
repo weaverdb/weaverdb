@@ -25,7 +25,6 @@
 #include "ivfflat.h"
 #include "halfutils.h"
 #include "bitutils.h"
-#include "pgvector_module.h"
 #include <math.h>
 #include <errno.h>
 #include <string.h>
@@ -52,12 +51,6 @@ void
 PgvectorModuleInit(void)
 {
 	pthread_once(&pgvector_module_once, pgvector_module_init_once);
-}
-
-void
-PgvectorEnsureInit(void)
-{
-	PgvectorModuleInit();
 }
 
 /* ----------------------------------------------------------------
