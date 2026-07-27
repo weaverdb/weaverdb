@@ -9,7 +9,6 @@
 #include "access/genam.h"
 #include "hnsw.h"
 #include "pgvector_index.h"
-#include "pgvector_module.h"
 
 static SectionId hnsw_env_id = SECTIONID("HNSW");
 
@@ -24,7 +23,6 @@ int			hnsw_lock_tranche_id;
 HnswGlobals *
 HnswGetEnv(void)
 {
-	PgvectorEnsureInit();
 	HnswGlobals *info = hnsw_globals;
 
 	if (info == NULL)

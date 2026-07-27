@@ -53,8 +53,7 @@
 #include "storage/sinvaladt.h"
 #include "access/xlog.h"
 #include "env/dbwriter.h"
-
-extern void PgvectorModuleInit(void);
+#include "pgvector_module.h"
 #include "env/dolhelper.h"
 #include "commands/vacuum.h"
 #include "utils/relcache.h"

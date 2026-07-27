@@ -45,8 +45,7 @@
 #include "version.h"
 #include "env/freespace.h"
 #include "env/poolsweep.h"
-
-extern void PgvectorModuleInit(void);
+#include "pgvector_module.h"
 
 #ifdef MULTIBYTE
 #include "mb/pg_wchar.h"
