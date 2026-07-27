@@ -41,8 +41,7 @@ else()
     message(WARNING "pgvector build: force include of compat may need port for this compiler")
 endif()
 
-# Include paths: port-stubs must come BEFORE the real src/include so that
-# our shims (varatt.h, utils/float.h, common/shortest_dec.h, etc) are found first.
+# Include paths: port-stubs only for pgvector-only shims (no duplicate of src/include).
 target_include_directories(pgvector BEFORE PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/port-stubs
 )

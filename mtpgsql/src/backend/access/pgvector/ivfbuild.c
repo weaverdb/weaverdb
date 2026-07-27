@@ -17,7 +17,6 @@
 #include "miscadmin.h"
 #include "env/env.h"
 #include "env/freespace.h"
-#include "pgvector_executor_port.h"
 #include "pgvector_index.h"
 #include "storage/multithread.h"
 #include "storage/sinvaladt.h"
@@ -28,7 +27,6 @@
 #include "utils/sampling.h"
 #include "utils/syscache.h"
 #include "utils/snapmgr.h"
-#include "utils/tuplesort.h"
 
 #include "varatt.h"
 

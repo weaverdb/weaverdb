@@ -160,5 +160,16 @@ PG_EXTERN int _ReadChunkArray(int *st, int *endp, int bsize, int fp,
 PG_EXTERN struct varlena *_ReadChunkArray1El(int *st, int bsize, int fp,
 				   ArrayType *array, bool *isNull);
 
+/*
+ * pgvector shims (implemented in pgvector_shims.c).
+ */
+extern bool array_contains_nulls(ArrayType *array);
+extern void get_typlenbyvalalign(Oid elemtype, int16 *typlen, bool *typbyval, char *typalign);
+extern void deconstruct_array(ArrayType *array,
+							  Oid elmtype, int elmlen, bool elmbyval, char elmalign,
+							  Datum **elemsp, bool **nullsp, int *nelemsp);
+extern ArrayType *construct_array(Datum *elems, int nelems,
+								  Oid elmtype, int elmlen, bool elmbyval, char elmalign);
+extern void *palloc0(Size size);
 
 #endif	 /* ARRAY_H */

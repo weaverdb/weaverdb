@@ -9,7 +9,7 @@
 #include "pgvector_index.h"
 #include "storage/condition_variable.h"
 #include "utils/sampling.h"
-#include "utils/tuplesort.h"
+#include "pgvector_tuplesort.h"
 #include "vector.h"
 
 #ifdef IVFFLAT_BENCH
