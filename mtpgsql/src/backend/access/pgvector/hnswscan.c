@@ -174,6 +174,8 @@ hnsw_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, 
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
 
 	so->first = true;
+	so->plainScan = false;
+	so->plainBlkno = InvalidBlockNumber;
 	/* v and discarded are allocated in tmpCtx */
 	so->v.tids = NULL;
 	so->discarded = NULL;
@@ -189,13 +191,71 @@ hnsw_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, 
 }
 
 /*
+ * Sequential index scan without ORDER BY (lazy VACUUM index stats).
+ */
+static bool
+hnsw_plain_gettuple(IndexScanDesc scan)
+{
+	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
+	Relation	index = pgvector_hnsw_index_rel(scan);
+
+	if (!so->plainScan)
+	{
+		so->plainScan = true;
+		so->plainBlkno = HNSW_HEAD_BLKNO;
+		so->plainOffno = FirstOffsetNumber;
+		so->plainTidIdx = 0;
+		pgstat_count_index_scan(index);
+	}
+
+	while (BlockNumberIsValid(so->plainBlkno))
+	{
+		Buffer		buf;
+		Page		page;
+		OffsetNumber maxoffno;
+		HnswElementTuple etup;
+
+		buf = ReadBuffer(index, so->plainBlkno);
+		LockBuffer(index, buf, BUFFER_LOCK_SHARE);
+		page = BufferGetPage(buf);
+		maxoffno = PageGetMaxOffsetNumber(page);
+
+		for (; so->plainOffno <= maxoffno; so->plainOffno = OffsetNumberNext(so->plainOffno))
+		{
+			etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, so->plainOffno));
+
+			if (!HnswIsElementTuple(etup))
+				continue;
+
+			for (; so->plainTidIdx < HNSW_HEAPTIDS; so->plainTidIdx++)
+			{
+				if (!ItemPointerIsValid(&etup->heaptids[so->plainTidIdx]))
+					break;
+
+				scan->currentItemData = etup->heaptids[so->plainTidIdx];
+				so->plainTidIdx++;
+				UnlockReleaseBuffer(buf);
+				return true;
+			}
+			so->plainTidIdx = 0;
+		}
+
+		so->plainBlkno = HnswPageGetOpaque(page)->nextblkno;
+		so->plainOffno = FirstOffsetNumber;
+		UnlockReleaseBuffer(buf);
+	}
+
+	return false;
+}
+
+/*
  * Fetch the next tuple in the given scan
  */
 bool
 hnsw_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
-	MemoryContext oldCtx = MemoryContextSwitchTo(so->tmpCtx);
+	MemoryContext oldCtx;
 
 	/*
 	 * Index can be used to scan backward, but Postgres doesn't support
@@ -203,16 +263,17 @@ hnsw_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 	 */
 	Assert(ScanDirectionIsForward(dir));
 
+	if (pgvector_hnsw_norderbys(scan) <= 0)
+		return hnsw_plain_gettuple(scan);
+
+	oldCtx = MemoryContextSwitchTo(so->tmpCtx);
+
 	if (so->first)
 	{
 		Datum		value;
 
 		/* Count index scan for stats */
 		pgstat_count_index_scan(pgvector_hnsw_index_rel(scan));
-
-		/* Safety check */
-		if (pgvector_hnsw_norderbys(scan) <= 0)
-			elog(ERROR, "cannot scan hnsw index without order");
 
 		if (!IsMVCCSnapshot(pgvector_hnsw_snapshot(scan)))
 			elog(ERROR, "non-MVCC snapshots are not supported with hnsw");

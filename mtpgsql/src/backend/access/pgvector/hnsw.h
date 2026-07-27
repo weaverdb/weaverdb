@@ -398,6 +398,12 @@ typedef struct HnswScanOpaqueData
 	/* Support functions */
 	HnswSupport support;
 
+	/* Plain index scan (no ORDER BY) for VACUUM stats */
+	bool		plainScan;
+	BlockNumber plainBlkno;
+	OffsetNumber plainOffno;
+	int			plainTidIdx;
+
 	/* PG7 scan bridge (order-by / snapshot not on IndexScanDescData) */
 	ScanKeyData orderByData;
 	int			numberOfOrderBys;

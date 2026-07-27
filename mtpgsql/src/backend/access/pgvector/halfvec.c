@@ -8,6 +8,7 @@
 #include "fmgr.h"
 #include "halfutils.h"
 #include "halfvec.h"
+#include "pgvector_module.h"
 #include "lib/stringinfo.h"
 #include "libpq/pqformat.h"
 #include "sparsevec.h"
@@ -544,6 +545,7 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_l2_distance);
 Datum
 halfvec_l2_distance(PG_FUNCTION_ARGS)
 {
+	PgvectorEnsureInit();
 	HalfVector *a = PG_GETARG_HALFVEC_P(0);
 	HalfVector *b = PG_GETARG_HALFVEC_P(1);
 
@@ -559,6 +561,7 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_l2_squared_distance);
 Datum
 halfvec_l2_squared_distance(PG_FUNCTION_ARGS)
 {
+	PgvectorEnsureInit();
 	HalfVector *a = PG_GETARG_HALFVEC_P(0);
 	HalfVector *b = PG_GETARG_HALFVEC_P(1);
 
@@ -574,6 +577,7 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_inner_product);
 Datum
 halfvec_inner_product(PG_FUNCTION_ARGS)
 {
+	PgvectorEnsureInit();
 	HalfVector *a = PG_GETARG_HALFVEC_P(0);
 	HalfVector *b = PG_GETARG_HALFVEC_P(1);
 
@@ -589,6 +593,7 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_negative_inner_product);
 Datum
 halfvec_negative_inner_product(PG_FUNCTION_ARGS)
 {
+	PgvectorEnsureInit();
 	HalfVector *a = PG_GETARG_HALFVEC_P(0);
 	HalfVector *b = PG_GETARG_HALFVEC_P(1);
 
@@ -604,6 +609,7 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_cosine_distance);
 Datum
 halfvec_cosine_distance(PG_FUNCTION_ARGS)
 {
+	PgvectorEnsureInit();
 	HalfVector *a = PG_GETARG_HALFVEC_P(0);
 	HalfVector *b = PG_GETARG_HALFVEC_P(1);
 	double		similarity;
@@ -636,6 +642,7 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_spherical_distance);
 Datum
 halfvec_spherical_distance(PG_FUNCTION_ARGS)
 {
+	PgvectorEnsureInit();
 	HalfVector *a = PG_GETARG_HALFVEC_P(0);
 	HalfVector *b = PG_GETARG_HALFVEC_P(1);
 	double		distance;
@@ -660,6 +667,7 @@ FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_l1_distance);
 Datum
 halfvec_l1_distance(PG_FUNCTION_ARGS)
 {
+	PgvectorEnsureInit();
 	HalfVector *a = PG_GETARG_HALFVEC_P(0);
 	HalfVector *b = PG_GETARG_HALFVEC_P(1);
 

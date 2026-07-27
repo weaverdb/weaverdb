@@ -140,12 +140,19 @@ NeedsUpdated(HnswVacuumState * vacuumstate, HnswElement element)
 	HnswNeighborTuple ntup;
 	bool		needsUpdated = false;
 
+	if (!BlockNumberIsValid(element->neighborPage) || !OffsetNumberIsValid(element->neighborOffno))
+		return false;
+
 	buf = ReadBufferExtended(index, MAIN_FORKNUM, element->neighborPage, RBM_NORMAL, bas);
 	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 	ntup = (HnswNeighborTuple) PageGetItem(page, PageGetItemId(page, element->neighborOffno));
 
-	Assert(HnswIsNeighborTuple(ntup));
+	if (!HnswIsNeighborTuple(ntup))
+	{
+		UnlockReleaseBuffer(buf);
+		return false;
+	}
 
 	/* Check neighbors */
 	for (int i = 0; i < ntup->count; i++)
@@ -165,13 +172,8 @@ NeedsUpdated(HnswVacuumState * vacuumstate, HnswElement element)
 
 	/* Also update if layer 0 is not full */
 	/* This could indicate too many candidates being deleted during insert */
-	if (!needsUpdated)
-	{
-		/* Keep clang-tidy happy */
-		Assert(ntup->count > 0);
-
+	if (!needsUpdated && ntup->count > 0)
 		needsUpdated = !ItemPointerIsValid(&ntup->indextids[ntup->count - 1]);
-	}
 
 	UnlockReleaseBuffer(buf);
 
@@ -585,6 +587,11 @@ InitVacuumState(HnswVacuumState * vacuumstate, IndexVacuumInfo *info, IndexBulkD
 
 	/* Get m from metapage */
 	HnswGetMetaPageInfo(index, &vacuumstate->m, NULL);
+
+	/* Embedded element used during repair; must match HnswInitElementFromBlock */
+	memset(&vacuumstate->highestPoint, 0, sizeof(HnswElementData));
+	HnswPtrStore((char *) NULL, vacuumstate->highestPoint.neighbors, (HnswNeighborArrayPtr *) NULL);
+	HnswPtrStore((char *) NULL, vacuumstate->highestPoint.value, (char *) NULL);
 
 	/* Create hash table */
 	vacuumstate->deleted = tidhash_create(CurrentMemoryContext, 256, NULL);

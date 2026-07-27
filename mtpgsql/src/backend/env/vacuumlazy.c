@@ -54,8 +54,10 @@
 #include "access/heapam.h"
 #include "access/hio.h"
 #include "access/xlog.h"
+#include "catalog/pg_am.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
+#include "pgvector_vacuum_stats.h"
 #include "storage/sinval.h"
 #include "storage/lock.h"
 #include "storage/smgr.h"
@@ -1117,6 +1119,31 @@ lazy_scan_index(Relation indrel)
 	BlockNumber     cpage = 0;
 
 	vac_init_rusage(&ru0);
+
+	/*
+	 * ivfflat/hnsw ANN indexes cannot use the ordered scan path; walk pages
+	 * directly for pg_class stats (see pgvector_vacuum_stats.c).
+	 */
+	if (indrel->rd_rel->relam == IVFFLAT_AM_OID || indrel->rd_rel->relam == HNSW_AM_OID)
+	{
+		nitups = pgvector_lazy_index_tuple_count(indrel);
+		nipages = RelationGetNumberOfBlocks(indrel);
+		notemptypages = nipages;
+
+		if (nipages > 50 && ((double) (nipages - notemptypages) / (double) nipages) > 0.75)
+		{
+			vacuum_log(indrel, "Index: adding reindex request index pages: %d used pages: %d number of tuples: %d", nipages, notemptypages, nitups);
+			AddReindexRequest(NameStr(indrel->rd_rel->relname), GetDatabaseName(),
+							  indrel->rd_id, GetDatabaseId());
+		}
+		else
+			lazy_index_freespace(indrel, true);
+
+		vacuum_log(indrel, "Index: Pages %ld; Empty: %ld; Tuples %ld.", nipages, (nipages - notemptypages), nitups);
+		vacuum_log(indrel, "%s", vac_show_rusage(&ru0, rubuf));
+
+		return nitups;
+	}
 
 	iscan = index_beginscan(indrel, false, 0, (ScanKey) NULL);
 

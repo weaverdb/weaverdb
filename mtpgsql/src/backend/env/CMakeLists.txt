@@ -20,6 +20,8 @@ if (JNI_FOUND)
     target_include_directories(env PRIVATE ${JNI_INCLUDE_DIRS})
 endif()
 
+target_include_directories(env PRIVATE ../access/pgvector)
+
 message("Using ${CMAKE_C_COMPILER_ID} to link library")
 if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     target_compile_definitions(env PRIVATE LIB_EXTERN=extern)
