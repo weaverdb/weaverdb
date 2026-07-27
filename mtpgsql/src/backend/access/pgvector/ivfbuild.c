@@ -49,7 +49,7 @@ AddSample(Datum *values, IvfflatBuildState * buildstate)
 	VectorArray samples = buildstate->samples;
 	int			targsamples = samples->maxlen;
 
-	/* Detoast once for all calls */
+	/* Materialize blob-indirect heap values once */
 	Datum		value = PointerGetDatum(PG_DETOAST_DATUM(values[0]));
 
 	/*
@@ -101,7 +101,7 @@ SampleCallback(Relation index, ItemPointer tid, Datum *values,
 	if (isnull[0])
 		return;
 
-	/* Use memory context since detoast can allocate */
+	/* Use memory context since blob materialization can allocate */
 	oldCtx = MemoryContextSwitchTo(buildstate->tmpCtx);
 
 	/* Add sample */
@@ -153,7 +153,7 @@ AddTupleToSort(ItemPointer tid, Datum *values, IvfflatBuildState * buildstate)
 	VectorArray centers = buildstate->centers;
 	TupleTableSlot *slot = buildstate->slot;
 
-	/* Detoast once for all calls */
+	/* Materialize blob-indirect heap values once */
 	Datum		value = PointerGetDatum(PG_DETOAST_DATUM(values[0]));
 
 	/* Normalize if needed */
@@ -215,7 +215,7 @@ BuildCallback(Relation index, ItemPointer tid, Datum *values,
 	if (isnull[0])
 		return;
 
-	/* Use memory context since detoast can allocate */
+	/* Use memory context since blob materialization can allocate */
 	oldCtx = MemoryContextSwitchTo(buildstate->tmpCtx);
 
 	/* Add tuple to sort */

@@ -82,7 +82,7 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 	ListInfo	listInfo;
 	BlockNumber originalInsertPage;
 
-	/* Detoast once for all calls */
+	/* Materialize blob-indirect heap values once */
 	value = PointerGetDatum(PG_DETOAST_DATUM(values[0]));
 
 	/* Normalize if needed */
@@ -193,7 +193,7 @@ ivfflat_insertindex(Relation index, Datum *values, bool *isnull, ItemPointer hea
 		return false;
 
 	/*
-	 * Use memory context since detoast, IvfflatNormValue, and
+	 * Use memory context since blob materialization, IvfflatNormValue, and
 	 * index_form_tuple can allocate
 	 */
 	insertCtx = AllocSetContextCreate(CurrentMemoryContext,

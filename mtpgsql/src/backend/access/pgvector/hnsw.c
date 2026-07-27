@@ -207,7 +207,7 @@ hnswcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,
 	/* Startup cost is cost before returning the first row */
 	costs.indexStartupCost = costs.indexTotalCost * ratio;
 
-	/* Adjust cost if needed since TOAST not included in seq scan cost */
+	/* Adjust cost if needed since blob-indirect heap storage is not in seq scan page estimate */
 	startupPages = costs.numIndexPages * ratio;
 	if (startupPages > path->indexinfo->rel->pages && ratio < 0.5)
 	{

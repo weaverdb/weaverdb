@@ -81,6 +81,33 @@ check "null emb count" "$out" 'count = "1"'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$SCRIPT_DIR/pgvector_orderby_smoke.sh"
 
+# Large vectors use blob-indirect heap storage (attstorage extended on vector type).
+BLOB_DIM=2200
+blob_vec() {
+  local u="$1"
+  printf '['
+  local i=0
+  while [[ "$i" -lt "$BLOB_DIM" ]]; do
+    [[ "$i" -gt 0 ]] && printf ','
+    if [[ "$i" -eq "$u" ]]; then printf '1'; else printf '0'; fi
+    i=$((i + 1))
+  done
+  printf ']'
+}
+V0="$(blob_vec 0)"
+V1="$(blob_vec 1)"
+V2="$(blob_vec 2)"
+out=$(run_sql \
+  "create table pv_blob_smoke (id int, emb vector);" \
+  "insert into pv_blob_smoke values (1, '${V0}');" \
+  "insert into pv_blob_smoke values (2, '${V1}');" \
+  "select id from pv_blob_smoke order by emb <-> '${V0}' limit 1;" \
+  "insert into pv_blob_smoke values (3, '${V2}');" \
+  "select id from pv_blob_smoke order by emb <-> '${V2}' limit 1;")
+check "blob-indirect vector insert + order by" "$out" 'INSERT|SELECT|backend>'
+check "blob-indirect nearest id=1" "$out" 'id = "1"'
+check "blob-indirect insert after read id=3" "$out" 'id = "3"'
+
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures check(s) failed" >&2
   exit 1

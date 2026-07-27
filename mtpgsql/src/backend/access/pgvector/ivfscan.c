@@ -20,6 +20,7 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/tuplesort.h"
+#include "access/blobstorage.h"
 
 #include "varatt.h"
 
@@ -220,9 +221,14 @@ GetScanValue(IndexScanDesc scan)
 		value = pgvector_ivfflat_orderby(scan)->sk_argument;
 		so->distfunc = FunctionCall2Coll;
 
-		/* Value should not be compressed or toasted */
-		Assert(!VARATT_IS_COMPRESSED(DatumGetPointer(value)));
-		Assert(!VARATT_IS_EXTENDED(DatumGetPointer(value)));
+		if (DatumGetPointer(value) != NULL && ISINDIRECT(value))
+		{
+			MemoryContext oldCtx = MemoryContextSwitchTo(so->tmpCtx);
+
+			value = materialize_blob_datum(value);
+			MemoryContextSwitchTo(oldCtx);
+		}
+		Assert(DatumGetPointer(value) == NULL || !ISINDIRECT(value));
 
 		/* Normalize if needed */
 		if (so->normprocinfo != NULL)

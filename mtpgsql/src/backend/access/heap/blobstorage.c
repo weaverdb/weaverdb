@@ -610,6 +610,16 @@ store_blob_segments(Relation rel, bytea * data, ItemPointer start, ItemPointer e
 	return TRUE;
 }
 
+Datum
+materialize_blob_datum(Datum datum)
+{
+	if (datum == (Datum) 0 || DatumGetPointer(datum) == NULL)
+		return datum;
+	if (ISINDIRECT(datum))
+		return PointerGetDatum(rebuild_indirect_blob(datum));
+	return datum;
+}
+
 bytea *
 rebuild_indirect_blob(Datum item)
 {
