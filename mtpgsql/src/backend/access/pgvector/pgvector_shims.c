@@ -25,23 +25,39 @@
 #include "ivfflat.h"
 #include "halfutils.h"
 #include "bitutils.h"
+#include "pgvector_module.h"
 #include <math.h>
 #include <errno.h>
 #include <string.h>
+#include <pthread.h>
 
-/* get_float8_infinity provided as inline in pgvector_compat.h (force-included) */
+static pthread_once_t pgvector_module_once = PTHREAD_ONCE_INIT;
 
-/* (numeric_float4 handling stubbed at call sites in array_to_*; no C shim needed for build) */
-
-/* Dummy inits for bit/half + ivf/hnsw (real .c excluded for build system to avoid deep AM deps).
- * vector.c _PG_init calls them unconditionally. */
-void
-PgvectorModuleInit(void)
+static void
+pgvector_module_init_body(void)
 {
 	HalfvecInit();
 	BitvecInit();
 	HnswInit();
 	IvfflatInit();
+}
+
+static void
+pgvector_module_init_once(void)
+{
+	pgvector_module_init_body();
+}
+
+void
+PgvectorModuleInit(void)
+{
+	pthread_once(&pgvector_module_once, pgvector_module_init_once);
+}
+
+void
+PgvectorEnsureInit(void)
+{
+	PgvectorModuleInit();
 }
 
 /* ----------------------------------------------------------------

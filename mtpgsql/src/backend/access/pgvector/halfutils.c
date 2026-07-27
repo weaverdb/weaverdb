@@ -21,10 +21,15 @@
 #endif
 #endif
 
-float		(*HalfvecL2SquaredDistance) (int dim, half * ax, half * bx);
-float		(*HalfvecInnerProduct) (int dim, half * ax, half * bx);
-double		(*HalfvecCosineSimilarity) (int dim, half * ax, half * bx);
-float		(*HalfvecL1Distance) (int dim, half * ax, half * bx);
+static float HalfvecL2SquaredDistanceDefault(int dim, half * ax, half * bx);
+static float HalfvecInnerProductDefault(int dim, half * ax, half * bx);
+static double HalfvecCosineSimilarityDefault(int dim, half * ax, half * bx);
+static float HalfvecL1DistanceDefault(int dim, half * ax, half * bx);
+
+float		(*HalfvecL2SquaredDistance) (int dim, half * ax, half * bx) = HalfvecL2SquaredDistanceDefault;
+float		(*HalfvecInnerProduct) (int dim, half * ax, half * bx) = HalfvecInnerProductDefault;
+double		(*HalfvecCosineSimilarity) (int dim, half * ax, half * bx) = HalfvecCosineSimilarityDefault;
+float		(*HalfvecL1Distance) (int dim, half * ax, half * bx) = HalfvecL1DistanceDefault;
 
 static float
 HalfvecL2SquaredDistanceDefault(int dim, half * ax, half * bx)

@@ -80,6 +80,7 @@ check "null emb count" "$out" 'count = "1"'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$SCRIPT_DIR/pgvector_orderby_smoke.sh"
+"$SCRIPT_DIR/pgvector_features_smoke.sh"
 
 # Large vectors use blob-indirect heap storage (attstorage extended on vector type).
 BLOB_DIM=2200

@@ -288,6 +288,13 @@ typedef struct IvfflatScanOpaqueData
 	int			listIndex;
 	IvfflatScanList *lists;
 
+	/* Plain index scan (no ORDER BY) for VACUUM stats */
+	bool		plainScan;
+	BlockNumber plainListBlkno;
+	OffsetNumber plainListOffno;
+	BlockNumber plainEntryBlkno;
+	OffsetNumber plainEntryOffno;
+
 	/* PG7 scan bridge: order-by / snapshot not in IndexScanDescData */
 	ScanKeyData orderByData;
 	int			numberOfOrderBys;

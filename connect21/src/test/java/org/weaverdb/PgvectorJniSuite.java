@@ -14,10 +14,14 @@ import org.junit.platform.suite.api.Suite;
 @SelectClasses({
         PgvectorSmokeTest.class,
         PgvectorOrderByTest.class,
+        PgvectorHalfvecOrderByTest.class,
+        PgvectorSparsevecOrderByTest.class,
+        PgvectorBitOrderByTest.class,
         PgvectorIndexTest.class,
         PgvectorMutationsTest.class,
         PgvectorIndirectBlobTest.class,
-        PgvectorConnect21Test.class
+        PgvectorConnect21Test.class,
+        PgvectorFeaturesShellTest.class
 })
 public class PgvectorJniSuite {
 }

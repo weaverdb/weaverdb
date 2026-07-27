@@ -53,6 +53,8 @@
 #include "storage/sinvaladt.h"
 #include "access/xlog.h"
 #include "env/dbwriter.h"
+
+extern void PgvectorModuleInit(void);
 #include "env/dolhelper.h"
 #include "commands/vacuum.h"
 #include "utils/relcache.h"
@@ -333,7 +335,9 @@ transaction system  */
 	 * Initialize the access methods. Does not touch files (?) - thomas
 	 * 1997-11-01
 	 */
-	initam();  
+	initam();
+
+	PgvectorModuleInit();
 
 /*  if there are recovered pages are present,
  *  index pages need to be scanned and items 

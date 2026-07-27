@@ -345,6 +345,8 @@ ivfflat_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderby
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
 
 	so->first = true;
+	so->plainScan = false;
+	so->plainListBlkno = InvalidBlockNumber;
 	pairingheap_reset(so->listQueue);
 	so->listIndex = 0;
 
@@ -353,6 +355,91 @@ ivfflat_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderby
 
 	if (orderbys && norderbys > 0)
 		pgvector_ivfflat_set_orderbys(scan, orderbys, norderbys);
+}
+
+/*
+ * Sequential index scan without ORDER BY (lazy VACUUM index stats).
+ */
+static bool
+ivfflat_plain_gettuple(IndexScanDesc scan)
+{
+	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
+	Relation	index = pgvector_scan_index_rel(scan);
+
+	if (!so->plainScan)
+	{
+		so->plainScan = true;
+		so->plainListBlkno = IVFFLAT_HEAD_BLKNO;
+		so->plainListOffno = FirstOffsetNumber;
+		so->plainEntryBlkno = InvalidBlockNumber;
+		so->plainEntryOffno = FirstOffsetNumber;
+		pgstat_count_index_scan(index);
+	}
+
+	for (;;)
+	{
+		if (BlockNumberIsValid(so->plainEntryBlkno))
+		{
+			Buffer		buf;
+			Page		page;
+			OffsetNumber maxoffno;
+
+			buf = ReadBuffer(index, so->plainEntryBlkno);
+			LockBuffer(index, buf, BUFFER_LOCK_SHARE);
+			page = BufferGetPage(buf);
+			maxoffno = PageGetMaxOffsetNumber(page);
+
+			if (so->plainEntryOffno <= maxoffno)
+			{
+				IndexTuple	itup;
+
+				itup = (IndexTuple) PageGetItem(page, PageGetItemId(page, so->plainEntryOffno));
+				scan->currentItemData = itup->t_tid;
+				so->plainEntryOffno = OffsetNumberNext(so->plainEntryOffno);
+				if (so->plainEntryOffno > maxoffno)
+				{
+					so->plainEntryBlkno = IvfflatPageGetOpaque(page)->nextblkno;
+					so->plainEntryOffno = FirstOffsetNumber;
+				}
+				UnlockReleaseBuffer(buf);
+				return true;
+			}
+
+			so->plainEntryBlkno = IvfflatPageGetOpaque(page)->nextblkno;
+			so->plainEntryOffno = FirstOffsetNumber;
+			UnlockReleaseBuffer(buf);
+			continue;
+		}
+
+		if (!BlockNumberIsValid(so->plainListBlkno))
+			return false;
+
+		{
+			Buffer		cbuf;
+			Page		cpage;
+			OffsetNumber cmaxoffno;
+			IvfflatList list;
+
+			cbuf = ReadBuffer(index, so->plainListBlkno);
+			LockBuffer(index, cbuf, BUFFER_LOCK_SHARE);
+			cpage = BufferGetPage(cbuf);
+			cmaxoffno = PageGetMaxOffsetNumber(cpage);
+
+			if (so->plainListOffno > cmaxoffno)
+			{
+				so->plainListBlkno = IvfflatPageGetOpaque(cpage)->nextblkno;
+				so->plainListOffno = FirstOffsetNumber;
+				UnlockReleaseBuffer(cbuf);
+				continue;
+			}
+
+			list = (IvfflatList) PageGetItem(cpage, PageGetItemId(cpage, so->plainListOffno));
+			so->plainEntryBlkno = list->startPage;
+			so->plainEntryOffno = FirstOffsetNumber;
+			so->plainListOffno = OffsetNumberNext(so->plainListOffno);
+			UnlockReleaseBuffer(cbuf);
+		}
+	}
 }
 
 /*
@@ -371,15 +458,15 @@ ivfflat_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 	 */
 	Assert(ScanDirectionIsForward(dir));
 
+	if (pgvector_ivfflat_norderbys(scan) <= 0)
+		return ivfflat_plain_gettuple(scan);
+
 	if (so->first)
 	{
 		Datum		value;
 
 		/* Count index scan for stats */
 		pgstat_count_index_scan(pgvector_scan_index_rel(scan));
-
-		if (pgvector_ivfflat_norderbys(scan) <= 0)
-			elog(ERROR, "cannot scan ivfflat index without order");
 
 		if (!IsMVCCSnapshot(pgvector_scan_snapshot(scan)))
 			elog(ERROR, "non-MVCC snapshots are not supported with ivfflat");
