@@ -452,7 +452,7 @@ HnswUpdateMetaPage(Relation index, int updateEntry, HnswElement entryPoint, Bloc
 bool
 HnswFormIndexValue(Datum *out, Datum *values, bool *isnull, const HnswTypeInfo * typeInfo, HnswSupport * support)
 {
-	/* Detoast once for all calls */
+	/* Materialize blob-indirect heap values once for index AM use */
 	Datum		value = PointerGetDatum(PG_DETOAST_DATUM(values[0]));
 
 	/* Check value */

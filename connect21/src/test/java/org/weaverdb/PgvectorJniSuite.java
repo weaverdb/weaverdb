@@ -16,6 +16,7 @@ import org.junit.platform.suite.api.Suite;
         PgvectorOrderByTest.class,
         PgvectorIndexTest.class,
         PgvectorMutationsTest.class,
+        PgvectorIndirectBlobTest.class,
         PgvectorConnect21Test.class
 })
 public class PgvectorJniSuite {

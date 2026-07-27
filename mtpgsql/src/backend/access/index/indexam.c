@@ -495,6 +495,8 @@ GetIndexValue(HeapTuple tuple,
 
 		for (i = 0; i < FIgetnArgs(fInfo); i++)
 		{
+			Form_pg_attribute attr = hTupDesc->attrs[attrNums[i] - 1];
+
 					attData[i] = HeapGetAttr(tuple,
 									  attrNums[i],
 									  hTupDesc,
@@ -502,8 +504,10 @@ GetIndexValue(HeapTuple tuple,
 									  
 				mustfree[i] = false;
 
-			if (hTupDesc->attrs[attrNums[i] - 1]->attstorage == 'e' && !(*attNull) && ISINDIRECT(attData[i])) {
-				attData[i] = PointerGetDatum(rebuild_indirect_blob(attData[i]));
+			if (attr->attstorage == 'e' && !(*attNull) &&
+				attr->attlen == -1 && !attr->attbyval &&
+				ISINDIRECT(DatumGetPointer(attData[i]))) {
+				attData[i] = materialize_blob_datum(attData[i]);
 				mustfree[i] = true;
 			}
 			
@@ -522,12 +526,12 @@ GetIndexValue(HeapTuple tuple,
 		*attNull = isNull;
 	}
 	else {
+		Form_pg_attribute attr = hTupDesc->attrs[attrNums[attOff] - 1];
+
 		returnVal = HeapGetAttr(tuple, attrNums[attOff], hTupDesc, attNull);
-		if ( HeapTupleHasBlob(tuple) ) {
-			if ( ( hTupDesc->attrs[attrNums[attOff]-1]->attstorage == 'e' ) && ISINDIRECT(returnVal)  ) {
-				elog(ERROR,"index key is too large");
-			}
-		}	
+		if (!(*attNull) && attr->attlen == -1 && !attr->attbyval &&
+			ISINDIRECT(DatumGetPointer(returnVal)))
+			returnVal = materialize_blob_datum(returnVal);
 	}
 
 

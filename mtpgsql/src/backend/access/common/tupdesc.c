@@ -23,6 +23,8 @@
 
 #include "postgres.h"
 
+#include <string.h>
+
 #include "catalog/pg_type.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_type.h"
@@ -462,7 +464,14 @@ TupleDescInitEntry(TupleDesc desc,
 		if ( att->atttypid == BLOBOID || att->atttypid == JAVAOID ) {
 			att->attstorage = 'e';
 		} else {
-			att->attstorage = 'p';
+			char	   *typname = NameStr(typeForm->typname);
+
+			if (strcmp(typname, "vector") == 0 ||
+				strcmp(typname, "halfvec") == 0 ||
+				strcmp(typname, "sparsevec") == 0)
+				att->attstorage = 'e';
+			else
+				att->attstorage = 'p';
 		}
 	}
 

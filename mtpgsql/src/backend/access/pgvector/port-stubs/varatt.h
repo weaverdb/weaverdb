@@ -2,11 +2,14 @@
  *
  * The fork's postgres.h already provides basic VARSIZE / SETVARSIZE / VARDATA.
  * pgvector code (PG13-era) uses SET_VARSIZE, VARSIZE_ANY, VARATT_IS_* etc.
+ *
+ * Large values use blobstorage (ISINDIRECT blob headers), not PostgreSQL TOAST.
  */
 #ifndef VARATT_H
 #define VARATT_H
 
 #include "postgres.h"
+#include "access/blobstorage.h"
 
 /* Core aliases used everywhere in pgvector */
 #define SET_VARSIZE(PTR, len)   SETVARSIZE((PTR), (len))
@@ -16,7 +19,7 @@
 /* Modern names for data access */
 #define VARDATA_ANY(PTR)        VARDATA(PTR)
 
-/* Extended / compressed / toast checks (we have no TOAST in this context usually) */
+/* PG toast tags are unused; blob-indirect uses ISINDIRECT() in postgres.h */
 #define VARATT_IS_4B(PTR)       (1)
 #define VARATT_IS_4B_U(PTR)     (0)
 #define VARATT_IS_1B(PTR)       (0)
@@ -35,10 +38,9 @@
 /* For code that does raw size math */
 #define VARATT_SHORT_MAX          0x7F
 
-/* Detoast is mostly a no-op here (no external toast in this integration yet) */
-#define PG_DETOAST_DATUM(datum)   (datum)
-#define PG_DETOAST_DATUM_COPY(datum) (datum)
-#define PG_DETOAST_DATUM_PACKED(datum) (datum)
+#define PG_DETOAST_DATUM(datum)        materialize_blob_datum(datum)
+#define PG_DETOAST_DATUM_COPY(datum)   materialize_blob_datum(datum)
+#define PG_DETOAST_DATUM_PACKED(datum) materialize_blob_datum(datum)
 
 /* Some code uses these for header inspection */
 #define VARTAG_1B_E(PTR)          (0)

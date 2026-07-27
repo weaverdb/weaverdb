@@ -14,6 +14,7 @@
 #include "utils/memutils.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
+#include "access/blobstorage.h"
 
 #include "varatt.h"
 
@@ -102,9 +103,9 @@ GetScanValue(IndexScanDesc scan)
 	{
 		value = orderby->sk_argument;
 
-		/* Value should not be compressed or toasted */
-		Assert(!VARATT_IS_COMPRESSED(DatumGetPointer(value)));
-		Assert(!VARATT_IS_EXTENDED(DatumGetPointer(value)));
+		if (DatumGetPointer(value) != NULL && ISINDIRECT(value))
+			value = materialize_blob_datum(value);
+		Assert(DatumGetPointer(value) == NULL || !ISINDIRECT(value));
 
 		/* Normalize if needed */
 		if (so->support.normprocinfo != NULL)

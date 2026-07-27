@@ -41,6 +41,9 @@ int sizeof_max_tuple_blob(void);
 
 bytea* rebuild_indirect_blob(Datum item);
 
+/* Inline varlena or rebuild blob-indirect storage (Weaver blobstorage, not TOAST). */
+Datum materialize_blob_datum(Datum datum);
+
 uint64* bloblen(Datum);
 
 Datum
