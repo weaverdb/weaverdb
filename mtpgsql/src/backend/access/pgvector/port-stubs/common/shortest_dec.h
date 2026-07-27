@@ -23,6 +23,12 @@ float_to_shortest_decimal_bufn(float f, char *buf)
 	return n;
 }
 
+static inline void
+float_to_shortest_decimal_buf(float f, char *buf)
+{
+	(void) float_to_shortest_decimal_bufn(f, buf);
+}
+
 static inline int
 double_to_shortest_decimal_bufn(double f, char *buf)
 {

@@ -23,6 +23,8 @@
 #include "bitvec.h"
 #include "hnsw.h"
 #include "ivfflat.h"
+#include "halfutils.h"
+#include "bitutils.h"
 #include <math.h>
 #include <errno.h>
 #include <string.h>
@@ -33,38 +35,13 @@
 
 /* Dummy inits for bit/half + ivf/hnsw (real .c excluded for build system to avoid deep AM deps).
  * vector.c _PG_init calls them unconditionally. */
-void BitvecInit(void) {}
-void HalfvecInit(void) {}
-
 void
 PgvectorModuleInit(void)
 {
-	BitvecInit();
 	HalfvecInit();
+	BitvecInit();
 	HnswInit();
 	IvfflatInit();
-}
-
-VarBit *
-InitBitVector(int dim)
-{
-	VarBit	   *result;
-	int			size;
-
-	size = VARBITDATALEN(dim);
-	result = (VarBit *) palloc0(size);
-	SET_VARSIZE(result, size);
-	VARBITLEN(result) = dim;
-	return result;
-}
-
-Datum
-halfvec_l2_normalize(PG_FUNCTION_ARGS)
-{
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("halfvec is not built in this configuration")));
-	PG_RETURN_NULL();
 }
 
 /* ----------------------------------------------------------------

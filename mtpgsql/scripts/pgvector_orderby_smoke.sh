@@ -39,7 +39,7 @@ assert_ids() {
     [[ -n "$line" ]] && got+=("$line")
   done < <(ids_from_output "$out")
   if [[ "${#got[@]}" -ne "${#expected[@]}" ]]; then
-    echo "FAIL: $desc (got ${#got[@]} rows, want ${#expected[@]}): ${got[*]}" >&2
+    echo "FAIL: $desc (got ${#got[@]} rows, want ${#expected[@]}): $(printf '%s ' "${got[@]+"${got[@]}"}")" >&2
     failures=$((failures + 1))
     return
   fi
@@ -109,6 +109,84 @@ if echo "$out" | grep -qi ERROR; then
 else
   got=$(ids_from_output "$out" | tr '\n' ' ')
   echo "OK: cosine <=> order (ids: ${got:-none})"
+fi
+
+out=$(run_session \
+  "create table pv_ip (id int, emb vector);" \
+  "insert into pv_ip values (1, '[1,0,0]');" \
+  "insert into pv_ip values (2, '[0,1,0]');" \
+  "insert into pv_ip values (3, '[0,0,1]');" \
+  "create index pv_ip_ivf on pv_ip using ivfflat (emb vector_ip_ops) with (lists = 2);" \
+  "create index pv_ip_hnsw on pv_ip using hnsw (emb vector_ip_ops) with (m = 8, ef_construction = 32);" \
+  "select id from pv_ip order by emb <#> '[1,0,0]' limit 2;")
+if echo "$out" | grep -qi ERROR; then
+  echo "FAIL: vector_ip_ops index + ORDER BY <#>" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+else
+  assert_ids "vector_ip_ops ORDER BY <#> limit 2" "$out" 1 2
+fi
+
+out=$(run_session \
+  "create table pv_cos (id int, emb vector);" \
+  "insert into pv_cos values (1, '[1,0,0]');" \
+  "insert into pv_cos values (2, '[0,1,0]');" \
+  "insert into pv_cos values (3, '[0,0,1]');" \
+  "create index pv_cos_ivf on pv_cos using ivfflat (emb vector_cosine_ops) with (lists = 2);" \
+  "create index pv_cos_hnsw on pv_cos using hnsw (emb vector_cosine_ops) with (m = 8, ef_construction = 32);" \
+  "select id from pv_cos order by emb <=> '[1,0,0]' limit 2;")
+if echo "$out" | grep -qi ERROR; then
+  echo "FAIL: vector_cosine_ops index + ORDER BY <=>" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+else
+  assert_ids "vector_cosine_ops ORDER BY <=> limit 2" "$out" 1 2
+fi
+
+out=$(run_session \
+  "create table pv_hv (id int, emb halfvec);" \
+  "insert into pv_hv values (1, '[1,0,0]');" \
+  "insert into pv_hv values (2, '[0,1,0]');" \
+  "insert into pv_hv values (3, '[0,0,1]');" \
+  "create index pv_hv_ivf on pv_hv using ivfflat (emb halfvec_l2_ops) with (lists = 2);" \
+  "create index pv_hv_hnsw on pv_hv using hnsw (emb halfvec_l2_ops) with (m = 8, ef_construction = 32);" \
+  "select id from pv_hv order by emb <-> '[1,0,0]' limit 2;")
+if echo "$out" | grep -qi ERROR; then
+  echo "FAIL: halfvec_l2_ops index + ORDER BY <->" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+else
+  assert_ids "halfvec_l2_ops ORDER BY <-> limit 2" "$out" 1 2
+fi
+
+out=$(run_session \
+  "create table pv_sv (id int, emb sparsevec);" \
+  "insert into pv_sv values (1, '{1:1}/3');" \
+  "insert into pv_sv values (2, '{2:1}/3');" \
+  "insert into pv_sv values (3, '{3:1}/3');" \
+  "create index pv_sv_hnsw on pv_sv using hnsw (emb sparsevec_l2_ops) with (m = 8, ef_construction = 32);" \
+  "select id from pv_sv order by emb <-> '{1:1}/3' limit 2;")
+if echo "$out" | grep -qi ERROR; then
+  echo "FAIL: sparsevec_l2_ops index + ORDER BY <->" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+else
+  assert_ids "sparsevec_l2_ops ORDER BY <-> limit 2" "$out" 1 2
+fi
+
+out=$(run_session \
+  "create table pv_bit (id int, emb varbit);" \
+  "insert into pv_bit values (1, 'B100');" \
+  "insert into pv_bit values (2, 'B010');" \
+  "insert into pv_bit values (3, 'B001');" \
+  "create index pv_bit_hnsw on pv_bit using hnsw (emb bit_hamming_ops) with (m = 8, ef_construction = 32);" \
+  "select id from pv_bit order by emb <~> 'B100' limit 2;")
+if echo "$out" | grep -qi ERROR; then
+  echo "FAIL: bit_hamming_ops index + ORDER BY <~>" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+else
+  assert_ids "bit_hamming_ops ORDER BY <~> limit 2" "$out" 1 2
 fi
 
 if [[ "$failures" -ne 0 ]]; then

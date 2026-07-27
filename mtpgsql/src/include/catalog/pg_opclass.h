@@ -137,5 +137,37 @@ DESCR("vector btree operators");
 DATA(insert OID = 1991 (	vector_l2_ops    1842   ));
 DESCR("vector L2 distance for ivfflat/hnsw");
 #define VECTOR_L2_OPS_OID 1991
+DATA(insert OID = 1992 (	vector_ip_ops    1842   ));
+DESCR("vector inner product for ivfflat/hnsw");
+#define VECTOR_IP_OPS_OID 1992
+DATA(insert OID = 1993 (	vector_cosine_ops 1842   ));
+DESCR("vector cosine distance for ivfflat/hnsw");
+#define VECTOR_COSINE_OPS_OID 1993
+DATA(insert OID = 1994 (	halfvec_ops	   1844   ));
+DESCR("halfvec btree operators");
+DATA(insert OID = 1995 (	halfvec_l2_ops    1844   ));
+DESCR("halfvec L2 distance for ivfflat/hnsw");
+#define HALFVEC_L2_OPS_OID 1995
+DATA(insert OID = 1996 (	halfvec_ip_ops    1844   ));
+DESCR("halfvec inner product for ivfflat/hnsw");
+#define HALFVEC_IP_OPS_OID 1996
+DATA(insert OID = 1997 (	halfvec_cosine_ops 1844   ));
+DESCR("halfvec cosine distance for ivfflat/hnsw");
+#define HALFVEC_COSINE_OPS_OID 1997
+DATA(insert OID = 1998 (	sparsevec_l2_ops  1846   ));
+DESCR("sparsevec L2 distance for hnsw");
+#define SPARSEVEC_L2_OPS_OID 1998
+DATA(insert OID = 1999 (	sparsevec_ip_ops  1846   ));
+DESCR("sparsevec inner product for hnsw");
+#define SPARSEVEC_IP_OPS_OID 1999
+DATA(insert OID = 2020 (	sparsevec_cosine_ops 1846   ));
+DESCR("sparsevec cosine distance for hnsw");
+#define SPARSEVEC_COSINE_OPS_OID 2020
+DATA(insert OID = 2021 (	bit_hamming_ops   1562   ));
+DESCR("bit hamming distance for ivfflat/hnsw");
+#define BIT_HAMMING_OPS_OID 2021
+DATA(insert OID = 2022 (	bit_jaccard_ops   1562   ));
+DESCR("bit jaccard distance for hnsw");
+#define BIT_JACCARD_OPS_OID 2022
 
 #endif	 /* PG_OPCLASS_H */

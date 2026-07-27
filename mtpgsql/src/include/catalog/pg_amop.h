@@ -466,7 +466,87 @@ DATA(insert OID = 0 (  403 1990 2305 5 ));
 DATA(insert OID = 0 (  406 1991 2301 1 ));
 
 /*
+ *	ivfflat vector_ip_ops
+ */
+DATA(insert OID = 0 (  406 1992 2302 1 ));
+
+/*
+ *	ivfflat vector_cosine_ops
+ */
+DATA(insert OID = 0 (  406 1993 2303 1 ));
+
+/*
  *	hnsw vector_l2_ops
  */
 DATA(insert OID = 0 (  407 1991 2301 1 ));
+
+/*
+ *	hnsw vector_ip_ops
+ */
+DATA(insert OID = 0 (  407 1992 2302 1 ));
+
+/*
+ *	hnsw vector_cosine_ops
+ */
+DATA(insert OID = 0 (  407 1993 2303 1 ));
+
+/*
+ *	ivfflat halfvec_l2_ops
+ */
+DATA(insert OID = 0 (  406 1995 2310 1 ));
+
+/*
+ *	ivfflat halfvec_ip_ops
+ */
+DATA(insert OID = 0 (  406 1996 2311 1 ));
+
+/*
+ *	ivfflat halfvec_cosine_ops
+ */
+DATA(insert OID = 0 (  406 1997 2312 1 ));
+
+/*
+ *	hnsw halfvec_l2_ops
+ */
+DATA(insert OID = 0 (  407 1995 2310 1 ));
+
+/*
+ *	hnsw halfvec_ip_ops
+ */
+DATA(insert OID = 0 (  407 1996 2311 1 ));
+
+/*
+ *	hnsw halfvec_cosine_ops
+ */
+DATA(insert OID = 0 (  407 1997 2312 1 ));
+
+/*
+ *	hnsw sparsevec_l2_ops
+ */
+DATA(insert OID = 0 (  407 1998 2321 1 ));
+
+/*
+ *	hnsw sparsevec_ip_ops
+ */
+DATA(insert OID = 0 (  407 1999 2322 1 ));
+
+/*
+ *	hnsw sparsevec_cosine_ops
+ */
+DATA(insert OID = 0 (  407 2020 2323 1 ));
+
+/*
+ *	ivfflat bit_hamming_ops
+ */
+DATA(insert OID = 0 (  406 2021 2319 1 ));
+
+/*
+ *	hnsw bit_hamming_ops
+ */
+DATA(insert OID = 0 (  407 2021 2319 1 ));
+
+/*
+ *	hnsw bit_jaccard_ops
+ */
+DATA(insert OID = 0 (  407 2022 2320 1 ));
 #endif	 /* PG_AMOP_H */

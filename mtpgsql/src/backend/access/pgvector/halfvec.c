@@ -51,7 +51,7 @@ pq_sendhalf(StringInfo buf, half h)
 	}			swap;
 
 	swap.h = h;
-	pq_sendint16(buf, swap.i);
+	pq_sendint(buf, swap.i, sizeof(uint16));
 }
 
 /*

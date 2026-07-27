@@ -4,8 +4,13 @@
 set(SRC_FILES
     pgvector_shims.c
     pgvector_pg7_am.c
+    pgvector_cost.c
     vector.c
+    halfvec.c
+    halfutils.c
     sparsevec.c
+    bitvec.c
+    bitutils.c
     ivfflat.c
     ivfinsert.c
     ivfutils.c
@@ -17,12 +22,12 @@ set(SRC_FILES
     hnswscan.c
     hnswutils.c
     hnswinsert.c
+    hnswvacuum.c
     pgvector_executor_port.c
     pgvector_hnsw_stubs.c
 )
 # pgvector_ivf_stubs.c replaced by ivfbuild.c / ivfscan.c when PG7 port complete.
-# hnsw.c excluded (modern GUC/reloptions/cost); hnswinsert.c / hnswvacuum.c deferred.
-# NOTE: bit/half .c excluded
+# hnsw.c excluded (modern GUC/reloptions/cost); pgvector_hnsw_stubs.c holds env/init only.
 
 # create the library (as OBJECT so backend mtpg can link the objs)
 add_library(pgvector OBJECT ${SRC_FILES})

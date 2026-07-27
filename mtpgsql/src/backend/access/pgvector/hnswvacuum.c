@@ -2,6 +2,7 @@
 
 #include "access/genam.h"
 #include "commands/vacuum.h"
+#include "env/freespace.h"
 #include "hnsw.h"
 #include "nodes/pg_list.h"
 #include "storage/bufmgr.h"
@@ -76,7 +77,7 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 					if (!ItemPointerIsValid(&etup->heaptids[i]))
 						break;
 
-					if (vacuumstate->callback(&etup->heaptids[i], vacuumstate->callback_state))
+					if (vacuumstate->callback((void *) &etup->heaptids[i], vacuumstate->callback_state))
 					{
 						itemUpdated = true;
 						stats->tuples_removed++;
@@ -605,8 +606,8 @@ FreeVacuumState(HnswVacuumState * vacuumstate)
  * Bulk delete tuples from the index
  */
 IndexBulkDeleteResult *
-hnswbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
-			   IndexBulkDeleteCallback callback, void *callback_state)
+hnsw_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
+					 IndexBulkDeleteCallback callback, void *callback_state)
 {
 	HnswVacuumState vacuumstate;
 
@@ -630,7 +631,7 @@ hnswbulkdelete(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
  * Clean up after a VACUUM operation
  */
 IndexBulkDeleteResult *
-hnswvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
+hnsw_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 {
 	Relation	rel = info->index;
 

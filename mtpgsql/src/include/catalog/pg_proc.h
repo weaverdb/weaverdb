@@ -923,6 +923,75 @@ DESCR("vector L2 normalize");
 DATA(insert OID = 2247 (  cosine_distance	   PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  cosine_distance - ));
 DESCR("vector cosine distance");
 
+DATA(insert OID = 2248 (  halfvec_in		   PGUID 11 f t t 3 f 1844 "0 0 23" 100 0 0 100  halfvec_in - ));
+DESCR("halfvec input");
+DATA(insert OID = 2249 (  halfvec_out		   PGUID 11 f t t 1 f 23 "1844" 100 0 0 100  halfvec_out - ));
+DESCR("halfvec output");
+DATA(insert OID = 2250 (  halfvec_typmod_in	   PGUID 11 f t t 1 f 23 "0" 100 0 0 100  halfvec_typmod_in - ));
+DESCR("halfvec typmod input");
+DATA(insert OID = 2251 (  halfvec_l2_distance	   PGUID 11 f t t 2 f 701 "1844 1844" 100 0 0 100  halfvec_l2_distance - ));
+DESCR("halfvec L2 distance");
+DATA(insert OID = 2252 (  halfvec_l2_squared_distance PGUID 11 f t t 2 f 701 "1844 1844" 100 0 0 100  halfvec_l2_squared_distance - ));
+DESCR("halfvec squared L2 distance");
+DATA(insert OID = 2253 (  halfvec_negative_inner_product PGUID 11 f t t 2 f 701 "1844 1844" 100 0 0 100  halfvec_negative_inner_product - ));
+DESCR("halfvec negative inner product");
+DATA(insert OID = 2254 (  halfvec_spherical_distance PGUID 11 f t t 2 f 701 "1844 1844" 100 0 0 100  halfvec_spherical_distance - ));
+DESCR("halfvec spherical distance");
+DATA(insert OID = 2255 (  halfvec_l2_norm		   PGUID 11 f t t 1 f 701 "1844" 100 0 0 100  halfvec_l2_norm - ));
+DESCR("halfvec L2 norm");
+DATA(insert OID = 2256 (  halfvec_l2_normalize		   PGUID 11 f t t 1 f 1844 "1844" 100 0 0 100  halfvec_l2_normalize - ));
+DESCR("halfvec L2 normalize");
+DATA(insert OID = 2257 (  halfvec_cosine_distance	   PGUID 11 f t t 2 f 701 "1844 1844" 100 0 0 100  halfvec_cosine_distance - ));
+DESCR("halfvec cosine distance");
+DATA(insert OID = 2258 (  halfvec_cmp		   PGUID 11 f t t 2 f 23 "1844 1844" 100 0 0 100  halfvec_cmp - ));
+DESCR("halfvec compare");
+DATA(insert OID = 2259 (  halfvec_lt		   PGUID 11 f t t 2 f 16 "1844 1844" 100 0 0 100  halfvec_lt - ));
+DESCR("halfvec less than");
+DATA(insert OID = 2260 (  halfvec_le		   PGUID 11 f t t 2 f 16 "1844 1844" 100 0 0 100  halfvec_le - ));
+DESCR("halfvec less or equal");
+DATA(insert OID = 2261 (  halfvec_eq		   PGUID 11 f t t 2 f 16 "1844 1844" 100 0 0 100  halfvec_eq - ));
+DESCR("halfvec equal");
+DATA(insert OID = 2262 (  halfvec_ne		   PGUID 11 f t t 2 f 16 "1844 1844" 100 0 0 100  halfvec_ne - ));
+DESCR("halfvec not equal");
+DATA(insert OID = 2263 (  halfvec_ge		   PGUID 11 f t t 2 f 16 "1844 1844" 100 0 0 100  halfvec_ge - ));
+DESCR("halfvec greater or equal");
+DATA(insert OID = 2264 (  halfvec_gt		   PGUID 11 f t t 2 f 16 "1844 1844" 100 0 0 100  halfvec_gt - ));
+DESCR("halfvec greater than");
+DATA(insert OID = 2265 (  ivfflat_halfvec_support PGUID 11 f t f 1 f 23 "0" 100 0 0 100  ivfflat_halfvec_support - ));
+DESCR("ivfflat halfvec type support");
+DATA(insert OID = 2266 (  hnsw_halfvec_support PGUID 11 f t f 1 f 23 "0" 100 0 0 100  hnsw_halfvec_support - ));
+DESCR("hnsw halfvec type support");
+
+DATA(insert OID = 2270 (  sparsevec_in		   PGUID 11 f t t 3 f 1846 "0 0 23" 100 0 0 100  sparsevec_in - ));
+DESCR("sparsevec input");
+DATA(insert OID = 2271 (  sparsevec_out		   PGUID 11 f t t 1 f 23 "1846" 100 0 0 100  sparsevec_out - ));
+DESCR("sparsevec output");
+DATA(insert OID = 2272 (  sparsevec_typmod_in	   PGUID 11 f t t 1 f 23 "0" 100 0 0 100  sparsevec_typmod_in - ));
+DESCR("sparsevec typmod input");
+DATA(insert OID = 2273 (  sparsevec_l2_distance	   PGUID 11 f t t 2 f 701 "1846 1846" 100 0 0 100  sparsevec_l2_distance - ));
+DESCR("sparsevec L2 distance");
+DATA(insert OID = 2274 (  sparsevec_l2_squared_distance PGUID 11 f t t 2 f 701 "1846 1846" 100 0 0 100  sparsevec_l2_squared_distance - ));
+DESCR("sparsevec squared L2 distance");
+DATA(insert OID = 2275 (  sparsevec_negative_inner_product PGUID 11 f t t 2 f 701 "1846 1846" 100 0 0 100  sparsevec_negative_inner_product - ));
+DESCR("sparsevec negative inner product");
+DATA(insert OID = 2277 (  sparsevec_l2_norm		   PGUID 11 f t t 1 f 701 "1846" 100 0 0 100  sparsevec_l2_norm - ));
+DESCR("sparsevec L2 norm");
+DATA(insert OID = 2278 (  sparsevec_l2_normalize		   PGUID 11 f t t 1 f 1846 "1846" 100 0 0 100  sparsevec_l2_normalize - ));
+DESCR("sparsevec L2 normalize");
+DATA(insert OID = 2279 (  sparsevec_cosine_distance	   PGUID 11 f t t 2 f 701 "1846 1846" 100 0 0 100  sparsevec_cosine_distance - ));
+DESCR("sparsevec cosine distance");
+DATA(insert OID = 2280 (  hnsw_sparsevec_support PGUID 11 f t f 1 f 23 "0" 100 0 0 100  hnsw_sparsevec_support - ));
+DESCR("hnsw sparsevec type support");
+
+DATA(insert OID = 2281 (  hamming_distance	   PGUID 11 f t t 2 f 701 "1562 1562" 100 0 0 100  hamming_distance - ));
+DESCR("bit hamming distance");
+DATA(insert OID = 2282 (  jaccard_distance	   PGUID 11 f t t 2 f 701 "1562 1562" 100 0 0 100  jaccard_distance - ));
+DESCR("bit jaccard distance");
+DATA(insert OID = 2283 (  ivfflat_bit_support PGUID 11 f t f 1 f 23 "0" 100 0 0 100  ivfflat_bit_support - ));
+DESCR("ivfflat bit type support");
+DATA(insert OID = 2284 (  hnsw_bit_support	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  hnsw_bit_support - ));
+DESCR("hnsw bit type support");
+
 #define F_VECTORIN	2237
 #define F_VECTOROUT	2238
 #define F_L2_DISTANCE	2240

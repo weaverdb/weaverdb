@@ -28,6 +28,7 @@
 #include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
+#include "optimizer/pgvector.h"
 #include "optimizer/plancat.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/var.h"
@@ -79,8 +80,8 @@ static bool useful_for_mergejoin(RelOptInfo *rel, IndexOptInfo *index,
 static bool useful_for_ordering(Query *root, RelOptInfo *rel,
 					IndexOptInfo *index,
 					ScanDirection scandir);
-static bool pgvector_useful_for_ordering(Query *root, RelOptInfo *rel,
-						   IndexOptInfo *index);
+bool		pgvector_index_useful_for_ordering(Query *root, RelOptInfo *rel,
+											   IndexOptInfo *index);
 static bool match_index_to_operand(int indexkey, Var *operand,
 					   RelOptInfo *rel, IndexOptInfo *index);
 static bool function_index_operand(Expr *funcOpnd, RelOptInfo *rel,
@@ -186,7 +187,7 @@ create_index_paths(Query *root,
                         add_path(rel, (Path *) create_delegated_index_path(root, rel, index,
 								restrictclauses,
 								NoMovementScanDirection));
-			if (pgvector_useful_for_ordering(root, rel, index))
+			if (pgvector_index_useful_for_ordering(root, rel, index))
 				add_path(rel, (Path *) create_index_path(root, rel, index,
 														 restrictclauses,
 														 ForwardScanDirection));
@@ -914,10 +915,10 @@ useful_for_mergejoin(RelOptInfo *rel,
  * 'rel' is the relation for which 'index' is defined
  * 'scandir' is the contemplated scan direction
  */
-static bool
-pgvector_useful_for_ordering(Query *root,
-							 RelOptInfo *rel,
-							 IndexOptInfo *index)
+bool
+pgvector_index_useful_for_ordering(Query *root,
+								   RelOptInfo *rel,
+								   IndexOptInfo *index)
 {
 	List	   *sublist;
 	PathKeyItem *pki;
@@ -971,7 +972,7 @@ useful_for_ordering(Query *root,
 	List	   *index_pathkeys;
 
 	if (index->relam == IVFFLAT_AM_OID || index->relam == HNSW_AM_OID)
-		return pgvector_useful_for_ordering(root, rel, index);
+		return pgvector_index_useful_for_ordering(root, rel, index);
 
 	if (root->query_pathkeys == NIL)
 		return false;			/* no special ordering requested */

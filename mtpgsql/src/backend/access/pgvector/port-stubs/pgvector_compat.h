@@ -16,8 +16,6 @@
 
 /* Dummies for varbit / float return macros used inside bitvec.c / halfvec etc (from CMake dummies + more) */
 #define PG_RETURN_FLOAT8(x)     return (Datum)0
-#define PG_GETARG_VARBIT_P(n)   ((VarBit *)0)
-#define PG_RETURN_VARBIT_P(x)   ((Datum)0)
 
 #define PG_FREE_IF_COPY(x,n)    ((void)0)
 #define PG_GETARG_POINTER(n)    ((void*)0)  /* for some GETARG cases */
@@ -39,8 +37,6 @@
 #define float_underflow_error() ((void)0)
 
 #define PG_RETURN_BOOL(x)       return (Datum)0
-#define HalfIsZero(h)           (0)
-#define HalfIsInf(h)            (0)
 
 #define PG_RETURN_ARRAYTYPE_P(x) return (Datum)0
 #define PG_RETURN_NULL()        return (Datum)0
@@ -274,6 +270,12 @@ extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
 #undef PG_GETARG_POINTER
 #define PG_GETARG_POINTER(n) ((void *) PG_GETARG_DATUM(n))
 
+#undef PG_GETARG_VARBIT_P
+#define PG_GETARG_VARBIT_P(n)	((VarBit *) PG_GETARG_POINTER(n))
+
+#undef PG_RETURN_VARBIT_P
+#define PG_RETURN_VARBIT_P(x)	PG_RETURN_POINTER(x)
+
 #undef PG_RETURN_POINTER
 #define PG_RETURN_POINTER(x) return (Datum) (long) (x)
 
@@ -401,14 +403,7 @@ get_float8_infinity(void)
 	return (double) 1.0 / 0.0;   /* INFINITY without <math.h> issues in all C stds */
 }
 
-/* ---- Halfvec support shims (if halfvec.c compiled) ---- */
-#ifndef Float4ToHalf
-/* very rough; real pgvector has proper half float. For build only. */
-static inline uint16 Float4ToHalf(float f) { (void)f; return 0; }
-#endif
-#ifndef HalfToFloat4
-static inline float HalfToFloat4(uint16 h) { (void)h; return 0.0f; }
-#endif
+/* ---- Halfvec support: halfutils.h provides Float4ToHalf / HalfToFloat4 when halfutils.c is linked ---- */
 
 /* IS_NOT_ZERO helper seen in sparsevec */
 #ifndef IS_NOT_ZERO
@@ -523,10 +518,6 @@ extern Datum  Float8GetDatum(float8 X);
 
 #ifndef RelationGetNumberOfBlocksInFork
 #define RelationGetNumberOfBlocksInFork(rel, fork) RelationGetNumberOfBlocks(rel)
-#endif
-
-#ifndef Float4ToHalfUnchecked
-#define Float4ToHalfUnchecked(f) Float4ToHalf(f)
 #endif
 
 /* Relation fields missing on Weaver */

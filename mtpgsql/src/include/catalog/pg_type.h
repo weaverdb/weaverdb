@@ -176,6 +176,22 @@ DATA(insert OID = 1843 (  _vector	 PGUID -1  -1 f b t \x2C 0 1842 array_in array
 DESCR("array of vector");
 #define VECTORARRAYOID	1843
 
+DATA(insert OID = 1844 (	halfvec	   PGUID -1  -1 f b t \x2C 0  18 halfvec_in halfvec_out halfvec_in halfvec_out i _null_ ));
+DESCR("half-precision float vector for similarity search");
+#define HALFVECOID		1844
+
+DATA(insert OID = 1845 (  _halfvec	 PGUID -1  -1 f b t \x2C 0 1844 array_in array_out array_in array_out i _null_ ));
+DESCR("array of halfvec");
+#define HALFVECARRAYOID	1845
+
+DATA(insert OID = 1846 (	sparsevec   PGUID -1  -1 f b t \x2C 0  18 sparsevec_in sparsevec_out sparsevec_in sparsevec_out i _null_ ));
+DESCR("sparse float vector for similarity search");
+#define SPARSEVECOID	1846
+
+DATA(insert OID = 1847 (  _sparsevec	 PGUID -1  -1 f b t \x2C 0 1846 array_in array_out array_in array_out i _null_ ));
+DESCR("array of sparsevec");
+#define SPARSEVECARRAYOID	1847
+
 DATA(insert OID = 19 (	name	   PGUID NAMEDATALEN NAMEDATALEN  f b t \x2C 0	18 namein nameout namein nameout i _null_ ));
 DESCR("64-character type for storing system identifiers");
 #define NAMEOID			19
