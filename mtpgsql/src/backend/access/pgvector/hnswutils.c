@@ -13,7 +13,6 @@
 #include "sparsevec.h"
 #include "storage/bufmgr.h"
 #include "utils/datum.h"
-#include "utils/memdebug.h"
 #include "utils/rel.h"
 #include "vector.h"
 

@@ -1,11 +1,14 @@
-/* PG7 tuplesort bridge for pgvector (shadows modern API; see pgvector_executor_port.c). */
-#ifndef UTILS_TUPLESORT_H
-#define UTILS_TUPLESORT_H
+/*
+ * pgvector tuplesort: real PG7 heap sort API plus PG13-style slot/sort entry points.
+ * Include this instead of utils/tuplesort.h in pgvector sources so pgvector_executor_port
+ * macros do not rewrite declarations in tuplesort.h.
+ */
+#ifndef PGVECTOR_TUPLESORT_H
+#define PGVECTOR_TUPLESORT_H
 
-#include "access/tupdesc.h"
+#include "utils/tuplesort.h"
 #include "pgvector_executor_port.h"
 
-typedef struct Tuplesortstate Tuplesortstate;
 typedef struct Sharedsort Sharedsort;
 
 typedef struct TuplesortCoordination
@@ -17,13 +20,6 @@ typedef struct TuplesortCoordination
 #define TTSOpsMinimalTuple ((const void *) 0)
 #define TTSOpsVirtual ((const void *) 0)
 #define TUPLESORT_NONE 0
-
-extern void tuplesort_performsort(Tuplesortstate *state);
-extern void tuplesort_end(Tuplesortstate *state);
-extern void tuplesort_rescan(Tuplesortstate *state);
-
-#define tuplesort_performsort tuplesort_performsort
-#define tuplesort_end tuplesort_end
 
 static inline Size
 tuplesort_estimate_shared(int n)
@@ -47,4 +43,4 @@ tuplesort_attach_shared(Sharedsort *sharedsort, void *seg)
 	(void) seg;
 }
 
-#endif /* UTILS_TUPLESORT_H */
+#endif /* PGVECTOR_TUPLESORT_H */

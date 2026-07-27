@@ -10,7 +10,6 @@
 #include "halfvec.h"
 #include "lib/stringinfo.h"
 #include "libpq/pqformat.h"
-#include "port.h"				/* for strtof() */
 #include "sparsevec.h"
 #include "utils/array.h"
 #include "utils/float.h"
