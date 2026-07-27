@@ -815,6 +815,20 @@ DATA(insert OID = 2307 (  ">="	   PGUID 0 b t f 1842 1842 16 2306 2304  0  0 vec
 DATA(insert OID = 2308 (  "="	   PGUID 0 b t f 1842 1842 16 2308 2309  0  0 vector_eq eqsel eqjoinsel ));
 DATA(insert OID = 2309 (  "<>"	   PGUID 0 b t f 1842 1842 16 2309 2308  0  0 vector_ne eqsel eqjoinsel ));
 
+/* halfvec similarity / ordering operators */
+DATA(insert OID = 2310 (  "<->"	   PGUID 0 b t f 1844 1844 701 2310   0   0   0 halfvec_l2_distance - - ));
+DATA(insert OID = 2311 (  "<#>"	   PGUID 0 b t f 1844 1844 701 2311   0   0   0 halfvec_negative_inner_product - - ));
+DATA(insert OID = 2312 (  "<=>"	   PGUID 0 b t f 1844 1844 701 2312   0   0   0 halfvec_cosine_distance - - ));
+
+/* bit (varbit) similarity operators */
+DATA(insert OID = 2319 (  "<~>"	   PGUID 0 b t f 1562 1562 701 2319   0   0   0 hamming_distance - - ));
+DATA(insert OID = 2320 (  "<%>"	   PGUID 0 b t f 1562 1562 701 2320   0   0   0 jaccard_distance - - ));
+
+/* sparsevec similarity operators */
+DATA(insert OID = 2321 (  "<->"	   PGUID 0 b t f 1846 1846 701 2321   0   0   0 sparsevec_l2_distance - - ));
+DATA(insert OID = 2322 (  "<#>"	   PGUID 0 b t f 1846 1846 701 2322   0   0   0 sparsevec_negative_inner_product - - ));
+DATA(insert OID = 2323 (  "<=>"	   PGUID 0 b t f 1846 1846 701 2323   0   0   0 sparsevec_cosine_distance - - ));
+
 /*
  * function prototypes
  */

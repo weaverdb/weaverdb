@@ -10,6 +10,7 @@
 #include "storage/bufmgr.h"
 #include "utils/relcache.h"
 #include "utils/varbit.h"
+#include "catalog/pg_type.h"
 #include "vector.h"
 
 #include "varatt.h"
@@ -53,9 +54,12 @@ IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum)
 	HeapTuple	tup;
 	bool		isnull = false;
 	Datum		val;
+	Form_pg_attribute att;
 
 	if (heap == NULL || !RelationIsValid(heap))
 		return -1;
+
+	att = TupleDescAttr(RelationGetDescr(heap), attnum - 1);
 
 	scan = heap_beginscan(heap, SnapshotNow, 0, (ScanKey) NULL);
 	while ((tup = heap_getnext(scan)) != NULL)
@@ -63,17 +67,36 @@ IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum)
 		val = heap_getattr(tup, attnum, RelationGetDescr(heap), &isnull);
 		if (!isnull)
 		{
-			Vector	   *vec = (Vector *) PG_DETOAST_DATUM(val);
+			Pointer		ptr;
 			int			dim;
 
-			heap_endscan(scan);
-			if (vec != NULL && vec->dim > 0 && vec->dim <= VECTOR_MAX_DIM)
-				dim = (int) vec->dim;
-			else
-				return -1;
-			if ((Pointer) vec != DatumGetPointer(val))
-				pfree(vec);
-			return dim;
+			ptr = (Pointer) DatumGetPointer(PG_DETOAST_DATUM(val));
+
+			if (att->atttypid == VARBITOID || att->atttypid == ZPBITOID)
+			{
+				VarBit	   *vb = (VarBit *) ptr;
+
+				heap_endscan(scan);
+				dim = (int) VARBITLEN(vb);
+				if (dim <= 0)
+					return -1;
+				if ((Pointer) vb != DatumGetPointer(val))
+					pfree(vb);
+				return dim;
+			}
+
+			{
+				Vector	   *vec = (Vector *) ptr;
+
+				heap_endscan(scan);
+				if (vec != NULL && vec->dim > 0 && vec->dim <= VECTOR_MAX_DIM)
+					dim = (int) vec->dim;
+				else
+					return -1;
+				if ((Pointer) vec != DatumGetPointer(val))
+					pfree(vec);
+				return dim;
+			}
 		}
 	}
 	heap_endscan(scan);

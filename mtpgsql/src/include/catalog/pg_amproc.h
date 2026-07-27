@@ -113,8 +113,83 @@ DATA(insert OID = 0 (403 1990 2242 1));
 DATA(insert OID = 0 (406 1991 2241 1));
 DATA(insert OID = 0 (406 1991 2240 3));
 
+/* ivfflat vector_ip_ops */
+DATA(insert OID = 0 (406 1992 2243 1));
+DATA(insert OID = 0 (406 1992 2245 3));
+DATA(insert OID = 0 (406 1992 2244 4));
+
+/* ivfflat vector_cosine_ops */
+DATA(insert OID = 0 (406 1993 2243 1));
+DATA(insert OID = 0 (406 1993 2244 2));
+DATA(insert OID = 0 (406 1993 2245 3));
+DATA(insert OID = 0 (406 1993 2244 4));
+
 /* hnsw vector_l2_ops */
 DATA(insert OID = 0 (407 1991 2241 1));
+
+/* hnsw vector_ip_ops */
+DATA(insert OID = 0 (407 1992 2243 1));
+
+/* hnsw vector_cosine_ops */
+DATA(insert OID = 0 (407 1993 2243 1));
+DATA(insert OID = 0 (407 1993 2244 2));
+
+/* ivfflat halfvec_l2_ops */
+DATA(insert OID = 0 (406 1995 2252 1));
+DATA(insert OID = 0 (406 1995 2251 3));
+DATA(insert OID = 0 (406 1995 2265 5));
+
+/* ivfflat halfvec_ip_ops */
+DATA(insert OID = 0 (406 1996 2253 1));
+DATA(insert OID = 0 (406 1996 2254 3));
+DATA(insert OID = 0 (406 1996 2255 4));
+DATA(insert OID = 0 (406 1996 2265 5));
+
+/* ivfflat halfvec_cosine_ops */
+DATA(insert OID = 0 (406 1997 2253 1));
+DATA(insert OID = 0 (406 1997 2255 2));
+DATA(insert OID = 0 (406 1997 2254 3));
+DATA(insert OID = 0 (406 1997 2255 4));
+DATA(insert OID = 0 (406 1997 2265 5));
+
+/* hnsw halfvec_l2_ops */
+DATA(insert OID = 0 (407 1995 2252 1));
+DATA(insert OID = 0 (407 1995 2266 3));
+
+/* hnsw halfvec_ip_ops */
+DATA(insert OID = 0 (407 1996 2253 1));
+DATA(insert OID = 0 (407 1996 2266 3));
+
+/* hnsw halfvec_cosine_ops */
+DATA(insert OID = 0 (407 1997 2253 1));
+DATA(insert OID = 0 (407 1997 2255 2));
+DATA(insert OID = 0 (407 1997 2266 3));
+
+/* hnsw sparsevec_l2_ops */
+DATA(insert OID = 0 (407 1998 2274 1));
+DATA(insert OID = 0 (407 1998 2280 3));
+
+/* hnsw sparsevec_ip_ops */
+DATA(insert OID = 0 (407 1999 2275 1));
+DATA(insert OID = 0 (407 1999 2280 3));
+
+/* hnsw sparsevec_cosine_ops */
+DATA(insert OID = 0 (407 2020 2275 1));
+DATA(insert OID = 0 (407 2020 2277 2));
+DATA(insert OID = 0 (407 2020 2280 3));
+
+/* ivfflat bit_hamming_ops */
+DATA(insert OID = 0 (406 2021 2281 1));
+DATA(insert OID = 0 (406 2021 2281 3));
+DATA(insert OID = 0 (406 2021 2283 5));
+
+/* hnsw bit_hamming_ops */
+DATA(insert OID = 0 (407 2021 2281 1));
+DATA(insert OID = 0 (407 2021 2284 3));
+
+/* hnsw bit_jaccard_ops */
+DATA(insert OID = 0 (407 2022 2282 1));
+DATA(insert OID = 0 (407 2022 2284 3));
 
 
 /* hash */

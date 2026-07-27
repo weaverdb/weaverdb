@@ -60,22 +60,3 @@ HnswWriteBuffer(Relation index, Buffer buf)
 	LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
 	WriteBuffer(index, buf);
 }
-
-IndexBulkDeleteResult *
-hnsw_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
-					 IndexBulkDeleteCallback callback, void *callback_state)
-{
-	(void) info;
-	(void) callback;
-	(void) callback_state;
-	if (stats == NULL)
-		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
-	return stats;
-}
-
-IndexBulkDeleteResult *
-hnsw_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
-{
-	(void) info;
-	return stats;
-}

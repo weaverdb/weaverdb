@@ -17,6 +17,7 @@
 #include "fmgr.h"
 #include "hnsw.h"
 #include "ivfflat.h"
+#include "pgvector_cost.h"
 #include "pgvector_index.h"
 #include "pgvector_scan.h"
 #include "nodes/primnodes.h"
@@ -215,27 +216,6 @@ ivfflatdelete(Relation rel, ItemPointer tid)
 	(void) tid;
 }
 
-void
-ivfflatcostestimate(Query *root,
-					RelOptInfo *rel,
-					IndexOptInfo *index,
-					List *indexQuals,
-					Cost *indexStartupCost,
-					Cost *indexTotalCost,
-					Selectivity *indexSelectivity)
-{
-	(void) root;
-	(void) rel;
-	(void) index;
-	(void) indexQuals;
-	if (indexStartupCost)
-		*indexStartupCost = 0;
-	if (indexTotalCost)
-		*indexTotalCost = 0;
-	if (indexSelectivity)
-		*indexSelectivity = 0;
-}
-
 /* -------- HNSW PG7 entry points -------- */
 
 typedef struct HnswBulkDelState
@@ -387,27 +367,6 @@ hnswdelete(Relation rel, ItemPointer tid)
 {
 	(void) rel;
 	(void) tid;
-}
-
-void
-hnswcostestimate(Query *root,
-				 RelOptInfo *rel,
-				 IndexOptInfo *index,
-				 List *indexQuals,
-				 Cost *indexStartupCost,
-				 Cost *indexTotalCost,
-				 Selectivity *indexSelectivity)
-{
-	(void) root;
-	(void) rel;
-	(void) index;
-	(void) indexQuals;
-	if (indexStartupCost)
-		*indexStartupCost = 0;
-	if (indexTotalCost)
-		*indexTotalCost = 0;
-	if (indexSelectivity)
-		*indexSelectivity = 0;
 }
 
 void

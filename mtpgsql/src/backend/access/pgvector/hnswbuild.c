@@ -689,12 +689,6 @@ InitBuildState(HnswBuildState * buildstate, Relation heap, Relation index, Pgvec
 		buildstate->dimensions = IvfflatInferIndexDimensions(heap, heapatt);
 	}
 
-	/* Disallow varbit since require fixed dimensions */
-	if (TupleDescAttr(index->rd_att, 0)->atttypid == VARBITOID)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("type not supported for hnsw index")));
-
 	/* Require column to have dimensions to be indexed */
 	if (buildstate->dimensions < 0)
 		ereport(ERROR,
