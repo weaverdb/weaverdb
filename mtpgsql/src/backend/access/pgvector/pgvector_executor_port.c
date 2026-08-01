@@ -7,12 +7,28 @@
 #include "access/heapam.h"
 #include "access/skey.h"
 #include "catalog/index.h"
+#include "env/env.h"
 #include "env/freespace.h"
 #include "fmgr.h"
 #include "pgvector_executor_port.h"
 #include "storage/bufmgr.h"
 #include "storage/bufpage.h"
 #include "utils/lsyscache.h"
+
+void
+pgvector_worker_attach_parent(Env *parent)
+{
+	Env		   *env = GetEnv();
+
+	if (env == NULL || parent == NULL)
+		return;
+
+	env->DatabaseId = parent->DatabaseId;
+	env->DatabaseName = parent->DatabaseName;
+	env->DatabasePath = parent->DatabasePath;
+	env->UserName = parent->UserName;
+	env->UserId = parent->UserId;
+}
 
 #undef tuplesort_begin_heap
 #undef tuplesort_puttupleslot

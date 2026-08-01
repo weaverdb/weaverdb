@@ -501,17 +501,40 @@ out=$(run_session \
   "set hnsw.scan_mem_multiplier = 2;" \
   "show hnsw.scan_mem_multiplier;" \
   "set ivfflat.max_probes = 50;" \
-  "show ivfflat.max_probes;")
+  "show ivfflat.max_probes;" \
+  "set hnsw.build_workers = 2;" \
+  "show hnsw.build_workers;" \
+  "set ivfflat.assign_workers = 2;" \
+  "show ivfflat.assign_workers;" \
+  "reset hnsw.build_workers;" \
+  "show hnsw.build_workers;")
 assert_no_error "remaining pgvector search knobs" "$out"
 if echo "$out" | grep -Fq 'hnsw.iterative_scan is relaxed_order' && \
    echo "$out" | grep -Fq 'hnsw.max_scan_tuples is 1000' && \
-   echo "$out" | grep -Fq 'ivfflat.max_probes is 50'; then
-  echo "OK: iterative_scan / max_scan_tuples / max_probes"
+   echo "$out" | grep -Fq 'ivfflat.max_probes is 50' && \
+   echo "$out" | grep -Fq 'hnsw.build_workers is 2' && \
+   echo "$out" | grep -Fq 'ivfflat.assign_workers is 2' && \
+   echo "$out" | grep -Fq 'hnsw.build_workers is 1'; then
+  echo "OK: iterative_scan / max_scan_tuples / max_probes / build workers"
 else
   echo "FAIL: remaining search knob SHOW values" >&2
   echo "$out" >&2
   failures=$((failures + 1))
 fi
+
+# Parallel build remains opt-in (defaults to 1). Serial path must stay green.
+out=$(run_session \
+  "create table pv_par (id int, emb vector);" \
+  "insert into pv_par values (1, '[1,0,0]');" \
+  "insert into pv_par values (2, '[2,0,0]');" \
+  "insert into pv_par values (3, '[3,0,0]');" \
+  "set hnsw.build_workers = 1;" \
+  "set ivfflat.assign_workers = 1;" \
+  "create index pv_par_hnsw on pv_par using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32);" \
+  "create index pv_par_ivf on pv_par using ivfflat (emb vector_l2_ops) with (lists = 2);" \
+  "select id from pv_par order by emb <-> '[1,0,0]' limit 1;")
+assert_no_error "serial hnsw/ivfflat index build" "$out"
+assert_ids "serial build ANN nearest" "$out" 1
 
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures pgvector feature check(s) failed" >&2

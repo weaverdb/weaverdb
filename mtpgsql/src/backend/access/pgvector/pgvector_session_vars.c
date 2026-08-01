@@ -293,3 +293,56 @@ reset_ivfflat_max_probes(void)
 	IvfflatGetEnv()->max_probes = IVFFLAT_DEFAULT_LISTS;
 	return TRUE;
 }
+
+/* ---- hnsw.build_workers ---- */
+
+bool
+parse_hnsw_build_workers(char *value)
+{
+	if (value == NULL)
+		return reset_hnsw_build_workers();
+	return parse_int_range(value, &HnswGetEnv()->build_workers,
+						   1, HNSW_MAX_BUILD_WORKERS,
+						   "hnsw.build_workers");
+}
+
+bool
+show_hnsw_build_workers(void)
+{
+	elog(NOTICE, "hnsw.build_workers is %d", HnswGetEnv()->build_workers);
+	return TRUE;
+}
+
+bool
+reset_hnsw_build_workers(void)
+{
+	HnswGetEnv()->build_workers = HNSW_DEFAULT_BUILD_WORKERS;
+	return TRUE;
+}
+
+/* ---- ivfflat.assign_workers ---- */
+
+bool
+parse_ivfflat_assign_workers(char *value)
+{
+	if (value == NULL)
+		return reset_ivfflat_assign_workers();
+	return parse_int_range(value, &IvfflatGetEnv()->assign_workers,
+						   1, IVFFLAT_MAX_ASSIGN_WORKERS,
+						   "ivfflat.assign_workers");
+}
+
+bool
+show_ivfflat_assign_workers(void)
+{
+	elog(NOTICE, "ivfflat.assign_workers is %d",
+		 IvfflatGetEnv()->assign_workers);
+	return TRUE;
+}
+
+bool
+reset_ivfflat_assign_workers(void)
+{
+	IvfflatGetEnv()->assign_workers = IVFFLAT_DEFAULT_ASSIGN_WORKERS;
+	return TRUE;
+}

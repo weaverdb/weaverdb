@@ -1,8 +1,15 @@
 #ifndef PGVECTOR_EXECUTOR_PORT_H
 #define PGVECTOR_EXECUTOR_PORT_H
 
+#include "env/env.h"
 #include "executor/tuptable.h"
 #include "pgvector_index.h"
+
+/*
+ * Copy DB/user identity from the leader Env into the current worker Env.
+ * Required before RelationInitialize / catalog opens in pthread build workers.
+ */
+void pgvector_worker_attach_parent(Env *parent);
 
 typedef struct Tuplesortstate Tuplesortstate;
 
