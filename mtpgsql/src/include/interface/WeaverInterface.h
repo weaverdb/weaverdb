@@ -14,6 +14,7 @@
 #ifndef _WEAVERINTERFACE_H_
 #define _WEAVERINTERFACE_H_
 
+#include <stdint.h>
 
 /*  leave some space for line item ids and header info try and squeeze two
     BLOBs per page  */

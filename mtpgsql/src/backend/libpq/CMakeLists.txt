@@ -9,6 +9,9 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Android")
     target_compile_definitions(libpq PRIVATE ANDROID NOCRYPT)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_compile_definitions(libpq PRIVATE MACOSX NOCUSERID)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # glibc moved crypt() to libcrypt; networking auth is largely unused here.
+    target_compile_definitions(libpq PRIVATE LINUX NOCRYPT)
 endif()
 
 add_dependencies(libpq fmgrtab)

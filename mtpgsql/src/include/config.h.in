@@ -281,7 +281,8 @@
 /* #undef const */
 
 /* Define as your compiler's spelling of "inline", or empty if no inline. */
-#define inline 
+/* Modern C99 compilers provide inline; do not empty-define it. */
+/* #undef inline */
 
 /* Define signed as empty if your compiler doesn't grok "signed char" etc */
 /* #undef signed */

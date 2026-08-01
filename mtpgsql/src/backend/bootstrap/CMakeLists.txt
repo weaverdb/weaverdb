@@ -1,5 +1,5 @@
-find_package(BISON)
-find_package(FLEX)
+find_package(BISON REQUIRED)
+find_package(FLEX REQUIRED)
 
 get_property(YFLAGS GLOBAL PROPERTY YFLAGS)
 

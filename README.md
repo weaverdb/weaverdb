@@ -14,8 +14,10 @@ This project does not have all of the improvements, development, and reliablitit
 
 ### Building
     
-    % mkdir build; cmake -S . -B build; cd build; make
+    % mkdir build; cmake -S . -B build; cmake --build build
     % ./gradlew build
+
+Native libraries are written to `build/mtpg/lib` (`libweaver` / `libweaver_jni`). Gradle tests load them from that path.
 
 ### Running
 
@@ -37,7 +39,18 @@ Preferred (FFM) example:
 
 ### Dependencies
 
-Currently built with cmake, gradle, clang and java on MacOS for MacOS or Android.  Requires Java 17 or greater.  
+Requires CMake 4.2.1+, a C99 compiler (Clang or GCC), bison, flex, Gradle, and Java 17 or greater (Java 25 for the FFM `connect25` module).
+
+### Platform support
+
+| Platform | Status |
+|----------|--------|
+| macOS (Darwin) | Primary development target |
+| Linux | Supported for native + JNI/FFM builds (x86_64 and aarch64) |
+| Android | Cross-build via `abuild.sh` / NDK (`x86`, `x86_64`, `arm64-v8a`, `armeabi-v7a`) |
+| Windows | Not supported — POSIX-only runtime and LP64 `long`/pointer assumptions |
+
+Spinlocks use `pthread_mutex_t` (`SPIN_IS_MUTEX`), so CPU-specific test-and-set assembly is not required for current builds. On-disk page layouts are endian-sensitive; databases are not portable across endianness. Android builds use a 4KB block size; other platforms default to 8KB.
 
 ### Installing
 

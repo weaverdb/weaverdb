@@ -71,15 +71,35 @@ add_library(mtpg STATIC
 
 add_library(weaver SHARED empty.c)
 
-target_link_libraries(weaver PRIVATE mtpg)
+# Darwin ld pulls needed archive members via the export list. ELF linkers do not
+# unless the static archive is wrapped in --whole-archive.
+if (APPLE)
+    target_link_libraries(weaver PRIVATE mtpg)
+else()
+    target_link_libraries(weaver PRIVATE
+        -Wl,--whole-archive mtpg -Wl,--no-whole-archive)
+endif()
 
-#message("Using ${CMAKE_C_COMPILER_ID} to link library")
-if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
-    target_link_options(weaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
-elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    target_link_options(weaver PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
-elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    target_link_options(weaver PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
+target_link_libraries(weaver PUBLIC Threads::Threads m)
+
+# Export maps differ by object format: Mach-O uses -exported_symbols_list with
+# underscored names; ELF uses a GNU version script.
+if (APPLE)
+    target_compile_definitions(weaver PRIVATE LIB_EXTERN=extern)
+    target_link_options(weaver PRIVATE
+        -fvisibility=hidden
+        -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_definitions(weaver PRIVATE LIB_EXTERN=extern)
+    target_link_options(weaver PRIVATE
+        -fvisibility=hidden
+        "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt")
+else()
+    # Other ELF-like toolchains: use a GNU version script.
+    target_compile_definitions(weaver PRIVATE LIB_EXTERN=extern)
+    target_link_options(weaver PRIVATE
+        -fvisibility=hidden
+        "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt")
 endif()
 
 target_include_directories(mtpg INTERFACE ../include/interface)
@@ -91,7 +111,7 @@ add_executable(postgres
     $<TARGET_OBJECTS:postmaster>
 )
 
-target_link_libraries(postgres PRIVATE mtpg)
+target_link_libraries(postgres PRIVATE mtpg Threads::Threads m)
 
 add_custom_command(
     TARGET mtpg POST_BUILD
