@@ -7,6 +7,8 @@
 
 package org.weaverdb;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -82,6 +84,46 @@ public class PgvectorDistanceOpsTest {
         }
         assertNearestThenTie(
                 "select id from pv_jni_cos order by emb <=> '[1,0,0]' limit 2", 1, 2, 3);
+    }
+
+    @Test
+    @Order(5)
+    public void explainL2OrderByUsesIndexScan() throws Exception {
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            exec(conn, "set enable_seqscan = off");
+            String plan = explain(conn,
+                    "explain select id from pv_jni_dist order by emb <-> '[1,0,0]' limit 2");
+            Assertions.assertTrue(plan.contains("Index Scan"),
+                    "expected Index Scan for pure L2 ORDER BY LIMIT, plan:\n" + plan);
+            Assertions.assertTrue(plan.contains("pv_jni_dist_l2_hnsw"),
+                    "expected HNSW index name in plan:\n" + plan);
+        }
+    }
+
+    @Test
+    @Order(6)
+    public void explainCosineOrderByUsesIndexScan() throws Exception {
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            exec(conn, "set enable_seqscan = off");
+            String plan = explain(conn,
+                    "explain select id from pv_jni_cos order by emb <=> '[1,0,0]' limit 2");
+            Assertions.assertTrue(plan.contains("Index Scan"),
+                    "expected Index Scan for pure cosine ORDER BY LIMIT, plan:\n" + plan);
+            Assertions.assertTrue(
+                    plan.contains("pv_jni_cos_ivf") || plan.contains("pv_jni_cos_hnsw"),
+                    "expected cosine ANN index name in plan:\n" + plan);
+        }
+    }
+
+    private static String explain(DBReference conn, String sql) throws Exception {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        conn.setStandardOutput(buf);
+        try {
+            conn.stream(sql);
+        } finally {
+            conn.setStandardOutput(null);
+        }
+        return buf.toString(StandardCharsets.UTF_8);
     }
 
     private static void assertIds(String sql, int... expected) throws Exception {

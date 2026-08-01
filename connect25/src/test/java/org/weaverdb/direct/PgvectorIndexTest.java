@@ -7,6 +7,8 @@
 
 package org.weaverdb.direct;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -153,6 +155,34 @@ public class PgvectorIndexTest {
             }
         });
         Assertions.assertNotNull(ex.getMessage());
+    }
+
+    @Test
+    @Order(12)
+    public void explainL2OrderByUsesIndexScan() throws Exception {
+        // Mirror shell: pure ORDER BY distance LIMIT must use ANN Index Scan.
+        // EXPLAIN is a utility statement — capture via stream()/stdio, not prepared fetch.
+        try (DBReference conn = DBReference.connect("template1")) {
+            exec(conn, "set enable_seqscan = off");
+            String plan = explain(conn,
+                    "explain select id from pv_idx_j order by emb <-> '[1,0,0]' limit 2");
+            Assertions.assertTrue(plan.contains("Index Scan"),
+                    "expected Index Scan for pure L2 ORDER BY LIMIT, plan:\n" + plan);
+            Assertions.assertTrue(
+                    plan.contains("pv_idx_j_ivf") || plan.contains("pv_idx_j_hnsw"),
+                    "expected ANN index name in plan:\n" + plan);
+        }
+    }
+
+    private static String explain(DBReference conn, String sql) throws Exception {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        conn.setStandardOutput(buf);
+        try {
+            conn.stream(sql);
+        } finally {
+            conn.setStandardOutput(null);
+        }
+        return buf.toString(StandardCharsets.UTF_8);
     }
 
     private static void assertIds(String sql, int... expected) throws Exception {
