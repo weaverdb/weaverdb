@@ -57,6 +57,7 @@ initStringInfo(StringInfo str)
 			 "initStringInfo: Out of memory (%d bytes requested)", size);
 	str->maxlen = size;
 	str->len = 0;
+	str->cursor = 0;
 	str->data[0] = '\0';
 }
 

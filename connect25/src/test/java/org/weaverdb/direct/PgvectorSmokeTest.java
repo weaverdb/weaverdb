@@ -49,6 +49,30 @@ public class PgvectorSmokeTest {
         }
     }
 
+    /**
+     * typsend must produce a real bytea (dim/unused + float payload), not the
+     * former no-op stub that returned a null pointer.
+     */
+    @Test
+    public void vectorSendProducesBinaryPayload() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            try (Statement s = conn.statement(
+                    "select length(vector_send('[1,2,3]'::vector))")) {
+                Output<Integer> out = s.linkOutput(1, Integer.class);
+                Assertions.assertTrue(s.fetch());
+                // int16 dim + int16 unused + 3 * float4
+                Assertions.assertEquals(16, out.get().intValue());
+            }
+            try (Statement s = conn.statement(
+                    "select length(halfvec_send('[1,2]'::halfvec))")) {
+                Output<Integer> out = s.linkOutput(1, Integer.class);
+                Assertions.assertTrue(s.fetch());
+                // int16 dim + int16 unused + 2 * float16
+                Assertions.assertEquals(8, out.get().intValue());
+            }
+        }
+    }
+
     private static void exec(DBReference conn, String sql) throws Exception {
         try (Statement s = conn.statement(sql)) {
             s.execute();

@@ -232,6 +232,127 @@ pq_endmessage(StringInfo buf)
 }
 
 /* --------------------------------
+ *		pq_sendfloat4		- append a float4 to a StringInfo buffer
+ *
+ * External float4 binary representation matches int4 byte order (IEEE-754).
+ * --------------------------------
+ */
+void
+pq_sendfloat4(StringInfo buf, float f)
+{
+	union
+	{
+		float		f;
+		uint32		i;
+	}			swap;
+
+	swap.f = f;
+	pq_sendint(buf, (int) swap.i, 4);
+}
+
+/* --------------------------------
+ *		pq_begintypsend		- initialize for constructing a bytea result
+ * --------------------------------
+ */
+void
+pq_begintypsend(StringInfo buf)
+{
+	initStringInfo(buf);
+	/* Reserve four bytes for the bytea length word */
+	appendStringInfoCharMacro(buf, '\0');
+	appendStringInfoCharMacro(buf, '\0');
+	appendStringInfoCharMacro(buf, '\0');
+	appendStringInfoCharMacro(buf, '\0');
+}
+
+/* --------------------------------
+ *		pq_endtypsend		- finish constructing a bytea result
+ *
+ * The data buffer is returned as the palloc'd bytea value.
+ * --------------------------------
+ */
+struct varlena *
+pq_endtypsend(StringInfo buf)
+{
+	struct varlena *result = (struct varlena *) buf->data;
+
+	Assert(buf->len >= VARHDRSZ);
+	SETVARSIZE(result, buf->len);
+
+	return result;
+}
+
+/* --------------------------------
+ *		pq_copymsgbytes		- copy raw data from a message buffer
+ * --------------------------------
+ */
+void
+pq_copymsgbytes(StringInfo msg, char *buf, int datalen)
+{
+	if (datalen < 0 || datalen > (msg->len - msg->cursor))
+		elog(ERROR, "insufficient data left in message");
+
+	memcpy(buf, &msg->data[msg->cursor], datalen);
+	msg->cursor += datalen;
+}
+
+/* --------------------------------
+ *		pq_getmsgint		- get a binary integer from a message buffer
+ *
+ * Values are treated as unsigned.  Byte order matches pq_sendint so that
+ * typsend/typreceive round-trips agree with this fork's FE endian rules.
+ * --------------------------------
+ */
+unsigned int
+pq_getmsgint(StringInfo msg, int b)
+{
+	unsigned int result;
+	unsigned char n8;
+	uint16		n16;
+	uint32		n32;
+
+	switch (b)
+	{
+		case 1:
+			pq_copymsgbytes(msg, (char *) &n8, 1);
+			result = n8;
+			break;
+		case 2:
+			pq_copymsgbytes(msg, (char *) &n16, 2);
+			result = (unsigned int) ((PG_PROTOCOL_MAJOR(FrontendProtocol) == 0) ?
+									ntoh_s(n16) : ntohs(n16));
+			break;
+		case 4:
+			pq_copymsgbytes(msg, (char *) &n32, 4);
+			result = (unsigned int) ((PG_PROTOCOL_MAJOR(FrontendProtocol) == 0) ?
+									ntoh_l(n32) : ntohl(n32));
+			break;
+		default:
+			elog(ERROR, "pq_getmsgint: unsupported size %d", b);
+			result = 0;
+			break;
+	}
+	return result;
+}
+
+/* --------------------------------
+ *		pq_getmsgfloat4		- get a float4 from a message buffer
+ * --------------------------------
+ */
+float
+pq_getmsgfloat4(StringInfo msg)
+{
+	union
+	{
+		float		f;
+		uint32		i;
+	}			swap;
+
+	swap.i = pq_getmsgint(msg, 4);
+	return swap.f;
+}
+
+/* --------------------------------
  *		pq_puttextmessage - generate a MULTIBYTE-converted message in one step
  *
  *		This is the same as the pqcomm.c routine pq_putmessage, except that

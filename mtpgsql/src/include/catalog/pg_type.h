@@ -168,7 +168,7 @@ DESCR("single character");
 DATA(insert OID = 1841 (	schar	   PGUID  1   1 t b t \x2C 0   0 charin charout charin charout c _null_ ));
 DESCR("single character");
 
-DATA(insert OID = 1842 (	vector	   PGUID -1  -1 f b t \x2C 0  18 vector_in vector_out vector_in vector_out i _null_ ));
+DATA(insert OID = 1842 (	vector	   PGUID -1  -1 f b t \x2C 0  18 vector_in vector_out vector_recv vector_send i _null_ ));
 DESCR("float vector for similarity search");
 #define VECTOROID		1842
 
@@ -176,7 +176,7 @@ DATA(insert OID = 1843 (  _vector	 PGUID -1  -1 f b t \x2C 0 1842 array_in array
 DESCR("array of vector");
 #define VECTORARRAYOID	1843
 
-DATA(insert OID = 1844 (	halfvec	   PGUID -1  -1 f b t \x2C 0  18 halfvec_in halfvec_out halfvec_in halfvec_out i _null_ ));
+DATA(insert OID = 1844 (	halfvec	   PGUID -1  -1 f b t \x2C 0  18 halfvec_in halfvec_out halfvec_recv halfvec_send i _null_ ));
 DESCR("half-precision float vector for similarity search");
 #define HALFVECOID		1844
 
@@ -184,7 +184,7 @@ DATA(insert OID = 1845 (  _halfvec	 PGUID -1  -1 f b t \x2C 0 1844 array_in arra
 DESCR("array of halfvec");
 #define HALFVECARRAYOID	1845
 
-DATA(insert OID = 1846 (	sparsevec   PGUID -1  -1 f b t \x2C 0  18 sparsevec_in sparsevec_out sparsevec_in sparsevec_out i _null_ ));
+DATA(insert OID = 1846 (	sparsevec   PGUID -1  -1 f b t \x2C 0  18 sparsevec_in sparsevec_out sparsevec_recv sparsevec_send i _null_ ));
 DESCR("sparse float vector for similarity search");
 #define SPARSEVECOID	1846
 
