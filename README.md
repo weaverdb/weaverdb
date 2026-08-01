@@ -39,7 +39,7 @@ Preferred (FFM) example:
 
 ### Dependencies
 
-Requires CMake 3.20+, a C99 compiler (Clang or GCC), bison, flex, Gradle, and Java 17 or greater (Java 25 for the FFM `connect25` module).
+Requires CMake 4.2.1+, a C99 compiler (Clang or GCC), bison, flex, Gradle, and Java 17 or greater (Java 25 for the FFM `connect25` module).
 
 ### Platform support
 
