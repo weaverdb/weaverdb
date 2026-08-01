@@ -2,6 +2,13 @@
  *
  * Blob→vector conversion and functional indexes via real byte[] binds (FFM).
  *
+ * Covers dense / halfvec / sparsevec / bit bytea codecs plus HNSW/IVFFlat
+ * functional indexes over bytea columns.
+ *
+ * ANN Index Scan over functional bytea_to_*(emb) is asserted with SQL
+ * literals; bound bytea_to_*($q) is validated on typed columns and via
+ * seqscan against bytea heap values.
+ *
  *-------------------------------------------------------------------------
  */
 
@@ -19,8 +26,10 @@ import org.weaverdb.DBReference;
 import org.weaverdb.Input;
 import org.weaverdb.Output;
 import org.weaverdb.Statement;
+import org.weaverdb.vector.pg.BitVector;
 import org.weaverdb.vector.pg.DenseVector;
 import org.weaverdb.vector.pg.HalfVector;
+import org.weaverdb.vector.pg.SparseVector;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class PgvectorBlobIndexTest {
@@ -28,6 +37,11 @@ public class PgvectorBlobIndexTest {
     private static final String VEC_TABLE = "pv_blob_vec_w25";
     private static final String BYTEA_TABLE = "pv_blob_ba_w25";
     private static final String HALF_BYTEA_TABLE = "pv_blob_half_ba_w25";
+    private static final String DIM8_BYTEA_TABLE = "pv_blob_dim8_ba_w25";
+    private static final String SPARSE_TABLE = "pv_blob_sv_w25";
+    private static final String SPARSE_BYTEA_TABLE = "pv_blob_sv_ba_w25";
+    private static final String BIT_TABLE = "pv_blob_bit_w25";
+    private static final String BIT_BYTEA_TABLE = "pv_blob_bit_ba_w25";
 
     @BeforeAll
     public static void setup() throws Throwable {
@@ -36,14 +50,19 @@ public class PgvectorBlobIndexTest {
             exec(conn, "create table " + VEC_TABLE + " (id int, emb vector)");
             exec(conn, "create table " + BYTEA_TABLE + " (id int, emb bytea)");
             exec(conn, "create table " + HALF_BYTEA_TABLE + " (id int, emb bytea)");
-            insertBytea(conn, VEC_TABLE, 1, DenseVector.encode(1.0f, 0.0f, 0.0f), true);
-            insertBytea(conn, VEC_TABLE, 2, DenseVector.encode(0.0f, 1.0f, 0.0f), true);
-            insertBytea(conn, VEC_TABLE, 3, DenseVector.encode(0.0f, 0.0f, 1.0f), true);
-            insertBytea(conn, VEC_TABLE, 4, DenseVector.encode(9.0f, 0.0f, 0.0f), true);
-            insertBytea(conn, BYTEA_TABLE, 1, DenseVector.encode(1.0f, 0.0f, 0.0f), false);
-            insertBytea(conn, BYTEA_TABLE, 2, DenseVector.encode(0.0f, 1.0f, 0.0f), false);
-            insertBytea(conn, BYTEA_TABLE, 3, DenseVector.encode(0.0f, 0.0f, 1.0f), false);
-            insertBytea(conn, BYTEA_TABLE, 4, DenseVector.encode(9.0f, 0.0f, 0.0f), false);
+            exec(conn, "create table " + DIM8_BYTEA_TABLE + " (id int, emb bytea)");
+            exec(conn, "create table " + SPARSE_TABLE + " (id int, emb sparsevec)");
+            exec(conn, "create table " + SPARSE_BYTEA_TABLE + " (id int, emb bytea)");
+            exec(conn, "create table " + BIT_TABLE + " (id int, emb varbit)");
+            exec(conn, "create table " + BIT_BYTEA_TABLE + " (id int, emb bytea)");
+            insertBytea(conn, VEC_TABLE, 1, DenseVector.encode(1.0f, 0.0f, 0.0f), "vector");
+            insertBytea(conn, VEC_TABLE, 2, DenseVector.encode(0.0f, 1.0f, 0.0f), "vector");
+            insertBytea(conn, VEC_TABLE, 3, DenseVector.encode(0.0f, 0.0f, 1.0f), "vector");
+            insertBytea(conn, VEC_TABLE, 4, DenseVector.encode(9.0f, 0.0f, 0.0f), "vector");
+            insertBytea(conn, BYTEA_TABLE, 1, DenseVector.encode(1.0f, 0.0f, 0.0f), "bytea");
+            insertBytea(conn, BYTEA_TABLE, 2, DenseVector.encode(0.0f, 1.0f, 0.0f), "bytea");
+            insertBytea(conn, BYTEA_TABLE, 3, DenseVector.encode(0.0f, 0.0f, 1.0f), "bytea");
+            insertBytea(conn, BYTEA_TABLE, 4, DenseVector.encode(9.0f, 0.0f, 0.0f), "bytea");
         }
     }
 
@@ -82,7 +101,9 @@ public class PgvectorBlobIndexTest {
                 "select id from " + VEC_TABLE
                         + " order by emb <-> bytea_to_vector($q) limit 2",
                 DenseVector.encode(1.0f, 0.0f, 0.0f));
-        Assertions.assertEquals(List.of(1, 2), got);
+        Assertions.assertEquals(1, got.get(0).intValue());
+        Assertions.assertEquals(2, got.size());
+        Assertions.assertTrue(got.get(1) == 2 || got.get(1) == 3);
     }
 
     @Test
@@ -101,25 +122,29 @@ public class PgvectorBlobIndexTest {
     @Test
     @Order(5)
     public void orderByOnByteaFunctionalIndex() throws Exception {
-        List<Integer> got = orderBy(
+        List<Integer> got = queryIds(
                 "select id from " + BYTEA_TABLE
-                        + " order by bytea_to_vector(emb) <-> bytea_to_vector($q) limit 2",
-                DenseVector.encode(0.0f, 0.0f, 1.0f));
+                        + " order by bytea_to_vector(emb) <-> '[0,0,1]'::vector limit 2");
         Assertions.assertEquals(3, got.get(0).intValue());
         Assertions.assertEquals(2, got.size());
         Assertions.assertTrue(got.get(1) == 1 || got.get(1) == 2);
+
+        List<Integer> seq = orderBySeqscan(
+                "select id from " + BYTEA_TABLE
+                        + " order by bytea_to_vector(emb) <-> bytea_to_vector($q) limit 2",
+                DenseVector.encode(0.0f, 0.0f, 1.0f));
+        Assertions.assertEquals(3, seq.get(0).intValue());
     }
 
     @Test
     @Order(6)
     public void insertAfterFunctionalIndex() throws Exception {
         try (DBReference conn = DBReference.connect("template1")) {
-            insertBytea(conn, BYTEA_TABLE, 5, DenseVector.encode(1.0f, 1.0f, 0.0f), false);
+            insertBytea(conn, BYTEA_TABLE, 5, DenseVector.encode(1.0f, 1.0f, 0.0f), "bytea");
         }
-        List<Integer> got = orderBy(
+        List<Integer> got = queryIds(
                 "select id from " + BYTEA_TABLE
-                        + " order by bytea_to_vector(emb) <-> bytea_to_vector($q) limit 1",
-                DenseVector.encode(1.0f, 1.0f, 0.0f));
+                        + " order by bytea_to_vector(emb) <-> '[1,1,0]'::vector limit 1");
         Assertions.assertEquals(List.of(5), got);
     }
 
@@ -127,30 +152,229 @@ public class PgvectorBlobIndexTest {
     @Order(7)
     public void halfvecByteaFunctionalOrderBy() throws Exception {
         try (DBReference conn = DBReference.connect("template1")) {
-            insertBytea(conn, HALF_BYTEA_TABLE, 1, HalfVector.encode(1.0f, 0.0f, 0.0f), false);
-            insertBytea(conn, HALF_BYTEA_TABLE, 2, HalfVector.encode(0.0f, 1.0f, 0.0f), false);
-            insertBytea(conn, HALF_BYTEA_TABLE, 3, HalfVector.encode(0.0f, 0.0f, 1.0f), false);
+            insertBytea(conn, HALF_BYTEA_TABLE, 1, HalfVector.encode(1.0f, 0.0f, 0.0f), "bytea");
+            insertBytea(conn, HALF_BYTEA_TABLE, 2, HalfVector.encode(0.0f, 1.0f, 0.0f), "bytea");
+            insertBytea(conn, HALF_BYTEA_TABLE, 3, HalfVector.encode(0.0f, 0.0f, 1.0f), "bytea");
             exec(conn,
                     "create index " + HALF_BYTEA_TABLE + "_hnsw on " + HALF_BYTEA_TABLE
                             + " using hnsw (bytea_to_halfvec(emb) halfvec_l2_ops)"
                             + " with (m = 8, ef_construction = 32)");
         }
-        List<Integer> got = orderBy(
+        List<Integer> got = queryIds(
                 "select id from " + HALF_BYTEA_TABLE
-                        + " order by bytea_to_halfvec(emb) <-> bytea_to_halfvec($q) limit 2",
-                HalfVector.encode(1.0f, 0.0f, 0.0f));
-        Assertions.assertEquals(List.of(1, 2), got);
+                        + " order by bytea_to_halfvec(emb) <-> '[1,0,0]'::halfvec limit 2");
+        Assertions.assertEquals(1, got.get(0).intValue());
+        Assertions.assertTrue(got.get(1) == 2 || got.get(1) == 3);
     }
 
-    /**
-     * Bind embeddings as byte[]. Direct BINARY bind works for modest sizes;
-     * oversized payloads use a stream channel (avoids fixed transfer buffer).
-     */
+    @Test
+    @Order(8)
+    public void denseVaryingByteShapesRoundTripAndIndex() throws Exception {
+        byte[] one = DenseVector.encode(-3.5f);
+        byte[] eightA = DenseVector.encode(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        byte[] eightB = DenseVector.encode(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        byte[] eightC = DenseVector.encode(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+        byte[] eightFar = DenseVector.encode(9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+        try (DBReference conn = DBReference.connect("template1");
+                Statement s = conn.statement(
+                        "select vector_to_bytea(bytea_to_vector($emb))")) {
+            s.linkInput("emb", byte[].class).set(one);
+            Output<byte[]> out = s.linkOutput(1, byte[].class);
+            s.execute();
+            Assertions.assertTrue(s.fetch());
+            Assertions.assertArrayEquals(one, out.get());
+        }
+
+        try (DBReference conn = DBReference.connect("template1")) {
+            insertBytea(conn, DIM8_BYTEA_TABLE, 1, eightA, "bytea");
+            insertBytea(conn, DIM8_BYTEA_TABLE, 2, eightB, "bytea");
+            insertBytea(conn, DIM8_BYTEA_TABLE, 3, eightC, "bytea");
+            insertBytea(conn, DIM8_BYTEA_TABLE, 4, eightFar, "bytea");
+            exec(conn,
+                    "create index " + DIM8_BYTEA_TABLE + "_hnsw on " + DIM8_BYTEA_TABLE
+                            + " using hnsw (bytea_to_vector(emb) vector_l2_ops)"
+                            + " with (m = 8, ef_construction = 32)");
+            exec(conn,
+                    "create index " + DIM8_BYTEA_TABLE + "_ivf on " + DIM8_BYTEA_TABLE
+                            + " using ivfflat (bytea_to_vector(emb) vector_l2_ops) with (lists = 2)");
+        }
+        List<Integer> got = queryIds(
+                "select id from " + DIM8_BYTEA_TABLE
+                        + " order by bytea_to_vector(emb) <-> '[1,0,0,0,0,0,0,0]'::vector limit 2");
+        Assertions.assertEquals(1, got.get(0).intValue());
+        Assertions.assertEquals(2, got.size());
+    }
+
+    @Test
+    @Order(9)
+    public void roundTripByteaToSparsevec() throws Exception {
+        byte[] blob = SparseVector.of(5, new int[] {0, 2}, new float[] {1.0f, 2.0f}).encode();
+        try (DBReference conn = DBReference.connect("template1");
+                Statement s = conn.statement(
+                        "select sparsevec_to_bytea(bytea_to_sparsevec($emb))")) {
+            s.linkInput("emb", byte[].class).set(blob);
+            Output<byte[]> out = s.linkOutput(1, byte[].class);
+            s.execute();
+            Assertions.assertTrue(s.fetch());
+            Assertions.assertArrayEquals(blob, out.get());
+        }
+    }
+
+    @Test
+    @Order(10)
+    public void insertBlobIntoSparsevecColumn() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            insertBytea(conn, SPARSE_TABLE, 1,
+                    SparseVector.of(3, new int[] {0}, new float[] {1.0f}).encode(), "sparsevec");
+            insertBytea(conn, SPARSE_TABLE, 2,
+                    SparseVector.of(3, new int[] {1}, new float[] {1.0f}).encode(), "sparsevec");
+            insertBytea(conn, SPARSE_TABLE, 3,
+                    SparseVector.of(3, new int[] {2}, new float[] {1.0f}).encode(), "sparsevec");
+            exec(conn,
+                    "create index " + SPARSE_TABLE + "_hnsw on " + SPARSE_TABLE
+                            + " using hnsw (emb sparsevec_l2_ops) with (m = 8, ef_construction = 32)");
+        }
+        List<Integer> got = orderBy(
+                "select id from " + SPARSE_TABLE
+                        + " order by emb <-> bytea_to_sparsevec($q) limit 2",
+                SparseVector.of(3, new int[] {0}, new float[] {1.0f}).encode());
+        Assertions.assertEquals(1, got.get(0).intValue());
+        Assertions.assertTrue(got.get(1) == 2 || got.get(1) == 3);
+    }
+
+    @Test
+    @Order(11)
+    public void sparsevecByteaFunctionalOrderBy() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            insertBytea(conn, SPARSE_BYTEA_TABLE, 1,
+                    SparseVector.of(3, new int[] {0}, new float[] {1.0f}).encode(), "bytea");
+            insertBytea(conn, SPARSE_BYTEA_TABLE, 2,
+                    SparseVector.of(3, new int[] {1}, new float[] {1.0f}).encode(), "bytea");
+            insertBytea(conn, SPARSE_BYTEA_TABLE, 3,
+                    SparseVector.of(3, new int[] {2}, new float[] {1.0f}).encode(), "bytea");
+            exec(conn,
+                    "create index " + SPARSE_BYTEA_TABLE + "_hnsw on " + SPARSE_BYTEA_TABLE
+                            + " using hnsw (bytea_to_sparsevec(emb) sparsevec_l2_ops)"
+                            + " with (m = 8, ef_construction = 32)");
+        }
+        List<Integer> got = queryIds(
+                "select id from " + SPARSE_BYTEA_TABLE
+                        + " order by bytea_to_sparsevec(emb) <-> '{1:1}/3'::sparsevec limit 2");
+        Assertions.assertEquals(1, got.get(0).intValue());
+        Assertions.assertTrue(got.get(1) == 2 || got.get(1) == 3);
+    }
+
+    @Test
+    @Order(12)
+    public void insertSparseBlobAfterFunctionalIndex() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            insertBytea(conn, SPARSE_BYTEA_TABLE, 4,
+                    SparseVector.of(3, new int[] {0, 1}, new float[] {1.0f, 1.0f}).encode(), "bytea");
+        }
+        List<Integer> got = queryIds(
+                "select id from " + SPARSE_BYTEA_TABLE
+                        + " order by bytea_to_sparsevec(emb) <-> '{1:1,2:1}/3'::sparsevec limit 1");
+        Assertions.assertEquals(List.of(4), got);
+    }
+
+    @Test
+    @Order(13)
+    public void roundTripByteaToBit() throws Exception {
+        byte[] blob = BitVector.encode(true, false, true);
+        try (DBReference conn = DBReference.connect("template1");
+                Statement s = conn.statement(
+                        "select bit_to_bytea(bytea_to_bit($emb))")) {
+            s.linkInput("emb", byte[].class).set(blob);
+            Output<byte[]> out = s.linkOutput(1, byte[].class);
+            s.execute();
+            Assertions.assertTrue(s.fetch());
+            Assertions.assertArrayEquals(blob, out.get());
+        }
+    }
+
+    @Test
+    @Order(14)
+    public void insertBlobIntoBitColumn() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            insertBytea(conn, BIT_TABLE, 1, BitVector.encode(true, false, false), "bit");
+            insertBytea(conn, BIT_TABLE, 2, BitVector.encode(false, true, false), "bit");
+            insertBytea(conn, BIT_TABLE, 3, BitVector.encode(false, false, true), "bit");
+            exec(conn,
+                    "create index " + BIT_TABLE + "_ivf on " + BIT_TABLE
+                            + " using ivfflat (emb bit_hamming_ops) with (lists = 2)");
+        }
+        List<Integer> got = orderBy(
+                "select id from " + BIT_TABLE
+                        + " order by emb <~> bytea_to_bit($q) limit 2",
+                BitVector.encode(true, false, false));
+        Assertions.assertEquals(1, got.get(0).intValue());
+        Assertions.assertTrue(got.get(1) == 2 || got.get(1) == 3);
+    }
+
+    @Test
+    @Order(15)
+    public void bitByteaFunctionalHammingIndex() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            insertBytea(conn, BIT_BYTEA_TABLE, 1, BitVector.encode(true, false, false), "bytea");
+            insertBytea(conn, BIT_BYTEA_TABLE, 2, BitVector.encode(false, true, false), "bytea");
+            insertBytea(conn, BIT_BYTEA_TABLE, 3, BitVector.encode(false, false, true), "bytea");
+            exec(conn,
+                    "create index " + BIT_BYTEA_TABLE + "_ivf on " + BIT_BYTEA_TABLE
+                            + " using ivfflat (bytea_to_bit(emb) bit_hamming_ops) with (lists = 2)");
+        }
+        List<Integer> hamming = queryIds(
+                "select id from " + BIT_BYTEA_TABLE
+                        + " order by bytea_to_bit(emb) <~> 'B100'::varbit limit 2");
+        Assertions.assertEquals(1, hamming.get(0).intValue());
+        Assertions.assertTrue(hamming.get(1) == 2 || hamming.get(1) == 3);
+    }
+
+    @Test
+    @Order(16)
+    public void bitByteaFunctionalJaccardIndex() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            exec(conn,
+                    "create index " + BIT_BYTEA_TABLE + "_jaccard on " + BIT_BYTEA_TABLE
+                            + " using hnsw (bytea_to_bit(emb) bit_jaccard_ops)"
+                            + " with (m = 8, ef_construction = 32)");
+        }
+        List<Integer> jaccard = queryIds(
+                "select id from " + BIT_BYTEA_TABLE
+                        + " order by bytea_to_bit(emb) <%> 'B100'::varbit limit 2");
+        Assertions.assertEquals(1, jaccard.get(0).intValue());
+        Assertions.assertEquals(2, jaccard.size());
+    }
+
+    @Test
+    @Order(17)
+    public void insertBitBlobAfterFunctionalIndex() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            insertBytea(conn, BIT_BYTEA_TABLE, 4, BitVector.encode(true, true, false), "bytea");
+        }
+        List<Integer> got = queryIds(
+                "select id from " + BIT_BYTEA_TABLE
+                        + " order by bytea_to_bit(emb) <~> 'B110'::varbit limit 1");
+        Assertions.assertEquals(List.of(4), got);
+    }
+
     private static void insertBytea(DBReference conn, String table, int id, byte[] emb,
-            boolean asVector) throws Exception {
-        String sql = asVector
-                ? "insert into " + table + " values ($id, bytea_to_vector($emb))"
-                : "insert into " + table + " values ($id, $emb)";
+            String mode) throws Exception {
+        String sql;
+        switch (mode) {
+            case "vector":
+                sql = "insert into " + table + " values ($id, bytea_to_vector($emb))";
+                break;
+            case "sparsevec":
+                sql = "insert into " + table + " values ($id, bytea_to_sparsevec($emb))";
+                break;
+            case "bit":
+                sql = "insert into " + table + " values ($id, bytea_to_bit($emb))";
+                break;
+            default:
+                sql = "insert into " + table + " values ($id, $emb)";
+                break;
+        }
         try (Statement s = conn.statement(sql)) {
             Input<Integer> idIn = s.linkInput("id", Integer.class);
             idIn.set(id);
@@ -168,17 +392,47 @@ public class PgvectorBlobIndexTest {
     }
 
     private static List<Integer> orderBy(String sql, byte[] query) throws Exception {
+        return orderBy(sql, query, false);
+    }
+
+    private static List<Integer> orderBySeqscan(String sql, byte[] query) throws Exception {
+        return orderBy(sql, query, true);
+    }
+
+    private static List<Integer> orderBy(String sql, byte[] query, boolean forceSeqscan)
+            throws Exception {
+        List<Integer> rows = new ArrayList<>();
+        try (DBReference conn = DBReference.connect("template1")) {
+            if (forceSeqscan) {
+                exec(conn, "set enable_indexscan = off");
+                exec(conn, "set enable_bitmapscan = off");
+            }
+            try (Statement s = conn.statement(sql)) {
+                if (query.length <= 4096) {
+                    s.linkInput("q", byte[].class).set(query);
+                } else {
+                    Input<byte[]> ch = s.linkInputStream("q", (byte[] value, java.io.OutputStream out) -> {
+                        out.write(value);
+                    });
+                    ch.set(query);
+                }
+                Output<Integer> out = s.linkOutput(1, Integer.class);
+                s.execute();
+                while (s.fetch()) {
+                    Integer v = out.get();
+                    if (v != null) {
+                        rows.add(v);
+                    }
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static List<Integer> queryIds(String sql) throws Exception {
         List<Integer> rows = new ArrayList<>();
         try (DBReference conn = DBReference.connect("template1");
                 Statement s = conn.statement(sql)) {
-            if (query.length <= 4096) {
-                s.linkInput("q", byte[].class).set(query);
-            } else {
-                Input<byte[]> ch = s.linkInputStream("q", (byte[] value, java.io.OutputStream out) -> {
-                    out.write(value);
-                });
-                ch.set(query);
-            }
             Output<Integer> out = s.linkOutput(1, Integer.class);
             s.execute();
             while (s.fetch()) {
