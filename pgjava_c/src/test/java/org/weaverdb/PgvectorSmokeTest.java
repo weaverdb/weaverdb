@@ -57,7 +57,7 @@ public class PgvectorSmokeTest {
     public void vectorSendProducesBinaryPayload() throws Exception {
         try (DBReference conn = DBReferenceManager.connect("template1")) {
             try (Statement s = conn.statement(
-                    "select length(vector_send('[1,2,3]'::vector))")) {
+                    "select octet_length(vector_send('[1,2,3]'::vector))")) {
                 Output<Integer> out = s.linkOutput(1, Integer.class);
                 s.execute();
                 Assertions.assertTrue(s.fetch());
@@ -65,7 +65,7 @@ public class PgvectorSmokeTest {
                 Assertions.assertEquals(16, out.get().intValue());
             }
             try (Statement s = conn.statement(
-                    "select length(halfvec_send('[1,2]'::halfvec))")) {
+                    "select octet_length(halfvec_send('[1,2]'::halfvec))")) {
                 Output<Integer> out = s.linkOutput(1, Integer.class);
                 s.execute();
                 Assertions.assertTrue(s.fetch());
