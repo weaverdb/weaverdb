@@ -165,7 +165,14 @@ CreateGraphPages(HnswBuildState * buildstate)
 		Size		etupSize;
 		Size		ntupSize;
 		Size		combinedSize;
-		Pointer		valuePtr = HnswPtrAccess(base, element->value);
+		Pointer		valuePtr;
+
+		if (element == NULL)
+			elog(ERROR, "hnsw CreateGraphPages: null element in graph list");
+
+		valuePtr = HnswPtrAccess(base, element->value);
+		if (valuePtr == NULL)
+			elog(ERROR, "hnsw CreateGraphPages: element missing value");
 
 		/* Update iterator */
 		iter = element->next;
