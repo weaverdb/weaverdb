@@ -346,6 +346,45 @@ out=$(run_session \
 assert_no_error "bytea functional post-index insert" "$out"
 assert_ids "bytea functional post-index nearest" "$out" 4
 
+# --- halfvec / sparsevec / bit bytea converters ---
+out=$(run_session \
+  "select halfvec_to_bytea('[1,0,0]'::halfvec) is not null as hv_ok;" \
+  "select bytea_to_halfvec(halfvec_to_bytea('[1,0,0]'::halfvec)) <-> '[1,0,0]'::halfvec as hv_dist;" \
+  "select sparsevec_to_bytea('{1:1,3:2}/5'::sparsevec) is not null as sv_ok;" \
+  "select bytea_to_sparsevec(sparsevec_to_bytea('{1:1,3:2}/5'::sparsevec)) <-> '{1:1,3:2}/5'::sparsevec as sv_dist;" \
+  "select bit_to_bytea('B101'::varbit) is not null as bit_ok;" \
+  "select bytea_to_bit(bit_to_bytea('B101'::varbit)) = 'B101'::varbit as bit_eq;")
+assert_no_error "halfvec/sparsevec/bit bytea converters" "$out"
+assert_scalar "bytea_to_halfvec distance" "$out" "hv_dist" "0"
+assert_scalar "bytea_to_sparsevec distance" "$out" "sv_dist" "0"
+assert_scalar "bytea_to_bit round-trip" "$out" "bit_eq" "t"
+
+out=$(run_session \
+  "create table pv_feat_half_blob (id int, emb bytea);" \
+  "insert into pv_feat_half_blob values (1, halfvec_to_bytea('[1,0,0]'::halfvec));" \
+  "insert into pv_feat_half_blob values (2, halfvec_to_bytea('[0,1,0]'::halfvec));" \
+  "insert into pv_feat_half_blob values (3, halfvec_to_bytea('[0,0,1]'::halfvec));" \
+  "create index pv_feat_half_blob_hnsw on pv_feat_half_blob using hnsw (bytea_to_halfvec(emb) halfvec_l2_ops) with (m = 8, ef_construction = 32);" \
+  "select id from pv_feat_half_blob order by bytea_to_halfvec(emb) <-> '[1,0,0]'::halfvec limit 2;")
+assert_no_error "halfvec bytea functional index" "$out"
+assert_ids "halfvec bytea functional ORDER BY nearest" "$out" 1 2
+
+# --- large bytea stays insertable (attstorage extended / blob-indirect) ---
+# Build a ~9KB float32 blob via convert from a high-dim vector literal path is heavy;
+# probe that small bytea still works and oversized vector(bytea) path is wired.
+out=$(run_session \
+  "create table pv_feat_ba_storage (id int, emb bytea);" \
+  "insert into pv_feat_ba_storage values (1, vector_to_bytea('[1,0,0]'));" \
+  "select attstorage from pg_attribute a, pg_class c where c.relname = 'pv_feat_ba_storage' and a.attrelid = c.oid and a.attname = 'emb';")
+assert_no_error "bytea attstorage probe" "$out"
+if echo "$out" | grep -Fq 'attstorage = "e"'; then
+  echo "OK: bytea attstorage is extended"
+else
+  echo "FAIL: expected bytea attstorage='e'" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
+
 echo "--- runtime search knobs (SET/SHOW/RESET) ---"
 
 out=$(run_session \

@@ -1248,3 +1248,122 @@ sparsevec_cmp(PG_FUNCTION_ARGS)
 
 	PG_RETURN_INT32(sparsevec_cmp_internal(a, b));
 }
+
+/*
+ * Convert sparse blob to sparsevec via InitSparseVector.
+ *
+ * Layout (native endian, matches sparsevec_send / on-disk after vl_len_):
+ *   int32 dim | int32 nnz | int32 unused(=0) | int32 indices[nnz] | float4 values[nnz]
+ * Indices are 0-based and must be strictly ascending.
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(bytea_to_sparsevec);
+Datum
+bytea_to_sparsevec(PG_FUNCTION_ARGS)
+{
+	bytea	   *raw = PG_GETARG_BYTEA_P(0);
+	int32		typmod = -1;
+	Size		nbytes;
+	char	   *ptr;
+	int32		dim;
+	int32		nnz;
+	int32		unused;
+	SparseVector *result;
+	float	   *values;
+	Size		need;
+	int			i;
+
+	nbytes = VARSIZE(raw) - VARHDRSZ;
+	if (nbytes < 3 * sizeof(int32))
+		ereport(ERROR,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("bytea too short for sparsevec header")));
+
+	ptr = VARDATA(raw);
+	memcpy(&dim, ptr, sizeof(int32));
+	ptr += sizeof(int32);
+	memcpy(&nnz, ptr, sizeof(int32));
+	ptr += sizeof(int32);
+	memcpy(&unused, ptr, sizeof(int32));
+	ptr += sizeof(int32);
+
+	CheckDim(dim);
+	CheckNnz(nnz, dim);
+	CheckExpectedDim(typmod, dim);
+
+	if (unused != 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("expected unused to be 0, not %d", unused)));
+
+	need = 3 * sizeof(int32) + (Size) nnz * sizeof(int32) + (Size) nnz * sizeof(float);
+	if (nbytes != need)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("bytea length %lu does not match sparsevec layout for nnz=%d",
+						(unsigned long) nbytes, nnz)));
+
+	result = InitSparseVector(dim, nnz);
+	values = SPARSEVEC_VALUES(result);
+
+	for (i = 0; i < nnz; i++)
+	{
+		memcpy(&result->indices[i], ptr, sizeof(int32));
+		ptr += sizeof(int32);
+		CheckIndex(result->indices, i, dim);
+	}
+
+	for (i = 0; i < nnz; i++)
+	{
+		memcpy(&values[i], ptr, sizeof(float));
+		ptr += sizeof(float);
+		CheckElement(values[i]);
+		if (values[i] == 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATA_EXCEPTION),
+					 errmsg("sparsevec bytea cannot contain zero values")));
+	}
+
+	PG_RETURN_POINTER(result);
+}
+
+/*
+ * Convert sparsevec to packed sparse blob (see bytea_to_sparsevec).
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(sparsevec_to_bytea);
+Datum
+sparsevec_to_bytea(PG_FUNCTION_ARGS)
+{
+	SparseVector *svec = PG_GETARG_SPARSEVEC_P(0);
+	float	   *values = SPARSEVEC_VALUES(svec);
+	Size		nbytes;
+	bytea	   *result;
+	char	   *ptr;
+	int32		zero = 0;
+	int			i;
+
+	nbytes = 3 * sizeof(int32) + (Size) svec->nnz * sizeof(int32) +
+		(Size) svec->nnz * sizeof(float);
+	result = (bytea *) palloc(VARHDRSZ + nbytes);
+	SET_VARSIZE(result, VARHDRSZ + nbytes);
+	ptr = VARDATA(result);
+
+	memcpy(ptr, &svec->dim, sizeof(int32));
+	ptr += sizeof(int32);
+	memcpy(ptr, &svec->nnz, sizeof(int32));
+	ptr += sizeof(int32);
+	memcpy(ptr, &zero, sizeof(int32));
+	ptr += sizeof(int32);
+
+	for (i = 0; i < svec->nnz; i++)
+	{
+		memcpy(ptr, &svec->indices[i], sizeof(int32));
+		ptr += sizeof(int32);
+	}
+	for (i = 0; i < svec->nnz; i++)
+	{
+		memcpy(ptr, &values[i], sizeof(float));
+		ptr += sizeof(float);
+	}
+
+	PG_RETURN_BYTEA_P(result);
+}

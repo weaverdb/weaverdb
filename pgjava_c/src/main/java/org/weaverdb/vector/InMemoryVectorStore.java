@@ -4,14 +4,16 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Simple brute-force vector store.
+ * Simple brute-force vector store for demos and tiny in-memory workloads.
+ *
+ * <p><b>Not a production ANN engine.</b> Prefer native pgvector indexes
+ * ({@code hnsw}/{@code ivfflat}) with {@code org.weaverdb.vector.pg} codecs
+ * for similarity search. See {@code org.weaverdb.vector.README.md}.
  *
  * Useful for:
  * - Prototyping
- * - Small-to-medium collections (< ~50k vectors)
+ * - Small-to-medium collections (&lt; ~50k vectors)
  * - Exact search (no approximation)
- *
- * For production-scale use, a proper ANN index (HNSW, etc.) should be plugged in.
  */
 public class InMemoryVectorStore implements VectorStore {
 

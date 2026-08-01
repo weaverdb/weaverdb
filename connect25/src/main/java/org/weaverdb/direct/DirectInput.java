@@ -56,7 +56,29 @@ class DirectInput<T> {
     
     private int transferIn(MemorySegment user, int type, MemorySegment var, int varSize) {
         try {
-            return this.type.write(value, type, var, varSize);
+            // WeaverConnection probes BYTEA/TEXT/etc with NULL + LENGTH_QUERY_OP
+            // before allocating the transfer buffer (see PassInValue / ExtractBytes).
+            if (varSize == DirectWeaverConnection.LENGTH_QUERY_OP
+                    || var.equals(MemorySegment.NULL)) {
+                if (value == null) {
+                    return -1;
+                }
+                if (value instanceof byte[] bytes) {
+                    return bytes.length;
+                }
+                if (value instanceof String s) {
+                    return s.length();
+                }
+                return 1;
+            }
+            if (varSize == DirectWeaverConnection.NULL_CHECK_OP) {
+                return value != null ? 1 : -1;
+            }
+            try (Arena a = Arena.ofConfined()) {
+                // Native pointers arrive as zero-length segments; expand like DirectOutput.
+                var = var.reinterpret(varSize, a, null);
+                return this.type.write(value, type, var, varSize);
+            }
         } catch (ExecutionException ee) {
 
         }

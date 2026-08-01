@@ -1198,3 +1198,57 @@ sparsevec_to_halfvec(PG_FUNCTION_ARGS)
 
 	PG_RETURN_POINTER(result);
 }
+
+/*
+ * Convert packed float16 bytes (native endian) to halfvec.
+ *
+ * Layout matches halfvec_to_bytea: dim * sizeof(half) with no header.
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(bytea_to_halfvec);
+Datum
+bytea_to_halfvec(PG_FUNCTION_ARGS)
+{
+	bytea	   *raw = PG_GETARG_BYTEA_P(0);
+	int32		typmod = -1;
+	Size		nbytes;
+	int			dim;
+	HalfVector *result;
+	int			i;
+
+	nbytes = VARSIZE(raw) - VARHDRSZ;
+	if (nbytes % sizeof(half) != 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("bytea length must be a multiple of 2 for halfvec")));
+
+	dim = (int) (nbytes / sizeof(half));
+	CheckDim(dim);
+	CheckExpectedDim(typmod, dim);
+
+	result = InitHalfVector(dim);
+	memcpy(result->x, VARDATA(raw), nbytes);
+
+	for (i = 0; i < dim; i++)
+		CheckElement(result->x[i]);
+
+	PG_RETURN_POINTER(result);
+}
+
+/*
+ * Convert halfvec to packed float16 bytes (native endian).
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_to_bytea);
+Datum
+halfvec_to_bytea(PG_FUNCTION_ARGS)
+{
+	HalfVector *vec = PG_GETARG_HALFVEC_P(0);
+	Size		nbytes;
+	bytea	   *result;
+
+	nbytes = sizeof(half) * (Size) vec->dim;
+	result = (bytea *) palloc(VARHDRSZ + nbytes);
+	SET_VARSIZE(result, VARHDRSZ + nbytes);
+	memcpy(VARDATA(result), vec->x, nbytes);
+
+	PG_RETURN_BYTEA_P(result);
+}

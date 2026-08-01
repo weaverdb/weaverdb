@@ -1010,12 +1010,31 @@ DESCR("vector greater or equal");
 DATA(insert OID = 2292 (  vector_gt		   PGUID 11 f t t 2 f 16 "1842 1842" 100 0 0 100  vector_gt - ));
 DESCR("vector greater than");
 
+DATA(insert OID = 2293 (  bytea_to_halfvec	   PGUID 11 f t t 1 f 1844 "17" 100 0 0 100  bytea_to_halfvec - ));
+DESCR("convert float16 bytea blob to halfvec");
+DATA(insert OID = 2294 (  halfvec_to_bytea	   PGUID 11 f t t 1 f 17 "1844" 100 0 0 100  halfvec_to_bytea - ));
+DESCR("convert halfvec to float16 bytea blob");
+DATA(insert OID = 2295 (  bytea_to_sparsevec	   PGUID 11 f t t 1 f 1846 "17" 100 0 0 100  bytea_to_sparsevec - ));
+DESCR("convert sparse bytea blob to sparsevec");
+DATA(insert OID = 2296 (  sparsevec_to_bytea	   PGUID 11 f t t 1 f 17 "1846" 100 0 0 100  sparsevec_to_bytea - ));
+DESCR("convert sparsevec to sparse bytea blob");
+DATA(insert OID = 2297 (  bytea_to_bit	   PGUID 11 f t t 1 f 1562 "17" 100 0 0 100  bytea_to_bit - ));
+DESCR("convert packed bit bytea blob to varbit");
+DATA(insert OID = 2298 (  bit_to_bytea	   PGUID 11 f t t 1 f 17 "1562" 100 0 0 100  bit_to_bytea - ));
+DESCR("convert varbit to packed bit bytea blob");
+
 #define F_VECTORIN	2237
 #define F_VECTOROUT	2238
 #define F_L2_DISTANCE	2240
 #define F_VECTOR_L2_SQUARED_DISTANCE 2241
 #define F_BYTEA_TO_VECTOR	2285
 #define F_VECTOR_TO_BYTEA	2286
+#define F_BYTEA_TO_HALFVEC	2293
+#define F_HALFVEC_TO_BYTEA	2294
+#define F_BYTEA_TO_SPARSEVEC	2295
+#define F_SPARSEVEC_TO_BYTEA	2296
+#define F_BYTEA_TO_BIT	2297
+#define F_BIT_TO_BYTEA	2298
 
 DATA(insert OID = 449 (  hashint2		   PGUID 11 f t t 1 f 23 "21" 100 0 0 100  hashint2 - ));
 DESCR("hash");
