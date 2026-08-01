@@ -344,6 +344,13 @@ ivfflat_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderby
 {
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
 
+	/*
+	 * RelationGetIndexScan() calls amrescan before the AM has allocated
+	 * opaque (same pattern as btrescan). Skip until beginscan finishes.
+	 */
+	if (so == NULL)
+		return;
+
 	so->first = true;
 	so->plainScan = false;
 	so->plainListBlkno = InvalidBlockNumber;
@@ -395,6 +402,7 @@ ivfflat_plain_gettuple(IndexScanDesc scan)
 
 				itup = (IndexTuple) PageGetItem(page, PageGetItemId(page, so->plainEntryOffno));
 				scan->currentItemData = itup->t_tid;
+				scan->xs_ctup.t_self = itup->t_tid;
 				so->plainEntryOffno = OffsetNumberNext(so->plainEntryOffno);
 				if (so->plainEntryOffno > maxoffno)
 				{
@@ -468,9 +476,6 @@ ivfflat_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 		/* Count index scan for stats */
 		pgstat_count_index_scan(pgvector_scan_index_rel(scan));
 
-		if (!IsMVCCSnapshot(pgvector_scan_snapshot(scan)))
-			elog(ERROR, "non-MVCC snapshots are not supported with ivfflat");
-
 		value = GetScanValue(scan);
 		IvfflatBench("GetScanLists", GetScanLists(scan, value));
 		IvfflatBench("GetScanItems", GetScanItems(scan, value));
@@ -489,6 +494,7 @@ ivfflat_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 	heaptid = (ItemPointer) DatumGetPointer(slot_getattr(so->mslot, 2, &isnull));
 
 	scan->currentItemData = *heaptid;
+	scan->xs_ctup.t_self = *heaptid;
 	return true;
 }
 

@@ -27,6 +27,7 @@ set(SRC_FILES
     pgvector_hnsw_stubs.c
     pgvector_session_vars.c
     pgvector_vacuum_stats.c
+    pairingheap.c
 )
 # pgvector_ivf_stubs.c replaced by ivfbuild.c / ivfscan.c when PG7 port complete.
 # hnsw.c excluded (modern GUC/reloptions/cost); pgvector_hnsw_stubs.c holds env/init only.

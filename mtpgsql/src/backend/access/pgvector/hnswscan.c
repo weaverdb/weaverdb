@@ -173,6 +173,13 @@ hnsw_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, 
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
 
+	/*
+	 * RelationGetIndexScan() calls amrescan before the AM has allocated
+	 * opaque (same pattern as btrescan). Skip until beginscan finishes.
+	 */
+	if (so == NULL)
+		return;
+
 	so->first = true;
 	so->plainScan = false;
 	so->plainBlkno = InvalidBlockNumber;
@@ -233,6 +240,7 @@ hnsw_plain_gettuple(IndexScanDesc scan)
 					break;
 
 				scan->currentItemData = etup->heaptids[so->plainTidIdx];
+				scan->xs_ctup.t_self = etup->heaptids[so->plainTidIdx];
 				so->plainTidIdx++;
 				UnlockReleaseBuffer(buf);
 				return true;
@@ -274,9 +282,6 @@ hnsw_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 
 		/* Count index scan for stats */
 		pgstat_count_index_scan(pgvector_hnsw_index_rel(scan));
-
-		if (!IsMVCCSnapshot(pgvector_hnsw_snapshot(scan)))
-			elog(ERROR, "non-MVCC snapshots are not supported with hnsw");
 
 		/* Get scan value */
 		value = GetScanValue(scan);
@@ -372,6 +377,7 @@ hnsw_gettupleindex(IndexScanDesc scan, ScanDirection dir)
 		MemoryContextSwitchTo(oldCtx);
 
 		scan->currentItemData = *heaptid;
+		scan->xs_ctup.t_self = *heaptid;
 		return true;
 	}
 

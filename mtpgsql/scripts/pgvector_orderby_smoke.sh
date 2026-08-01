@@ -99,17 +99,10 @@ out=$(run_session \
   "select id from pv_ob order by l2_distance(emb, '[1,0,0]') limit 2;")
 assert_ids "ORDER BY l2_distance() expr" "$out" 1 2
 
-# Cosine opclass ordering via <=> (sequential plan is fine for this smoke test)
+# Cosine on pv_ob: [9,0,0] is parallel to [1,0,0] so cosine distance is 0
 out=$(run_session \
   "select id from pv_ob order by emb <=> '[1,0,0]' limit 2;")
-if echo "$out" | grep -qi ERROR; then
-  echo "FAIL: cosine <=> order" >&2
-  echo "$out" >&2
-  failures=$((failures + 1))
-else
-  got=$(ids_from_output "$out" | tr '\n' ' ')
-  echo "OK: cosine <=> order (ids: ${got:-none})"
-fi
+assert_ids "cosine <=> order (seq) limit 2" "$out" 1 4
 
 out=$(run_session \
   "create table pv_ip (id int, emb vector);" \
@@ -141,6 +134,88 @@ if echo "$out" | grep -qi ERROR; then
   failures=$((failures + 1))
 else
   assert_ids "vector_cosine_ops ORDER BY <=> limit 2" "$out" 1 2
+fi
+
+echo "--- EXPLAIN: distance ORDER BY plan ---"
+
+out=$(run_session \
+  "explain select id from pv_ob order by emb <-> '[1,0,0]' limit 2;")
+if echo "$out" | grep -qi ERROR; then
+  echo "FAIL: EXPLAIN ORDER BY <->" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+elif echo "$out" | grep -q 'QUERY PLAN' && echo "$out" | grep -qE 'Sort|Index Scan|Seq Scan'; then
+  # ANN Index Scan is not yet selected for ORDER BY (neighbor-tuple build gap);
+  # Seq Scan + Sort is the correct working plan today.
+  echo "OK: EXPLAIN produces a distance ORDER BY plan"
+else
+  echo "FAIL: EXPLAIN missing expected plan nodes" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
+
+out=$(run_session \
+  "explain select id from pv_cos order by emb <=> '[1,0,0]' limit 2;")
+if echo "$out" | grep -q 'QUERY PLAN' && echo "$out" | grep -qE 'Sort|Index Scan|Seq Scan'; then
+  echo "OK: EXPLAIN produces a cosine ORDER BY plan"
+else
+  echo "FAIL: EXPLAIN expected plan for cosine" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
+
+echo "--- medium-scale recall (200 points on a line) ---"
+
+# Build insert batch for ids 0..199 with emb = [id, 0]
+recall_sql="create table pv_recall (id int, emb vector);"
+for i in $(seq 0 199); do
+  recall_sql+=$'\n'"insert into pv_recall values ($i, '[$i,0]');"
+done
+recall_sql+=$'\n'"create index pv_recall_hnsw on pv_recall using hnsw (emb vector_l2_ops) with (m = 16, ef_construction = 64);"
+recall_sql+=$'\n'"set hnsw.ef_search = 100;"
+recall_sql+=$'\n'"select id from pv_recall order by emb <-> '[100,0]' limit 5;"
+
+out=$(run_session "$recall_sql")
+if echo "$out" | grep -qi ERROR; then
+  echo "FAIL: recall setup/query" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+else
+  # Exact top-5 around 100: 100, then {99,101}, then {98,102} — order among ties may vary
+  got=$(ids_from_output "$out" | tr '\n' ' ')
+  first=$(echo "$got" | awk '{print $1}')
+  if [[ "$first" != "100" ]]; then
+    echo "FAIL: recall nearest should be 100, got: $got" >&2
+    echo "$out" >&2
+    failures=$((failures + 1))
+  else
+    # All five results must be in {98,99,100,101,102}
+    ok=1
+    for id in $(ids_from_output "$out"); do
+      if [[ "$id" -lt 98 || "$id" -gt 102 ]]; then
+        ok=0
+        break
+      fi
+    done
+    count=$(ids_from_output "$out" | wc -l | tr -d ' ')
+    if [[ "$ok" -eq 1 && "$count" -eq 5 ]]; then
+      echo "OK: recall top-5 around 100 (ids: $got)"
+    else
+      echo "FAIL: recall top-5 not within {98..102}: $got" >&2
+      echo "$out" >&2
+      failures=$((failures + 1))
+    fi
+  fi
+fi
+
+out=$(run_session \
+  "explain select id from pv_recall order by emb <-> '[100,0]' limit 5;")
+if echo "$out" | grep -q 'QUERY PLAN'; then
+  echo "OK: EXPLAIN on recall table"
+else
+  echo "FAIL: EXPLAIN on recall table" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
 fi
 
 out=$(run_session \
