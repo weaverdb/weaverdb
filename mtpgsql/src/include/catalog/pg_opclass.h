@@ -169,5 +169,7 @@ DESCR("bit hamming distance for ivfflat/hnsw");
 DATA(insert OID = 2022 (	bit_jaccard_ops   1562   ));
 DESCR("bit jaccard distance for hnsw");
 #define BIT_JACCARD_OPS_OID 2022
+DATA(insert OID = 2023 (	sparsevec_ops	   1846   ));
+DESCR("sparsevec btree operators");
 
 #endif	 /* PG_OPCLASS_H */

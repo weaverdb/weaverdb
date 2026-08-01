@@ -14,11 +14,13 @@
  */
 #include "postgres.h"
 #include "env/env.h"
+#include "catalog/pg_am.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/joininfo.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
+#include "optimizer/pgvector.h"
 #include "optimizer/tlist.h"
 #include "optimizer/var.h"
 #include "parser/parsetree.h"
@@ -489,6 +491,21 @@ build_index_pathkeys(Query *root,
 	Oid		   *ordering = index->ordering;
 	PathKeyItem *item;
 	Oid			sortop;
+
+	/*
+	 * ivfflat/hnsw order by a distance expression (ORDER BY emb <-> q),
+	 * not by the indexed column. query_pathkeys are already canonical
+	 * when create_index_paths runs; reuse them so the IndexPath
+	 * satisfies ORDER BY without an extra Sort.
+	 */
+	if (index->relam == IVFFLAT_AM_OID || index->relam == HNSW_AM_OID)
+	{
+		if (ScanDirectionIsNoMovement(scandir))
+			return NIL;
+		if (pgvector_index_useful_for_ordering(root, rel, index))
+			return root->query_pathkeys;
+		return NIL;
+	}
 
 	if (!indexkeys || indexkeys[0] == 0 ||
 		!ordering || ordering[0] == InvalidOid)

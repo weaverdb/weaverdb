@@ -837,6 +837,14 @@ DATA(insert OID = 2321 (  "<->"	   PGUID 0 b t f 1846 1846 701 2321   0   0   0 
 DATA(insert OID = 2322 (  "<#>"	   PGUID 0 b t f 1846 1846 701 2322   0   0   0 sparsevec_negative_inner_product - - ));
 DATA(insert OID = 2323 (  "<=>"	   PGUID 0 b t f 1846 1846 701 2323   0   0   0 sparsevec_cosine_distance - - ));
 
+/* sparsevec comparison operators (btree sparsevec_ops) */
+DATA(insert OID = 2340 (  "<"	   PGUID 0 b t f 1846 1846 16 2341 2343  0  0 sparsevec_lt - - ));
+DATA(insert OID = 2341 (  ">"	   PGUID 0 b t f 1846 1846 16 2340 2342  0  0 sparsevec_gt - - ));
+DATA(insert OID = 2342 (  "<="	   PGUID 0 b t f 1846 1846 16 2343 2341  0  0 sparsevec_le - - ));
+DATA(insert OID = 2343 (  ">="	   PGUID 0 b t f 1846 1846 16 2342 2340  0  0 sparsevec_ge - - ));
+DATA(insert OID = 2344 (  "="	   PGUID 0 b t f 1846 1846 16 2344 2345  0  0 sparsevec_eq eqsel eqjoinsel ));
+DATA(insert OID = 2345 (  "<>"	   PGUID 0 b t f 1846 1846 16 2345 2344  0  0 sparsevec_ne eqsel eqjoinsel ));
+
 /*
  * function prototypes
  */

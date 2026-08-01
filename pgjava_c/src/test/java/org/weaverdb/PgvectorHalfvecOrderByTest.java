@@ -70,7 +70,7 @@ public class PgvectorHalfvecOrderByTest {
     @Test
     @Order(4)
     public void orderByHalfvecL2WithIvfflatIndex() throws Exception {
-        assertIds(
+        assertNearestThenTiePair(
                 "select id from pv_jni_half_ob order by emb <-> '[1,0,0]'::halfvec limit 3",
                 1, 2, 3);
     }
@@ -87,7 +87,7 @@ public class PgvectorHalfvecOrderByTest {
     @Test
     @Order(6)
     public void orderByHalfvecL2WithHnswIndex() throws Exception {
-        assertIds(
+        assertNearestThenTiePair(
                 "select id from pv_jni_half_ob order by emb <-> '[1,0,0]'::halfvec limit 3",
                 1, 2, 3);
     }
@@ -99,6 +99,18 @@ public class PgvectorHalfvecOrderByTest {
             Assertions.assertEquals(expected[i], got.get(i).intValue(),
                     "column id row " + (i + 1) + " for: " + sql);
         }
+    }
+
+    private static void assertNearestThenTiePair(String sql, int nearest, int tieA, int tieB)
+            throws Exception {
+        List<Integer> got = queryIntColumn(sql, 1);
+        Assertions.assertEquals(3, got.size(), "row count for: " + sql);
+        Assertions.assertEquals(nearest, got.get(0).intValue(), "nearest for: " + sql);
+        Assertions.assertTrue(
+                (got.get(1) == tieA && got.get(2) == tieB)
+                        || (got.get(1) == tieB && got.get(2) == tieA),
+                "expected tied pair {" + tieA + "," + tieB + "} after nearest, got " + got
+                        + " for: " + sql);
     }
 
     private static List<Integer> queryIntColumn(String sql, int columnIndex)

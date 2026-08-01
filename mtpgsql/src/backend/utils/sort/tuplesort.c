@@ -583,6 +583,67 @@ tuplesort_end(Tuplesortstate *state)
 }
 
 /*
+ * tuplesort_reset
+ *
+ *	Clear previously loaded/sorted tuples and restore TSS_INITIAL so the
+ *	caller can puttuple/performsort again. Used by ivfflat multi-batch
+ *	scans (modern pgvector calls tuplesort_reset for the same purpose).
+ *	This is NOT tuplesort_rescan (rewind of completed output).
+ */
+void
+tuplesort_reset(Tuplesortstate *state)
+{
+	TupleSortGlobals *global = TupleSortGetEnv();
+
+	if (state->tapeset)
+	{
+		LogicalTapeSetClose(state->tapeset);
+		state->tapeset = NULL;
+	}
+
+	if (state->data_cxt)
+	{
+		MemoryContextDelete(state->data_cxt);
+		state->data_cxt = NULL;
+	}
+	state->data_cxt = AllocSetContextCreate(state->header_cxt,
+											"SortContext",
+											ALLOCSET_DEFAULT_MINSIZE,
+											(32 * 1024),
+											ALLOCSET_DEFAULT_MAXSIZE);
+
+	if (state->memtupindex)
+	{
+		pfree(state->memtupindex);
+		state->memtupindex = NULL;
+	}
+
+	state->status = TSS_INITIAL;
+	state->availMem = global->sortmem;
+	state->memtupcount = 0;
+	state->currentRun = 0;
+	state->result_tape = -1;
+	state->current = 0;
+	state->eof_reached = false;
+	state->markpos_block = 0L;
+	state->markpos_offset = 0;
+	state->markpos_eof = false;
+	state->mergefreelist = 0;
+	state->mergefirstfree = 0;
+	state->spacePerTape = 0;
+	MemSet(state->mergeactive, 0, sizeof(state->mergeactive));
+	MemSet(state->mergenext, 0, sizeof(state->mergenext));
+	MemSet(state->mergelast, 0, sizeof(state->mergelast));
+	MemSet(state->mergeavailmem, 0, sizeof(state->mergeavailmem));
+	MemSet(state->tp_fib, 0, sizeof(state->tp_fib));
+	MemSet(state->tp_runs, 0, sizeof(state->tp_runs));
+	MemSet(state->tp_dummy, 0, sizeof(state->tp_dummy));
+	MemSet(state->tp_tapenum, 0, sizeof(state->tp_tapenum));
+	state->Level = 0;
+	state->destTape = 0;
+}
+
+/*
  * Accept one tuple while collecting input data for sort.
  *
  * Note that the input tuple is always copied; the caller need not save it.

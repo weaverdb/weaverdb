@@ -470,6 +470,15 @@ DATA(insert OID = 0 (  403 1994 2316 4 ));
 DATA(insert OID = 0 (  403 1994 2314 5 ));
 
 /*
+ *	nbtree sparsevec_ops
+ */
+DATA(insert OID = 0 (  403 2023 2340 1 ));
+DATA(insert OID = 0 (  403 2023 2342 2 ));
+DATA(insert OID = 0 (  403 2023 2344 3 ));
+DATA(insert OID = 0 (  403 2023 2343 4 ));
+DATA(insert OID = 0 (  403 2023 2341 5 ));
+
+/*
  *	ivfflat vector_l2_ops
  */
 DATA(insert OID = 0 (  406 1991 2301 1 ));

@@ -206,6 +206,8 @@ ivfflatbulkdelete(Relation rel, int delcount, ItemPointerData *del_heappointers)
 	st.cursor = 0;
 
 	stats = ivfflat_bulkdeleteindex(&info, NULL, ivfflat_bulkdel_callback, &st);
+	/* PG7 has no amvacuumcleanup slot; finish cleanup after bulkdelete. */
+	stats = ivfflat_vacuumcleanupindex(&info, stats);
 	if (stats == NULL)
 		return 0;
 	return (TupleCount) stats->tuples_removed;
@@ -358,6 +360,8 @@ hnswbulkdelete(Relation rel, int delcount, ItemPointerData *del_heappointers)
 	st.items = del_heappointers;
 
 	stats = hnsw_bulkdeleteindex(&info, NULL, hnsw_bulkdel_callback, &st);
+	/* PG7 has no amvacuumcleanup slot; finish cleanup after bulkdelete. */
+	stats = hnsw_vacuumcleanupindex(&info, stats);
 	if (stats == NULL)
 		return 0;
 	return (TupleCount) stats->tuples_removed;
