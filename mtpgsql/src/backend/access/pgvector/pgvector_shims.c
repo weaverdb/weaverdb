@@ -28,7 +28,11 @@
 #include <math.h>
 #include <errno.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 #include <pthread.h>
+
+#include "utils/elog.h"
 
 static pthread_once_t pgvector_module_once = PTHREAD_ONCE_INIT;
 
@@ -286,6 +290,149 @@ Float8GetDatum(float8 X)
 	Datum d = 0;
 	memcpy(&d, &X, sizeof(float8));
 	return d;
+}
+
+/* ----------------------------------------------------------------
+ * ereport → elog bridge (see port-stubs/pgvector_compat.h)
+ *
+ * Modern pgvector uses ereport(ERROR, (errcode(...), errmsg(...))).
+ * Weaver only has elog/coded_elog. Capture aux fields in TLS, then emit.
+ * ---------------------------------------------------------------- */
+
+#define PGVECTOR_ERR_MSG_LEN	1024
+#define PGVECTOR_ERR_AUX_LEN	512
+
+typedef struct PgvectorErrState
+{
+	int			sqlerrcode;
+	char		message[PGVECTOR_ERR_MSG_LEN];
+	char		detail[PGVECTOR_ERR_AUX_LEN];
+	char		hint[PGVECTOR_ERR_AUX_LEN];
+} PgvectorErrState;
+
+static __thread PgvectorErrState pgvector_err_state;
+
+void
+pgvector_err_reset(void)
+{
+	pgvector_err_state.sqlerrcode = 0;
+	pgvector_err_state.message[0] = '\0';
+	pgvector_err_state.detail[0] = '\0';
+	pgvector_err_state.hint[0] = '\0';
+}
+
+int
+pgvector_errcode(int sqlerrcode)
+{
+	pgvector_err_state.sqlerrcode = sqlerrcode;
+	return 0;
+}
+
+static void
+pgvector_err_vset(char *buf, size_t buflen, const char *fmt, va_list ap)
+{
+	if (buf == NULL || buflen == 0)
+		return;
+	vsnprintf(buf, buflen, fmt, ap);
+	buf[buflen - 1] = '\0';
+}
+
+int
+pgvector_errmsg(const char *fmt,...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	pgvector_err_vset(pgvector_err_state.message, sizeof(pgvector_err_state.message),
+					  fmt, ap);
+	va_end(ap);
+	return 0;
+}
+
+int
+pgvector_errdetail(const char *fmt,...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	pgvector_err_vset(pgvector_err_state.detail, sizeof(pgvector_err_state.detail),
+					  fmt, ap);
+	va_end(ap);
+	return 0;
+}
+
+int
+pgvector_errhint(const char *fmt,...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	pgvector_err_vset(pgvector_err_state.hint, sizeof(pgvector_err_state.hint),
+					  fmt, ap);
+	va_end(ap);
+	return 0;
+}
+
+static int
+pgvector_map_elevel(int elevel)
+{
+	if (elevel == ERROR)
+		return ERROR;
+	if (elevel == FATAL)
+		return FATAL;
+	if (elevel == REALLYFATAL || elevel == STOP)
+		return REALLYFATAL;
+	if (elevel == DEBUG || elevel == NOIND || elevel == LOG)
+		return DEBUG;
+	if (elevel == NOTICE)
+		return NOTICE;
+	/* PG13+ DEBUG1.. and other positive modern levels (DEBUG1=10 here) */
+	if (elevel >= 10)
+		return DEBUG;
+	return NOTICE;
+}
+
+void
+pgvector_ereport(int elevel)
+{
+	int			lev = pgvector_map_elevel(elevel);
+	char		full[PGVECTOR_ERR_MSG_LEN + 2 * PGVECTOR_ERR_AUX_LEN + 64];
+	const char *msg = pgvector_err_state.message[0] ?
+		pgvector_err_state.message : "pgvector error";
+	size_t		n;
+
+	n = snprintf(full, sizeof(full), "%s", msg);
+	if (n < sizeof(full) && pgvector_err_state.detail[0])
+		n += snprintf(full + n, sizeof(full) - n, "\nDETAIL:  %s",
+					  pgvector_err_state.detail);
+	if (n < sizeof(full) && pgvector_err_state.hint[0])
+		snprintf(full + n, sizeof(full) - n, "\nHINT:  %s",
+				 pgvector_err_state.hint);
+
+	if (lev == ERROR || lev == FATAL || lev == REALLYFATAL)
+	{
+		int			code = pgvector_err_state.sqlerrcode;
+
+		if (code != 0)
+			coded_elog(lev, code, "%s", full);
+		else
+			elog(lev, "%s", full);
+	}
+	else
+		elog(lev, "%s", full);
+}
+
+char *
+pgvector_pnstrdup(const char *in, size_t len)
+{
+	char	   *out;
+
+	if (in == NULL)
+		return NULL;
+	out = (char *) palloc(len + 1);
+	memcpy(out, in, len);
+	out[len] = '\0';
+	return out;
 }
 
 /* palloc0 implementation for all the pgvector sources that call it.

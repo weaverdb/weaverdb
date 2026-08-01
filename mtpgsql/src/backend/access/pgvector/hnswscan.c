@@ -18,8 +18,6 @@
 
 #include "varatt.h"
 
-#include "pgstat.h"
-
 /*
  * Algorithm 5 from paper
  */

@@ -12,7 +12,6 @@
 #include "access/heapam.h"
 #include "pgvector_scan.h"
 #include "miscadmin.h"
-#include "pgstat.h"
 #include "storage/bufmgr.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"

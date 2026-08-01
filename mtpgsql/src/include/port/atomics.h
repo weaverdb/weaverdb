@@ -6,7 +6,6 @@
 #include <stdint.h>
 
 #define pg_atomic_uint32 uint32_t
-#define pg_atomic_uint64 uint64_t
 
 static inline void
 pg_atomic_init_u32(volatile pg_atomic_uint32 *ptr, uint32_t val)
