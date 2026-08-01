@@ -5,27 +5,14 @@
 #define ACCESS_AMAPI_H
 
 #include "access/relscan.h"
-#include "pgvector_index.h"
+#include "pgvector_index.h"		/* IndexBuildResult, IndexUniqueCheck */
 #include "access/sdir.h"
-
-typedef struct IndexBuildResult
-{
-	double		heap_tuples;
-	double		index_tuples;
-} IndexBuildResult;
-
-typedef int IndexUniqueCheck;
-#define UNIQUE_CHECK_NO 0
-#define UNIQUE_CHECK_YES 1
-#define UNIQUE_CHECK_PARTIAL 2
-#define UNIQUE_CHECK_EXISTING 3
 
 #ifndef VACUUM_OPTION_PARALLEL_BULKDEL
 #define VACUUM_OPTION_PARALLEL_BULKDEL 0
 #endif
 
-typedef double Cost;
-typedef double Selectivity;
+/* Cost / Selectivity: nodes/nodes.h */
 
 typedef struct IndexAmRoutine
 {

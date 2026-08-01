@@ -8,8 +8,6 @@
 #define relptr_declare(type, relptrtype) \
 	typedef struct { Size relptr_off; } relptrtype
 
-typedef uintptr_t Relptr;
-
 #define relptr_is_null(rp)		((rp).relptr_off == 0)
 
 #define relptr_store(base, rp, value) \

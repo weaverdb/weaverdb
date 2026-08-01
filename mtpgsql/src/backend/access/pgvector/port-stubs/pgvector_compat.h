@@ -3,12 +3,14 @@
 #include <string.h>
 #include <errno.h>
 
-/* Early neutering of ereport family (must be before any pgvector .c text that uses ereport in headers or bodies).
- * This is more reliable than -D on command line for complex function-like macros with multi-line calls.
+/* Early ereport neuter for text inside this header before the real bridge below.
+ * After postgres.h-level symbols are available, we redefine to elog/coded_elog.
  */
 #define ereport(elevel, rest)   ((void)0)
 #define errcode(x)              (0)
 #define errmsg(...)             (0)
+#define errdetail(...)          (0)
+#define errhint(...)            (0)
 
 #ifndef VALGRIND_MAKE_MEM_DEFINED
 #define VALGRIND_MAKE_MEM_DEFINED(p, n) ((void) 0)
@@ -85,14 +87,8 @@
 #endif
 #endif
 
-/* Common missing base types/macros used by pgvector and shims (hoisted early, lightweight) */
-#ifndef Size
-typedef size_t Size;
-#endif
-
-#ifndef Datum
-typedef unsigned long Datum;   /* common definition; project/c.h will provide equivalent later */
-#endif
+/* Size/Datum/Page come from c.h / storage/page.h via postgres.h below — do not
+ * typedef them here (#ifndef Size does not guard typedefs and causes redefs). */
 
 #ifndef FLOAT8PASSBYVAL
 #define FLOAT8PASSBYVAL true
@@ -105,11 +101,42 @@ typedef unsigned long Datum;   /* common definition; project/c.h will provide eq
 #define TYPALIGN_DOUBLE 'd'
 #endif
 
-#ifndef ERRCODE_FEATURE_NOT_SUPPORTED
-#define ERRCODE_FEATURE_NOT_SUPPORTED 0
+/*
+ * SQLSTATE-like codes for coded_elog / Env->errorcode.
+ * Keep non-zero so ERROR longjmp uses the code (0 falls back to 100 in elog.c).
+ */
+#ifdef ERRCODE_DATA_EXCEPTION
+#undef ERRCODE_DATA_EXCEPTION
 #endif
+#define ERRCODE_DATA_EXCEPTION				820
+#ifndef ERRCODE_PROGRAM_LIMIT_EXCEEDED
+#define ERRCODE_PROGRAM_LIMIT_EXCEEDED		821
+#endif
+#ifndef ERRCODE_INVALID_TEXT_REPRESENTATION
+#define ERRCODE_INVALID_TEXT_REPRESENTATION	822
+#endif
+#ifndef ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE
+#define ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE	823
+#endif
+#ifndef ERRCODE_INVALID_PARAMETER_VALUE
+#define ERRCODE_INVALID_PARAMETER_VALUE		824
+#endif
+#ifndef ERRCODE_NULL_VALUE_NOT_ALLOWED
+#define ERRCODE_NULL_VALUE_NOT_ALLOWED		825
+#endif
+#ifndef ERRCODE_FEATURE_NOT_SUPPORTED
+#define ERRCODE_FEATURE_NOT_SUPPORTED		826
+#endif
+
+/* Modern PG elevels used by pgvector; map to PG7 elog levels in pgvector_ereport(). */
 #ifndef DEBUG1
 #define DEBUG1 10
+#endif
+#ifndef INFO
+#define INFO NOTICE
+#endif
+#ifndef WARNING
+#define WARNING NOTICE
 #endif
 
 /* Forward declare so VarBit name and ArrayType (from real headers) can be used in prototypes
@@ -117,7 +144,8 @@ typedef unsigned long Datum;   /* common definition; project/c.h will provide eq
 struct varbita;
 typedef struct varbita VarBit;
 
-/* Index AM vacuum types - forward decls only here (full defs after postgres.h) */
+/* Index AM vacuum types — full defs after postgres.h.
+ * IndexBuildResult / IndexUniqueCheck live in pgvector_index.h. */
 typedef struct IndexBulkDeleteResult IndexBulkDeleteResult;
 typedef struct IndexVacuumInfo IndexVacuumInfo;
 
@@ -165,11 +193,15 @@ extern void DefineCustomEnumVariable(const char *name,
 extern void EmitWarningsOnPlaceholders(const char *className);
 extern void MarkGUCPrefixReserved(const char *className);
 
-/* Progress and optimizer types for cost/ build */
+/* Progress and optimizer types for cost/ build (replaces commands/progress.h) */
 #define PROGRESS_CREATEIDX_SUBPHASE_INITIALIZE 0
+#define PROGRESS_CREATEIDX_SUBPHASE 0
+#define PROGRESS_CREATEIDX_TUPLES_TOTAL 0
+#define PROGRESS_CREATEIDX_TUPLES_DONE 0
+/* RelOptInfo: nodes/relation.h. PlannerInfo is modern-only; IndexPath needed
+ * early for ivfflat.c/hnsw.c costestimate signatures (also in relation.h). */
 typedef struct PlannerInfo PlannerInfo;
 typedef struct IndexPath IndexPath;
-typedef struct RelOptInfo RelOptInfo;
 
 /* CurrentMemoryContext provided by real headers */
 #ifndef CurrentMemoryContext
@@ -183,21 +215,13 @@ typedef struct BufferAccessStrategyData *BufferAccessStrategy;
 /* itemptr callback — full ItemPointer after postgres.h; use void* here */
 typedef bool (*IndexBulkDeleteCallback) (void *itemptr, void *callback_state);
 
-/* Other frequently referenced in index build/scan/vacuum headers */
-typedef struct List List;
-typedef char *Page;          /* simplified; real is Page (pointer to bufpage) */
-/* Buffer / BlockNumber intentionally not typedef'd here to avoid signedness/width clashes
-   with the project's definitions in storage/buf.h and storage/block.h (pulled via postgres.h). */
+/* List / Page / Buffer / BlockNumber come from real headers via postgres.h. */
 
-/* DSM / shared memory / index build result types (for parallel index and am build/ vacuum hooks in hnsw/ivf headers) */
+/* DSM / shared memory types (upstream parallel unused; Weaver uses pthreads) */
 typedef struct dsm_segment dsm_segment;
 typedef struct shm_toc shm_toc;
 
-typedef struct IndexBuildResult IndexBuildResult;
-typedef int IndexUniqueCheck;
-typedef struct IndexVacuumInfo IndexVacuumInfo;
-
-typedef struct Sharedsort { int dummy; } Sharedsort;
+/* Sharedsort declared in pgvector_tuplesort.h */
 
 /* Ensure VARSIZE_ANY visible even if varatt.h include is version-guarded in ivfflat.h */
 #ifndef VARSIZE_ANY
@@ -217,12 +241,7 @@ typedef struct Sharedsort { int dummy; } Sharedsort;
 #define PG_USED_FOR_ASSERTS_ONLY
 #endif
 
-/* For atomics if not */
-#ifndef pg_atomic_uint32
-/* already in our atomics stub */
-#endif
-
-/* popcount table is provided in our pg_bitutils stub */
+/* Atomics / popcount: mtpgsql/src/include/port/{atomics,pg_bitutils}.h */
 
 /* ----------------------------------------------------------------
  * Additional shims for array handling, fmgr, varlena, oids etc.
@@ -308,22 +327,50 @@ extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
 		return (Datum) (long) _pgv_r; \
 	} while (0)
 
+/*
+ * Bridge modern ereport(errmsg(...)) to Weaver elog/coded_elog.
+ * Evaluate `rest` for side effects (errcode/errmsg/errdetail/errhint fill TLS),
+ * then emit through the existing error infrastructure.
+ */
+extern void pgvector_err_reset(void);
+extern void pgvector_ereport(int elevel);
+extern int	pgvector_errcode(int sqlerrcode);
+extern int	pgvector_errmsg(const char *fmt,...)
+#if defined(__GNUC__)
+			__attribute__((format(printf, 1, 2)))
+#endif
+			;
+extern int	pgvector_errdetail(const char *fmt,...)
+#if defined(__GNUC__)
+			__attribute__((format(printf, 1, 2)))
+#endif
+			;
+extern int	pgvector_errhint(const char *fmt,...)
+#if defined(__GNUC__)
+			__attribute__((format(printf, 1, 2)))
+#endif
+			;
+
+/* Used inside errmsg() args now that ereport evaluates its rest expression. */
+extern char *pgvector_pnstrdup(const char *in, size_t len);
+#ifndef pnstrdup
+#define pnstrdup(in, len) pgvector_pnstrdup((in), (size_t) (len))
+#endif
+
 #undef ereport
 #undef errcode
 #undef errmsg
 #undef errdetail
-#define errcode(code) 0
-#define errmsg(...) ""
-#define errdetail(...) ""
+#undef errhint
+#define errcode(code)			pgvector_errcode(code)
+#define errmsg(...)				pgvector_errmsg(__VA_ARGS__)
+#define errdetail(...)			pgvector_errdetail(__VA_ARGS__)
+#define errhint(...)			pgvector_errhint(__VA_ARGS__)
 #define ereport(elevel, rest) \
 	do { \
-		int _pgv_ereport_level = (elevel); \
-		if (_pgv_ereport_level == FATAL || _pgv_ereport_level == REALLYFATAL) \
-			elog(FATAL, "pgvector: operation failed"); \
-		else if (_pgv_ereport_level == ERROR) \
-			elog(ERROR, "pgvector: operation failed"); \
-		else if (_pgv_ereport_level >= NOTICE) \
-			elog(NOTICE, "pgvector notice"); \
+		pgvector_err_reset(); \
+		(void) (rest); \
+		pgvector_ereport(elevel); \
 	} while (0)
 
 #undef DirectFunctionCall1
@@ -409,11 +456,6 @@ get_float8_infinity(void)
 
 /* ---- Halfvec support: halfutils.h provides Float4ToHalf / HalfToFloat4 when halfutils.c is linked ---- */
 
-/* IS_NOT_ZERO helper seen in sparsevec */
-#ifndef IS_NOT_ZERO
-#define IS_NOT_ZERO(f) ((f) != 0.0f)
-#endif
-
 /* For index AM relation options etc that may pull in */
 #ifndef RELOPT_KIND_IVFFLAT
 #define RELOPT_KIND_IVFFLAT  (1 << 10)   /* arbitrary high bit */
@@ -422,9 +464,7 @@ get_float8_infinity(void)
 #define RELOPT_KIND_HNSW     (1 << 11)
 #endif
 
-/* elog/ereport already provided by elog.h via postgres.h */
-
-/* end of pgvector_compat.h shims */
+/* end of pgvector_compat.h shims (ereport bridged to elog above) */
 
 /* ----------------------------------------------------------------
  * Datum <-> float4/float8 accessors - prototypes only here (force include time).
@@ -695,6 +735,13 @@ pgstat_progress_update_param(int index, int64 val)
 	(void) index; (void) val;
 }
 
+/* Replaces port-stubs/pgstat.h */
+static inline void
+pgstat_count_index_scan(Relation index)
+{
+	(void) index;
+}
+
 static inline Size
 MemoryContextMemAllocated(MemoryContext context, bool recurse)
 {
@@ -728,7 +775,7 @@ table_parallelscan_initialize(Relation heap, void *pscan, void *snapshot)
 	(void) heap; (void) pscan; (void) snapshot;
 }
 
-typedef struct MemoryContextData *MemoryContext; /* may already exist */
+/* MemoryContext: utils/mcxt.h via postgres.h */
 
 #ifndef GenerationContextCreate
 #define GenerationContextCreate(parent, name, blockSize) \

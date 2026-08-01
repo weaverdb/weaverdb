@@ -1,9 +1,0 @@
-/* Stub commands/progress.h for pgvector */
-#ifndef COMMANDS_PROGRESS_H
-#define COMMANDS_PROGRESS_H
-
-#define PROGRESS_CREATEIDX_SUBPHASE 0
-#define PROGRESS_CREATEIDX_TUPLES_TOTAL 0
-#define PROGRESS_CREATEIDX_TUPLES_DONE 0
-
-#endif /* COMMANDS_PROGRESS_H */

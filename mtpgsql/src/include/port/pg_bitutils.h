@@ -56,16 +56,6 @@ pg_popcount(const char *buf, int bytes)
     return count;
 }
 
-static inline uint64_t
-pg_popcount64_8(const uint64_t *buf, int n)
-{
-    uint64_t count = 0;
-    for (int i = 0; i < n; i++) {
-        count += pg_popcount64(buf[i]);
-    }
-    return count;
-}
-
 static inline uint64
 pg_nextpower2_64(uint64 size)
 {

@@ -49,7 +49,8 @@ else()
     message(WARNING "pgvector build: force include of compat may need port for this compiler")
 endif()
 
-# Include paths: port-stubs only for pgvector-only shims (no duplicate of src/include).
+# port-stubs: pgvector-only overrides (amapi/reloptions/lwlock/cv + compat).
+# Real ports live under src/include (lib/, port/, common/, utils/, access/parallel).
 target_include_directories(pgvector BEFORE PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/port-stubs
 )
@@ -59,13 +60,9 @@ target_include_directories(pgvector PRIVATE
 )
 
 # Compile definitions to adapt pgvector (written for PG13+) to this older Weaver PG fork.
-# Note: many PG_ macro neuters and ereport now handled in pgvector_compat.h (force include)
-# for reliability. Keep here only the core version/flex/etc.
+# Note: PG_ macros and ereport→elog bridge are handled in pgvector_compat.h (force include).
 target_compile_definitions(pgvector PRIVATE
     FLEXIBLE_ARRAY_MEMBER=
     PGDLLEXPORT=
-    ERRCODE_DATA_EXCEPTION=0
 )
 
-# Ensure the port-stubs dir is visible (redundant with BEFORE but harmless)
-target_include_directories(pgvector PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/port-stubs)
