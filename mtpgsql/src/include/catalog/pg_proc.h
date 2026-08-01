@@ -1042,6 +1042,64 @@ DESCR("quantize vector to bit");
 DATA(insert OID = 2338 (  halfvec_binary_quantize	   PGUID 11 f t t 1 f 1562 "1844" 100 0 0 100  halfvec_binary_quantize - ));
 DESCR("quantize halfvec to bit");
 
+/* vector / halfvec arithmetic, aggregates, leftover helpers (OIDs 2346+) */
+DATA(insert OID = 2346 (  vector_add		   PGUID 11 f t t 2 f 1842 "1842 1842" 100 0 0 100  vector_add - ));
+DESCR("vector element-wise add");
+DATA(insert OID = 2347 (  vector_sub		   PGUID 11 f t t 2 f 1842 "1842 1842" 100 0 0 100  vector_sub - ));
+DESCR("vector element-wise subtract");
+DATA(insert OID = 2348 (  vector_mul		   PGUID 11 f t t 2 f 1842 "1842 1842" 100 0 0 100  vector_mul - ));
+DESCR("vector element-wise multiply");
+DATA(insert OID = 2349 (  halfvec_add		   PGUID 11 f t t 2 f 1844 "1844 1844" 100 0 0 100  halfvec_add - ));
+DESCR("halfvec element-wise add");
+DATA(insert OID = 2350 (  halfvec_sub		   PGUID 11 f t t 2 f 1844 "1844 1844" 100 0 0 100  halfvec_sub - ));
+DESCR("halfvec element-wise subtract");
+DATA(insert OID = 2351 (  halfvec_mul		   PGUID 11 f t t 2 f 1844 "1844 1844" 100 0 0 100  halfvec_mul - ));
+DESCR("halfvec element-wise multiply");
+DATA(insert OID = 2352 (  vector_accum		   PGUID 11 f t t 2 f 1022 "1022 1842" 100 0 0 100  vector_accum - ));
+DESCR("vector average accumulate");
+DATA(insert OID = 2353 (  vector_avg		   PGUID 11 f t t 1 f 1842 "1022" 100 0 0 100  vector_avg - ));
+DESCR("vector average finalize");
+DATA(insert OID = 2354 (  vector_combine	   PGUID 11 f t t 2 f 1022 "1022 1022" 100 0 0 100  vector_combine - ));
+DESCR("vector average combine states");
+DATA(insert OID = 2355 (  halfvec_accum		   PGUID 11 f t t 2 f 1022 "1022 1844" 100 0 0 100  halfvec_accum - ));
+DESCR("halfvec average accumulate");
+DATA(insert OID = 2356 (  halfvec_avg		   PGUID 11 f t t 1 f 1844 "1022" 100 0 0 100  halfvec_avg - ));
+DESCR("halfvec average finalize");
+DATA(insert OID = 2357 (  halfvec_combine	   PGUID 11 f t t 2 f 1022 "1022 1022" 100 0 0 100  vector_combine - ));
+DESCR("halfvec average combine states");
+DATA(insert OID = 2358 (  inner_product		   PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  inner_product - ));
+DESCR("vector inner product");
+DATA(insert OID = 2359 (  halfvec_inner_product	   PGUID 11 f t t 2 f 701 "1844 1844" 100 0 0 100  halfvec_inner_product - ));
+DESCR("halfvec inner product");
+DATA(insert OID = 2360 (  sparsevec_inner_product	   PGUID 11 f t t 2 f 701 "1846 1846" 100 0 0 100  sparsevec_inner_product - ));
+DESCR("sparsevec inner product");
+DATA(insert OID = 2361 (  l1_distance		   PGUID 11 f t t 2 f 701 "1842 1842" 100 0 0 100  l1_distance - ));
+DESCR("vector L1 distance");
+DATA(insert OID = 2362 (  halfvec_l1_distance	   PGUID 11 f t t 2 f 701 "1844 1844" 100 0 0 100  halfvec_l1_distance - ));
+DESCR("halfvec L1 distance");
+DATA(insert OID = 2363 (  sparsevec_l1_distance	   PGUID 11 f t t 2 f 701 "1846 1846" 100 0 0 100  sparsevec_l1_distance - ));
+DESCR("sparsevec L1 distance");
+DATA(insert OID = 2364 (  vector_dims		   PGUID 11 f t t 1 f 23 "1842" 100 0 0 100  vector_dims - ));
+DESCR("vector dimensions");
+DATA(insert OID = 2365 (  halfvec_vector_dims	   PGUID 11 f t t 1 f 23 "1844" 100 0 0 100  halfvec_vector_dims - ));
+DESCR("halfvec dimensions");
+DATA(insert OID = 2366 (  subvector		   PGUID 11 f t t 3 f 1842 "1842 23 23" 100 0 0 100  subvector - ));
+DESCR("extract vector slice");
+DATA(insert OID = 2367 (  halfvec_subvector	   PGUID 11 f t t 3 f 1844 "1844 23 23" 100 0 0 100  halfvec_subvector - ));
+DESCR("extract halfvec slice");
+DATA(insert OID = 2368 (  vector_concat		   PGUID 11 f t t 2 f 1842 "1842 1842" 100 0 0 100  vector_concat - ));
+DESCR("concatenate vectors");
+DATA(insert OID = 2369 (  halfvec_concat	   PGUID 11 f t t 2 f 1844 "1844 1844" 100 0 0 100  halfvec_concat - ));
+DESCR("concatenate halfvecs");
+DATA(insert OID = 2381 (  float8array_in	   PGUID 11 f t t 3 f 1022 "0 0 23" 100 0 0 100  float8array_in - ));
+DESCR("float8[] input (pgvector avg state)");
+DATA(insert OID = 2382 (  float8array_out	   PGUID 11 f t t 2 f 23 "1022 0" 100 0 0 100  float8array_out - ));
+DESCR("float8[] output (pgvector avg state)");
+DATA(insert OID = 2383 (  vector_avg_final	   PGUID 11 f t t 2 f 1842 "1842 701" 100 0 0 100  vector_avg_final - ));
+DESCR("vector avg finalize (sum / count)");
+DATA(insert OID = 2384 (  halfvec_avg_final	   PGUID 11 f t t 2 f 1844 "1844 701" 100 0 0 100  halfvec_avg_final - ));
+DESCR("halfvec avg finalize (sum / count)");
+
 #define F_VECTORIN	2237
 #define F_VECTOROUT	2238
 #define F_L2_DISTANCE	2240

@@ -25,6 +25,7 @@
 #include "ivfflat.h"
 #include "halfutils.h"
 #include "bitutils.h"
+#include <ctype.h>
 #include <math.h>
 #include <errno.h>
 #include <string.h>
@@ -445,6 +446,111 @@ palloc0(Size size)
 	if (p != NULL)
 		memset(p, 0, size);
 	return p;
+}
+
+/*
+ * Minimal float8[] text I/O for pgvector avg aggregate state under NOARRAY.
+ * Old-style fmgr ABI (matches array_in / AggNameGetInitVal).
+ */
+char *
+float8array_in(char *string, Oid element_type, int32 typmod)
+{
+	char	   *p;
+	Datum	   *datums;
+	int			nalloc = 8;
+	int			n = 0;
+	ArrayType  *result;
+
+	(void) element_type;
+	(void) typmod;
+
+	if (string == NULL)
+		elog(ERROR, "float8array_in: null input");
+
+	p = string;
+	while (*p && isspace((unsigned char) *p))
+		p++;
+	if (*p != '{')
+		elog(ERROR, "float8array_in: expected '{', got \"%s\"", string);
+	p++;
+
+	datums = (Datum *) palloc(sizeof(Datum) * nalloc);
+
+	while (*p && isspace((unsigned char) *p))
+		p++;
+
+	if (*p == '}')
+	{
+		/* empty — treat as single-count zero state for avg init '{0}' callers
+		 * that somehow omit the zero; still require at least one slot for CheckStateArray */
+		datums[0] = Float8GetDatum(0.0);
+		n = 1;
+	}
+	else
+	{
+		for (;;)
+		{
+			char	   *end;
+			double		val;
+
+			while (*p && isspace((unsigned char) *p))
+				p++;
+			errno = 0;
+			val = strtod(p, &end);
+			if (end == p)
+				elog(ERROR, "float8array_in: bad float8 in \"%s\"", string);
+			if (n >= nalloc)
+			{
+				nalloc *= 2;
+				datums = (Datum *) repalloc(datums, sizeof(Datum) * nalloc);
+			}
+			datums[n++] = Float8GetDatum((float8) val);
+			p = end;
+			while (*p && isspace((unsigned char) *p))
+				p++;
+			if (*p == ',')
+			{
+				p++;
+				continue;
+			}
+			if (*p == '}')
+				break;
+			elog(ERROR, "float8array_in: ill-formed array \"%s\"", string);
+		}
+	}
+
+	result = construct_array(datums, n, FLOAT8OID, sizeof(float8),
+							 true, TYPALIGN_DOUBLE);
+	pfree(datums);
+	return (char *) result;
+}
+
+char *
+float8array_out(ArrayType *v, Oid element_type)
+{
+	int			n;
+	float8	   *data;
+	StringInfoData buf;
+	int			i;
+
+	(void) element_type;
+
+	if (v == NULL)
+		return pstrdup("{}");
+
+	n = (ARR_NDIM(v) == 1) ? ARR_DIMS(v)[0] : 0;
+	data = (float8 *) ARR_DATA_PTR(v);
+
+	initStringInfo(&buf);
+	appendStringInfoChar(&buf, '{');
+	for (i = 0; i < n; i++)
+	{
+		if (i > 0)
+			appendStringInfoChar(&buf, ',');
+		appendStringInfo(&buf, "%g", data[i]);
+	}
+	appendStringInfoChar(&buf, '}');
+	return buf.data;
 }
 
 #ifdef NOT_USED

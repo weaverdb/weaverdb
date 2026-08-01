@@ -393,13 +393,15 @@ DATA(insert OID = 1018 (  _lseg		 PGUID -1  -1 f b t \x2C 0 601 array_in array_o
 DATA(insert OID = 1019 (  _path		 PGUID -1  -1 f b t \x2C 0 602 array_in array_out array_in array_out d _null_ ));
 DATA(insert OID = 1020 (  _rect		 PGUID -1  -1 f b t \x3B 0 603 array_in array_out array_in array_out d _null_ ));
 DATA(insert OID = 1021 (  _float4	 PGUID -1  -1 f b t \x2C 0 700 array_in array_out array_in array_out i _null_ ));
-DATA(insert OID = 1022 (  _float8	 PGUID -1  -1 f b t \x2C 0 701 array_in array_out array_in array_out d _null_ ));
 DATA(insert OID = 1023 (  _abstime	 PGUID -1  -1 f b t \x2C 0 702 array_in array_out array_in array_out i _null_ ));
 DATA(insert OID = 1024 (  _reltime	 PGUID -1  -1 f b t \x2C 0 703 array_in array_out array_in array_out i _null_ ));
 DATA(insert OID = 1025 (  _tinterval PGUID -1  -1 f b t \x2C 0 704 array_in array_out array_in array_out i _null_ ));
 DATA(insert OID = 1026 (  _filename  PGUID -1  -1 f b t \x2C 0 605 array_in array_out array_in array_out i _null_ ));
 DATA(insert OID = 1027 (  _polygon	 PGUID -1  -1 f b t \x2C 0 604 array_in array_out array_in array_out d _null_ ));
 #endif
+/* _float8 always present: pgvector avg(vector/halfvec) transition type (works with NOARRAY).
+ * I/O uses float8array_in/out shims (full array_in is not linked when NOARRAY=ON). */
+DATA(insert OID = 1022 (  _float8	 PGUID -1  -1 f b t \x2C 0 701 float8array_in float8array_out float8array_in float8array_out d _null_ ));
 /*
  *	Note: the size of aclitem needs to match sizeof(AclItem) in acl.h.
  *	Thanks to some padding, this will be 8 on all platforms.

@@ -149,10 +149,10 @@ halfvec_isspace(char ch)
 static float8 *
 CheckStateArray(ArrayType *statearray, const char *caller)
 {
+	/* Weaver ArrayType has no elemtype; skip ARR_ELEMTYPE under NOARRAY shims. */
 	if (ARR_NDIM(statearray) != 1 ||
 		ARR_DIMS(statearray)[0] < 1 ||
-		ARR_HASNULL(statearray) ||
-		ARR_ELEMTYPE(statearray) != FLOAT8OID)
+		ARR_HASNULL(statearray))
 		elog(ERROR, "%s: expected state array", caller);
 	return (float8 *) ARR_DATA_PTR(statearray);
 }
@@ -1170,6 +1170,32 @@ halfvec_avg(PG_FUNCTION_ARGS)
 	for (int i = 0; i < dim; i++)
 	{
 		result->x[i] = Float4ToHalf(statevalues[i + 1] / n);
+		CheckElement(result->x[i]);
+	}
+
+	PG_RETURN_POINTER(result);
+}
+
+/*
+ * PG7-style avg final: divide summed halfvec by float8 count.
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(halfvec_avg_final);
+Datum
+halfvec_avg_final(PG_FUNCTION_ARGS)
+{
+	HalfVector *sum = PG_GETARG_HALFVEC_P(0);
+	float8		n = PG_GETARG_FLOAT8(1);
+	HalfVector *result;
+
+	if (n == 0.0)
+		PG_RETURN_NULL();
+
+	result = InitHalfVector(sum->dim);
+	for (int i = 0, imax = sum->dim; i < imax; i++)
+	{
+		float		v = HalfToFloat4(sum->x[i]) / (float) n;
+
+		result->x[i] = Float4ToHalf(v);
 		CheckElement(result->x[i]);
 	}
 

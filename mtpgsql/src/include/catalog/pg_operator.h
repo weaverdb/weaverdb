@@ -845,6 +845,19 @@ DATA(insert OID = 2343 (  ">="	   PGUID 0 b t f 1846 1846 16 2342 2340  0  0 spa
 DATA(insert OID = 2344 (  "="	   PGUID 0 b t f 1846 1846 16 2344 2345  0  0 sparsevec_eq eqsel eqjoinsel ));
 DATA(insert OID = 2345 (  "<>"	   PGUID 0 b t f 1846 1846 16 2345 2344  0  0 sparsevec_ne eqsel eqjoinsel ));
 
+/* vector / halfvec arithmetic and leftover helper operators */
+DATA(insert OID = 2370 (  "+"	   PGUID 0 b t f 1842 1842 1842 2370   0   0   0 vector_add - - ));
+DATA(insert OID = 2371 (  "-"	   PGUID 0 b t f 1842 1842 1842    0   0   0   0 vector_sub - - ));
+DATA(insert OID = 2372 (  "*"	   PGUID 0 b t f 1842 1842 1842 2372   0   0   0 vector_mul - - ));
+DATA(insert OID = 2373 (  "+"	   PGUID 0 b t f 1844 1844 1844 2373   0   0   0 halfvec_add - - ));
+DATA(insert OID = 2374 (  "-"	   PGUID 0 b t f 1844 1844 1844    0   0   0   0 halfvec_sub - - ));
+DATA(insert OID = 2375 (  "*"	   PGUID 0 b t f 1844 1844 1844 2375   0   0   0 halfvec_mul - - ));
+DATA(insert OID = 2376 (  "<+>"	   PGUID 0 b t f 1842 1842 701 2376   0   0   0 l1_distance - - ));
+DATA(insert OID = 2377 (  "<+>"	   PGUID 0 b t f 1844 1844 701 2377   0   0   0 halfvec_l1_distance - - ));
+DATA(insert OID = 2378 (  "<+>"	   PGUID 0 b t f 1846 1846 701 2378   0   0   0 sparsevec_l1_distance - - ));
+DATA(insert OID = 2379 (  "||"	   PGUID 0 b t f 1842 1842 1842    0   0   0   0 vector_concat - - ));
+DATA(insert OID = 2380 (  "||"	   PGUID 0 b t f 1844 1844 1844    0   0   0   0 halfvec_concat - - ));
+
 /*
  * function prototypes
  */

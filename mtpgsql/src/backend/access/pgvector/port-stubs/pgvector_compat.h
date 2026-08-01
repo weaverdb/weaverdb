@@ -281,6 +281,10 @@ extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
 #undef PG_GETARG_BOOL
 #define PG_GETARG_BOOL(n) ((bool) PG_GETARG_INT32(n))
 
+#undef PG_GETARG_FLOAT8
+/* float8 is pass-by-ref (float64*) in this fork — DatumGetFloat8 derefs the pointer */
+#define PG_GETARG_FLOAT8(n) DatumGetFloat8(PG_GETARG_DATUM(n))
+
 #undef PG_GETARG_DATUM
 #define PG_GETARG_DATUM(n) \
 	((Datum) (long) (((n) == 0) ? (long) pgvector_arg0 : \

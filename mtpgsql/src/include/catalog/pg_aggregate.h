@@ -97,6 +97,9 @@ DATA(insert OID = 0 ( avg	PGUID float8pl	  float8inc float8div	   701	701  701  
 DATA(insert OID = 0 ( avg	PGUID cash_pl	  float8inc cash_div_flt8  790	790  701  790 _null_ 0.0 ));
 DATA(insert OID = 0 ( avg	PGUID interval_pl float8inc interval_div  1186 1186  701 1186 _null_ 0.0 ));
 DATA(insert OID = 0 ( avg	PGUID numeric_add numeric_inc numeric_div 1700 1700 1700 1700 _null_ 0 ));
+/* PG7-style vector/halfvec avg: sum via + , count via float8inc, divide in final */
+DATA(insert OID = 0 ( avg	PGUID vector_add	  float8inc vector_avg_final	1842 1842 701 1842 _null_ 0.0 ));
+DATA(insert OID = 0 ( avg	PGUID halfvec_add	  float8inc halfvec_avg_final	1844 1844 701 1844 _null_ 0.0 ));
 
 DATA(insert OID = 0 ( sum	PGUID int8pl			- -   20   20 0   20 _null_ _null_ ));
 DATA(insert OID = 0 ( sum	PGUID int4pl			- -   23   23 0   23 _null_ _null_ ));
@@ -106,6 +109,8 @@ DATA(insert OID = 0 ( sum	PGUID float8pl			- -  701  701 0  701 _null_ _null_ ))
 DATA(insert OID = 0 ( sum	PGUID cash_pl			- -  790  790 0  790 _null_ _null_ ));
 DATA(insert OID = 0 ( sum	PGUID interval_pl		- - 1186 1186 0 1186 _null_ _null_ ));
 DATA(insert OID = 0 ( sum	PGUID numeric_add		- - 1700 1700 0 1700 _null_ _null_ ));
+DATA(insert OID = 0 ( sum	PGUID vector_add		- - 1842 1842 0 1842 _null_ _null_ ));
+DATA(insert OID = 0 ( sum	PGUID halfvec_add		- - 1844 1844 0 1844 _null_ _null_ ));
 
 DATA(insert OID = 0 ( max	PGUID int8larger		- -   20   20 0   20 _null_ _null_ ));
 DATA(insert OID = 0 ( max	PGUID int4larger		- -   23   23 0   23 _null_ _null_ ));

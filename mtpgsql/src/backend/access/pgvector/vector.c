@@ -140,10 +140,10 @@ vector_isspace(char ch)
 static float8 *
 CheckStateArray(ArrayType *statearray, const char *caller)
 {
+	/* Weaver ArrayType has no elemtype; skip ARR_ELEMTYPE under NOARRAY shims. */
 	if (ARR_NDIM(statearray) != 1 ||
 		ARR_DIMS(statearray)[0] < 1 ||
-		ARR_HASNULL(statearray) ||
-		ARR_ELEMTYPE(statearray) != FLOAT8OID)
+		ARR_HASNULL(statearray))
 		elog(ERROR, "%s: expected state array", caller);
 	return (float8 *) ARR_DATA_PTR(statearray);
 }
@@ -1282,6 +1282,35 @@ vector_avg(PG_FUNCTION_ARGS)
 	{
 		result->x[i] = statevalues[i + 1] / n;
 		CheckElement(result->x[i]);
+	}
+
+	PG_RETURN_POINTER(result);
+}
+
+/*
+ * PG7-style avg final: divide summed vector by float8 count.
+ * Used with SFUNC=vector_add, SFUNC2=float8inc (no float8[] state).
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(vector_avg_final);
+Datum
+vector_avg_final(PG_FUNCTION_ARGS)
+{
+	Vector	   *sum = PG_GETARG_VECTOR_P(0);
+	float8		n = PG_GETARG_FLOAT8(1);
+	Vector	   *result;
+	float	   *sx;
+	float	   *rx;
+
+	if (n == 0.0)
+		PG_RETURN_NULL();
+
+	result = InitVector(sum->dim);
+	sx = sum->x;
+	rx = result->x;
+	for (int i = 0, imax = sum->dim; i < imax; i++)
+	{
+		rx[i] = (float) ((double) sx[i] / n);
+		CheckElement(rx[i]);
 	}
 
 	PG_RETURN_POINTER(result);

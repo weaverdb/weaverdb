@@ -433,6 +433,77 @@ else
   failures=$((failures + 1))
 fi
 
+echo "--- arithmetic / avg / leftover helpers ---"
+
+out=$(run_session \
+  "select '[1,2,3]'::vector + '[4,5,6]'::vector;" \
+  "select '[4,5,6]'::vector - '[1,2,3]'::vector;" \
+  "select '[2,3,4]'::vector * '[1,2,3]'::vector;" \
+  "select vector_add('[1,2,3]'::vector, '[4,5,6]'::vector);")
+assert_no_error "vector arithmetic ops" "$out"
+assert_scalar "vector +" "$out" "?column?" "[5,7,9]"
+assert_scalar "vector -" "$out" "?column?" "[3,3,3]"
+assert_scalar "vector *" "$out" "?column?" "[2,6,12]"
+assert_scalar "vector_add" "$out" "vector_add" "[5,7,9]"
+
+out=$(run_session \
+  "select '[1,2,3]'::halfvec + '[4,5,6]'::halfvec;" \
+  "select '[4,5,6]'::halfvec - '[1,2,3]'::halfvec;" \
+  "select '[2,3,4]'::halfvec * '[1,2,3]'::halfvec;")
+assert_no_error "halfvec arithmetic ops" "$out"
+assert_scalar "halfvec +" "$out" "?column?" "[5,7,9]"
+assert_scalar "halfvec -" "$out" "?column?" "[3,3,3]"
+assert_scalar "halfvec *" "$out" "?column?" "[2,6,12]"
+
+out=$(run_session \
+  "create table pv_feat_avg (id int, emb vector);" \
+  "insert into pv_feat_avg values (1, '[1,2,3]');" \
+  "insert into pv_feat_avg values (2, '[3,4,5]');" \
+  "select avg(emb) from pv_feat_avg;" \
+  "select sum(emb) from pv_feat_avg;")
+assert_no_error "vector avg/sum aggregates" "$out"
+assert_scalar "avg(vector)" "$out" "avg" "[2,3,4]"
+assert_scalar "sum(vector)" "$out" "sum" "[4,6,8]"
+
+out=$(run_session \
+  "create table pv_feat_hv_avg (id int, emb halfvec);" \
+  "insert into pv_feat_hv_avg values (1, '[1,2,3]');" \
+  "insert into pv_feat_hv_avg values (2, '[3,4,5]');" \
+  "select avg(emb) from pv_feat_hv_avg;" \
+  "select sum(emb) from pv_feat_hv_avg;")
+assert_no_error "halfvec avg/sum aggregates" "$out"
+assert_scalar "avg(halfvec)" "$out" "avg" "[2,3,4]"
+assert_scalar "sum(halfvec)" "$out" "sum" "[4,6,8]"
+
+out=$(run_session \
+  "select vector_dims('[1,2,3,4]'::vector);" \
+  "select halfvec_vector_dims('[1,2,3]'::halfvec);" \
+  "select inner_product('[1,2,3]'::vector, '[4,5,6]'::vector);" \
+  "select halfvec_inner_product('[1,2,3]'::halfvec, '[4,5,6]'::halfvec);" \
+  "select sparsevec_inner_product('{1:1,2:2}/3'::sparsevec, '{1:4,2:5}/3'::sparsevec);" \
+  "select l1_distance('[1,0,0]'::vector, '[0,1,0]'::vector);" \
+  "select '[1,0,0]'::vector <+> '[0,1,0]'::vector;" \
+  "select halfvec_l1_distance('[1,0,0]'::halfvec, '[0,1,0]'::halfvec);" \
+  "select sparsevec_l1_distance('{1:1}/2'::sparsevec, '{2:1}/2'::sparsevec);" \
+  "select subvector('[1,2,3,4]'::vector, 2, 2);" \
+  "select halfvec_subvector('[1,2,3,4]'::halfvec, 2, 2);" \
+  "select '[1,2]'::vector || '[3,4]'::vector;" \
+  "select '[1,2]'::halfvec || '[3,4]'::halfvec;")
+assert_no_error "utility helpers / L1 / concat" "$out"
+assert_scalar "vector_dims" "$out" "vector_dims" "4"
+assert_scalar "halfvec_vector_dims" "$out" "halfvec_vector_dims" "3"
+assert_scalar "inner_product" "$out" "inner_product" "32"
+assert_scalar "halfvec_inner_product" "$out" "halfvec_inner_product" "32"
+assert_scalar "sparsevec_inner_product" "$out" "sparsevec_inner_product" "14"
+assert_scalar "l1_distance" "$out" "l1_distance" "2"
+assert_scalar "vector <+> operator" "$out" "?column?" "2"
+assert_scalar "halfvec_l1_distance" "$out" "halfvec_l1_distance" "2"
+assert_scalar "sparsevec_l1_distance" "$out" "sparsevec_l1_distance" "2"
+assert_scalar "subvector" "$out" "subvector" "[2,3]"
+assert_scalar "halfvec_subvector" "$out" "halfvec_subvector" "[2,3]"
+assert_scalar "vector ||" "$out" "?column?" "[1,2,3,4]"
+assert_scalar "halfvec ||" "$out" "?column?" "[1,2,3,4]"
+
 echo "--- binary_quantize + sparsevec btree ---"
 
 out=$(run_session \
