@@ -1708,6 +1708,22 @@ static struct VariableParsers
 		"ivfflat_max_probes", parse_ivfflat_max_probes,
 		show_ivfflat_max_probes, reset_ivfflat_max_probes
 	},
+	{
+		"hnsw.build_workers", parse_hnsw_build_workers,
+		show_hnsw_build_workers, reset_hnsw_build_workers
+	},
+	{
+		"hnsw_build_workers", parse_hnsw_build_workers,
+		show_hnsw_build_workers, reset_hnsw_build_workers
+	},
+	{
+		"ivfflat.assign_workers", parse_ivfflat_assign_workers,
+		show_ivfflat_assign_workers, reset_ivfflat_assign_workers
+	},
+	{
+		"ivfflat_assign_workers", parse_ivfflat_assign_workers,
+		show_ivfflat_assign_workers, reset_ivfflat_assign_workers
+	},
         {
 		NULL, NULL, NULL, NULL
 	}

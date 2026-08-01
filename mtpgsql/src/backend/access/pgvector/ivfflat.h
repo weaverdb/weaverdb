@@ -38,8 +38,9 @@
 #define IVFFLAT_MIN_LISTS		1
 #define IVFFLAT_MAX_LISTS		32768
 #define IVFFLAT_DEFAULT_PROBES	1
-/* In-process parallel assign (Weaver pthread workers; 1 = serial only) */
-#define IVFFLAT_DEFAULT_ASSIGN_WORKERS	4
+/* In-process parallel assign (Weaver pthread workers; 1 = serial only).
+ * Default stays serial until concurrent Relation/buffer use is proven safe. */
+#define IVFFLAT_DEFAULT_ASSIGN_WORKERS	1
 #define IVFFLAT_MAX_ASSIGN_WORKERS		8
 #define IVFFLAT_MIN_BLOCKS_PER_WORKER	8
 

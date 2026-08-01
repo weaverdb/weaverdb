@@ -33,4 +33,12 @@ PG_EXTERN bool parse_ivfflat_max_probes(char *value);
 PG_EXTERN bool show_ivfflat_max_probes(void);
 PG_EXTERN bool reset_ivfflat_max_probes(void);
 
+PG_EXTERN bool parse_hnsw_build_workers(char *value);
+PG_EXTERN bool show_hnsw_build_workers(void);
+PG_EXTERN bool reset_hnsw_build_workers(void);
+
+PG_EXTERN bool parse_ivfflat_assign_workers(char *value);
+PG_EXTERN bool show_ivfflat_assign_workers(void);
+PG_EXTERN bool reset_ivfflat_assign_workers(void);
+
 #endif /* PGVECTOR_SESSION_VARS_H */

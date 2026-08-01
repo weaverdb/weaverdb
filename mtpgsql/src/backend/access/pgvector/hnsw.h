@@ -48,8 +48,9 @@
 #define HNSW_DEFAULT_EF_SEARCH	40
 #define HNSW_MIN_EF_SEARCH		1
 #define HNSW_MAX_EF_SEARCH		1000
-/* In-process parallel graph build (Weaver pthread workers; 1 = serial only) */
-#define HNSW_DEFAULT_BUILD_WORKERS		4
+/* In-process parallel graph build (Weaver pthread workers; 1 = serial only).
+ * Default stays serial until concurrent Relation/buffer use is proven safe. */
+#define HNSW_DEFAULT_BUILD_WORKERS		1
 #define HNSW_MAX_BUILD_WORKERS			8
 #define HNSW_MIN_BLOCKS_PER_WORKER		8
 

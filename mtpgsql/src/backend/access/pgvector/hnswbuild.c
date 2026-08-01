@@ -45,7 +45,6 @@
 #include "access/tupdesc.h"
 #include "access/heapam.h"
 #include "catalog/index.h"
-#include "commands/progress.h"
 #include "hnsw.h"
 #include "ivfflat.h"
 #include "miscadmin.h"
@@ -63,7 +62,6 @@
 #include "utils/syscache.h"
 
 #include "varatt.h"
-#include "pgstat.h"
 
 #define PARALLEL_KEY_HNSW_SHARED		UINT64CONST(0xA000000000000001)
 #define PARALLEL_KEY_HNSW_AREA			UINT64CONST(0xA000000000000002)
@@ -780,7 +778,7 @@ FreeBuildState(HnswBuildState * buildstate)
 /*
  * Within leader, wait for end of heap scan
  */
-#if 0 /* PG7: parallel hnsw build not ported */
+#if 0 /* Upstream ParallelContext/DSM unused — Weaver pthread path below */
 static double
 ParallelHeapScan(HnswBuildState * buildstate)
 {
@@ -1081,7 +1079,7 @@ HnswBeginParallel(HnswBuildState * buildstate, bool isconcurrent, int request)
 	WaitForParallelWorkersToAttach(pcxt);
 }
 
-#endif /* PG7: parallel hnsw build not ported */
+#endif /* Upstream ParallelContext/DSM unused */
 
 static Size
 HnswSharedGraphBytes(void)
@@ -1135,20 +1133,24 @@ HnswBuildWorkerMain(void *argp)
 {
 	HnswBuildWorkerArg	   *arg = (HnswBuildWorkerArg *) argp;
 	Env					   *env = NULL;
-	Relation				heap = NULL;
-	Relation				index = NULL;
-	PgvectorIndexInfo	   *indexInfo = NULL;
 	HnswBuildState			wstate;
 	double					reltuples = 0;
 
 	arg->ok = false;
 
-	env = CreateEnv(arg->parent_env);
+	/*
+	 * CreateEnv(parent) must run on a thread that already has GetEnv() set
+	 * (it MemoryContextSwitchTo's into the parent). Worker threads start with
+	 * no Env — use CreateEnv(NULL) like poolsweep/dbwriter, then copy identity.
+	 */
+	env = CreateEnv(NULL);
 	if (env == NULL)
 		return NULL;
 
 	SetEnv(env);
 	MemoryContextInit();
+	pgvector_worker_attach_parent(arg->parent_env);
+	SetProcessingMode(InitProcessing);
 	InitThread(NORMAL_THREAD);
 	if (!CallableInitInvalidationState())
 		goto worker_failed;
@@ -1156,13 +1158,23 @@ HnswBuildWorkerMain(void *argp)
 	InitCatalogCache();
 	SetProcessingMode(NormalProcessing);
 
-	heap = heap_open(arg->shared->heapOid, AccessShareLock);
-	index = index_open(arg->shared->indexOid);
-	indexInfo = BuildIndexInfo(index);
+	/*
+	 * Catch elog(ERROR) inside this worker. Without setjmp, ERROR longjmps to
+	 * the leader's PostgresMain frame (wrong thread) and hangs pthread_join.
+	 */
+	if (setjmp(env->errorContext) != 0)
+		goto worker_failed;
 
-	InitWorkerHnswBuildState(&wstate, arg->leader, heap, index, indexInfo, arg->shared);
+	/*
+	 * The index being built is not visible via worker catalog caches (same
+	 * xact as the leader). Reuse the leader's already-open Relations.
+	 */
+	InitWorkerHnswBuildState(&wstate, arg->leader,
+							 arg->leader->heap, arg->leader->index,
+							 arg->leader->indexInfo, arg->shared);
 
-	reltuples = table_index_build_range_scan(heap, index, indexInfo,
+	reltuples = table_index_build_range_scan(arg->leader->heap, arg->leader->index,
+											 arg->leader->indexInfo,
 											 true, true, false,
 											 arg->start_block, arg->num_blocks,
 											 BuildCallback, (void *) &wstate, NULL);
@@ -1173,9 +1185,6 @@ HnswBuildWorkerMain(void *argp)
 
 	MemoryContextDelete(wstate.tmpCtx);
 	MemoryContextDelete(wstate.graphCtx);
-	index_close(index);
-	heap_close(heap, AccessShareLock);
-	pfree(indexInfo);
 	arg->ok = true;
 
 worker_failed:
@@ -1253,12 +1262,12 @@ BuildGraphParallel(HnswBuildState *buildstate, int nworkers)
 	if (!ok)
 		ereport(ERROR,
 				(errmsg("parallel hnsw build failed"),
-				 errhint("Set HnswGetEnv()->build_workers to 1 for serial build.")));
+				 errhint("SET hnsw.build_workers = 1 for a serial build.")));
 
 	buildstate->reltuples = shared->reltuples;
 
 	ereport(DEBUG1, (errmsg("hnsw parallel build: %d workers, %.0f index tuples",
-							nworkers, buildstate->graph->indtuples)));
+							 nworkers, buildstate->graph->indtuples)));
 }
 
 static void
