@@ -7,21 +7,27 @@ add_library(weaver_jni SHARED
 	WeaverValueExtractor.c
 )
 
-target_link_libraries(weaver_jni PRIVATE weaver)
+target_link_libraries(weaver_jni PRIVATE weaver Threads::Threads)
 
 target_compile_definitions(weaver_jni PRIVATE WEAVER_JAVA)
 
 
 message("Using ${CMAKE_C_COMPILER_ID} to link library")
-if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+if (APPLE)
     target_compile_definitions(weaver_jni PRIVATE LIB_EXTERN=extern)
-    target_link_options(weaver_jni PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
-elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+    target_link_options(weaver_jni PRIVATE
+        -fvisibility=hidden
+        -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_compile_definitions(weaver_jni PRIVATE LIB_EXTERN=extern)
-    target_link_options(weaver_jni PRIVATE -fvisibility=hidden -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/clang_mapfile.txt)
-elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    target_compile_definitions(weaver_jni PRIVATE LIB_EXTERN=__attribute__((__visibility__("default"))))
-    target_link_options(weaver_jni PRIVATE -M${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt)
+    target_link_options(weaver_jni PRIVATE
+        -fvisibility=hidden
+        "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt")
+else()
+    target_compile_definitions(weaver_jni PRIVATE LIB_EXTERN=extern)
+    target_link_options(weaver_jni PRIVATE
+        -fvisibility=hidden
+        "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/mapfile.txt")
 endif()
 
 if (JNI_FOUND)

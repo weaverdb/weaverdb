@@ -47,7 +47,8 @@ jar {
 tasks.named('test', Test) {
     useJUnitPlatform()
 
-    systemProperty 'java.library.path', project.file('build/mtpg/lib').absolutePath
+    // Native libs are produced by the top-level CMake build (mkdir build; cmake ...).
+    systemProperty 'java.library.path', rootProject.file('build/mtpg/lib').absolutePath
 
     maxHeapSize = '1G'
     javaLauncher = javaToolchains.launcherFor {

@@ -21,16 +21,15 @@ if (JNI_FOUND)
 endif()
 
 message("Using ${CMAKE_C_COMPILER_ID} to link library")
-if (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
-    target_compile_definitions(env PRIVATE LIB_EXTERN=extern)
-elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    target_compile_definitions(env PRIVATE LIB_EXTERN=extern)
-elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    target_compile_definitions(env PRIVATE LIB_EXTERN=__attribute__((__visibility__("default"))))
-endif()
+# Export visibility is controlled by Mach-O export lists / ELF version scripts
+# on the shared library targets; keep declarations as plain extern here.
+target_compile_definitions(env PRIVATE LIB_EXTERN=extern)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Android")
     target_compile_definitions(env PRIVATE ANDROID NOCUSERID)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_compile_definitions(env PRIVATE MACOSX NOCUSERID)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Embeddable Linux build: avoid deprecated cuserid().
+    target_compile_definitions(env PRIVATE LINUX NOCUSERID)
 endif()

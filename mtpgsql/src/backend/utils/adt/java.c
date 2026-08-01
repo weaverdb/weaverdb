@@ -1120,7 +1120,7 @@ CallJavaFunction(JavaFunction def, int nargs, jvalue* args) {
                 return rval;
             }
             /* FFM path failed — this is unexpected in normal operation */
-            elog(WARNING, "FFM Java function invoker failed, falling back to legacy JNI path");
+            elog(NOTICE, "FFM Java function invoker failed, falling back to legacy JNI path");
         } else {
             /* No FFM invoker registered — using legacy JNI path.
              * This is normal for old WeaverInitializer users, but new code should

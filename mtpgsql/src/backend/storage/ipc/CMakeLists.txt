@@ -11,4 +11,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Android")
     target_compile_definitions(ipc PRIVATE ANDROID PRIVATEONLY)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_compile_definitions(ipc PRIVATE MACOSX PRIVATEONLY)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Prefer private/in-process IPC for the embeddable single-process model.
+    target_compile_definitions(ipc PRIVATE LINUX PRIVATEONLY)
 endif()

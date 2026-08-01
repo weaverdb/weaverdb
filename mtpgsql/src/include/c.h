@@ -52,6 +52,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdarg.h>
 #endif
 
@@ -848,6 +849,11 @@ extern char *vararg_format(const char *fmt,...);
 /* These are for things that are one way on Unix and another on NT */
 #define NULL_DEV		"/dev/null"
 #define SEP_CHAR		'/'
+
+/* O_BINARY is meaningful on Windows; POSIX open() is always binary. */
+#ifndef O_BINARY
+#define O_BINARY		0
+#endif
 
 /* defines for dynamic linking on Win32 platform */
 #ifdef __CYGWIN32__
