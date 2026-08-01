@@ -60,7 +60,7 @@ void
 IvfflatInit(void)
 {
 	(void) IvfflatGetEnv();
-	/* reloptions/GUC registration deferred until ivfflat GUC APIs are ported */
+	/* reloptions deferred; runtime knobs via SET/SHOW (pgvector_session_vars.c) */
 	(void) ivfflat_iterative_scan_options;
 }
 
