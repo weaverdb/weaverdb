@@ -732,6 +732,26 @@ VariableSetStmt:  SET ColId TO var_value
 					n->value = $4;
 					$$ = (Node *) n;
 				}
+		| SET ColId '.' ColId TO var_value
+				{
+					VariableSetStmt *n = makeNode(VariableSetStmt);
+					char	   *dotted = palloc(strlen($2) + strlen($4) + 2);
+
+					sprintf(dotted, "%s.%s", $2, $4);
+					n->name = dotted;
+					n->value = $6;
+					$$ = (Node *) n;
+				}
+		| SET ColId '.' ColId '=' var_value
+				{
+					VariableSetStmt *n = makeNode(VariableSetStmt);
+					char	   *dotted = palloc(strlen($2) + strlen($4) + 2);
+
+					sprintf(dotted, "%s.%s", $2, $4);
+					n->name = dotted;
+					n->value = $6;
+					$$ = (Node *) n;
+				}
 		| SET TIME ZONE zone_value
 				{
 					VariableSetStmt *n = makeNode(VariableSetStmt);
@@ -952,6 +972,15 @@ VariableShowStmt:  SHOW ColId
 					n->name  = $2;
 					$$ = (Node *) n;
 				}
+		| SHOW ColId '.' ColId
+				{
+					VariableShowStmt *n = makeNode(VariableShowStmt);
+					char	   *dotted = palloc(strlen($2) + strlen($4) + 2);
+
+					sprintf(dotted, "%s.%s", $2, $4);
+					n->name = dotted;
+					$$ = (Node *) n;
+				}
 		| SHOW TIME ZONE
 				{
 					VariableShowStmt *n = makeNode(VariableShowStmt);
@@ -970,6 +999,15 @@ VariableResetStmt:	RESET ColId
 				{
 					VariableResetStmt *n = makeNode(VariableResetStmt);
 					n->name  = $2;
+					$$ = (Node *) n;
+				}
+		| RESET ColId '.' ColId
+				{
+					VariableResetStmt *n = makeNode(VariableResetStmt);
+					char	   *dotted = palloc(strlen($2) + strlen($4) + 2);
+
+					sprintf(dotted, "%s.%s", $2, $4);
+					n->name = dotted;
 					$$ = (Node *) n;
 				}
 		| RESET TIME ZONE

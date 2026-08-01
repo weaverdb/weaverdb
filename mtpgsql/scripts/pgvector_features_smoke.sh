@@ -346,6 +346,65 @@ out=$(run_session \
 assert_no_error "bytea functional post-index insert" "$out"
 assert_ids "bytea functional post-index nearest" "$out" 4
 
+echo "--- runtime search knobs (SET/SHOW/RESET) ---"
+
+out=$(run_session \
+  "show hnsw.ef_search;" \
+  "set hnsw.ef_search = 80;" \
+  "show hnsw.ef_search;" \
+  "reset hnsw.ef_search;" \
+  "show hnsw.ef_search;")
+assert_no_error "hnsw.ef_search SET/SHOW/RESET" "$out"
+if echo "$out" | grep -Fq 'hnsw.ef_search is 40' && \
+   echo "$out" | grep -Fq 'hnsw.ef_search is 80'; then
+  echo "OK: hnsw.ef_search defaults and SET"
+else
+  echo "FAIL: hnsw.ef_search SHOW values" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
+
+out=$(run_session \
+  "show ivfflat.probes;" \
+  "set ivfflat.probes to 5;" \
+  "show ivfflat.probes;" \
+  "set ivfflat_probes = 3;" \
+  "show ivfflat_probes;" \
+  "reset ivfflat.probes;" \
+  "show ivfflat.probes;")
+assert_no_error "ivfflat.probes SET/SHOW/RESET" "$out"
+if echo "$out" | grep -Fq 'ivfflat.probes is 1' && \
+   echo "$out" | grep -Fq 'ivfflat.probes is 5' && \
+   echo "$out" | grep -Fq 'ivfflat.probes is 3'; then
+  echo "OK: ivfflat.probes dotted and underscore aliases"
+else
+  echo "FAIL: ivfflat.probes SHOW values" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
+
+out=$(run_session \
+  "set hnsw.iterative_scan = relaxed_order;" \
+  "show hnsw.iterative_scan;" \
+  "set ivfflat.iterative_scan = off;" \
+  "show ivfflat.iterative_scan;" \
+  "set hnsw.max_scan_tuples = 1000;" \
+  "show hnsw.max_scan_tuples;" \
+  "set hnsw.scan_mem_multiplier = 2;" \
+  "show hnsw.scan_mem_multiplier;" \
+  "set ivfflat.max_probes = 50;" \
+  "show ivfflat.max_probes;")
+assert_no_error "remaining pgvector search knobs" "$out"
+if echo "$out" | grep -Fq 'hnsw.iterative_scan is relaxed_order' && \
+   echo "$out" | grep -Fq 'hnsw.max_scan_tuples is 1000' && \
+   echo "$out" | grep -Fq 'ivfflat.max_probes is 50'; then
+  echo "OK: iterative_scan / max_scan_tuples / max_probes"
+else
+  echo "FAIL: remaining search knob SHOW values" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
+
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures pgvector feature check(s) failed" >&2
   exit 1

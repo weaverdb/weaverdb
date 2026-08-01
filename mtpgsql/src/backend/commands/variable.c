@@ -25,6 +25,7 @@
 #include "env/properties.h"
 #include "env/poolsweep.h"
 #include "access/xact.h"
+#include "access/pgvector_session_vars.h"
 #include "catalog/pg_shadow.h"
 #include "catalog/catalog.h"
 #include "commands/variable.h"
@@ -1649,6 +1650,63 @@ static struct VariableParsers
 	},
  	{
 		"debug_memory", parse_debug_memory, show_debug_memory, reset_debug_memory
+	},
+	/* pgvector runtime search knobs (dotted + underscore aliases) */
+	{
+		"hnsw.ef_search", parse_hnsw_ef_search,
+		show_hnsw_ef_search, reset_hnsw_ef_search
+	},
+	{
+		"hnsw_ef_search", parse_hnsw_ef_search,
+		show_hnsw_ef_search, reset_hnsw_ef_search
+	},
+	{
+		"hnsw.iterative_scan", parse_hnsw_iterative_scan,
+		show_hnsw_iterative_scan, reset_hnsw_iterative_scan
+	},
+	{
+		"hnsw_iterative_scan", parse_hnsw_iterative_scan,
+		show_hnsw_iterative_scan, reset_hnsw_iterative_scan
+	},
+	{
+		"hnsw.max_scan_tuples", parse_hnsw_max_scan_tuples,
+		show_hnsw_max_scan_tuples, reset_hnsw_max_scan_tuples
+	},
+	{
+		"hnsw_max_scan_tuples", parse_hnsw_max_scan_tuples,
+		show_hnsw_max_scan_tuples, reset_hnsw_max_scan_tuples
+	},
+	{
+		"hnsw.scan_mem_multiplier", parse_hnsw_scan_mem_multiplier,
+		show_hnsw_scan_mem_multiplier, reset_hnsw_scan_mem_multiplier
+	},
+	{
+		"hnsw_scan_mem_multiplier", parse_hnsw_scan_mem_multiplier,
+		show_hnsw_scan_mem_multiplier, reset_hnsw_scan_mem_multiplier
+	},
+	{
+		"ivfflat.probes", parse_ivfflat_probes,
+		show_ivfflat_probes, reset_ivfflat_probes
+	},
+	{
+		"ivfflat_probes", parse_ivfflat_probes,
+		show_ivfflat_probes, reset_ivfflat_probes
+	},
+	{
+		"ivfflat.iterative_scan", parse_ivfflat_iterative_scan,
+		show_ivfflat_iterative_scan, reset_ivfflat_iterative_scan
+	},
+	{
+		"ivfflat_iterative_scan", parse_ivfflat_iterative_scan,
+		show_ivfflat_iterative_scan, reset_ivfflat_iterative_scan
+	},
+	{
+		"ivfflat.max_probes", parse_ivfflat_max_probes,
+		show_ivfflat_max_probes, reset_ivfflat_max_probes
+	},
+	{
+		"ivfflat_max_probes", parse_ivfflat_max_probes,
+		show_ivfflat_max_probes, reset_ivfflat_max_probes
 	},
         {
 		NULL, NULL, NULL, NULL
