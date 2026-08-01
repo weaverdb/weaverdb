@@ -7,11 +7,8 @@
  * functional HNSW/IVFFlat indexes over a bytea column (vector, halfvec,
  * sparsevec, bit).
  *
- * Note: ANN Index Scan over functional bytea_to_*(emb) expressions is
- * asserted with SQL literals. Bound bytea_to_*($q) queries are validated
- * on typed columns and (with seqscan) against bytea heap values — a known
- * planner/index quirk mis-orders bound expression queries on functional
- * indexes.
+ * ANN Index Scan over functional bytea_to_*(emb) is covered with both SQL
+ * literals and bound bytea_to_*($q). Typed-column binds are also covered.
  *
  *-------------------------------------------------------------------------
  */
@@ -154,8 +151,6 @@ public class PgvectorBlobIndexTest {
     @Test
     @Order(8)
     public void orderByOnByteaFunctionalIndex() throws Exception {
-        // Bound bytea_to_vector($q) against functional indexes is unreliable; use a
-        // literal query to assert the indexed Java blobs are searchable.
         List<Integer> got = queryIds(
                 "select id from " + BYTEA_TABLE
                         + " order by bytea_to_vector(emb) <-> '[0,0,1]'::vector limit 2");
@@ -164,12 +159,15 @@ public class PgvectorBlobIndexTest {
         Assertions.assertTrue(got.get(1) == 1 || got.get(1) == 2,
                 "second nearest should be id 1 or 2, got " + got.get(1));
 
-        // Seqscan + bound query still proves codec distance on the heap blobs.
-        List<Integer> seq = orderByBlobQuerySeqscan(
+        // Bound query over functional index (Index Scan) must order correctly.
+        List<Integer> bound = orderByBlobQuery(
                 "select id from " + BYTEA_TABLE
                         + " order by bytea_to_vector(emb) <-> bytea_to_vector($q) limit 2",
                 DenseVector.encode(0.0f, 0.0f, 1.0f));
-        Assertions.assertEquals(3, seq.get(0).intValue());
+        Assertions.assertEquals(3, bound.get(0).intValue());
+        Assertions.assertEquals(2, bound.size());
+        Assertions.assertTrue(bound.get(1) == 1 || bound.get(1) == 2,
+                "bound Index Scan second nearest should be id 1 or 2, got " + bound.get(1));
     }
 
     @Test
@@ -452,31 +450,17 @@ public class PgvectorBlobIndexTest {
     }
 
     private static List<Integer> orderByBlobQuery(String sql, byte[] query) throws Exception {
-        return orderByBlobQuery(sql, query, false);
-    }
-
-    private static List<Integer> orderByBlobQuerySeqscan(String sql, byte[] query) throws Exception {
-        return orderByBlobQuery(sql, query, true);
-    }
-
-    private static List<Integer> orderByBlobQuery(String sql, byte[] query, boolean forceSeqscan)
-            throws Exception {
         List<Integer> rows = new ArrayList<>();
-        try (DBReference conn = DBReferenceManager.connect("template1")) {
-            if (forceSeqscan) {
-                exec(conn, "set enable_indexscan = off");
-                exec(conn, "set enable_bitmapscan = off");
-            }
-            try (Statement s = conn.statement(sql)) {
-                Input<byte[]> in = s.linkInput("q", byte[].class);
-                Output<Integer> out = s.linkOutput(1, Integer.class);
-                in.set(query);
-                s.execute();
-                while (s.fetch()) {
-                    Integer v = out.get();
-                    if (v != null) {
-                        rows.add(v);
-                    }
+        try (DBReference conn = DBReferenceManager.connect("template1");
+                Statement s = conn.statement(sql)) {
+            Input<byte[]> in = s.linkInput("q", byte[].class);
+            Output<Integer> out = s.linkOutput(1, Integer.class);
+            in.set(query);
+            s.execute();
+            while (s.fetch()) {
+                Integer v = out.get();
+                if (v != null) {
+                    rows.add(v);
                 }
             }
         }
