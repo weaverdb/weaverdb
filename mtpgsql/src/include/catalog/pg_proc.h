@@ -1027,6 +1027,24 @@ DESCR("convert packed bit bytea blob to varbit");
 DATA(insert OID = 2298 (  bit_to_bytea	   PGUID 11 f t t 1 f 17 "1562" 100 0 0 100  bit_to_bytea - ));
 DESCR("convert varbit to packed bit bytea blob");
 
+/* blob (OID 1803) twins: same C bodies as bytea converters (shared varlena layout). */
+DATA(insert OID = 2387 (  blob_to_vector	   PGUID 11 f t t 1 f 1842 "1803" 100 0 0 100  bytea_to_vector - ));
+DESCR("convert float32 blob to vector");
+DATA(insert OID = 2388 (  vector_to_blob	   PGUID 11 f t t 1 f 1803 "1842" 100 0 0 100  vector_to_bytea - ));
+DESCR("convert vector to float32 blob");
+DATA(insert OID = 2389 (  blob_to_halfvec	   PGUID 11 f t t 1 f 1844 "1803" 100 0 0 100  bytea_to_halfvec - ));
+DESCR("convert float16 blob to halfvec");
+DATA(insert OID = 2390 (  halfvec_to_blob	   PGUID 11 f t t 1 f 1803 "1844" 100 0 0 100  halfvec_to_bytea - ));
+DESCR("convert halfvec to float16 blob");
+DATA(insert OID = 2391 (  blob_to_sparsevec	   PGUID 11 f t t 1 f 1846 "1803" 100 0 0 100  bytea_to_sparsevec - ));
+DESCR("convert sparse blob to sparsevec");
+DATA(insert OID = 2392 (  sparsevec_to_blob	   PGUID 11 f t t 1 f 1803 "1846" 100 0 0 100  sparsevec_to_bytea - ));
+DESCR("convert sparsevec to sparse blob");
+DATA(insert OID = 2393 (  blob_to_bit	   PGUID 11 f t t 1 f 1562 "1803" 100 0 0 100  bytea_to_bit - ));
+DESCR("convert packed bit blob to varbit");
+DATA(insert OID = 2394 (  bit_to_blob	   PGUID 11 f t t 1 f 1803 "1562" 100 0 0 100  bit_to_bytea - ));
+DESCR("convert varbit to packed bit blob");
+
 DATA(insert OID = 2330 (  sparsevec_lt		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_lt - ));
 DESCR("sparsevec less than");
 DATA(insert OID = 2331 (  sparsevec_le		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_le - ));
@@ -1128,6 +1146,14 @@ DESCR("halfvec avg finalize (sum / count)");
 #define F_SPARSEVEC_TO_BYTEA	2296
 #define F_BYTEA_TO_BIT	2297
 #define F_BIT_TO_BYTEA	2298
+#define F_BLOB_TO_VECTOR	2387
+#define F_VECTOR_TO_BLOB	2388
+#define F_BLOB_TO_HALFVEC	2389
+#define F_HALFVEC_TO_BLOB	2390
+#define F_BLOB_TO_SPARSEVEC	2391
+#define F_SPARSEVEC_TO_BLOB	2392
+#define F_BLOB_TO_BIT	2393
+#define F_BIT_TO_BLOB	2394
 #define F_BINARY_QUANTIZE	2337
 #define F_HALFVEC_BINARY_QUANTIZE	2338
 #define F_VECTOR_RECV	2339

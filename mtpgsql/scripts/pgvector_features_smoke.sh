@@ -386,6 +386,47 @@ out=$(run_session \
 assert_no_error "bytea functional post-index insert" "$out"
 assert_ids "bytea functional post-index nearest" "$out" 4
 
+# --- SQL type blob (OID 1803) ↔ vector conversion + functional index ---
+out=$(run_session \
+  "select vector_to_blob('[1,0,0]'::vector) is not null;" \
+  "select blob_to_vector(vector_to_blob('[1,0,0]'::vector)) <-> '[1,0,0]'::vector;")
+assert_no_error "blob_to_vector round-trip" "$out"
+assert_scalar "blob_to_vector distance" "$out" "?column?" "0"
+
+out=$(run_session \
+  "create table pv_feat_typed_blob (id int, emb blob);" \
+  "insert into pv_feat_typed_blob values (1, vector_to_blob('[1,0,0]'));" \
+  "insert into pv_feat_typed_blob values (2, vector_to_blob('[0,1,0]'));" \
+  "insert into pv_feat_typed_blob values (3, vector_to_blob('[0,0,1]'));" \
+  "create index pv_feat_typed_blob_hnsw on pv_feat_typed_blob using hnsw (blob_to_vector(emb) vector_l2_ops) with (m = 8, ef_construction = 32);" \
+  "create index pv_feat_typed_blob_ivf on pv_feat_typed_blob using ivfflat (blob_to_vector(emb) vector_l2_ops) with (lists = 2);" \
+  "select id from pv_feat_typed_blob order by blob_to_vector(emb) <-> '[1,0,0]' limit 2;")
+assert_no_error "blob functional indexes" "$out"
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: blob functional ORDER BY nearest (1 then tie 2|3)"
+else
+  echo "FAIL: blob functional ORDER BY nearest (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
+
+out=$(run_session \
+  "insert into pv_feat_typed_blob values (4, vector_to_blob('[1,1,0]'));" \
+  "select id from pv_feat_typed_blob order by blob_to_vector(emb) <-> '[1,1,0]' limit 1;")
+assert_no_error "blob functional post-index insert" "$out"
+assert_ids "blob functional post-index nearest" "$out" 4
+
+out=$(run_session \
+  "select blob_to_halfvec(halfvec_to_blob('[1,0,0]'::halfvec)) <-> '[1,0,0]'::halfvec as hv_dist;" \
+  "select blob_to_sparsevec(sparsevec_to_blob('{1:1,3:2}/5'::sparsevec)) <-> '{1:1,3:2}/5'::sparsevec as sv_dist;" \
+  "select blob_to_bit(bit_to_blob('B101'::varbit)) = 'B101'::varbit as bit_eq;")
+assert_no_error "halfvec/sparsevec/bit blob converters" "$out"
+assert_scalar "blob_to_halfvec distance" "$out" "hv_dist" "0"
+assert_scalar "blob_to_sparsevec distance" "$out" "sv_dist" "0"
+assert_scalar "blob_to_bit round-trip" "$out" "bit_eq" "t"
+
 # --- halfvec / sparsevec / bit bytea converters ---
 out=$(run_session \
   "select halfvec_to_bytea('[1,0,0]'::halfvec) is not null as hv_ok;" \

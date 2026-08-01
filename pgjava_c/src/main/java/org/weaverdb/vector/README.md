@@ -14,8 +14,9 @@ This Java package provides helpers around that engine:
 
 ## Recommended path: bind blobs + functional indexes
 
-Apps typically store embeddings as `bytea` (or convert on insert) and index with
-`bytea_to_vector(emb)` (or halfvec / sparsevec / bit equivalents):
+Apps typically store embeddings as `bytea` or Weaver `blob` (OID 1803) and index
+with `bytea_to_vector(emb)` / `blob_to_vector(emb)` (or halfvec / sparsevec / bit
+equivalents). `bytea` and `blob` share a varlena layout and are binary-compatible:
 
 ```java
 import org.weaverdb.vector.pg.DenseVector;
@@ -41,15 +42,15 @@ try (Statement s = conn.statement(
 
 ### Codec layouts (native endian)
 
-| Type | SQL | `byte[]` layout |
-|------|-----|-----------------|
-| Dense float32 | `bytea_to_vector` / `vector_to_bytea` | `float32[dim]` |
-| Half float16 | `bytea_to_halfvec` / `halfvec_to_bytea` | `float16[dim]` |
-| Sparse | `bytea_to_sparsevec` / `sparsevec_to_bytea` | `dim\|nnz\|0\|indices[nnz]\|values[nnz]` |
-| Bit | `bytea_to_bit` / `bit_to_bytea` | `int32 bitlen \| MSB-packed bits` |
+| Type | SQL (`bytea` / `blob`) | `byte[]` layout |
+|------|------------------------|-----------------|
+| Dense float32 | `*_to_vector` / `vector_to_*` | `float32[dim]` |
+| Half float16 | `*_to_halfvec` / `halfvec_to_*` | `float16[dim]` |
+| Sparse | `*_to_sparsevec` / `sparsevec_to_*` | `dim\|nnz\|0\|indices[nnz]\|values[nnz]` |
+| Bit | `*_to_bit` / `bit_to_*` | `int32 bitlen \| MSB-packed bits` |
 
-Large `bytea` / vector columns use `attstorage='e'`: small values stay inline;
-oversized tuples span via blob-indirect (`ISINDIRECT`) storage automatically.
+Large `bytea` / `blob` / vector columns use `attstorage='e'`: small values stay
+inline; oversized tuples span via blob-indirect (`ISINDIRECT`) storage automatically.
 
 ## Deprecated framing
 

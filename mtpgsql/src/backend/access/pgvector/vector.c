@@ -1342,8 +1342,9 @@ sparsevec_to_vector(PG_FUNCTION_ARGS)
 /*
  * Convert packed float32 bytes (native endian) to vector.
  *
- * Primary ingest path for embedding blobs: apps bind bytea / byte[] and
- * convert for storage or for functional indexes over blob columns.
+ * Primary ingest path for embedding bytes: apps bind bytea/blob / byte[] and
+ * convert for storage or for functional indexes. Catalog also exposes
+ * blob_to_vector with the same C body (OID 1803; shared varlena layout).
  */
 FUNCTION_PREFIX PG_FUNCTION_INFO_V1(bytea_to_vector);
 Datum

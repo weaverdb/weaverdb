@@ -1,20 +1,21 @@
 /*-------------------------------------------------------------------------
  *
- * Index embeddings from float32 / float16 / sparse / bit byte[] blobs via
- * bytea_to_*.
+ * Index embeddings from float32 / float16 / sparse / bit byte[] via
+ * bytea_to_* / blob_to_*.
  *
- * Covers: conversion round-trip, typed-column ingest from blobs, and
- * functional HNSW/IVFFlat indexes over a bytea column (vector, halfvec,
- * sparsevec, bit).
+ * Covers: conversion round-trip, typed-column ingest from packed bytes, and
+ * functional HNSW/IVFFlat indexes over bytea and Weaver blob (OID 1803)
+ * columns (vector, halfvec, sparsevec, bit).
  *
- * ANN Index Scan over functional bytea_to_*(emb) is covered with both SQL
- * literals and bound bytea_to_*($q). Typed-column binds are also covered.
+ * ANN Index Scan over functional *_to_*(emb) is covered with both SQL
+ * literals and bound converters($q). Typed-column binds are also covered.
  *
  *-------------------------------------------------------------------------
  */
 
 package org.weaverdb;
 
+import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -35,24 +36,32 @@ public class PgvectorBlobIndexTest {
 
     private static final String VEC_TABLE = "pv_blob_vec_jni";
     private static final String BYTEA_TABLE = "pv_blob_ba_jni";
+    private static final String BLOB_TABLE = "pv_blob_typed_jni";
     private static final String HALF_BYTEA_TABLE = "pv_blob_half_ba_jni";
+    private static final String HALF_BLOB_TABLE = "pv_blob_half_typed_jni";
     private static final String DIM8_BYTEA_TABLE = "pv_blob_dim8_ba_jni";
     private static final String SPARSE_TABLE = "pv_blob_sv_jni";
     private static final String SPARSE_BYTEA_TABLE = "pv_blob_sv_ba_jni";
+    private static final String SPARSE_BLOB_TABLE = "pv_blob_sv_typed_jni";
     private static final String BIT_TABLE = "pv_blob_bit_jni";
     private static final String BIT_BYTEA_TABLE = "pv_blob_bit_ba_jni";
+    private static final String BIT_BLOB_TABLE = "pv_blob_bit_typed_jni";
 
     @BeforeAll
     public static void setup() throws Exception {
         try (DBReference conn = DBReferenceManager.connect("template1")) {
             exec(conn, "create table " + VEC_TABLE + " (id int, emb vector)");
             exec(conn, "create table " + BYTEA_TABLE + " (id int, emb bytea)");
+            exec(conn, "create table " + BLOB_TABLE + " (id int, emb blob)");
             exec(conn, "create table " + HALF_BYTEA_TABLE + " (id int, emb bytea)");
+            exec(conn, "create table " + HALF_BLOB_TABLE + " (id int, emb blob)");
             exec(conn, "create table " + DIM8_BYTEA_TABLE + " (id int, emb bytea)");
             exec(conn, "create table " + SPARSE_TABLE + " (id int, emb sparsevec)");
             exec(conn, "create table " + SPARSE_BYTEA_TABLE + " (id int, emb bytea)");
+            exec(conn, "create table " + SPARSE_BLOB_TABLE + " (id int, emb blob)");
             exec(conn, "create table " + BIT_TABLE + " (id int, emb varbit)");
             exec(conn, "create table " + BIT_BYTEA_TABLE + " (id int, emb bytea)");
+            exec(conn, "create table " + BIT_BLOB_TABLE + " (id int, emb blob)");
         }
     }
 
@@ -402,6 +411,122 @@ public class PgvectorBlobIndexTest {
         Assertions.assertEquals(4, got.get(0).intValue());
     }
 
+    @Test
+    @Order(21)
+    public void roundTripBlobToVector() throws Exception {
+        byte[] packed = DenseVector.encode(1.0f, 0.0f, 0.0f);
+        // byte[] binds BYTEA; binary-compatible with blob arg / return.
+        try (DBReference conn = DBReferenceManager.connect("template1");
+                Statement s = conn.statement(
+                        "select vector_to_blob(blob_to_vector($emb))")) {
+            Input<byte[]> in = s.linkInput("emb", byte[].class);
+            Output<byte[]> out = s.linkOutput(1, byte[].class);
+            in.set(packed);
+            s.execute();
+            Assertions.assertTrue(s.fetch());
+            Assertions.assertArrayEquals(packed, out.get());
+        }
+    }
+
+    @Test
+    @Order(22)
+    public void roundTripBlobBindAsBlobOid() throws Exception {
+        // ByteArrayInputStream binds as SQL blob (OID 1803), not bytea.
+        byte[] packed = DenseVector.encode(0.0f, 1.0f, 0.0f);
+        try (DBReference conn = DBReferenceManager.connect("template1");
+                Statement s = conn.statement(
+                        "select vector_to_blob(blob_to_vector($emb))")) {
+            Input<ByteArrayInputStream> in = s.linkInput("emb", ByteArrayInputStream.class);
+            Output<ByteArrayInputStream> out = s.linkOutput(1, ByteArrayInputStream.class);
+            in.set(new ByteArrayInputStream(packed));
+            s.execute();
+            Assertions.assertTrue(s.fetch());
+            Assertions.assertArrayEquals(packed, out.get().readAllBytes());
+        }
+    }
+
+    @Test
+    @Order(23)
+    public void typedBlobColumnFunctionalIndex() throws Exception {
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            insertTypedBlob(conn, BLOB_TABLE, 1, DenseVector.encode(1.0f, 0.0f, 0.0f));
+            insertTypedBlob(conn, BLOB_TABLE, 2, DenseVector.encode(0.0f, 1.0f, 0.0f));
+            insertTypedBlob(conn, BLOB_TABLE, 3, DenseVector.encode(0.0f, 0.0f, 1.0f));
+            insertTypedBlob(conn, BLOB_TABLE, 4, DenseVector.encode(9.0f, 0.0f, 0.0f));
+            exec(conn,
+                    "create index " + BLOB_TABLE + "_ivf on " + BLOB_TABLE
+                            + " using ivfflat (blob_to_vector(emb) vector_l2_ops) with (lists = 2)");
+            exec(conn,
+                    "create index " + BLOB_TABLE + "_hnsw on " + BLOB_TABLE
+                            + " using hnsw (blob_to_vector(emb) vector_l2_ops)"
+                            + " with (m = 8, ef_construction = 32)");
+        }
+        List<Integer> got = queryIds(
+                "select id from " + BLOB_TABLE
+                        + " order by blob_to_vector(emb) <-> '[0,0,1]'::vector limit 2");
+        Assertions.assertEquals(3, got.get(0).intValue());
+        Assertions.assertEquals(2, got.size());
+
+        List<Integer> bound = orderByTypedBlobQuery(
+                "select id from " + BLOB_TABLE
+                        + " order by blob_to_vector(emb) <-> blob_to_vector($q) limit 2",
+                DenseVector.encode(0.0f, 0.0f, 1.0f));
+        Assertions.assertEquals(3, bound.get(0).intValue());
+        Assertions.assertEquals(2, bound.size());
+
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            insertTypedBlob(conn, BLOB_TABLE, 5, DenseVector.encode(1.0f, 1.0f, 0.0f));
+        }
+        List<Integer> after = queryIds(
+                "select id from " + BLOB_TABLE
+                        + " order by blob_to_vector(emb) <-> '[1,1,0]'::vector limit 1");
+        Assertions.assertEquals(5, after.get(0).intValue());
+    }
+
+    @Test
+    @Order(24)
+    public void typedBlobHalfSparseBitFunctionalIndexes() throws Exception {
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            insertTypedBlob(conn, HALF_BLOB_TABLE, 1, HalfVector.encode(1.0f, 0.0f, 0.0f));
+            insertTypedBlob(conn, HALF_BLOB_TABLE, 2, HalfVector.encode(0.0f, 1.0f, 0.0f));
+            insertTypedBlob(conn, HALF_BLOB_TABLE, 3, HalfVector.encode(0.0f, 0.0f, 1.0f));
+            exec(conn,
+                    "create index " + HALF_BLOB_TABLE + "_hnsw on " + HALF_BLOB_TABLE
+                            + " using hnsw (blob_to_halfvec(emb) halfvec_l2_ops)"
+                            + " with (m = 8, ef_construction = 32)");
+
+            insertTypedBlob(conn, SPARSE_BLOB_TABLE, 1,
+                    SparseVector.of(3, new int[] {0}, new float[] {1.0f}).encode());
+            insertTypedBlob(conn, SPARSE_BLOB_TABLE, 2,
+                    SparseVector.of(3, new int[] {1}, new float[] {1.0f}).encode());
+            insertTypedBlob(conn, SPARSE_BLOB_TABLE, 3,
+                    SparseVector.of(3, new int[] {2}, new float[] {1.0f}).encode());
+            exec(conn,
+                    "create index " + SPARSE_BLOB_TABLE + "_hnsw on " + SPARSE_BLOB_TABLE
+                            + " using hnsw (blob_to_sparsevec(emb) sparsevec_l2_ops)"
+                            + " with (m = 8, ef_construction = 32)");
+
+            insertTypedBlob(conn, BIT_BLOB_TABLE, 1, BitVector.encode(true, false, false));
+            insertTypedBlob(conn, BIT_BLOB_TABLE, 2, BitVector.encode(false, true, false));
+            insertTypedBlob(conn, BIT_BLOB_TABLE, 3, BitVector.encode(false, false, true));
+            exec(conn,
+                    "create index " + BIT_BLOB_TABLE + "_ivf on " + BIT_BLOB_TABLE
+                            + " using ivfflat (blob_to_bit(emb) bit_hamming_ops) with (lists = 2)");
+        }
+        Assertions.assertEquals(1, queryIds(
+                "select id from " + HALF_BLOB_TABLE
+                        + " order by blob_to_halfvec(emb) <-> '[1,0,0]'::halfvec limit 1")
+                .get(0).intValue());
+        Assertions.assertEquals(1, queryIds(
+                "select id from " + SPARSE_BLOB_TABLE
+                        + " order by blob_to_sparsevec(emb) <-> '{1:1}/3'::sparsevec limit 1")
+                .get(0).intValue());
+        Assertions.assertEquals(1, queryIds(
+                "select id from " + BIT_BLOB_TABLE
+                        + " order by blob_to_bit(emb) <~> 'B100'::varbit limit 1")
+                .get(0).intValue());
+    }
+
     private static void insertBlobVector(DBReference conn, String table, int id, float... emb)
             throws Exception {
         try (Statement s = conn.statement(
@@ -449,6 +574,18 @@ public class PgvectorBlobIndexTest {
         }
     }
 
+    /** Insert into a SQL blob column using OID-1803 BLOB bind (ByteArrayInputStream). */
+    private static void insertTypedBlob(DBReference conn, String table, int id, byte[] emb)
+            throws Exception {
+        try (Statement s = conn.statement("insert into " + table + " values ($id, $emb)")) {
+            Input<Integer> idIn = s.linkInput("id", Integer.class);
+            Input<ByteArrayInputStream> embIn = s.linkInput("emb", ByteArrayInputStream.class);
+            idIn.set(id);
+            embIn.set(new ByteArrayInputStream(emb));
+            s.execute();
+        }
+    }
+
     private static List<Integer> orderByBlobQuery(String sql, byte[] query) throws Exception {
         List<Integer> rows = new ArrayList<>();
         try (DBReference conn = DBReferenceManager.connect("template1");
@@ -456,6 +593,24 @@ public class PgvectorBlobIndexTest {
             Input<byte[]> in = s.linkInput("q", byte[].class);
             Output<Integer> out = s.linkOutput(1, Integer.class);
             in.set(query);
+            s.execute();
+            while (s.fetch()) {
+                Integer v = out.get();
+                if (v != null) {
+                    rows.add(v);
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static List<Integer> orderByTypedBlobQuery(String sql, byte[] query) throws Exception {
+        List<Integer> rows = new ArrayList<>();
+        try (DBReference conn = DBReferenceManager.connect("template1");
+                Statement s = conn.statement(sql)) {
+            Input<ByteArrayInputStream> in = s.linkInput("q", ByteArrayInputStream.class);
+            Output<Integer> out = s.linkOutput(1, Integer.class);
+            in.set(new ByteArrayInputStream(query));
             s.execute();
             while (s.fetch()) {
                 Integer v = out.get();

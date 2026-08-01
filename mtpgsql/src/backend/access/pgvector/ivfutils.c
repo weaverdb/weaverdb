@@ -49,7 +49,7 @@ VectorArrayFree(VectorArray arr)
 /*
  * Infer vector dimensions from heap data when atttypmod is unset (-1).
  * When finfo is set (functional index), form the indexed value first so
- * blob/bytea columns converted via bytea_to_vector() work.
+ * blob/bytea columns converted via blob_to_vector()/bytea_to_vector() work.
  */
 int
 IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum)

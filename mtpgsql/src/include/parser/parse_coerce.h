@@ -84,6 +84,8 @@ typedef enum CATEGORY
 #define IS_BINARY_COMPATIBLE(a,b) \
 		  (((a) == BLOBOID && (b) == STREAMINGOID) \
 		|| ((a) == STREAMINGOID && (b) == BLOBOID) \
+		|| ((a) == BLOBOID && (b) == BYTEAOID) \
+		|| ((a) == BYTEAOID && (b) == BLOBOID) \
 		|| ((a) == BPCHAROID && (b) == TEXTOID) \
 		|| ((a) == BPCHAROID && (b) == VARCHAROID) \
 		|| ((a) == VARCHAROID && (b) == TEXTOID) \
