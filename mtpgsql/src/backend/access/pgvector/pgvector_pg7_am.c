@@ -415,7 +415,13 @@ pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
 	{
 		Node	   *arg = (Node *) lfirst(arglist);
 
-		/* Indexed column side: plain Var or functional f(col) */
+		/*
+		 * Indexed column side: plain Var, or functional f(col) where the
+		 * func arg is a Var. Do NOT skip f($q) / f(subquery) even when
+		 * funcid == indproc — that is the query vector (same conversion
+		 * on both sides of <->). Skipping it left SK_ISNULL and mis-ordered
+		 * ANN Index Scans over bytea_to_* expression indexes.
+		 */
 		if (IsA(arg, Var))
 			continue;
 		if (indproc != InvalidOid && IsA(arg, Expr))
@@ -423,7 +429,9 @@ pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
 			Expr	   *fexpr = (Expr *) arg;
 
 			if (fexpr->opType == FUNC_EXPR && IsA(fexpr->oper, Func) &&
-				((Func *) fexpr->oper)->funcid == indproc)
+				((Func *) fexpr->oper)->funcid == indproc &&
+				fexpr->args != NIL &&
+				IsA(lfirst(fexpr->args), Var))
 				continue;
 		}
 

@@ -5,9 +5,8 @@
  * Covers dense / halfvec / sparsevec / bit bytea codecs plus HNSW/IVFFlat
  * functional indexes over bytea columns.
  *
- * ANN Index Scan over functional bytea_to_*(emb) is asserted with SQL
- * literals; bound bytea_to_*($q) is validated on typed columns and via
- * seqscan against bytea heap values.
+ * ANN Index Scan over functional bytea_to_*(emb) is covered with both SQL
+ * literals and bound bytea_to_*($q). Typed-column binds are also covered.
  *
  *-------------------------------------------------------------------------
  */
@@ -129,11 +128,13 @@ public class PgvectorBlobIndexTest {
         Assertions.assertEquals(2, got.size());
         Assertions.assertTrue(got.get(1) == 1 || got.get(1) == 2);
 
-        List<Integer> seq = orderBySeqscan(
+        List<Integer> bound = orderBy(
                 "select id from " + BYTEA_TABLE
                         + " order by bytea_to_vector(emb) <-> bytea_to_vector($q) limit 2",
                 DenseVector.encode(0.0f, 0.0f, 1.0f));
-        Assertions.assertEquals(3, seq.get(0).intValue());
+        Assertions.assertEquals(3, bound.get(0).intValue());
+        Assertions.assertEquals(2, bound.size());
+        Assertions.assertTrue(bound.get(1) == 1 || bound.get(1) == 2);
     }
 
     @Test
@@ -392,37 +393,23 @@ public class PgvectorBlobIndexTest {
     }
 
     private static List<Integer> orderBy(String sql, byte[] query) throws Exception {
-        return orderBy(sql, query, false);
-    }
-
-    private static List<Integer> orderBySeqscan(String sql, byte[] query) throws Exception {
-        return orderBy(sql, query, true);
-    }
-
-    private static List<Integer> orderBy(String sql, byte[] query, boolean forceSeqscan)
-            throws Exception {
         List<Integer> rows = new ArrayList<>();
-        try (DBReference conn = DBReference.connect("template1")) {
-            if (forceSeqscan) {
-                exec(conn, "set enable_indexscan = off");
-                exec(conn, "set enable_bitmapscan = off");
+        try (DBReference conn = DBReference.connect("template1");
+                Statement s = conn.statement(sql)) {
+            if (query.length <= 4096) {
+                s.linkInput("q", byte[].class).set(query);
+            } else {
+                Input<byte[]> ch = s.linkInputStream("q", (byte[] value, java.io.OutputStream out) -> {
+                    out.write(value);
+                });
+                ch.set(query);
             }
-            try (Statement s = conn.statement(sql)) {
-                if (query.length <= 4096) {
-                    s.linkInput("q", byte[].class).set(query);
-                } else {
-                    Input<byte[]> ch = s.linkInputStream("q", (byte[] value, java.io.OutputStream out) -> {
-                        out.write(value);
-                    });
-                    ch.set(query);
-                }
-                Output<Integer> out = s.linkOutput(1, Integer.class);
-                s.execute();
-                while (s.fetch()) {
-                    Integer v = out.get();
-                    if (v != null) {
-                        rows.add(v);
-                    }
+            Output<Integer> out = s.linkOutput(1, Integer.class);
+            s.execute();
+            while (s.fetch()) {
+                Integer v = out.get();
+                if (v != null) {
+                    rows.add(v);
                 }
             }
         }

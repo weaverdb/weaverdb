@@ -25,8 +25,13 @@ final class PgvectorWeaverTestSupport {
 
     static synchronized void ensureInitialized() throws Throwable {
         if (!initialized) {
-        Path connect25 = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-        if (!DirectWeaverInitializer.isBackendLoaded()) {
+            Path connect25 = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+
+            /*
+             * Stage build/mtpg before any DirectWeaverInitializer reference.
+             * That class's static System.loadLibrary("weaver") pins the dylib
+             * already under java.library.path; copying afterward cannot refresh it.
+             */
             ProcessBuilder b = new ProcessBuilder(
                     "rm", "-rf", connect25.resolve("build/mtpg").toString());
             b.inheritIO().start().waitFor();
@@ -36,21 +41,22 @@ final class PgvectorWeaverTestSupport {
                     connect25.resolve("build/mtpg").toString());
             b.inheritIO().start().waitFor();
 
-            b = new ProcessBuilder("rm", "-rf", DB_DIR);
-            b.inheritIO().start().waitFor();
+            if (!DirectWeaverInitializer.isBackendLoaded()) {
+                b = new ProcessBuilder("rm", "-rf", DB_DIR);
+                b.inheritIO().start().waitFor();
 
-            b = new ProcessBuilder(
-                    connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", DB_DIR);
-            b.inheritIO().start().waitFor();
+                b = new ProcessBuilder(
+                        connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", DB_DIR);
+                b.inheritIO().start().waitFor();
 
-            Properties prop = new Properties();
-            prop.setProperty("datadir", DB_DIR);
-            prop.setProperty("start_delay", "10");
-            prop.setProperty("stdlog", "TRUE");
-            prop.setProperty("disable_crc", "TRUE");
-            DirectWeaverInitializer.initialize(prop);
-        }
-        initialized = true;
+                Properties prop = new Properties();
+                prop.setProperty("datadir", DB_DIR);
+                prop.setProperty("start_delay", "10");
+                prop.setProperty("stdlog", "TRUE");
+                prop.setProperty("disable_crc", "TRUE");
+                DirectWeaverInitializer.initialize(prop);
+            }
+            initialized = true;
         }
         resetAbortedTransaction();
     }
