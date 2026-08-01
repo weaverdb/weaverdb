@@ -22,7 +22,7 @@
 #define PG_RETURN_CSTRING(x)    return (Datum)0
 #define pg_ltoa(i,ptr)          ((void)0)
 
-#define PG_RETURN_BYTEA_P(x)    return (Datum)0
+#define PG_RETURN_BYTEA_P(x)    return (Datum)0 /* replaced below after PG7 arg wiring */
 #define PG_RETURN_POINTER(x)    return (Datum)0
 #define pq_sendfloat4(buf,f)    ((void)0)
 #define pq_endtypsend(buf)      ((void*)0)
@@ -279,6 +279,13 @@ extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
 #undef PG_RETURN_POINTER
 #define PG_RETURN_POINTER(x) return (Datum) (long) (x)
 
+#undef PG_RETURN_BYTEA_P
+#define PG_RETURN_BYTEA_P(x) PG_RETURN_POINTER(x)
+
+#undef PG_GETARG_BYTEA_P
+#define PG_GETARG_BYTEA_P(n) \
+	((bytea *) DatumGetPointer(PG_DETOAST_DATUM(PG_GETARG_DATUM(n))))
+
 #undef PG_RETURN_CSTRING
 #define PG_RETURN_CSTRING(x) return (Datum) (long) (x)
 
@@ -286,12 +293,12 @@ extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
 #define PG_RETURN_NULL() return (Datum) 0
 
 #undef PG_RETURN_INT32
-#define PG_RETURN_INT32(x) \
-	do { \
-		int32 *_pgv_r = (int32 *) palloc(sizeof(int32)); \
-		*_pgv_r = (x); \
-		return (Datum) (long) _pgv_r; \
-	} while (0)
+/* int4 is pass-by-value in this fork; return the integer in the Datum/register */
+#define PG_RETURN_INT32(x) return (Datum) (long) (int32) (x)
+
+#undef PG_RETURN_BOOL
+/* bool is pass-by-value (len 1); must not return a palloc'd pointer */
+#define PG_RETURN_BOOL(x) return (Datum) (long) ((x) ? 1 : 0)
 
 #undef PG_RETURN_FLOAT8
 #define PG_RETURN_FLOAT8(x) \
@@ -300,9 +307,6 @@ extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
 		*_pgv_r = (double) (x); \
 		return (Datum) (long) _pgv_r; \
 	} while (0)
-
-#undef PG_RETURN_BOOL
-#define PG_RETURN_BOOL(x) PG_RETURN_INT32((int32) ((x) ? 1 : 0))
 
 #undef ereport
 #undef errcode

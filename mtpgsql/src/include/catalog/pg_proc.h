@@ -992,10 +992,30 @@ DESCR("ivfflat bit type support");
 DATA(insert OID = 2284 (  hnsw_bit_support	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  hnsw_bit_support - ));
 DESCR("hnsw bit type support");
 
+DATA(insert OID = 2285 (  bytea_to_vector	   PGUID 11 f t t 1 f 1842 "17" 100 0 0 100  bytea_to_vector - ));
+DESCR("convert float32 bytea blob to vector");
+DATA(insert OID = 2286 (  vector_to_bytea	   PGUID 11 f t t 1 f 17 "1842" 100 0 0 100  vector_to_bytea - ));
+DESCR("convert vector to float32 bytea blob");
+
+DATA(insert OID = 2287 (  vector_lt		   PGUID 11 f t t 2 f 16 "1842 1842" 100 0 0 100  vector_lt - ));
+DESCR("vector less than");
+DATA(insert OID = 2288 (  vector_le		   PGUID 11 f t t 2 f 16 "1842 1842" 100 0 0 100  vector_le - ));
+DESCR("vector less or equal");
+DATA(insert OID = 2289 (  vector_eq		   PGUID 11 f t t 2 f 16 "1842 1842" 100 0 0 100  vector_eq - ));
+DESCR("vector equal");
+DATA(insert OID = 2290 (  vector_ne		   PGUID 11 f t t 2 f 16 "1842 1842" 100 0 0 100  vector_ne - ));
+DESCR("vector not equal");
+DATA(insert OID = 2291 (  vector_ge		   PGUID 11 f t t 2 f 16 "1842 1842" 100 0 0 100  vector_ge - ));
+DESCR("vector greater or equal");
+DATA(insert OID = 2292 (  vector_gt		   PGUID 11 f t t 2 f 16 "1842 1842" 100 0 0 100  vector_gt - ));
+DESCR("vector greater than");
+
 #define F_VECTORIN	2237
 #define F_VECTOROUT	2238
 #define F_L2_DISTANCE	2240
 #define F_VECTOR_L2_SQUARED_DISTANCE 2241
+#define F_BYTEA_TO_VECTOR	2285
+#define F_VECTOR_TO_BYTEA	2286
 
 DATA(insert OID = 449 (  hashint2		   PGUID 11 f t t 1 f 23 "21" 100 0 0 100  hashint2 - ));
 DESCR("hash");

@@ -932,7 +932,11 @@ pgvector_index_useful_for_ordering(Query *root,
 		return false;
 	if (!index->ordering || index->ordering[0] == InvalidOid)
 		return false;
-	if (!index->indexkeys || index->indexkeys[0] == 0)
+
+	/* Column indexes need a heap attnum; functional indexes use indexkeys[0]==0 */
+	if (!index->indexkeys)
+		return false;
+	if (index->indexkeys[0] == 0 && index->indproc == InvalidOid)
 		return false;
 
 	sublist = lfirst(root->query_pathkeys);
@@ -956,8 +960,15 @@ pgvector_index_useful_for_ordering(Query *root,
 	{
 		Node	   *arg = (Node *) lfirst(arglist);
 
-		if (IsA(arg, Var) &&
-			match_index_to_operand(index->indexkeys[0], (Var *) arg, rel, index))
+		if (index->indproc != InvalidOid)
+		{
+			/* Functional index: ORDER BY f(col) <-> query */
+			if (IsA(arg, Expr) &&
+				function_index_operand((Expr *) arg, rel, index))
+				return true;
+		}
+		else if (IsA(arg, Var) &&
+				 match_index_to_operand(index->indexkeys[0], (Var *) arg, rel, index))
 			return true;
 	}
 	return false;

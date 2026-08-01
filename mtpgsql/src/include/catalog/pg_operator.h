@@ -820,6 +820,14 @@ DATA(insert OID = 2310 (  "<->"	   PGUID 0 b t f 1844 1844 701 2310   0   0   0 
 DATA(insert OID = 2311 (  "<#>"	   PGUID 0 b t f 1844 1844 701 2311   0   0   0 halfvec_negative_inner_product - - ));
 DATA(insert OID = 2312 (  "<=>"	   PGUID 0 b t f 1844 1844 701 2312   0   0   0 halfvec_cosine_distance - - ));
 
+/* halfvec comparison operators (btree halfvec_ops) */
+DATA(insert OID = 2313 (  "<"	   PGUID 0 b t f 1844 1844 16 2314 2316  0  0 halfvec_lt - - ));
+DATA(insert OID = 2314 (  ">"	   PGUID 0 b t f 1844 1844 16 2313 2315  0  0 halfvec_gt - - ));
+DATA(insert OID = 2315 (  "<="	   PGUID 0 b t f 1844 1844 16 2316 2314  0  0 halfvec_le - - ));
+DATA(insert OID = 2316 (  ">="	   PGUID 0 b t f 1844 1844 16 2315 2313  0  0 halfvec_ge - - ));
+DATA(insert OID = 2317 (  "="	   PGUID 0 b t f 1844 1844 16 2317 2318  0  0 halfvec_eq eqsel eqjoinsel ));
+DATA(insert OID = 2318 (  "<>"	   PGUID 0 b t f 1844 1844 16 2318 2317  0  0 halfvec_ne eqsel eqjoinsel ));
+
 /* bit (varbit) similarity operators */
 DATA(insert OID = 2319 (  "<~>"	   PGUID 0 b t f 1562 1562 701 2319   0   0   0 hamming_distance - - ));
 DATA(insert OID = 2320 (  "<%>"	   PGUID 0 b t f 1562 1562 701 2320   0   0   0 jaccard_distance - - ));

@@ -1,7 +1,9 @@
 #include "postgres.h"
 
+#include "access/funcindex.h"
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "catalog/index.h"
 #include "fmgr.h"
 #include "halfutils.h"
 #include "halfvec.h"
@@ -46,24 +48,63 @@ VectorArrayFree(VectorArray arr)
 
 /*
  * Infer vector dimensions from heap data when atttypmod is unset (-1).
+ * When finfo is set (functional index), form the indexed value first so
+ * blob/bytea columns converted via bytea_to_vector() work.
  */
 int
 IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum)
+{
+	return IvfflatInferIndexDimensionsEx(heap, attnum, NULL, NULL);
+}
+
+int
+IvfflatInferIndexDimensionsEx(Relation heap, AttrNumber attnum,
+							  AttrNumber *attnums, FuncIndexInfo *finfo)
 {
 	HeapScanDesc scan;
 	HeapTuple	tup;
 	bool		isnull = false;
 	Datum		val;
 	Form_pg_attribute att;
+	int			natts = 1;
 
 	if (heap == NULL || !RelationIsValid(heap))
 		return -1;
 
-	att = TupleDescAttr(RelationGetDescr(heap), attnum - 1);
+	if (finfo != NULL && FIisFunctionalIndex(finfo))
+		natts = FIgetnArgs(finfo);
+
+	att = TupleDescAttr(RelationGetDescr(heap),
+						(finfo != NULL && attnums != NULL) ? attnums[0] - 1 : attnum - 1);
 
 	scan = heap_beginscan(heap, SnapshotNow, 0, (ScanKey) NULL);
 	while ((tup = heap_getnext(scan)) != NULL)
 	{
+		if (finfo != NULL && FIisFunctionalIndex(finfo) && attnums != NULL)
+		{
+			Datum		values[INDEX_MAX_KEYS];
+			char		nulls[INDEX_MAX_KEYS];
+			Pointer		ptr;
+			Vector	   *vec;
+			int			dim;
+
+			FormIndexDatum(natts, attnums, tup, RelationGetDescr(heap),
+						   values, nulls, finfo);
+			if (nulls[0] == 'n')
+				continue;
+
+			ptr = (Pointer) DatumGetPointer(PG_DETOAST_DATUM(values[0]));
+			vec = (Vector *) ptr;
+			heap_endscan(scan);
+			if (vec != NULL && vec->dim > 0 && vec->dim <= VECTOR_MAX_DIM)
+				dim = (int) vec->dim;
+			else
+				return -1;
+			if ((Pointer) vec != DatumGetPointer(values[0]))
+				pfree(vec);
+			return dim;
+		}
+
 		val = heap_getattr(tup, attnum, RelationGetDescr(heap), &isnull);
 		if (!isnull)
 		{

@@ -679,7 +679,8 @@ class DirectWeaverConnection implements DBReference {
             DirectInput<T> bi = new DirectInput(name, type);
             Optional.ofNullable(inputs.put(name, bi)).ifPresent(DirectInput::deactivate);
             try {
-                check((long)WBindTransfer.invokeExact(link, name, bi.getType(), MemorySegment.NULL, bi.createUpcallStub()));
+                MemorySegment nameSeg = Arena.ofAuto().allocateFrom(name);
+                check((long)WBindTransfer.invokeExact(link, nameSeg, bi.getType(), MemorySegment.NULL, bi.createUpcallStub()));
             } catch (ExecutionException ee) {
                 throw ee;
             } catch (Throwable t) {
@@ -693,7 +694,8 @@ class DirectWeaverConnection implements DBReference {
             DirectInputChannel<T> channel = new DirectInputChannel<>(transformer, name, transform);
             Optional.ofNullable(inputs.put(name, channel)).ifPresent(DirectInput::deactivate);
             try {
-                check((long)WBindTransfer.invokeExact(link, name, channel.getType(), MemorySegment.NULL, channel.createUpcallStub()));
+                MemorySegment nameSeg = Arena.ofAuto().allocateFrom(name);
+                check((long)WBindTransfer.invokeExact(link, nameSeg, channel.getType(), MemorySegment.NULL, channel.createUpcallStub()));
             } catch (ExecutionException ee) {
                 throw ee;
             } catch (Throwable t) {

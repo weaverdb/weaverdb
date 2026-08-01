@@ -185,6 +185,7 @@ pgvector_form_index_datum(PgvectorIndexInfo *indexInfo, Relation heap,
 	AttrNumber	attnums[INDEX_MAX_KEYS];
 	int			natts;
 	int			i;
+	FuncIndexInfo *finfo;
 
 	natts = indexInfo->ii_NumIndexAttrs;
 	if (natts > INDEX_MAX_KEYS)
@@ -201,7 +202,8 @@ pgvector_form_index_datum(PgvectorIndexInfo *indexInfo, Relation heap,
 			attnums[i] = (AttrNumber) (i + 1);
 	}
 
-	FormIndexDatum(natts, attnums, htup, heapDesc, values, nulls, NULL);
+	finfo = indexInfo->ii_FuncIndexInfo;
+	FormIndexDatum(natts, attnums, htup, heapDesc, values, nulls, finfo);
 	for (i = 0; i < natts; i++)
 		isnull[i] = (nulls[i] == 'n');
 }
