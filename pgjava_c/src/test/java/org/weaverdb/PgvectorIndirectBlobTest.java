@@ -58,6 +58,27 @@ public class PgvectorIndirectBlobTest {
         Assertions.assertEquals(3, got.get(0).intValue());
     }
 
+    @Test
+    @Order(3)
+    public void largeByteaColumnUsesExtendedStorage() throws Exception {
+        // attstorage='e' on bytea: small values stay direct; oversized tuples span.
+        String baTable = "pv_blob_ba_indirect_jni";
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            exec(conn, "create table " + baTable + " (id int, emb bytea)");
+            exec(conn,
+                    "insert into " + baTable + " values (1, vector_to_bytea('"
+                            + unitVectorLiteral(0) + "'::vector))");
+            exec(conn,
+                    "insert into " + baTable + " values (2, vector_to_bytea('"
+                            + unitVectorLiteral(1) + "'::vector))");
+        }
+        List<Integer> got = queryIntColumn(
+                "select id from " + baTable + " order by bytea_to_vector(emb) <-> '"
+                        + unitVectorLiteral(0) + "'::vector limit 1",
+                1);
+        Assertions.assertEquals(1, got.get(0).intValue());
+    }
+
     private static String unitVectorLiteral(int unitIndex) {
         StringBuilder sb = new StringBuilder(DIM * 3);
         sb.append('[');

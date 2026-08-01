@@ -1,63 +1,57 @@
-# WeaverDB Vector Extension (Java-based)
+# WeaverDB Vector Support
 
-This package provides pgvector-like functionality for WeaverDB, implemented **entirely through Java extensions** rather than modifying the C storage engine.
+Native **pgvector** in the WeaverDB C engine is the index and distance engine
+(HNSW / IVFFlat, `vector` / `halfvec` / `sparsevec` / `bit` types, operators
+`<->` / `<#>` / `<=>` / `<~>` / `<%>`).
 
-## Design Philosophy
+This Java package provides helpers around that engine:
 
-WeaverDB already has excellent support for calling Java code from SQL (`LANGUAGE 'java'` + `FunctionInstaller`). 
+| Component | Purpose |
+|-----------|---------|
+| `org.weaverdb.vector.pg.*` | Codecs: float/half/sparse/bit ↔ `byte[]` matching `bytea_to_*` / `*_to_bytea` |
+| `Vector` / `VectorFunctions` | Lightweight float[] helpers (optional app-side math) |
+| `InMemoryVectorStore` | **In-memory / demos only** — not a substitute for native ANN indexes |
 
-Instead of fighting the ancient Postgres 7 storage engine to add a native `vector` type + index access method (very hard), we take the pragmatic path:
+## Recommended path: bind blobs + functional indexes
 
-- Store vectors + metadata using normal WeaverDB tables (or Java-serialized objects).
-- Perform indexing and similarity search in Java, where we have access to modern libraries and techniques.
-- Expose distance functions back into SQL when desired.
-
-This approach is faster to build, easier to extend, and aligns with WeaverDB's existing strengths.
-
-## Current Components (MVP)
-
-| Component              | Purpose                                      | Status     |
-|------------------------|----------------------------------------------|------------|
-| `Vector`               | Immutable float[] wrapper (Serializable)     | Done       |
-| `VectorFunctions`      | cosine, euclidean, inner product, etc.       | Done       |
-| `VectorStore`          | High-level search API                        | Done       |
-| `InMemoryVectorStore`  | Brute-force exact search (great for <50k)    | Done       |
-| `VectorRegistration`   | Easy registration of functions into SQL      | Done       |
-| `VectorMatch`          | Search result object                         | Done       |
-
-## Usage Example
+Apps typically store embeddings as `bytea` (or convert on insert) and index with
+`bytea_to_vector(emb)` (or halfvec / sparsevec / bit equivalents):
 
 ```java
-// Java side (recommended for most AI use cases)
-VectorStore store = new InMemoryVectorStore(VectorFunctions::cosineDistance);
+import org.weaverdb.vector.pg.DenseVector;
 
-store.add("chunk1", Vector.of(embedding), Map.of("doc", "paper.pdf", "page", 3));
+byte[] emb = DenseVector.encode(0.1f, 0.2f, 0.3f);
 
-List<VectorMatch> results = store.search(queryVector, 10);
+try (Statement s = conn.statement(
+        "insert into docs (id, emb) values ($id, $emb)")) {
+    s.linkInput("id", Integer.class).set(1);
+    s.linkInput("emb", byte[].class).set(emb);
+    s.execute();
+}
+
+// Functional ANN index (SQL):
+// create index on docs using hnsw (bytea_to_vector(emb) vector_l2_ops);
+
+try (Statement s = conn.statement(
+        "select id from docs order by bytea_to_vector(emb) <-> bytea_to_vector($q) limit 10")) {
+    s.linkInput("q", byte[].class).set(DenseVector.encode(0.1f, 0.2f, 0.3f));
+    // ...
+}
 ```
 
-```sql
--- Optional: also expose functions to SQL
-SELECT cosine_similarity(embedding_col, $query_vec) AS sim
-FROM documents
-ORDER BY sim DESC
-LIMIT 10;
-```
+### Codec layouts (native endian)
 
-## Next Steps / Roadmap
+| Type | SQL | `byte[]` layout |
+|------|-----|-----------------|
+| Dense float32 | `bytea_to_vector` / `vector_to_bytea` | `float32[dim]` |
+| Half float16 | `bytea_to_halfvec` / `halfvec_to_bytea` | `float16[dim]` |
+| Sparse | `bytea_to_sparsevec` / `sparsevec_to_bytea` | `dim\|nnz\|0\|indices[nnz]\|values[nnz]` |
+| Bit | `bytea_to_bit` / `bit_to_bytea` | `int32 bitlen \| MSB-packed bits` |
 
-1. **Persistent Vector Storage** — Helpers to create a standard `vectors` table + metadata columns.
-2. **Better Serialization** — Efficient `float[]` ↔ `bytea` without full Java object serialization (lower overhead).
-3. **Real ANN Index** — Plug in HNSW (Java), Lucene KNN, or a disk-backed structure.
-4. **Hybrid Search** — Combine vector similarity + metadata filters efficiently.
-5. **Direct float[] binding** — Improve the FFM/JNI layer to pass primitive arrays more efficiently.
+Large `bytea` / vector columns use `attstorage='e'`: small values stay inline;
+oversized tuples span via blob-indirect (`ISINDIRECT`) storage automatically.
 
-## Why This Works Well on WeaverDB
+## Deprecated framing
 
-- The Java object loader already supports passing arbitrary `Serializable` objects in and out of the database.
-- `FunctionInstaller` makes it trivial to expose Java methods as SQL functions.
-- The single-writer + threaded model makes it relatively easy to keep a Java-side index consistent with the DB.
-
----
-
-This is intentionally a **Java-native** vector extension. It gives you most of what pgvector offers for AI/agent workloads with far less complexity.
+`InMemoryVectorStore` remains for unit tests and tiny datasets. Prefer native
+pgvector indexes for production similarity search.
