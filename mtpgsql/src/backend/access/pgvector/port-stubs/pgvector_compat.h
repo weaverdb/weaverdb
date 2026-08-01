@@ -534,11 +534,15 @@ extern Datum  Float8GetDatum(float8 X);
 #define likely(x) (x)
 #endif
 
+/*
+ * maintenance_work_mem / work_mem are kB budgets in modern PG.
+ * Weaver exposes the same unit as SortMem (miscadmin.h / globals.c).
+ */
 #ifndef maintenance_work_mem
-#define maintenance_work_mem (1024)
+#define maintenance_work_mem SortMem
 #endif
 #ifndef work_mem
-#define work_mem maintenance_work_mem
+#define work_mem SortMem
 #endif
 
 #ifndef MCXT_ALLOC_HUGE

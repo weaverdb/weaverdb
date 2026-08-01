@@ -486,8 +486,20 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heaptid, Hn
 	/* Get datum size */
 	valueSize = VARSIZE_ANY(DatumGetPointer(value));
 
-	/* In a parallel build, add a margin so allocations never fail */
-	memoryMargin = base == NULL ? 0 : 1024 * 1024;
+	/*
+	 * Parallel builds reserve headroom so HnswSharedMemoryAlloc never races
+	 * past memoryTotal. Cap the margin below memoryTotal — a fixed 1MB margin
+	 * with a small SortMem budget forces an immediate flush (and unsafe
+	 * concurrent on-disk inserts).
+	 */
+	if (base == NULL)
+		memoryMargin = 0;
+	else
+	{
+		memoryMargin = 1024 * 1024;
+		if (graph->memoryTotal > 0 && memoryMargin > graph->memoryTotal / 8)
+			memoryMargin = graph->memoryTotal / 8;
+	}
 
 	/* Ensure graph not flushed when inserting */
 	LWLockAcquire(flushLock, LW_SHARED);
@@ -496,8 +508,15 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heaptid, Hn
 	if (graph->flushed)
 	{
 		LWLockRelease(flushLock);
-
-		return HnswInsertTupleOnDisk(index, support, value, heaptid, true);
+		/* Serialize on-disk inserts: shared index Relation is not MT-safe. */
+		LWLockAcquire(flushLock, LW_EXCLUSIVE);
+		if (!HnswInsertTupleOnDisk(index, support, value, heaptid, true))
+		{
+			LWLockRelease(flushLock);
+			return false;
+		}
+		LWLockRelease(flushLock);
+		return true;
 	}
 
 	/*
@@ -510,7 +529,7 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heaptid, Hn
 	 * Check that we have enough memory available for the new element now that
 	 * we have the allocator lock, and flush pages if needed.
 	 */
-	if (graph->memoryUsed + memoryMargin >= graph->memoryTotal)
+		if (graph->memoryUsed + memoryMargin >= graph->memoryTotal)
 	{
 		LWLockRelease(&graph->allocatorLock);
 
@@ -527,9 +546,14 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heaptid, Hn
 			FlushPages(buildstate);
 		}
 
+		/* Stay exclusive for on-disk insert (shared Relation / buffers). */
+		if (!HnswInsertTupleOnDisk(index, support, value, heaptid, true))
+		{
+			LWLockRelease(flushLock);
+			return false;
+		}
 		LWLockRelease(flushLock);
-
-		return HnswInsertTupleOnDisk(index, support, value, heaptid, true);
+		return true;
 	}
 
 	/* Ok, we can proceed to allocate the element */
@@ -714,7 +738,7 @@ InitBuildState(HnswBuildState * buildstate, Relation heap, Relation index, Pgvec
 	/* Get support functions */
 	HnswInitSupport(&buildstate->support, index);
 
-	InitGraph(&buildstate->graphData, NULL, (Size) maintenance_work_mem * 1024L);
+	InitGraph(&buildstate->graphData, NULL, (Size) Max(maintenance_work_mem, 8192) * 1024L);
 	buildstate->graph = &buildstate->graphData;
 	buildstate->ml = HnswGetMl(buildstate->m);
 	buildstate->maxLevel = HnswGetMaxLevel(buildstate->m);
@@ -1085,8 +1109,9 @@ static Size
 HnswSharedGraphBytes(void)
 {
 	Size		est;
+	int			memkb = Max(maintenance_work_mem, 8192);
 
-	est = (Size) maintenance_work_mem * 1024L;
+	est = (Size) memkb * 1024L;
 	if (est > 3 * 1024 * 1024)
 		est -= 3 * 1024 * 1024;
 	return Min(est, HNSW_MAX_GRAPH_MEMORY);
@@ -1106,7 +1131,34 @@ InitWorkerHnswBuildState(HnswBuildState *wstate, HnswBuildState *leader,
 						 Relation heap, Relation index, PgvectorIndexInfo *indexInfo,
 						 HnswWeaverParallelShared *shared)
 {
-	InitBuildState(wstate, heap, index, indexInfo, leader->forkNum);
+	/*
+	 * Do not call InitBuildState here: with typmod -1 it scans the heap via
+	 * IvfflatInferIndexDimensions, and concurrent LockBuffer on the shared
+	 * leader Relation hits ExceptionalCondition.
+	 */
+	MemSet(wstate, 0, sizeof(*wstate));
+	wstate->heap = heap;
+	wstate->index = index;
+	wstate->indexInfo = indexInfo;
+	wstate->forkNum = leader->forkNum;
+	wstate->typeInfo = leader->typeInfo;
+	wstate->m = leader->m;
+	wstate->efConstruction = leader->efConstruction;
+	wstate->dimensions = leader->dimensions;
+	wstate->ml = leader->ml;
+	wstate->maxLevel = leader->maxLevel;
+	wstate->reltuples = 0;
+	wstate->indtuples = 0;
+
+	HnswInitSupport(&wstate->support, index);
+
+	wstate->graphCtx = GenerationContextCreate(CurrentMemoryContext,
+											   "Hnsw worker graph context",
+											   1024 * 1024);
+	wstate->tmpCtx = AllocSetContextCreate(CurrentMemoryContext,
+										   "Hnsw worker temporary context",
+										   ALLOCSET_DEFAULT_SIZES);
+
 	HnswAttachWeaverParallelGraph(wstate, shared);
 }
 
