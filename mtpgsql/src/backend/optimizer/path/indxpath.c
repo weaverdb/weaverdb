@@ -943,6 +943,13 @@ pgvector_index_useful_for_ordering(Query *root,
 	if (sublist == NIL)
 		return false;
 	pki = (PathKeyItem *) lfirst(sublist);
+	/*
+	 * PG7 SortClauses use the result type's default sortop (float8 <),
+	 * while index->ordering is the distance operator (<->). Until ANN
+	 * IndexPath pathkeys and neighbor-tuple build are fixed end-to-end,
+	 * refuse ordered index paths so the planner keeps Seq Scan + Sort
+	 * (correct results). Match distance OpExpr when re-enabling.
+	 */
 	if (pki->sortop != index->ordering[0])
 		return false;
 	if (!IsA(pki->key, Expr))

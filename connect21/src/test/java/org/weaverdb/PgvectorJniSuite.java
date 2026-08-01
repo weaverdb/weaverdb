@@ -18,11 +18,13 @@ import org.junit.platform.suite.api.Suite;
         PgvectorSparsevecOrderByTest.class,
         PgvectorBitOrderByTest.class,
         PgvectorIndexTest.class,
+        PgvectorDistanceOpsTest.class,
         PgvectorMutationsTest.class,
         PgvectorIndirectBlobTest.class,
         PgvectorBlobIndexTest.class,
         PgvectorConnect21Test.class,
-        PgvectorFeaturesShellTest.class
+        PgvectorFeaturesShellTest.class,
+        PgvectorOrderByShellTest.class
 })
 public class PgvectorJniSuite {
 }

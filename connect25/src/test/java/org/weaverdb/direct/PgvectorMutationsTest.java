@@ -98,6 +98,19 @@ public class PgvectorMutationsTest {
         Assertions.assertEquals(1, queryInt("select count(*) from pv_mut_w25 where emb is null"));
     }
 
+    @Test
+    @Order(7)
+    public void vacuumAfterIndexMutations() throws Exception {
+        try (DBReference conn = DBReference.connect("template1")) {
+            exec(conn, "vacuum pv_mut_w25");
+        }
+        List<Integer> got = queryIntColumn(
+                "select id from pv_mut_w25 where emb is not null order by emb <-> '[1,0,0]' limit 1",
+                1);
+        Assertions.assertFalse(got.isEmpty());
+        Assertions.assertEquals(1, got.get(0).intValue());
+    }
+
     private static int queryInt(String sql) throws ExecutionException {
         try (DBReference conn = DBReference.connect("template1");
                 Statement s = conn.statement(sql)) {

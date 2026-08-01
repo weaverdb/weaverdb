@@ -427,8 +427,15 @@ pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
 		break;
 	}
 
-	ScanKeyEntryInitialize(&orderKey, isnull ? SK_ISNULL : 0,
-						   (AttrNumber) 1, InvalidOid, val);
+	/*
+	 * Order-by keys only need sk_argument (query vector). Do not call
+	 * ScanKeyEntryInitialize with InvalidOid — it always fmgr_info's the
+	 * procedure and fails.
+	 */
+	memset(&orderKey, 0, sizeof(orderKey));
+	orderKey.sk_flags = isnull ? SK_ISNULL : 0;
+	orderKey.sk_attno = (AttrNumber) 1;
+	orderKey.sk_argument = val;
 
 	if (relam == IVFFLAT_AM_OID)
 	{
