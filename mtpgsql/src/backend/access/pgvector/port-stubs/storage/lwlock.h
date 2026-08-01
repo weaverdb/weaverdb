@@ -1,14 +1,21 @@
-/* pgvector lwlock shim: pthread-backed locks for in-process parallel builds */
+/* pgvector lwlock shim: pthread rwlocks for in-process parallel builds.
+ *
+ * Upstream HNSW parallel build relies on LW_SHARED (many readers) vs
+ * LW_EXCLUSIVE (one writer) on flushLock / element locks. Mapping both
+ * modes to an exclusive spinlock serializes the entire build and is wrong
+ * for flushLock upgrade patterns.
+ */
 
 #ifndef STORAGE_LWLOCK_H
 #define STORAGE_LWLOCK_H
 
+#include <pthread.h>
 #include "os.h"
 #include "storage/m_lock.h"
 
 struct LWLock
 {
-	slock_t		lock;
+	pthread_rwlock_t rwlock;
 };
 typedef struct LWLock LWLock;
 
@@ -19,20 +26,22 @@ static inline void
 LWLockInitialize(LWLock *lock, int trancheId)
 {
 	(void) trancheId;
-	m_init(&lock->lock);
+	pthread_rwlock_init(&lock->rwlock, NULL);
 }
 
 static inline void
 LWLockAcquire(LWLock *lock, int mode)
 {
-	(void) mode;
-	m_lock(&lock->lock);
+	if (mode == LW_SHARED)
+		pthread_rwlock_rdlock(&lock->rwlock);
+	else
+		pthread_rwlock_wrlock(&lock->rwlock);
 }
 
 static inline void
 LWLockRelease(LWLock *lock)
 {
-	m_unlock(&lock->lock);
+	pthread_rwlock_unlock(&lock->rwlock);
 }
 
 #ifndef AddinShmemInitLock

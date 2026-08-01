@@ -225,8 +225,9 @@ extern BufferDesc *BufferDescriptors;
 extern const int	NLocBuffer;
 
 PG_EXTERN BufferDesc *LocalBufferAlloc(Relation reln, BlockNumber blockNum,bool *foundPtr);
-PG_EXTERN int	WriteLocalBuffer(Buffer buffer, bool release);
-PG_EXTERN int	FlushLocalBuffer(Buffer buffer);
+/* Prefer the open Relation when writing (avoids relcache miss for in-build indexes). */
+PG_EXTERN int	WriteLocalBuffer(Relation rel, Buffer buffer, bool release);
+PG_EXTERN int	FlushLocalBuffer(Relation rel, Buffer buffer);
 
 PG_EXTERN void ResetLocalBufferPool(void);
 

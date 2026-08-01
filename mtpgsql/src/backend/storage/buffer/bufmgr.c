@@ -417,7 +417,7 @@ WriteBuffer(Relation rel, Buffer buffer) {
     BufferEnv* bufenv = RelationGetBufferCxt(rel);
 
     if (BufferIsLocal(buffer))
-        return WriteLocalBuffer(buffer, TRUE);
+        return WriteLocalBuffer(rel, buffer, TRUE);
     
     if (BAD_BUFFER_ID(buffer))
         return FALSE;
@@ -462,7 +462,7 @@ int
 FlushBuffer(Relation rel, Buffer buffer) {
 
     if (BufferIsLocal(buffer))
-        return FlushLocalBuffer(buffer) ? STATUS_OK : STATUS_ERROR;
+        return FlushLocalBuffer(rel, buffer) ? STATUS_OK : STATUS_ERROR;
     
     if (BAD_BUFFER_ID(buffer))
         return STATUS_ERROR;
@@ -542,7 +542,7 @@ WriteNoReleaseBuffer(Relation rel, Buffer buffer) {
     BufferDesc *bufHdr;
 
     if (BufferIsLocal(buffer))
-        return WriteLocalBuffer(buffer, FALSE);
+        return WriteLocalBuffer(rel, buffer, FALSE);
     
     if (BAD_BUFFER_ID(buffer))
         return STATUS_ERROR;

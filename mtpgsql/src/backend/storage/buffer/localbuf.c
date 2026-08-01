@@ -211,12 +211,16 @@ LocalBufferAlloc(Relation reln, BlockNumber blockNum, bool *foundPtr)
 /*
  * WriteLocalBuffer -
  *	  writes out a local buffer
+ *
+ * When 'rel' matches the buffer's relation, use its already-open smgr
+ * instead of RelationIdCacheGetRelation — required for indexes still being
+ * built (not visible in other threads' relcaches).
  */
 int
-WriteLocalBuffer(Buffer buffer, bool release)
+WriteLocalBuffer(Relation rel, Buffer buffer, bool release)
 {
 	int			bufid;
-        LocalBufferEnv* env = GetLocalBufferEnv();
+	LocalBufferEnv *env = GetLocalBufferEnv();
 
 	Assert(BufferIsLocal(buffer));
 
@@ -225,21 +229,37 @@ WriteLocalBuffer(Buffer buffer, bool release)
 #endif
 
 	bufid = -(buffer + 1);
-        if ( bufid == 0 ) {
-            elog(ERROR,"tried to write a read only buffer");
-        } else {
-            BufferDesc* bufHdr = &env->LocalBufferDescriptors[bufid];
-            Relation	bufrel = RelationIdCacheGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
-            Assert(bufrel != NULL);
+	if (bufid == 0)
+	{
+		elog(ERROR, "tried to write a read only buffer");
+	}
+	else
+	{
+		BufferDesc *bufHdr = &env->LocalBufferDescriptors[bufid];
+		Relation	bufrel;
+		bool		from_cache = false;
 
-            bufHdr->ioflags &= ~BM_DIRTY;
-            if ( bufrel->rd_rel->relkind != RELKIND_SPECIAL )  
-                PageInsertChecksum((Page)(bufHdr->data));
+		if (rel != NULL &&
+			RelationGetRelid(rel) == bufHdr->tag.relId.relId &&
+			rel->rd_smgr != NULL)
+			bufrel = rel;
+		else
+		{
+			bufrel = RelationIdCacheGetRelation(bufHdr->tag.relId.relId,
+												DEFAULTDBOID);
+			from_cache = true;
+		}
+		Assert(bufrel != NULL);
 
-            smgrwrite(bufrel->rd_smgr, bufHdr->tag.blockNum,
-                              (char *)(bufHdr->data));
-		RelationDecrementReferenceCount(bufrel);
-        }
+		bufHdr->ioflags &= ~BM_DIRTY;
+		if (bufrel->rd_rel->relkind != RELKIND_SPECIAL)
+			PageInsertChecksum((Page) (bufHdr->data));
+
+		smgrwrite(bufrel->rd_smgr, bufHdr->tag.blockNum,
+				  (char *) (bufHdr->data));
+		if (from_cache)
+			RelationDecrementReferenceCount(bufrel);
+	}
 
 	if (release)
 	{
@@ -255,46 +275,55 @@ WriteLocalBuffer(Buffer buffer, bool release)
  *	  flushes a local buffer
  */
 int
-FlushLocalBuffer(Buffer buffer)
+FlushLocalBuffer(Relation rel, Buffer buffer)
 {
 	int			bufid;
 	Relation	bufrel;
 	BufferDesc *bufHdr;
-        LocalBufferEnv* env = GetLocalBufferEnv();
+	LocalBufferEnv *env = GetLocalBufferEnv();
+	bool		from_cache = false;
 
 	Assert(BufferIsLocal(buffer));
 
 #ifdef LBDEBUG
 	fprintf(stderr, "LB FLUSH %d\n", buffer);
 #endif
-        
+
 	bufid = -(buffer + 1);
 	bufHdr = &env->LocalBufferDescriptors[bufid];
-/*  NOT NEEDED all local buffers should be thread specific  
+/*   NOT NEEDED, only one thread sees a local buffer MKS  5/15/08
 	pthread_mutex_lock(&bufHdr->io_in_progress_lock.guard);
 */
-                
-        if ( bufHdr->ioflags & BM_READONLY ) {
-            elog(ERROR,"trying to flush a read only buffer");
-        }
-        
+
+	if (bufHdr->ioflags & BM_READONLY)
+		elog(ERROR, "trying to flush a read only buffer");
+
 	bufHdr->ioflags &= ~BM_DIRTY;
-	bufrel = RelationIdCacheGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
+	if (rel != NULL &&
+		RelationGetRelid(rel) == bufHdr->tag.relId.relId &&
+		rel->rd_smgr != NULL)
+		bufrel = rel;
+	else
+	{
+		bufrel = RelationIdCacheGetRelation(bufHdr->tag.relId.relId,
+											DEFAULTDBOID);
+		from_cache = true;
+	}
 
 	Assert(bufrel != NULL);
-    if ( bufrel->rd_rel->relkind != RELKIND_SPECIAL )   
-            PageInsertChecksum((Page)(bufHdr->data));
-    smgrflush(bufrel->rd_smgr, bufHdr->tag.blockNum,
-			  (char *)(bufHdr->data));
+	if (bufrel->rd_rel->relkind != RELKIND_SPECIAL)
+		PageInsertChecksum((Page) (bufHdr->data));
+	smgrflush(bufrel->rd_smgr, bufHdr->tag.blockNum,
+			  (char *) (bufHdr->data));
 /*
-    pthread_mutex_unlock(&bufHdr->io_in_progress_lock.guard);
+	pthread_mutex_unlock(&bufHdr->io_in_progress_lock.guard);
 */
 	env->LocalBufferFlushCount++;
 
-	/* drop relcache refcount incremented by RelationIdCacheGetRelation */
-	RelationDecrementReferenceCount(bufrel);
+	if (from_cache)
+		RelationDecrementReferenceCount(bufrel);
 
-        env->LocalRefCount[bufid]--;
+	env->LocalRefCount[bufid]--;
 
 	return true;
 }
