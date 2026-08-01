@@ -873,6 +873,8 @@ DATA(insert OID = 2222 (  ivfflatdelete		   PGUID 11 f t f 2 f 23 "0" 100 0 0 10
 DESCR("ivfflat(internal)");
 DATA(insert OID = 2223 (  ivfflatbulkdelete	   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  ivfflatbulkdelete - ));
 DESCR("ivfflat(internal)");
+DATA(insert OID = 2385 (  ivfflatvacuumcleanup	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  ivfflatvacuumcleanup - ));
+DESCR("ivfflat vacuum cleanup");
 DATA(insert OID = 2224 (  ivfflatbeginscan	   PGUID 11 f t f 4 f 23 "0" 100 0 0 100  ivfflatbeginscan - ));
 DESCR("ivfflat(internal)");
 DATA(insert OID = 2225 (  ivfflatrescan		   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  ivfflatrescan - ));
@@ -891,6 +893,8 @@ DATA(insert OID = 2231 (  hnswdelete		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  
 DESCR("hnsw(internal)");
 DATA(insert OID = 2232 (  hnswbulkdelete	   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  hnswbulkdelete - ));
 DESCR("hnsw(internal)");
+DATA(insert OID = 2386 (  hnswvacuumcleanup	   PGUID 11 f t f 1 f 23 "0" 100 0 0 100  hnswvacuumcleanup - ));
+DESCR("hnsw vacuum cleanup");
 DATA(insert OID = 2233 (  hnswbeginscan	   PGUID 11 f t f 4 f 23 "0" 100 0 0 100  hnswbeginscan - ));
 DESCR("hnsw(internal)");
 DATA(insert OID = 2234 (  hnswrescan		   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  hnswrescan - ));

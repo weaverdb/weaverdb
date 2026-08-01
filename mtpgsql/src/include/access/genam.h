@@ -53,6 +53,7 @@ BlockNumber index_recoverpage(Relation rel,BlockNumber page);
 			 Relation heapRel, bool is_put);
 /* extern */  void index_delete(Relation relation, ItemPointer indexItem);
 /* extern */  TupleCount index_bulkdelete(Relation relation,int delcount, ItemPointerData* del_heappointers);
+/* extern */  void index_vacuumcleanup(Relation relation);
 /* extern */  IndexScanDesc index_beginscan(Relation relation, bool scanFromEnd,
 				uint16 numberOfKeys, ScanKey key);
 /* extern */  void index_rescan(IndexScanDesc scan, bool scanFromEnd, ScanKey key);

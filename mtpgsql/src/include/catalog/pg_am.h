@@ -49,8 +49,8 @@ CATALOG(pg_am)
 	regproc		amgettuple;		/* "next valid tuple" function */
 	regproc		aminsert;		/* "insert this tuple" function */
 	regproc		amdelete;		/* "delete this tuple" function */
-	regproc		ambulkdelete;		
-	regproc		amsetlock;		/* - deprecated */
+	regproc		ambulkdelete;
+	regproc		amvacuumcleanup;	/* post-bulkdelete vacuum cleanup (optional) */
 	regproc		amsettid;		/* - deprecated */
 	regproc		amfreetuple;	/* - deprecated...use for recoverpage of indexes */
 	regproc		ambeginscan;	/* "start new scan" function */
@@ -87,7 +87,7 @@ typedef FormData_pg_am *Form_pg_am;
 #define Anum_pg_am_aminsert				7
 #define Anum_pg_am_amdelete				8
 #define Anum_pg_am_ambulkdelete			9
-#define Anum_pg_am_amsetlock			10
+#define Anum_pg_am_amvacuumcleanup		10
 #define Anum_pg_am_amsettid				11
 #define Anum_pg_am_amfreetuple			12
 #define Anum_pg_am_ambeginscan			13
@@ -115,10 +115,10 @@ DESCR("");
 DATA(insert OID = 405 (  hash PGUID 1 1 0 hashgettuple hashinsert hashdelete - - - - hashbeginscan hashrescan hashendscan hashmarkpos hashrestrpos - - hashbuild - - hashcostestimate ));
 DESCR("");
 #define HASH_AM_OID 405
-DATA(insert OID = 406 (  ivfflat PGUID 0 5 1 ivfflatgettuple ivfflatinsert ivfflatdelete ivfflatbulkdelete - - - ivfflatbeginscan ivfflatrescan ivfflatendscan - - - - ivfflatbuild - - ivfflatcostestimate ));
+DATA(insert OID = 406 (  ivfflat PGUID 0 5 1 ivfflatgettuple ivfflatinsert ivfflatdelete ivfflatbulkdelete ivfflatvacuumcleanup - - ivfflatbeginscan ivfflatrescan ivfflatendscan - - - - ivfflatbuild - - ivfflatcostestimate ));
 DESCR("");
 #define IVFFLAT_AM_OID 406
-DATA(insert OID = 407 (  hnsw PGUID 0 3 1 hnswgettuple hnswinsert hnswdelete hnswbulkdelete - - - hnswbeginscan hnswrescan hnswendscan - - - - hnswbuild - - hnswcostestimate ));
+DATA(insert OID = 407 (  hnsw PGUID 0 3 1 hnswgettuple hnswinsert hnswdelete hnswbulkdelete hnswvacuumcleanup - - hnswbeginscan hnswrescan hnswendscan - - - - hnswbuild - - hnswcostestimate ));
 DESCR("");
 #define HNSW_AM_OID 407
 //DATA(insert OID = 783 (  gist PGUID 100 7 0 gistgettuple gistinsert gistdelete - - - - gistbeginscan gistrescan gistendscan gistmarkpos gistrestrpos - - gistbuild - - gistcostestimate ));

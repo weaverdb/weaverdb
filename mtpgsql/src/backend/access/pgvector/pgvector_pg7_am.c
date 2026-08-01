@@ -206,11 +206,22 @@ ivfflatbulkdelete(Relation rel, int delcount, ItemPointerData *del_heappointers)
 	st.cursor = 0;
 
 	stats = ivfflat_bulkdeleteindex(&info, NULL, ivfflat_bulkdel_callback, &st);
-	/* PG7 has no amvacuumcleanup slot; finish cleanup after bulkdelete. */
-	stats = ivfflat_vacuumcleanupindex(&info, stats);
 	if (stats == NULL)
 		return 0;
 	return (TupleCount) stats->tuples_removed;
+}
+
+void
+ivfflatvacuumcleanup(Relation rel)
+{
+	IndexVacuumInfo info;
+	IndexBulkDeleteResult stats;
+
+	memset(&info, 0, sizeof(info));
+	info.index = rel;
+	memset(&stats, 0, sizeof(stats));
+	/* PG7 does not thread IndexBulkDeleteResult from bulkdelete; refresh pages. */
+	(void) ivfflat_vacuumcleanupindex(&info, &stats);
 }
 
 void
@@ -360,11 +371,22 @@ hnswbulkdelete(Relation rel, int delcount, ItemPointerData *del_heappointers)
 	st.items = del_heappointers;
 
 	stats = hnsw_bulkdeleteindex(&info, NULL, hnsw_bulkdel_callback, &st);
-	/* PG7 has no amvacuumcleanup slot; finish cleanup after bulkdelete. */
-	stats = hnsw_vacuumcleanupindex(&info, stats);
 	if (stats == NULL)
 		return 0;
 	return (TupleCount) stats->tuples_removed;
+}
+
+void
+hnswvacuumcleanup(Relation rel)
+{
+	IndexVacuumInfo info;
+	IndexBulkDeleteResult stats;
+
+	memset(&info, 0, sizeof(info));
+	info.index = rel;
+	memset(&stats, 0, sizeof(stats));
+	/* PG7 does not thread IndexBulkDeleteResult from bulkdelete; refresh pages. */
+	(void) hnsw_vacuumcleanupindex(&info, &stats);
 }
 
 void

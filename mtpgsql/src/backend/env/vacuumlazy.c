@@ -1223,6 +1223,7 @@ lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats)
         LockRelation(indrel,RowExclusiveLock);
         
 	nitupsremoved = (TupleCount) index_bulkdelete(indrel, vacrelstats->num_dead_tuples, vacrelstats->dead_tuples);
+	index_vacuumcleanup(indrel);
 
 	unused_recorded = vacrelstats->num_unused_dead_tuples;
 	expected_heap_deletes = vacrelstats->num_dead_tuples

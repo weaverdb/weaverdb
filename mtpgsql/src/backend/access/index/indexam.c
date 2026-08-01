@@ -232,6 +232,23 @@ TupleCount index_bulkdelete(Relation relation,int delcount, ItemPointerData* del
 	return (TupleCount)DatumGetLong(fmgr(procedure, relation, delcount, del_heappointers));
 }
 
+/*
+ * Optional post-bulkdelete vacuum cleanup. AMs without amvacuumcleanup
+ * (btree, hash, …) leave the slot InvalidOid and this is a no-op.
+ */
+void
+index_vacuumcleanup(Relation relation)
+{
+	RegProcedure procedure;
+
+	RELATION_CHECKS;
+	procedure = relation->rd_am->amvacuumcleanup;
+	if (!RegProcedureIsValid(procedure))
+		return;
+
+	fmgr(procedure, relation);
+}
+
 /* ----------------
  *		index_beginscan - start a scan of an index
  * ----------------
