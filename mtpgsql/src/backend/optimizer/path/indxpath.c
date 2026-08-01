@@ -933,6 +933,15 @@ pgvector_index_useful_for_ordering(Query *root,
 	if (!index->ordering || index->ordering[0] == InvalidOid)
 		return false;
 
+	/*
+	 * Residual WHERE filters on an ANN ordered scan are approximate: far
+	 * rows that match the filter may never be visited. Keep Seq+Sort for
+	 * hybrid WHERE+ORDER BY so results stay exact; pure ORDER BY LIMIT
+	 * still uses Index Scan.
+	 */
+	if (rel->baserestrictinfo != NIL)
+		return false;
+
 	/* Column indexes need a heap attnum; functional indexes use indexkeys[0]==0 */
 	if (!index->indexkeys)
 		return false;
@@ -944,14 +953,11 @@ pgvector_index_useful_for_ordering(Query *root,
 		return false;
 	pki = (PathKeyItem *) lfirst(sublist);
 	/*
-	 * PG7 SortClauses use the result type's default sortop (float8 <),
-	 * while index->ordering is the distance operator (<->). Until ANN
-	 * IndexPath pathkeys and neighbor-tuple build are fixed end-to-end,
-	 * refuse ordered index paths so the planner keeps Seq Scan + Sort
-	 * (correct results). Match distance OpExpr when re-enabling.
+	 * PG7 SortClauses use the result type's default sortop (float8 <) on
+	 * the distance expression, while index->ordering is the distance
+	 * operator (<-> / <#> / <=>). Match the OpExpr operator, not
+	 * PathKeyItem.sortop.
 	 */
-	if (pki->sortop != index->ordering[0])
-		return false;
 	if (!IsA(pki->key, Expr))
 		return false;
 

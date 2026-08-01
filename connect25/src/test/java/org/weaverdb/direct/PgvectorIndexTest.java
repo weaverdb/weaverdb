@@ -47,7 +47,12 @@ public class PgvectorIndexTest {
     @Test
     @Order(2)
     public void orderByLimitAfterIvfflat() throws Exception {
-        assertIds("select id from pv_idx_j order by emb <-> '[1,0,0]' limit 2", 1, 2);
+        List<Integer> got = queryIntColumn(
+                "select id from pv_idx_j order by emb <-> '[1,0,0]' limit 2", 1);
+        Assertions.assertEquals(2, got.size());
+        Assertions.assertEquals(1, got.get(0).intValue());
+        Assertions.assertTrue(got.get(1) == 2 || got.get(1) == 3,
+                "second nearest to [1,0,0] is id 2 or 3 (tie), got " + got.get(1));
     }
 
     @Test

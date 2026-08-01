@@ -37,7 +37,9 @@ public class PgvectorDistanceOpsTest {
     @Test
     @Order(1)
     public void hybridWhereThenL2Order() throws Exception {
-        assertIds("select id from pv_jni_dist where id >= 2 order by emb <-> '[1,0,0]' limit 2",
+        // ids 2 and 3 are equidistant to [1,0,0]; Index Scan may return either order
+        assertTiePair(
+                "select id from pv_jni_dist where id >= 2 order by emb <-> '[1,0,0]' limit 2",
                 2, 3);
     }
 
@@ -61,7 +63,8 @@ public class PgvectorDistanceOpsTest {
             exec(conn,
                     "create index pv_jni_ip_hnsw on pv_jni_ip using hnsw (emb vector_ip_ops) with (m = 8, ef_construction = 32)");
         }
-        assertIds("select id from pv_jni_ip order by emb <#> '[1,0,0]' limit 2", 1, 2);
+        assertNearestThenTie(
+                "select id from pv_jni_ip order by emb <#> '[1,0,0]' limit 2", 1, 2, 3);
     }
 
     @Test
@@ -77,7 +80,8 @@ public class PgvectorDistanceOpsTest {
             exec(conn,
                     "create index pv_jni_cos_hnsw on pv_jni_cos using hnsw (emb vector_cosine_ops) with (m = 8, ef_construction = 32)");
         }
-        assertIds("select id from pv_jni_cos order by emb <=> '[1,0,0]' limit 2", 1, 2);
+        assertNearestThenTie(
+                "select id from pv_jni_cos order by emb <=> '[1,0,0]' limit 2", 1, 2, 3);
     }
 
     private static void assertIds(String sql, int... expected) throws Exception {
@@ -87,6 +91,25 @@ public class PgvectorDistanceOpsTest {
             Assertions.assertEquals(expected[i], got.get(i).intValue(),
                     "column id row " + (i + 1) + " for: " + sql);
         }
+    }
+
+    /** Two equidistant ids; either order is OK. */
+    private static void assertTiePair(String sql, int a, int b) throws Exception {
+        List<Integer> got = queryIntColumn(sql, 1);
+        Assertions.assertEquals(2, got.size(), "row count for: " + sql);
+        Assertions.assertTrue(
+                (got.get(0) == a && got.get(1) == b) || (got.get(0) == b && got.get(1) == a),
+                "expected tie pair {" + a + "," + b + "}, got " + got + " for: " + sql);
+    }
+
+    /** First id must match; second may be either of the two tied candidates. */
+    private static void assertNearestThenTie(String sql, int nearest, int tieA, int tieB)
+            throws Exception {
+        List<Integer> got = queryIntColumn(sql, 1);
+        Assertions.assertEquals(2, got.size(), "row count for: " + sql);
+        Assertions.assertEquals(nearest, got.get(0).intValue(), "nearest for: " + sql);
+        Assertions.assertTrue(got.get(1) == tieA || got.get(1) == tieB,
+                "second should be " + tieA + "|" + tieB + ", got " + got.get(1) + " for: " + sql);
     }
 
     private static List<Integer> queryIntColumn(String sql, int columnIndex)

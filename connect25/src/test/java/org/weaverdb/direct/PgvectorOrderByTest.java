@@ -45,6 +45,7 @@ public class PgvectorOrderByTest {
     @Test
     @Order(2)
     public void orderByL2DistanceLimit3() throws Exception {
+        // Without an index, Seq+Sort keeps insertion order among ties.
         assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
     }
 
@@ -84,7 +85,9 @@ public class PgvectorOrderByTest {
     @Test
     @Order(6)
     public void orderByL2DistanceLimit3WithIvfflatIndex() throws Exception {
-        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
+        // Index Scan may reorder equidistant ids 2 and 3
+        assertNearestThenTiePair(
+                "select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
     }
 
     @Test
@@ -99,13 +102,16 @@ public class PgvectorOrderByTest {
     @Test
     @Order(8)
     public void orderByL2DistanceLimit3WithHnswIndex() throws Exception {
-        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
+        assertNearestThenTiePair(
+                "select id from pv_ob_j order by emb <-> '[1,0,0]' limit 3", 1, 2, 3);
     }
 
     @Test
     @Order(9)
     public void orderByLimitWithOffset() throws Exception {
-        assertIds("select id from pv_ob_j order by emb <-> '[1,0,0]' limit 2 offset 1", 2, 3);
+        // After indexes exist, offset into the tied pair may be 2,3 or 3,2
+        assertTiePair(
+                "select id from pv_ob_j order by emb <-> '[1,0,0]' limit 2 offset 1", 2, 3);
     }
 
     private static void assertIds(String sql, int... expected) throws Exception {
@@ -115,6 +121,26 @@ public class PgvectorOrderByTest {
             Assertions.assertEquals(expected[i], got.get(i).intValue(),
                     "column id row " + (i + 1) + " for: " + sql);
         }
+    }
+
+    private static void assertTiePair(String sql, int a, int b) throws Exception {
+        List<Integer> got = queryIntColumn(sql, 1);
+        Assertions.assertEquals(2, got.size(), "row count for: " + sql);
+        Assertions.assertTrue(
+                (got.get(0) == a && got.get(1) == b) || (got.get(0) == b && got.get(1) == a),
+                "expected tie pair {" + a + "," + b + "}, got " + got + " for: " + sql);
+    }
+
+    private static void assertNearestThenTiePair(String sql, int nearest, int tieA, int tieB)
+            throws Exception {
+        List<Integer> got = queryIntColumn(sql, 1);
+        Assertions.assertEquals(3, got.size(), "row count for: " + sql);
+        Assertions.assertEquals(nearest, got.get(0).intValue(), "nearest for: " + sql);
+        Assertions.assertTrue(
+                (got.get(1) == tieA && got.get(2) == tieB)
+                        || (got.get(1) == tieB && got.get(2) == tieA),
+                "expected tied pair {" + tieA + "," + tieB + "} after nearest, got " + got
+                        + " for: " + sql);
     }
 
     private static List<Integer> queryIntColumn(String sql, int columnIndex)

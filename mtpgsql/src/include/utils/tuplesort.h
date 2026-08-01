@@ -70,6 +70,13 @@ PG_EXTERN bool tuplesort_getdatum(Tuplesortstate *state, bool forward,
 PG_EXTERN void tuplesort_end(Tuplesortstate *state);
 
 /*
+ * Discard sorted/loaded data and prepare to accept a new batch of input
+ * tuples (used by ivfflat iterative probe batches). Preserves sort keys
+ * and comparison callbacks.
+ */
+PG_EXTERN void tuplesort_reset(Tuplesortstate *state);
+
+/*
  * These routines may only be called if randomAccess was specified 'true'.
  * Likewise, backwards scan in gettuple/getdatum is only allowed if
  * randomAccess was specified.

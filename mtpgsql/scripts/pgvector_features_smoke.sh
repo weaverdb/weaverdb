@@ -207,7 +207,15 @@ out=$(run_session \
 assert_no_error "halfvec ip index DDL" "$out"
 
 out=$(run_session "select id from pv_feat_hv order by emb <#> '[1,0,0]' limit 2;")
-assert_ids "halfvec_ip_ops ORDER BY <#>" "$out" 1 2
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: halfvec_ip_ops ORDER BY <#> (1 then tie 2|3)"
+else
+  echo "FAIL: halfvec_ip_ops ORDER BY <#> (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 out=$(run_session \
   "create index pv_feat_hv_cos_ivf on pv_feat_hv using ivfflat (emb halfvec_cosine_ops) with (lists = 2);" \
@@ -215,7 +223,15 @@ out=$(run_session \
 assert_no_error "halfvec cosine index DDL" "$out"
 
 out=$(run_session "select id from pv_feat_hv order by emb <=> '[1,0,0]' limit 2;")
-assert_ids "halfvec_cosine_ops ORDER BY <=>" "$out" 1 2
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: halfvec_cosine_ops ORDER BY <=> (1 then tie 2|3)"
+else
+  echo "FAIL: halfvec_cosine_ops ORDER BY <=> (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 echo "--- sparsevec ip/cosine hnsw opclasses ---"
 
@@ -228,14 +244,30 @@ out=$(run_session \
 assert_no_error "sparsevec ip index DDL" "$out"
 
 out=$(run_session "select id from pv_feat_sv order by emb <#> '{1:1}/3' limit 2;")
-assert_ids "sparsevec_ip_ops ORDER BY <#>" "$out" 1 2
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: sparsevec_ip_ops ORDER BY <#> (1 then tie 2|3)"
+else
+  echo "FAIL: sparsevec_ip_ops ORDER BY <#> (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 out=$(run_session \
   "create index pv_feat_sv_cos on pv_feat_sv using hnsw (emb sparsevec_cosine_ops) with (m = 8, ef_construction = 32);")
 assert_no_error "sparsevec cosine index DDL" "$out"
 
 out=$(run_session "select id from pv_feat_sv order by emb <=> '{1:1}/3' limit 2;")
-assert_ids "sparsevec_cosine_ops ORDER BY <=>" "$out" 1 2
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: sparsevec_cosine_ops ORDER BY <=> (1 then tie 2|3)"
+else
+  echo "FAIL: sparsevec_cosine_ops ORDER BY <=> (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 echo "--- bit ivfflat hamming and hnsw jaccard ---"
 
@@ -338,7 +370,15 @@ out=$(run_session \
   "create index pv_feat_blob_ivf on pv_feat_blob using ivfflat (bytea_to_vector(emb) vector_l2_ops) with (lists = 2);" \
   "select id from pv_feat_blob order by bytea_to_vector(emb) <-> '[1,0,0]' limit 2;")
 assert_no_error "bytea functional indexes" "$out"
-assert_ids "bytea functional ORDER BY nearest" "$out" 1 2
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: bytea functional ORDER BY nearest (1 then tie 2|3)"
+else
+  echo "FAIL: bytea functional ORDER BY nearest (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 out=$(run_session \
   "insert into pv_feat_blob values (4, vector_to_bytea('[1,1,0]'));" \
@@ -367,7 +407,15 @@ out=$(run_session \
   "create index pv_feat_half_blob_hnsw on pv_feat_half_blob using hnsw (bytea_to_halfvec(emb) halfvec_l2_ops) with (m = 8, ef_construction = 32);" \
   "select id from pv_feat_half_blob order by bytea_to_halfvec(emb) <-> '[1,0,0]'::halfvec limit 2;")
 assert_no_error "halfvec bytea functional index" "$out"
-assert_ids "halfvec bytea functional ORDER BY nearest" "$out" 1 2
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: halfvec bytea functional ORDER BY nearest (1 then tie 2|3)"
+else
+  echo "FAIL: halfvec bytea functional ORDER BY nearest (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 # --- large bytea stays insertable (attstorage extended / blob-indirect) ---
 # Build a ~9KB float32 blob via convert from a high-dim vector literal path is heavy;
@@ -384,6 +432,27 @@ else
   echo "$out" >&2
   failures=$((failures + 1))
 fi
+
+echo "--- binary_quantize + sparsevec btree ---"
+
+out=$(run_session \
+  "select binary_quantize('[1,-1,0.5,0]'::vector);" \
+  "select halfvec_binary_quantize('[1,-1,0.5,0]'::halfvec);")
+assert_no_error "binary_quantize family" "$out"
+
+out=$(run_session \
+  "create table pv_feat_sv_bt (id int, emb sparsevec);" \
+  "insert into pv_feat_sv_bt values (1, '{1:1}/3');" \
+  "insert into pv_feat_sv_bt values (2, '{1:2}/3');" \
+  "insert into pv_feat_sv_bt values (3, '{2:1}/3');" \
+  "create index pv_feat_sv_bt_idx on pv_feat_sv_bt using btree (emb sparsevec_ops);" \
+  "select id from pv_feat_sv_bt where emb = '{1:1}/3'::sparsevec;")
+assert_no_error "sparsevec_ops btree" "$out"
+assert_ids "sparsevec btree equality" "$out" 1
+
+out=$(run_session \
+  "select id from pv_feat_sv_bt where emb < '{1:2}/3'::sparsevec order by emb;")
+assert_ids "sparsevec btree range order" "$out" 3 1
 
 echo "--- runtime search knobs (SET/SHOW/RESET) ---"
 

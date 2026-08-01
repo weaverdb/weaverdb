@@ -618,10 +618,62 @@ PageIndexMultiDelete(Page page, OffsetNumber *itemnos, int nitems)
 	(void) page; (void) itemnos; (void) nitems;
 }
 
+/*
+ * Replace an existing index tuple in place (modern PG API missing from PG7).
+ * Same-size overwrite is the common HNSW neighbor-tuple path; larger tuples
+ * require free space and relocate preceding item data like upstream.
+ */
 static inline bool
-PageIndexTupleOverwrite(Page page, OffsetNumber off, Item item, Size size)
+PageIndexTupleOverwrite(Page page, OffsetNumber offnum, Item item, Size newsize)
 {
-	(void) page; (void) off; (void) item; (void) size;
+	PageHeader	phdr = (PageHeader) page;
+	ItemId		tupid;
+	Size		oldsize;
+	Size		alignedold;
+	Size		alignednew;
+	unsigned	offset;
+	int			size_diff;
+	int			itemcount;
+	int			i;
+
+	if (page == NULL || item == NULL || newsize == 0)
+		return false;
+
+	itemcount = PageGetMaxOffsetNumber(page);
+	if ((int) offnum <= 0 || (int) offnum > itemcount)
+		elog(ERROR, "PageIndexTupleOverwrite: invalid offnum %u", offnum);
+
+	tupid = PageGetItemId(page, offnum);
+	if (!(tupid->lp_flags & LP_USED))
+		elog(ERROR, "PageIndexTupleOverwrite: unused item %u", offnum);
+
+	oldsize = ItemIdGetLength(tupid);
+	offset = ItemIdGetOffset(tupid);
+	alignedold = MAXALIGN(oldsize);
+	alignednew = MAXALIGN(newsize);
+
+	if (alignednew > alignedold + (phdr->pd_upper - phdr->pd_lower))
+		return false;
+
+	size_diff = (int) alignedold - (int) alignednew;
+	if (size_diff != 0)
+	{
+		char	   *addr = (char *) page + phdr->pd_upper;
+
+		memmove(addr + size_diff, addr, offset - phdr->pd_upper);
+		phdr->pd_upper += size_diff;
+		for (i = FirstOffsetNumber; i <= itemcount; i++)
+		{
+			ItemId		ii = PageGetItemId(page, i);
+
+			if ((ii->lp_flags & LP_USED) && ItemIdGetOffset(ii) <= offset)
+				ii->lp_off += size_diff;
+		}
+	}
+
+	tupid->lp_off = offset + size_diff;
+	tupid->lp_len = newsize;
+	memcpy((char *) page + tupid->lp_off, item, newsize);
 	return true;
 }
 

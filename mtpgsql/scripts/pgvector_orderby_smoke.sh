@@ -71,7 +71,16 @@ fi
 echo "OK: setup table, rows, ivfflat + hnsw"
 
 out=$(run_session "select id from pv_ob order by emb <-> '[1,0,0]' limit 3;")
-assert_ids "L2 order to [1,0,0] limit 3" "$out" 1 2 3
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+third=$(echo "$got" | sed -n '3p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) && ( "$third" == "2" || "$third" == "3" ) && "$second" != "$third" ]]; then
+  echo "OK: L2 order to [1,0,0] limit 3 (1 then tie 2|3)"
+else
+  echo "FAIL: L2 order to [1,0,0] limit 3 (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 out=$(run_session "select id from pv_ob order by emb <-> '[1,0,0]' limit 1;")
 assert_ids "L2 order limit 1" "$out" 1
@@ -89,7 +98,15 @@ fi
 
 out=$(run_session \
   "select id from pv_ob where id >= 2 order by emb <-> '[1,0,0]' limit 2;")
-assert_ids "WHERE id>=2 then L2 order" "$out" 2 3
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ ( "$first" == "2" || "$first" == "3" ) && ( "$second" == "2" || "$second" == "3" ) && "$first" != "$second" ]]; then
+  echo "OK: WHERE id>=2 then L2 order (tie 2|3)"
+else
+  echo "FAIL: WHERE id>=2 then L2 order (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 out=$(run_session \
   "select id from pv_ob where id in (1, 4) order by emb <-> '[1,0,0]';")
@@ -97,7 +114,15 @@ assert_ids "filter ids 1,4 nearest first" "$out" 1 4
 
 out=$(run_session \
   "select id from pv_ob order by l2_distance(emb, '[1,0,0]') limit 2;")
-assert_ids "ORDER BY l2_distance() expr" "$out" 1 2
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+second=$(echo "$got" | sed -n '2p')
+if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+  echo "OK: ORDER BY l2_distance() expr (1 then tie 2|3)"
+else
+  echo "FAIL: ORDER BY l2_distance() expr (got: $(echo "$got" | tr '\n' ' '))" >&2
+  failures=$((failures + 1))
+fi
 
 # Cosine on pv_ob: [9,0,0] is parallel to [1,0,0] so cosine distance is 0
 out=$(run_session \
@@ -117,7 +142,15 @@ if echo "$out" | grep -qi ERROR; then
   echo "$out" >&2
   failures=$((failures + 1))
 else
-  assert_ids "vector_ip_ops ORDER BY <#> limit 2" "$out" 1 2
+  got=$(ids_from_output "$out")
+  first=$(echo "$got" | sed -n '1p')
+  second=$(echo "$got" | sed -n '2p')
+  if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+    echo "OK: vector_ip_ops ORDER BY <#> limit 2 (1 then tie 2|3)"
+  else
+    echo "FAIL: vector_ip_ops ORDER BY <#> (got: $(echo "$got" | tr '\n' ' '))" >&2
+    failures=$((failures + 1))
+  fi
 fi
 
 out=$(run_session \
@@ -133,33 +166,41 @@ if echo "$out" | grep -qi ERROR; then
   echo "$out" >&2
   failures=$((failures + 1))
 else
-  assert_ids "vector_cosine_ops ORDER BY <=> limit 2" "$out" 1 2
+  got=$(ids_from_output "$out")
+  first=$(echo "$got" | sed -n '1p')
+  second=$(echo "$got" | sed -n '2p')
+  if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+    echo "OK: vector_cosine_ops ORDER BY <=> limit 2 (1 then tie 2|3)"
+  else
+    echo "FAIL: vector_cosine_ops ORDER BY <=> (got: $(echo "$got" | tr '\n' ' '))" >&2
+    failures=$((failures + 1))
+  fi
 fi
 
 echo "--- EXPLAIN: distance ORDER BY plan ---"
 
 out=$(run_session \
+  "set enable_seqscan = off;" \
   "explain select id from pv_ob order by emb <-> '[1,0,0]' limit 2;")
 if echo "$out" | grep -qi ERROR; then
   echo "FAIL: EXPLAIN ORDER BY <->" >&2
   echo "$out" >&2
   failures=$((failures + 1))
-elif echo "$out" | grep -q 'QUERY PLAN' && echo "$out" | grep -qE 'Sort|Index Scan|Seq Scan'; then
-  # ANN Index Scan is not yet selected for ORDER BY (neighbor-tuple build gap);
-  # Seq Scan + Sort is the correct working plan today.
-  echo "OK: EXPLAIN produces a distance ORDER BY plan"
+elif echo "$out" | grep -q 'Index Scan'; then
+  echo "OK: EXPLAIN uses Index Scan for L2 ORDER BY"
 else
-  echo "FAIL: EXPLAIN missing expected plan nodes" >&2
+  echo "FAIL: EXPLAIN expected Index Scan for L2 ORDER BY" >&2
   echo "$out" >&2
   failures=$((failures + 1))
 fi
 
 out=$(run_session \
+  "set enable_seqscan = off;" \
   "explain select id from pv_cos order by emb <=> '[1,0,0]' limit 2;")
-if echo "$out" | grep -q 'QUERY PLAN' && echo "$out" | grep -qE 'Sort|Index Scan|Seq Scan'; then
-  echo "OK: EXPLAIN produces a cosine ORDER BY plan"
+if echo "$out" | grep -q 'Index Scan'; then
+  echo "OK: EXPLAIN uses Index Scan for cosine ORDER BY"
 else
-  echo "FAIL: EXPLAIN expected plan for cosine" >&2
+  echo "FAIL: EXPLAIN expected Index Scan for cosine" >&2
   echo "$out" >&2
   failures=$((failures + 1))
 fi
@@ -231,7 +272,15 @@ if echo "$out" | grep -qi ERROR; then
   echo "$out" >&2
   failures=$((failures + 1))
 else
-  assert_ids "halfvec_l2_ops ORDER BY <-> limit 2" "$out" 1 2
+  got=$(ids_from_output "$out")
+  first=$(echo "$got" | sed -n '1p')
+  second=$(echo "$got" | sed -n '2p')
+  if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+    echo "OK: halfvec_l2_ops ORDER BY <-> limit 2 (1 then tie 2|3)"
+  else
+    echo "FAIL: halfvec_l2_ops ORDER BY <-> (got: $(echo "$got" | tr '\n' ' '))" >&2
+    failures=$((failures + 1))
+  fi
 fi
 
 out=$(run_session \
@@ -246,7 +295,15 @@ if echo "$out" | grep -qi ERROR; then
   echo "$out" >&2
   failures=$((failures + 1))
 else
-  assert_ids "sparsevec_l2_ops ORDER BY <-> limit 2" "$out" 1 2
+  got=$(ids_from_output "$out")
+  first=$(echo "$got" | sed -n '1p')
+  second=$(echo "$got" | sed -n '2p')
+  if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+    echo "OK: sparsevec_l2_ops ORDER BY <-> limit 2 (1 then tie 2|3)"
+  else
+    echo "FAIL: sparsevec_l2_ops ORDER BY <-> (got: $(echo "$got" | tr '\n' ' '))" >&2
+    failures=$((failures + 1))
+  fi
 fi
 
 out=$(run_session \
@@ -261,7 +318,15 @@ if echo "$out" | grep -qi ERROR; then
   echo "$out" >&2
   failures=$((failures + 1))
 else
-  assert_ids "bit_hamming_ops ORDER BY <~> limit 2" "$out" 1 2
+  got=$(ids_from_output "$out")
+  first=$(echo "$got" | sed -n '1p')
+  second=$(echo "$got" | sed -n '2p')
+  if [[ "$first" == "1" && ( "$second" == "2" || "$second" == "3" ) ]]; then
+    echo "OK: bit_hamming_ops ORDER BY <~> limit 2 (1 then tie 2|3)"
+  else
+    echo "FAIL: bit_hamming_ops ORDER BY <~> (got: $(echo "$got" | tr '\n' ' '))" >&2
+    failures=$((failures + 1))
+  fi
 fi
 
 if [[ "$failures" -ne 0 ]]; then

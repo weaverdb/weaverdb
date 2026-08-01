@@ -25,7 +25,7 @@ extern Tuplesortstate *tuplesort_begin_heap(TupleDesc tupDesc, int nkeys,
 											ScanKey keys, bool randomAccess);
 extern void tuplesort_puttuple(Tuplesortstate *state, void *tuple);
 extern void *tuplesort_gettuple(Tuplesortstate *state, bool forward, bool *should_free);
-extern void tuplesort_rescan(Tuplesortstate *state);
+extern void tuplesort_reset(Tuplesortstate *state);
 extern void tuplesort_performsort(Tuplesortstate *state);
 extern void tuplesort_end(Tuplesortstate *state);
 
@@ -173,7 +173,8 @@ pgvector_tuplesort_gettupleslot(Tuplesortstate *state, bool forward, bool copy,
 void
 pgvector_tuplesort_reset(Tuplesortstate *state)
 {
-	tuplesort_rescan(state);
+	/* Must clear for a new put/performsort batch, not rewind sorted output. */
+	tuplesort_reset(state);
 }
 
 static void

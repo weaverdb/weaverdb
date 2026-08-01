@@ -109,6 +109,7 @@ DATA(insert OID = 0 (403 1419 1137 1));
 DATA(insert OID = 0 (403 1989 2010 1));
 DATA(insert OID = 0 (403 1990 2242 1));
 DATA(insert OID = 0 (403 1994 2258 1));
+DATA(insert OID = 0 (403 2023 2336 1));
 
 /* ivfflat vector_l2_ops */
 DATA(insert OID = 0 (406 1991 2241 1));

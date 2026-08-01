@@ -1023,6 +1023,25 @@ DESCR("convert packed bit bytea blob to varbit");
 DATA(insert OID = 2298 (  bit_to_bytea	   PGUID 11 f t t 1 f 17 "1562" 100 0 0 100  bit_to_bytea - ));
 DESCR("convert varbit to packed bit bytea blob");
 
+DATA(insert OID = 2330 (  sparsevec_lt		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_lt - ));
+DESCR("sparsevec less than");
+DATA(insert OID = 2331 (  sparsevec_le		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_le - ));
+DESCR("sparsevec less or equal");
+DATA(insert OID = 2332 (  sparsevec_eq		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_eq - ));
+DESCR("sparsevec equal");
+DATA(insert OID = 2333 (  sparsevec_ne		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_ne - ));
+DESCR("sparsevec not equal");
+DATA(insert OID = 2334 (  sparsevec_ge		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_ge - ));
+DESCR("sparsevec greater or equal");
+DATA(insert OID = 2335 (  sparsevec_gt		   PGUID 11 f t t 2 f 16 "1846 1846" 100 0 0 100  sparsevec_gt - ));
+DESCR("sparsevec greater than");
+DATA(insert OID = 2336 (  sparsevec_cmp		   PGUID 11 f t t 2 f 23 "1846 1846" 100 0 0 100  sparsevec_cmp - ));
+DESCR("sparsevec compare");
+DATA(insert OID = 2337 (  binary_quantize	   PGUID 11 f t t 1 f 1562 "1842" 100 0 0 100  binary_quantize - ));
+DESCR("quantize vector to bit");
+DATA(insert OID = 2338 (  halfvec_binary_quantize	   PGUID 11 f t t 1 f 1562 "1844" 100 0 0 100  halfvec_binary_quantize - ));
+DESCR("quantize halfvec to bit");
+
 #define F_VECTORIN	2237
 #define F_VECTOROUT	2238
 #define F_L2_DISTANCE	2240
@@ -1035,6 +1054,8 @@ DESCR("convert varbit to packed bit bytea blob");
 #define F_SPARSEVEC_TO_BYTEA	2296
 #define F_BYTEA_TO_BIT	2297
 #define F_BIT_TO_BYTEA	2298
+#define F_BINARY_QUANTIZE	2337
+#define F_HALFVEC_BINARY_QUANTIZE	2338
 
 DATA(insert OID = 449 (  hashint2		   PGUID 11 f t t 1 f 23 "21" 100 0 0 100  hashint2 - ));
 DESCR("hash");
