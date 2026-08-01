@@ -458,18 +458,16 @@ else
   failures=$((failures + 1))
 fi
 
-# --- large bytea stays insertable (attstorage extended / blob-indirect) ---
-# Build a ~9KB float32 blob via convert from a high-dim vector literal path is heavy;
-# probe that small bytea still works and oversized vector(bytea) path is wired.
+# --- bytea columns keep plain storage (vector/halfvec/sparsevec stay 'e') ---
 out=$(run_session \
   "create table pv_feat_ba_storage (id int, emb bytea);" \
   "insert into pv_feat_ba_storage values (1, vector_to_bytea('[1,0,0]'));" \
   "select attstorage from pg_attribute a, pg_class c where c.relname = 'pv_feat_ba_storage' and a.attrelid = c.oid and a.attname = 'emb';")
 assert_no_error "bytea attstorage probe" "$out"
-if echo "$out" | grep -Fq 'attstorage = "e"'; then
-  echo "OK: bytea attstorage is extended"
+if echo "$out" | grep -Fq 'attstorage = "p"'; then
+  echo "OK: bytea attstorage is plain"
 else
-  echo "FAIL: expected bytea attstorage='e'" >&2
+  echo "FAIL: expected bytea attstorage='p'" >&2
   echo "$out" >&2
   failures=$((failures + 1))
 fi

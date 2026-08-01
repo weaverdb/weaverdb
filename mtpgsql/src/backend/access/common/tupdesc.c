@@ -466,17 +466,9 @@ TupleDescInitEntry(TupleDesc desc,
 		} else {
 			char	   *typname = NameStr(typeForm->typname);
 
-			/*
-			 * attstorage 'e' marks the column as eligible for blob-indirect
-			 * spanning. hio.c only calls store_tuple_blob when the tuple
-			 * exceeds MaxTupleSize; prioritize_blobs then replaces large
-			 * varlena values with ISINDIRECT headers. Small values stay
-			 * plain/direct inline. Safe for all bytea (not just embeddings).
-			 */
 			if (strcmp(typname, "vector") == 0 ||
 				strcmp(typname, "halfvec") == 0 ||
-				strcmp(typname, "sparsevec") == 0 ||
-				strcmp(typname, "bytea") == 0)
+				strcmp(typname, "sparsevec") == 0)
 				att->attstorage = 'e';
 			else
 				att->attstorage = 'p';

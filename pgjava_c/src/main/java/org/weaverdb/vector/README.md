@@ -49,8 +49,9 @@ try (Statement s = conn.statement(
 | Sparse | `*_to_sparsevec` / `sparsevec_to_*` | `dim\|nnz\|0\|indices[nnz]\|values[nnz]` |
 | Bit | `*_to_bit` / `bit_to_*` | `int32 bitlen \| MSB-packed bits` |
 
-Large `bytea` / `blob` / vector columns use `attstorage='e'`: small values stay
-inline; oversized tuples span via blob-indirect (`ISINDIRECT`) storage automatically.
+Typed `blob` / `vector` / `halfvec` / `sparsevec` columns use `attstorage='e'`:
+small values stay inline; oversized tuples span via blob-indirect (`ISINDIRECT`)
+storage. Plain `bytea` columns keep `attstorage='p'`.
 
 ## Deprecated framing
 
