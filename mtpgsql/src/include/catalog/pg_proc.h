@@ -1042,6 +1042,18 @@ DESCR("quantize vector to bit");
 DATA(insert OID = 2338 (  halfvec_binary_quantize	   PGUID 11 f t t 1 f 1562 "1844" 100 0 0 100  halfvec_binary_quantize - ));
 DESCR("quantize halfvec to bit");
 
+DATA(insert OID = 2339 (  vector_recv		   PGUID 11 f t t 3 f 1842 "0 0 23" 100 0 0 100  vector_recv - ));
+DESCR("vector binary receive");
+DATA(insert OID = 2340 (  vector_send		   PGUID 11 f t t 1 f 17 "1842" 100 0 0 100  vector_send - ));
+DESCR("vector binary send");
+DATA(insert OID = 2341 (  halfvec_recv		   PGUID 11 f t t 3 f 1844 "0 0 23" 100 0 0 100  halfvec_recv - ));
+DESCR("halfvec binary receive");
+DATA(insert OID = 2342 (  halfvec_send		   PGUID 11 f t t 1 f 17 "1844" 100 0 0 100  halfvec_send - ));
+DESCR("halfvec binary send");
+DATA(insert OID = 2343 (  sparsevec_recv	   PGUID 11 f t t 3 f 1846 "0 0 23" 100 0 0 100  sparsevec_recv - ));
+DESCR("sparsevec binary receive");
+DATA(insert OID = 2344 (  sparsevec_send	   PGUID 11 f t t 1 f 17 "1846" 100 0 0 100  sparsevec_send - ));
+DESCR("sparsevec binary send");
 /* vector / halfvec arithmetic, aggregates, leftover helpers (OIDs 2346+) */
 DATA(insert OID = 2346 (  vector_add		   PGUID 11 f t t 2 f 1842 "1842 1842" 100 0 0 100  vector_add - ));
 DESCR("vector element-wise add");
@@ -1114,6 +1126,12 @@ DESCR("halfvec avg finalize (sum / count)");
 #define F_BIT_TO_BYTEA	2298
 #define F_BINARY_QUANTIZE	2337
 #define F_HALFVEC_BINARY_QUANTIZE	2338
+#define F_VECTOR_RECV	2339
+#define F_VECTOR_SEND	2340
+#define F_HALFVEC_RECV	2341
+#define F_HALFVEC_SEND	2342
+#define F_SPARSEVEC_RECV	2343
+#define F_SPARSEVEC_SEND	2344
 
 DATA(insert OID = 449 (  hashint2		   PGUID 11 f t t 1 f 23 "21" 100 0 0 100  hashint2 - ));
 DESCR("hash");

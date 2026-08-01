@@ -26,14 +26,13 @@
 
 #define PG_RETURN_BYTEA_P(x)    return (Datum)0 /* replaced below after PG7 arg wiring */
 #define PG_RETURN_POINTER(x)    return (Datum)0
-#define pq_sendfloat4(buf,f)    ((void)0)
-#define pq_endtypsend(buf)      ((void*)0)
-#define pq_begin_typsend()      ((StringInfo)0)
 
 #define PG_RETURN_INT32(x)      return (Datum)0
-#define pq_getmsgint(buf,sz)    (0)
-#define pq_getmsgfloat4(buf)    (0.0f)
-#define pq_begintypsend(buf)    ((void)0)
+/*
+ * pq_begintypsend / pq_endtypsend / pq_sendfloat4 / pq_getmsgint /
+ * pq_getmsgfloat4 are real helpers in libpq/pqformat.c (typreceive/typsend).
+ * Do not stub them: no-ops returned NULL bytea / zero vectors.
+ */
 
 #define float_overflow_error()  ((void)0)
 #define float_underflow_error() ((void)0)

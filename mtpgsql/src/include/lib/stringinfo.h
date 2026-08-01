@@ -27,6 +27,7 @@
  *				string size (including the terminating '\0' char) that we can
  *				currently store in 'data' without having to reallocate
  *				more space.  We must always have maxlen > len.
+ *		cursor	is a read position for pq_getmsg* parsers (typreceive).
  *-------------------------
  */
 typedef struct StringInfoData
@@ -34,6 +35,7 @@ typedef struct StringInfoData
 	char	   *data;
 	int			len;
 	int			maxlen;
+	int			cursor;
 } StringInfoData;
 
 typedef StringInfoData *StringInfo;
