@@ -1309,3 +1309,58 @@ sparsevec_to_vector(PG_FUNCTION_ARGS)
 
 	PG_RETURN_POINTER(result);
 }
+
+/*
+ * Convert packed float32 bytes (native endian) to vector.
+ *
+ * Primary ingest path for embedding blobs: apps bind bytea / byte[] and
+ * convert for storage or for functional indexes over blob columns.
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(bytea_to_vector);
+Datum
+bytea_to_vector(PG_FUNCTION_ARGS)
+{
+	bytea	   *raw = PG_GETARG_BYTEA_P(0);
+	int32		typmod = -1;
+	Size		nbytes;
+	int			dim;
+	Vector	   *result;
+	int			i;
+
+	nbytes = VARSIZE(raw) - VARHDRSZ;
+	if (nbytes % sizeof(float) != 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("bytea length must be a multiple of 4 for vector")));
+
+	dim = (int) (nbytes / sizeof(float));
+	CheckDim(dim);
+	CheckExpectedDim(typmod, dim);
+
+	result = InitVector(dim);
+	memcpy(result->x, VARDATA(raw), nbytes);
+
+	for (i = 0; i < dim; i++)
+		CheckElement(result->x[i]);
+
+	PG_RETURN_POINTER(result);
+}
+
+/*
+ * Convert vector to packed float32 bytes (native endian).
+ */
+FUNCTION_PREFIX PG_FUNCTION_INFO_V1(vector_to_bytea);
+Datum
+vector_to_bytea(PG_FUNCTION_ARGS)
+{
+	Vector	   *vec = PG_GETARG_VECTOR_P(0);
+	Size		nbytes;
+	bytea	   *result;
+
+	nbytes = sizeof(float) * (Size) vec->dim;
+	result = (bytea *) palloc(VARHDRSZ + nbytes);
+	SET_VARSIZE(result, VARHDRSZ + nbytes);
+	memcpy(VARDATA(result), vec->x, nbytes);
+
+	PG_RETURN_BYTEA_P(result);
+}

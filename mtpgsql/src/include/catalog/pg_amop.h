@@ -461,6 +461,15 @@ DATA(insert OID = 0 (  403 1990 2307 4 ));
 DATA(insert OID = 0 (  403 1990 2305 5 ));
 
 /*
+ *	nbtree halfvec_ops
+ */
+DATA(insert OID = 0 (  403 1994 2313 1 ));
+DATA(insert OID = 0 (  403 1994 2315 2 ));
+DATA(insert OID = 0 (  403 1994 2317 3 ));
+DATA(insert OID = 0 (  403 1994 2316 4 ));
+DATA(insert OID = 0 (  403 1994 2314 5 ));
+
+/*
  *	ivfflat vector_l2_ops
  */
 DATA(insert OID = 0 (  406 1991 2301 1 ));

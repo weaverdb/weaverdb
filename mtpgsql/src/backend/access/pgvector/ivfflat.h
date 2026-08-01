@@ -330,6 +330,8 @@ int			IvfflatGetLists(Relation index);
 void		IvfflatSetBuildLists(Oid indexId, int lists);
 void		IvfflatClearBuildLists(Oid indexId);
 int			IvfflatInferIndexDimensions(Relation heap, AttrNumber attnum);
+int			IvfflatInferIndexDimensionsEx(Relation heap, AttrNumber attnum,
+										  AttrNumber *attnums, FuncIndexInfo *finfo);
 void		IvfflatGetMetaPageInfo(Relation index, int *lists, int *dimensions);
 void		IvfflatUpdateList(Relation index, ListInfo listInfo, BlockNumber insertPage, BlockNumber originalInsertPage, BlockNumber startPage, ForkNumber forkNum);
 void		IvfflatCommitBuffer(Relation index, Buffer buf);

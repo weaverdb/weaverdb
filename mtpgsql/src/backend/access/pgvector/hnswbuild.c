@@ -686,7 +686,12 @@ InitBuildState(HnswBuildState * buildstate, Relation heap, Relation index, Pgvec
 		else
 			heapatt = TupleDescAttr(inddesc, 0)->attnum;
 
-		buildstate->dimensions = IvfflatInferIndexDimensions(heap, heapatt);
+		if (indexInfo != NULL && indexInfo->ii_FuncIndexInfo != NULL)
+			buildstate->dimensions = IvfflatInferIndexDimensionsEx(heap, heapatt,
+																   indexInfo->ii_KeyAttributeNumbers,
+																   indexInfo->ii_FuncIndexInfo);
+		else
+			buildstate->dimensions = IvfflatInferIndexDimensions(heap, heapatt);
 	}
 
 	/* Require column to have dimensions to be indexed */

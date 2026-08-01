@@ -263,6 +263,36 @@ enum TransferType {
             return ((String)value).length();
         }
     },
+    BINARY {
+        @Override
+        int getType() {
+            return DirectWeaverConnection.BYTEA;
+        }
+
+        @Override
+        Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
+            switch (type) {
+                case DirectWeaverConnection.BYTEA:
+                case DirectWeaverConnection.BLOB:
+                case DirectWeaverConnection.STREAM:
+                    byte[] buf = new byte[varLen];
+                    MemorySegment.copy(val, 0, MemorySegment.ofArray(buf), 0, varLen);
+                    return buf;
+                default:
+                    throw new ExecutionException("unable to convert");
+            }
+        }
+
+        @Override
+        int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
+            byte[] bytes = (byte[]) value;
+            if (bytes.length > varLen) {
+                throw new ExecutionException("bytea value exceeds transfer buffer");
+            }
+            MemorySegment.copy(MemorySegment.ofArray(bytes), 0, val, 0, bytes.length);
+            return bytes.length;
+        }
+    },
     OBJECT {
         @Override
         int getType() {
@@ -309,22 +339,26 @@ enum TransferType {
         }
     };
     
-    public static Map<Class<?>, TransferType> types = Map.of(
-        Boolean.class, TransferType.BOOLEAN,
-        Byte.class, TransferType.BYTE,
-        Character.class, TransferType.CHAR,
-        Short.class, TransferType.SHORT,
-        Integer.class, TransferType.INTEGER,
-        Float.class, TransferType.FLOAT,
-        Long.class, TransferType.LONG,
-        String.class, TransferType.STRING,
-        Object.class, TransferType.OBJECT,
-        Date.class, TransferType.DATE
+    public static Map<Class<?>, TransferType> types = Map.ofEntries(
+        Map.entry(Boolean.class, TransferType.BOOLEAN),
+        Map.entry(Byte.class, TransferType.BYTE),
+        Map.entry(Character.class, TransferType.CHAR),
+        Map.entry(Short.class, TransferType.SHORT),
+        Map.entry(Integer.class, TransferType.INTEGER),
+        Map.entry(Float.class, TransferType.FLOAT),
+        Map.entry(Long.class, TransferType.LONG),
+        Map.entry(String.class, TransferType.STRING),
+        Map.entry(Object.class, TransferType.OBJECT),
+        Map.entry(Date.class, TransferType.DATE),
+        Map.entry(byte[].class, TransferType.BINARY)
     );
     
     public static TransferType type(Class<?> type) {
         if (type.isPrimitive()) {
             type = convertPrimative(type);
+        }
+        if (type != null && type.isArray() && type.getComponentType() == byte.class) {
+            return TransferType.BINARY;
         }
         return types.get(type);
     }

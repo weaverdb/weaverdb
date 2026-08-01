@@ -20,6 +20,7 @@ import org.junit.platform.suite.api.Suite;
         PgvectorIndexTest.class,
         PgvectorMutationsTest.class,
         PgvectorIndirectBlobTest.class,
+        PgvectorBlobIndexTest.class,
         PgvectorConnect21Test.class,
         PgvectorFeaturesShellTest.class
 })

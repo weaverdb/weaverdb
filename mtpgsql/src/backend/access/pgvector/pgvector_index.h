@@ -2,6 +2,7 @@
 #define PGVECTOR_INDEX_H
 
 #include "postgres.h"
+#include "access/funcindex.h"
 
 /*
  * Index build/insert context for pgvector access methods on WeaverDB.
@@ -13,6 +14,7 @@ typedef struct PgvectorIndexInfo
 	int			ii_NumKeyAttributes;
 	int			ii_NumIndexAttrs;
 	AttrNumber *ii_KeyAttributeNumbers;
+	FuncIndexInfo *ii_FuncIndexInfo;
 	bool		ii_Concurrent;
 } PgvectorIndexInfo;
 

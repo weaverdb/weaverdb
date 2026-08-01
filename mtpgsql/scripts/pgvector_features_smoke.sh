@@ -115,6 +115,72 @@ assert_scalar "halfvec_cosine_distance" "$out" "halfvec_cosine_distance" "1"
 assert_scalar "halfvec_lt" "$out" "halfvec_lt" "t"
 assert_scalar "halfvec_eq" "$out" "halfvec_eq" "t"
 
+echo "--- vector / halfvec comparison operators and btree opclasses ---"
+
+out=$(run_session \
+  "select vector_lt('[1,0,0]'::vector, '[2,0,0]'::vector);" \
+  "select vector_eq('[1,0,0]'::vector, '[1,0,0]'::vector);" \
+  "select vector_ne('[1,0,0]'::vector, '[1,0,1]'::vector);" \
+  "select vector_le('[1,0,0]'::vector, '[1,0,0]'::vector);" \
+  "select vector_ge('[2,0,0]'::vector, '[1,0,0]'::vector);" \
+  "select vector_gt('[2,0,0]'::vector, '[1,0,0]'::vector);" \
+  "select vector_cmp('[1,0,0]'::vector, '[2,0,0]'::vector);" \
+  "select vector_eq('[1,0,0]'::vector, '[2,0,0]'::vector);" \
+  "select '[1,0,0]'::vector < '[2,0,0]'::vector;" \
+  "select '[2,0,0]'::vector < '[2,0,0]'::vector;" \
+  "select '[1,0,0]'::vector = '[1,0,0]'::vector;" \
+  "select '[1,0,0]'::vector <> '[1,0,1]'::vector;")
+assert_no_error "vector comparison funcs/ops" "$out"
+assert_scalar "vector_lt" "$out" "vector_lt" "t"
+assert_scalar "vector_eq true" "$out" "vector_eq" "t"
+assert_scalar "vector_ne" "$out" "vector_ne" "t"
+assert_scalar "vector_cmp" "$out" "vector_cmp" "-1"
+assert_scalar "vector_eq false" "$out" "vector_eq" "f"
+assert_scalar "vector < operator" "$out" "?column?" "t"
+assert_scalar "vector < equal is false" "$out" "?column?" "f"
+
+out=$(run_session \
+  "select '[1,0,0]'::halfvec < '[2,0,0]'::halfvec;" \
+  "select '[1,0,0]'::halfvec = '[1,0,0]'::halfvec;" \
+  "select '[1,0,0]'::halfvec <> '[1,0,1]'::halfvec;" \
+  "select '[1,0,0]'::halfvec <= '[1,0,0]'::halfvec;" \
+  "select '[2,0,0]'::halfvec >= '[1,0,0]'::halfvec;" \
+  "select '[2,0,0]'::halfvec > '[1,0,0]'::halfvec;" \
+  "select '[1,0,0]'::halfvec < '[1,0,0]'::halfvec;" \
+  "select '[1,0,0]'::halfvec = '[2,0,0]'::halfvec;")
+assert_no_error "halfvec comparison operators" "$out"
+assert_scalar "halfvec < operator" "$out" "?column?" "t"
+assert_scalar "halfvec < equal is false" "$out" "?column?" "f"
+assert_scalar "halfvec = false" "$out" "?column?" "f"
+
+out=$(run_session \
+  "create table pv_feat_bt (id int, emb vector);" \
+  "insert into pv_feat_bt values (1, '[1,0,0]');" \
+  "insert into pv_feat_bt values (2, '[2,0,0]');" \
+  "insert into pv_feat_bt values (3, '[0,1,0]');" \
+  "create index pv_feat_bt_idx on pv_feat_bt using btree (emb vector_ops);" \
+  "select id from pv_feat_bt where emb = '[1,0,0]';")
+assert_no_error "vector btree vector_ops" "$out"
+assert_ids "vector btree equality" "$out" 1
+
+out=$(run_session \
+  "select id from pv_feat_bt where emb < '[2,0,0]' order by emb;")
+assert_ids "vector btree range order" "$out" 3 1
+
+out=$(run_session \
+  "create table pv_feat_hv_bt (id int, emb halfvec);" \
+  "insert into pv_feat_hv_bt values (1, '[1,0,0]');" \
+  "insert into pv_feat_hv_bt values (2, '[2,0,0]');" \
+  "insert into pv_feat_hv_bt values (3, '[0,1,0]');" \
+  "create index pv_feat_hv_bt_idx on pv_feat_hv_bt using btree (emb halfvec_ops);" \
+  "select id from pv_feat_hv_bt where emb = '[1,0,0]';")
+assert_no_error "halfvec btree halfvec_ops" "$out"
+assert_ids "halfvec btree equality" "$out" 1
+
+out=$(run_session \
+  "select id from pv_feat_hv_bt where emb < '[2,0,0]' order by emb;")
+assert_ids "halfvec btree range order" "$out" 3 1
+
 out=$(run_session \
   "select sparsevec_l2_squared_distance('{1:1}/3'::sparsevec, '{2:1}/3'::sparsevec);" \
   "select sparsevec_l2_norm('{3:4}/5'::sparsevec);" \
@@ -255,6 +321,30 @@ else
   echo "$out" >&2
   failures=$((failures + 1))
 fi
+
+# --- bytea blob ↔ vector conversion + functional index ---
+out=$(run_session \
+  "select vector_to_bytea('[1,0,0]'::vector) is not null;" \
+  "select bytea_to_vector(vector_to_bytea('[1,0,0]'::vector)) <-> '[1,0,0]'::vector;")
+assert_no_error "bytea_to_vector round-trip" "$out"
+assert_scalar "bytea_to_vector distance" "$out" "?column?" "0"
+
+out=$(run_session \
+  "create table pv_feat_blob (id int, emb bytea);" \
+  "insert into pv_feat_blob values (1, vector_to_bytea('[1,0,0]'));" \
+  "insert into pv_feat_blob values (2, vector_to_bytea('[0,1,0]'));" \
+  "insert into pv_feat_blob values (3, vector_to_bytea('[0,0,1]'));" \
+  "create index pv_feat_blob_hnsw on pv_feat_blob using hnsw (bytea_to_vector(emb) vector_l2_ops) with (m = 8, ef_construction = 32);" \
+  "create index pv_feat_blob_ivf on pv_feat_blob using ivfflat (bytea_to_vector(emb) vector_l2_ops) with (lists = 2);" \
+  "select id from pv_feat_blob order by bytea_to_vector(emb) <-> '[1,0,0]' limit 2;")
+assert_no_error "bytea functional indexes" "$out"
+assert_ids "bytea functional ORDER BY nearest" "$out" 1 2
+
+out=$(run_session \
+  "insert into pv_feat_blob values (4, vector_to_bytea('[1,1,0]'));" \
+  "select id from pv_feat_blob order by bytea_to_vector(emb) <-> '[1,1,0]' limit 1;")
+assert_no_error "bytea functional post-index insert" "$out"
+assert_ids "bytea functional post-index nearest" "$out" 4
 
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures pgvector feature check(s) failed" >&2

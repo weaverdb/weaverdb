@@ -14,6 +14,7 @@
 #include "access/istrat.h"
 #include "access/skey.h"
 #include "catalog/index.h"
+#include "catalog/pg_index.h"
 #include "fmgr.h"
 #include "hnsw.h"
 #include "ivfflat.h"
@@ -24,6 +25,7 @@
 #include "nodes/relation.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 
 #include "catalog/pg_am.h"
 #include "nodes/execnodes.h"
@@ -46,7 +48,7 @@ BuildIndexInfo(Relation index)
 }
 
 static PgvectorIndexInfo *
-pgvector_make_indexinfo(int natts, AttrNumber *attnum)
+pgvector_make_indexinfo(int natts, AttrNumber *attnum, FuncIndexInfo *finfo)
 {
 	PgvectorIndexInfo  *info;
 
@@ -54,6 +56,7 @@ pgvector_make_indexinfo(int natts, AttrNumber *attnum)
 	info->ii_NumKeyAttributes = natts;
 	info->ii_NumIndexAttrs = natts;
 	info->ii_KeyAttributeNumbers = attnum;
+	info->ii_FuncIndexInfo = finfo;
 	info->ii_Concurrent = false;
 	return info;
 }
@@ -105,7 +108,6 @@ ivfflatbuild(Relation heap,
 	IndexBuildResult *result;
 
 	(void) istrat;
-	(void) finfo;
 	(void) predInfo;
 
 	{
@@ -119,7 +121,7 @@ ivfflatbuild(Relation heap,
 				 IVFFLAT_MIN_LISTS, IVFFLAT_MAX_LISTS);
 
 		IvfflatSetBuildLists(RelationGetRelid(index), lists);
-		indexInfo = pgvector_make_indexinfo(natts, attnum);
+		indexInfo = pgvector_make_indexinfo(natts, attnum, finfo);
 		result = ivfflat_buildindex(heap, index, indexInfo);
 		IvfflatClearBuildLists(RelationGetRelid(index));
 	}
@@ -254,7 +256,6 @@ hnswbuild(Relation heap,
 	IndexBuildResult *result;
 
 	(void) istrat;
-	(void) finfo;
 	(void) predInfo;
 
 	{
@@ -273,7 +274,7 @@ hnswbuild(Relation heap,
 				 HNSW_MIN_EF_CONSTRUCTION, HNSW_MAX_EF_CONSTRUCTION);
 
 		HnswSetBuildParams(RelationGetRelid(index), m, ef);
-		indexInfo = pgvector_make_indexinfo(natts, attnum);
+		indexInfo = pgvector_make_indexinfo(natts, attnum, finfo);
 		result = hnsw_buildindex(heap, index, indexInfo);
 		HnswClearBuildParams(RelationGetRelid(index));
 	}
@@ -380,6 +381,8 @@ pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
 	Datum		val;
 	bool		isnull;
 	bool		isDone;
+	Relation	indexRel;
+	Oid			indproc = InvalidOid;
 
 	if (scan == NULL || orderExpr == NULL || !IsA(orderExpr, Expr))
 		return;
@@ -392,12 +395,33 @@ pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
 	val = (Datum) 0;
 	isnull = true;
 
+	indexRel = scan->relation;
+	if (indexRel != NULL)
+	{
+		HeapTuple	tuple;
+
+		tuple = SearchSysCacheTuple(INDEXRELID,
+									ObjectIdGetDatum(RelationGetRelid(indexRel)),
+									0, 0, 0);
+		if (HeapTupleIsValid(tuple))
+			indproc = ((Form_pg_index) GETSTRUCT(tuple))->indproc;
+	}
+
 	foreach(arglist, expr->args)
 	{
 		Node	   *arg = (Node *) lfirst(arglist);
 
+		/* Indexed column side: plain Var or functional f(col) */
 		if (IsA(arg, Var))
 			continue;
+		if (indproc != InvalidOid && IsA(arg, Expr))
+		{
+			Expr	   *fexpr = (Expr *) arg;
+
+			if (fexpr->opType == FUNC_EXPR && IsA(fexpr->oper, Func) &&
+				((Func *) fexpr->oper)->funcid == indproc)
+				continue;
+		}
 
 		val = ExecEvalExpr(arg, econtext, NULL, &isnull, &isDone);
 		break;
