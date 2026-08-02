@@ -1223,6 +1223,12 @@ lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats)
         LockRelation(indrel,RowExclusiveLock);
         
 	nitupsremoved = (TupleCount) index_bulkdelete(indrel, vacrelstats->num_dead_tuples, vacrelstats->dead_tuples);
+	/*
+	 * amvacuumcleanup (HNSW/IVFFlat graph repair stats, etc.) must run
+	 * here — still inside the pre-barrier window — so any pages it
+	 * dirties are included in FlushAllDirtyBuffersDurable before heap
+	 * LP cleanup.  Do not move this past lazy_index_barrier_then_heap.
+	 */
 	index_vacuumcleanup(indrel);
 
 	unused_recorded = vacrelstats->num_unused_dead_tuples;
