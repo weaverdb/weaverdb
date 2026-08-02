@@ -109,11 +109,17 @@ ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 
 				if (ndeletable > 0)
 				{
-					/* Delete tuples */
+					/*
+					 * Delete tuples and commit the buffer. Weaver persists
+					 * page mutations via WriteBuffer (IvfflatCommitBuffer);
+					 * UnlockReleaseBuffer alone would drop in-memory deletes
+					 * on eviction.
+					 */
 					PageIndexMultiDelete(page, deletable, ndeletable);
+					IvfflatCommitBuffer(index, buf);
 				}
-
-				UnlockReleaseBuffer(buf);
+				else
+					UnlockReleaseBuffer(buf);
 			}
 
 			/*

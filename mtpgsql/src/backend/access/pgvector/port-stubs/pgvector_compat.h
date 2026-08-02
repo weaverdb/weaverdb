@@ -506,10 +506,6 @@ extern Datum  Float8GetDatum(float8 X);
 	ReadBuffer((rel), (blockNum))
 #endif
 
-#ifndef MarkBufferDirty
-#define MarkBufferDirty(buf) ((void) (buf))
-#endif
-
 /* Prefer call-site rewrites with Relation; these macros assume `index` in scope */
 #ifndef UnlockReleaseBuffer
 #define UnlockReleaseBuffer(buf) \

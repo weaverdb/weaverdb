@@ -123,7 +123,14 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 
 		blkno = HnswPageGetOpaque(page)->nextblkno;
 
-		UnlockReleaseBuffer(buf);
+		/*
+		 * Persist heap-TID compaction. UnlockReleaseBuffer alone would drop
+		 * in-memory updates on eviction; HnswWriteBuffer schedules the write.
+		 */
+		if (updated)
+			HnswWriteBuffer(index, buf);
+		else
+			UnlockReleaseBuffer(buf);
 	}
 }
 
@@ -225,8 +232,8 @@ RepairGraphElement(HnswVacuumState * vacuumstate, HnswElement element, HnswEleme
 	if (!PageIndexTupleOverwrite(page, element->neighborOffno, (Item) ntup, ntupSize))
 		elog(ERROR, "failed to add index item to \"%s\"", RelationGetRelationName(index));
 
-	/* Commit */
-	UnlockReleaseBuffer(buf);
+	/* Commit neighbor page via WriteBuffer */
+	HnswWriteBuffer(index, buf);
 
 	/* Update neighbors */
 	HnswUpdateNeighborsOnDisk(index, support, element, m, true, false);
@@ -456,6 +463,7 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 		Page		page;
 		OffsetNumber offno;
 		OffsetNumber maxoffno;
+		bool		pageUpdated = false;
 
 		vacuum_delay_point();
 
@@ -540,9 +548,11 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 			 * PageIndexTupleOverwrite
 			 */
 
-			/* Commit */
+			/* Commit neighbor page when it is a separate buffer */
 			if (nbuf != buf)
-				UnlockReleaseBuffer(nbuf);
+				HnswWriteBuffer(index, nbuf);
+
+			pageUpdated = true;
 
 			/* Set to first free page */
 			if (!BlockNumberIsValid(insertPage))
@@ -554,7 +564,14 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 
 		blkno = HnswPageGetOpaque(page)->nextblkno;
 
-		UnlockReleaseBuffer(buf);
+		/*
+		 * Persist in-place deleted marks. UnlockReleaseBuffer alone would
+		 * drop updates on eviction; HnswWriteBuffer schedules the write.
+		 */
+		if (pageUpdated)
+			HnswWriteBuffer(index, buf);
+		else
+			UnlockReleaseBuffer(buf);
 	}
 
 	/* Update insert page last, after everything has been marked as deleted */
