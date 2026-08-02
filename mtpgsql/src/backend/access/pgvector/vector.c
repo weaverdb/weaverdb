@@ -468,8 +468,10 @@ array_to_vector(PG_FUNCTION_ARGS)
 	}
 	else if (ARR_ELEMTYPE(array) == NUMERICOID)
 	{
-		for (int i = 0; i < nelemsp; i++)
-			result->x[i] = 0.0f; /* numeric->float stub for initial build integration */
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("numeric[] to vector conversion is not supported"),
+				 errhint("Cast the array to float4[] or float8[] first.")));
 	}
 	else
 	{

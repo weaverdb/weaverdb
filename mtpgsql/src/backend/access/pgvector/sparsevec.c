@@ -719,8 +719,10 @@ array_to_sparsevec(PG_FUNCTION_ARGS)
 	}
 	else if (ARR_ELEMTYPE(array) == NUMERICOID)
 	{
-		for (int i = 0; i < nelemsp; i++)
-			nnz += IS_NOT_ZERO(0.0f /* numeric stub */ );
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("numeric[] to sparsevec conversion is not supported"),
+				 errhint("Cast the array to float4[] or float8[] first.")));
 	}
 	else
 	{
@@ -759,11 +761,6 @@ array_to_sparsevec(PG_FUNCTION_ARGS)
 	{
 		for (int i = 0; i < nelemsp; i++)
 			PROCESS_ARRAY_ELEM(DatumGetFloat4(elemsp[i]));
-	}
-	else if (ARR_ELEMTYPE(array) == NUMERICOID)
-	{
-		for (int i = 0; i < nelemsp; i++)
-			PROCESS_ARRAY_ELEM(0.0f /* numeric stub */ );
 	}
 	else
 	{

@@ -106,6 +106,37 @@ public class PgvectorMutationsTest {
         Assertions.assertEquals(1, got.get(0).intValue());
     }
 
+    /**
+     * IVFFlat must remove index items on VACUUM. If PageIndexMultiDelete is a
+     * no-op, a stale index key can outlive the heap tuple and, after TID reuse,
+     * rank the wrong live row as a near neighbor.
+     */
+    @Test
+    @Order(8)
+    public void ivfflatVacuumRemovesStaleEntries() throws Exception {
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            exec(conn, "create table pv_jni_vac_ivf (id int, emb vector)");
+            exec(conn, "insert into pv_jni_vac_ivf values (1, '[1,0,0]')");
+            exec(conn, "insert into pv_jni_vac_ivf values (2, '[0,1,0]')");
+            exec(conn, "insert into pv_jni_vac_ivf values (3, '[0,0,1]')");
+            exec(conn, "insert into pv_jni_vac_ivf values (4, '[0.95,0.05,0]')");
+            exec(conn,
+                    "create index pv_jni_vac_ivf_idx on pv_jni_vac_ivf using ivfflat (emb vector_l2_ops) with (lists = 2)");
+            exec(conn, "delete from pv_jni_vac_ivf where id = 4");
+            exec(conn, "vacuum pv_jni_vac_ivf");
+            exec(conn, "insert into pv_jni_vac_ivf values (40, '[0,1,0]')");
+            exec(conn, "set enable_seqscan = off");
+            exec(conn, "set ivfflat.probes = 2");
+        }
+        List<Integer> nearest = queryIntColumn(
+                "select id from pv_jni_vac_ivf order by emb <-> '[1,0,0]' limit 1", 1);
+        Assertions.assertEquals(List.of(1), nearest);
+        List<Integer> top = queryIntColumn(
+                "select id from pv_jni_vac_ivf order by emb <-> '[1,0,0]' limit 5", 1);
+        Assertions.assertFalse(top.contains(4), "deleted id must not appear after VACUUM");
+        Assertions.assertTrue(top.contains(1));
+    }
+
     private static int queryInt(String sql) throws ExecutionException {
         try (DBReference conn = DBReferenceManager.connect("template1");
                 Statement s = conn.statement(sql)) {

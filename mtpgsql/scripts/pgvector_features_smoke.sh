@@ -674,6 +674,55 @@ assert_no_error "simd-width + tail" "$out"
 assert_scalar "simd inner_product 17d ones" "$out" "inner_product" "17"
 assert_scalar "simd l2_squared sparse 17d" "$out" "vector_l2_squared_distance" "2"
 
+echo "--- IVFFlat vacuum delete correctness (TID reuse) ---"
+# PageIndexMultiDelete must actually remove index items. If it no-ops, a stale
+# IVFFlat entry keeps the deleted vector key while the heap TID can be reused
+# by a later INSERT — Index Scan then ranks the wrong live row as a neighbor.
+out=$(run_session \
+  "create table pv_feat_vac_ivf (id int, emb vector);" \
+  "insert into pv_feat_vac_ivf values (1, '[1,0,0]');" \
+  "insert into pv_feat_vac_ivf values (2, '[0,1,0]');" \
+  "insert into pv_feat_vac_ivf values (3, '[0,0,1]');" \
+  "insert into pv_feat_vac_ivf values (4, '[0.95,0.05,0]');" \
+  "create index pv_feat_vac_ivf_idx on pv_feat_vac_ivf using ivfflat (emb vector_l2_ops) with (lists = 2);" \
+  "delete from pv_feat_vac_ivf where id = 4;" \
+  "vacuum pv_feat_vac_ivf;" \
+  "insert into pv_feat_vac_ivf values (40, '[0,1,0]');" \
+  "set enable_seqscan = off;" \
+  "set ivfflat.probes = 2;" \
+  "select id from pv_feat_vac_ivf order by emb <-> '[1,0,0]' limit 1;")
+assert_no_error "ivfflat vacuum TID-reuse setup" "$out"
+assert_ids "ivfflat vacuum: nearest to [1,0,0] stays id=1 (not reused TID)" "$out" 1
+
+out=$(run_session \
+  "set enable_seqscan = off;" \
+  "select id from pv_feat_vac_ivf order by emb <-> '[1,0,0]' limit 5;")
+assert_no_error "ivfflat vacuum post-delete scan" "$out"
+if echo "$out" | grep -qE 'id = "4"'; then
+  echo "FAIL: deleted id=4 still visible via IVFFlat after VACUUM" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+else
+  echo "OK: deleted id=4 absent from IVFFlat ANN results"
+fi
+
+echo "--- HNSW vacuum after delete (no deleted ids; live nearest) ---"
+out=$(run_session \
+  "create table pv_feat_vac_hnsw (id int, emb vector);" \
+  "insert into pv_feat_vac_hnsw values (1, '[1,0,0]');" \
+  "insert into pv_feat_vac_hnsw values (2, '[0,1,0]');" \
+  "insert into pv_feat_vac_hnsw values (3, '[0,0,1]');" \
+  "insert into pv_feat_vac_hnsw values (4, '[0.95,0.05,0]');" \
+  "create index pv_feat_vac_hnsw_idx on pv_feat_vac_hnsw using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32);" \
+  "delete from pv_feat_vac_hnsw where id = 4;" \
+  "vacuum pv_feat_vac_hnsw;" \
+  "insert into pv_feat_vac_hnsw values (40, '[0,1,0]');" \
+  "set enable_seqscan = off;" \
+  "set hnsw.ef_search = 40;" \
+  "select id from pv_feat_vac_hnsw order by emb <-> '[1,0,0]' limit 1;")
+assert_no_error "hnsw vacuum setup" "$out"
+assert_ids "hnsw vacuum: nearest to [1,0,0] stays id=1" "$out" 1
+
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures pgvector feature check(s) failed" >&2
   exit 1

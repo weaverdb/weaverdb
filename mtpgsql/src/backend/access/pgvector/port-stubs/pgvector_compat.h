@@ -659,10 +659,26 @@ vacuum_delay_point(void)
 {
 }
 
+/*
+ * Delete multiple index tuples from a page.
+ *
+ * Callers (e.g. ivfflat bulkdelete) pass itemnos in ascending order. Walk
+ * the array from high to low and call PageIndexTupleDelete so earlier
+ * offsets remain valid as line pointers are compacted — same strategy
+ * upstream uses for the nitems <= 2 fast path.
+ */
+#include "storage/bufpage.h"
+
 static inline void
 PageIndexMultiDelete(Page page, OffsetNumber *itemnos, int nitems)
 {
-	(void) page; (void) itemnos; (void) nitems;
+	int			i;
+
+	if (page == NULL || itemnos == NULL || nitems <= 0)
+		return;
+
+	for (i = nitems - 1; i >= 0; i--)
+		PageIndexTupleDelete(page, itemnos[i]);
 }
 
 /*

@@ -61,11 +61,9 @@ PgvectorModuleInit(void)
 /* ----------------------------------------------------------------
  * Minimal deconstruct_array / construct_array for pgvector's needs.
  *
- * Only supports simple 1-dimensional arrays of int4/float4/float8
- * (and falls back for numeric by returning 0s). It walks the
- * project's ArrayType layout using ARR_DIMS / ARR_DATA_PTR and
- * produces a palloc'ed Datum[] of *values* (by-val style so that
- * DatumGetFloat4 etc in pgvector code see the bits in the Datum word).
+ * Only supports simple 1-dimensional arrays of int4/float4/float8.
+ * numeric[] is rejected by array_to_* callers (FEATURE_NOT_SUPPORTED);
+ * this helper leaves zeros for unknown element types as a last resort.
  *
  * This makes array_to_vector('{1.0,2.0}'::float4[]) and vector_to_float4
  * work for the common case.
