@@ -20,6 +20,7 @@
 #include "utils/varbit.h"
 #include "vector.h"
 
+#include "simd.h"
 #include "varatt.h"
 
 #define STATE_DIMS(x) (ARR_DIMS(x)[0] - 1)
@@ -539,17 +540,8 @@ halfvec_to_vector(PG_FUNCTION_ARGS)
 VECTOR_TARGET_CLONES static float
 VectorL2SquaredDistance(int dim, float *ax, float *bx)
 {
-	float		distance = 0.0;
-
-	/* Auto-vectorized */
-	for (int i = 0; i < dim; i++)
-	{
-		float		diff = ax[i] - bx[i];
-
-		distance += diff * diff;
-	}
-
-	return distance;
+	/* NEON (arm64) / AVX2 (x86) via utils/simd; scalar fallback otherwise */
+	return simd_l2_squared_f32(ax, bx, dim);
 }
 
 /*
@@ -586,13 +578,8 @@ vector_l2_squared_distance(PG_FUNCTION_ARGS)
 VECTOR_TARGET_CLONES static float
 VectorInnerProduct(int dim, float *ax, float *bx)
 {
-	float		distance = 0.0;
-
-	/* Auto-vectorized */
-	for (int i = 0; i < dim; i++)
-		distance += ax[i] * bx[i];
-
-	return distance;
+	/* NEON (arm64) / AVX2 (x86) via utils/simd; scalar fallback otherwise */
+	return simd_inner_product_f32(ax, bx, dim);
 }
 
 /*
@@ -704,13 +691,7 @@ vector_spherical_distance(PG_FUNCTION_ARGS)
 VECTOR_TARGET_CLONES static float
 VectorL1Distance(int dim, float *ax, float *bx)
 {
-	float		distance = 0.0;
-
-	/* Auto-vectorized */
-	for (int i = 0; i < dim; i++)
-		distance += fabsf(ax[i] - bx[i]);
-
-	return distance;
+	return simd_l1_distance_f32(ax, bx, dim);
 }
 
 /*

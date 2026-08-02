@@ -21,6 +21,14 @@
 #endif
 #endif
 
+/* arm64: convert f16→f32 with NEON (no x86 F16C). Requires FLT16_SUPPORT. */
+#if defined(__ARM_NEON) || defined(__aarch64__)
+#if defined(FLT16_SUPPORT)
+#define HALFVEC_NEON 1
+#include <arm_neon.h>
+#endif
+#endif
+
 static float HalfvecL2SquaredDistanceDefault(int dim, half * ax, half * bx);
 static float HalfvecInnerProductDefault(int dim, half * ax, half * bx);
 static double HalfvecCosineSimilarityDefault(int dim, half * ax, half * bx);
@@ -34,6 +42,34 @@ float		(*HalfvecL1Distance) (int dim, half * ax, half * bx) = HalfvecL1DistanceD
 static float
 HalfvecL2SquaredDistanceDefault(int dim, half * ax, half * bx)
 {
+#ifdef HALFVEC_NEON
+	float32x4_t sum = vdupq_n_f32(0.0f);
+	int			i;
+	float		distance;
+
+	for (i = 0; i + 4 <= dim; i += 4)
+	{
+		float16x4_t ah = vld1_f16((const float16_t *) (ax + i));
+		float16x4_t bh = vld1_f16((const float16_t *) (bx + i));
+		float32x4_t af = vcvt_f32_f16(ah);
+		float32x4_t bf = vcvt_f32_f16(bh);
+		float32x4_t diff = vsubq_f32(af, bf);
+
+		sum = vmlaq_f32(sum, diff, diff);
+	}
+	{
+		float32x2_t sum2 = vadd_f32(vget_low_f32(sum), vget_high_f32(sum));
+
+		distance = vget_lane_f32(vpadd_f32(sum2, sum2), 0);
+	}
+	for (; i < dim; i++)
+	{
+		float		diff = HalfToFloat4(ax[i]) - HalfToFloat4(bx[i]);
+
+		distance += diff * diff;
+	}
+	return distance;
+#else
 	float		distance = 0.0;
 
 	/* Auto-vectorized */
@@ -45,6 +81,7 @@ HalfvecL2SquaredDistanceDefault(int dim, half * ax, half * bx)
 	}
 
 	return distance;
+#endif
 }
 
 #ifdef HALFVEC_DISPATCH
@@ -86,6 +123,29 @@ HalfvecL2SquaredDistanceF16c(int dim, half * ax, half * bx)
 static float
 HalfvecInnerProductDefault(int dim, half * ax, half * bx)
 {
+#ifdef HALFVEC_NEON
+	float32x4_t sum = vdupq_n_f32(0.0f);
+	int			i;
+	float		distance;
+
+	for (i = 0; i + 4 <= dim; i += 4)
+	{
+		float16x4_t ah = vld1_f16((const float16_t *) (ax + i));
+		float16x4_t bh = vld1_f16((const float16_t *) (bx + i));
+		float32x4_t af = vcvt_f32_f16(ah);
+		float32x4_t bf = vcvt_f32_f16(bh);
+
+		sum = vmlaq_f32(sum, af, bf);
+	}
+	{
+		float32x2_t sum2 = vadd_f32(vget_low_f32(sum), vget_high_f32(sum));
+
+		distance = vget_lane_f32(vpadd_f32(sum2, sum2), 0);
+	}
+	for (; i < dim; i++)
+		distance += HalfToFloat4(ax[i]) * HalfToFloat4(bx[i]);
+	return distance;
+#else
 	float		distance = 0.0;
 
 	/* Auto-vectorized */
@@ -93,6 +153,7 @@ HalfvecInnerProductDefault(int dim, half * ax, half * bx)
 		distance += HalfToFloat4(ax[i]) * HalfToFloat4(bx[i]);
 
 	return distance;
+#endif
 }
 
 #ifdef HALFVEC_DISPATCH
@@ -202,6 +263,29 @@ HalfvecCosineSimilarityF16c(int dim, half * ax, half * bx)
 static float
 HalfvecL1DistanceDefault(int dim, half * ax, half * bx)
 {
+#ifdef HALFVEC_NEON
+	float32x4_t sum = vdupq_n_f32(0.0f);
+	int			i;
+	float		distance;
+
+	for (i = 0; i + 4 <= dim; i += 4)
+	{
+		float16x4_t ah = vld1_f16((const float16_t *) (ax + i));
+		float16x4_t bh = vld1_f16((const float16_t *) (bx + i));
+		float32x4_t af = vcvt_f32_f16(ah);
+		float32x4_t bf = vcvt_f32_f16(bh);
+
+		sum = vaddq_f32(sum, vabsq_f32(vsubq_f32(af, bf)));
+	}
+	{
+		float32x2_t sum2 = vadd_f32(vget_low_f32(sum), vget_high_f32(sum));
+
+		distance = vget_lane_f32(vpadd_f32(sum2, sum2), 0);
+	}
+	for (; i < dim; i++)
+		distance += fabsf(HalfToFloat4(ax[i]) - HalfToFloat4(bx[i]));
+	return distance;
+#else
 	float		distance = 0.0;
 
 	/* Auto-vectorized */
@@ -209,6 +293,7 @@ HalfvecL1DistanceDefault(int dim, half * ax, half * bx)
 		distance += fabsf(HalfToFloat4(ax[i]) - HalfToFloat4(bx[i]));
 
 	return distance;
+#endif
 }
 
 #ifdef HALFVEC_DISPATCH

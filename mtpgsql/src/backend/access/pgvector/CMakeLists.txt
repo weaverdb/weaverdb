@@ -66,3 +66,28 @@ target_compile_definitions(pgvector PRIVATE
     PGDLLEXPORT=
 )
 
+# SIMD distance kernels (header-only: utils/simd/simd.h).
+# Include path is direct because access/ is configured before utils/ creates the
+# simd INTERFACE target. NEON is always available on arm64; AVX2/FMA for x86
+# Release only (Debug stays plain -g).
+target_include_directories(pgvector PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/simd
+)
+
+option(WEAVER_PGVECTOR_SIMD_NATIVE "Enable -mavx2/-mfma for pgvector on x86 Release" ON)
+if(WEAVER_PGVECTOR_SIMD_NATIVE AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64" OR
+       (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "x86_64"))
+        include(CheckCCompilerFlag)
+        check_c_compiler_flag("-mavx2" WEAVER_PGVECTOR_HAVE_MAVX2)
+        check_c_compiler_flag("-mfma" WEAVER_PGVECTOR_HAVE_MFMA)
+        if(WEAVER_PGVECTOR_HAVE_MAVX2)
+            target_compile_options(pgvector PRIVATE -mavx2)
+        endif()
+        if(WEAVER_PGVECTOR_HAVE_MFMA)
+            target_compile_options(pgvector PRIVATE -mfma)
+        endif()
+    endif()
+endif()
+
+

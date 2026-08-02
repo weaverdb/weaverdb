@@ -646,6 +646,34 @@ out=$(run_session \
 assert_no_error "serial hnsw/ivfflat index build" "$out"
 assert_ids "serial build ANN nearest" "$out" 1
 
+echo "--- SIMD-width distance correctness (dims that hit NEON/AVX lanes) ---"
+
+# 16-dim vectors: NEON processes 4 floats/iter, AVX2 8 — exercises vectorized path + tail.
+# Expected IP = sum_{i=0..15} (i+1)*(i+1) = sum k^2 for k=1..16 = 16*17*33/6 = 1496
+# Expected L2^2 of a vs zeros = same 1496; L2^2(a,a) = 0; L1(a, zeros) = sum 1..16 = 136
+out=$(run_session \
+  "select inner_product('[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::vector, '[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::vector);" \
+  "select vector_l2_squared_distance('[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::vector, '[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]'::vector);" \
+  "select vector_l2_squared_distance('[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::vector, '[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::vector);" \
+  "select l1_distance('[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::vector, '[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]'::vector);" \
+  "select halfvec_inner_product('[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::halfvec, '[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::halfvec);" \
+  "select halfvec_l2_squared_distance('[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]'::halfvec, '[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]'::halfvec);")
+assert_no_error "simd-width distances" "$out"
+assert_scalar "simd inner_product 16d" "$out" "inner_product" "1496"
+assert_scalar "simd vector_l2_squared vs zero" "$out" "vector_l2_squared_distance" "1496"
+assert_scalar "simd vector_l2_squared identical" "$out" "vector_l2_squared_distance" "0"
+assert_scalar "simd l1_distance 16d" "$out" "l1_distance" "136"
+assert_scalar "simd halfvec_inner_product 16d" "$out" "halfvec_inner_product" "1496"
+assert_scalar "simd halfvec_l2_squared 16d" "$out" "halfvec_l2_squared_distance" "1496"
+
+# 17-dim: full SIMD iterations + 1-element scalar tail
+out=$(run_session \
+  "select inner_product('[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]'::vector, '[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]'::vector);" \
+  "select vector_l2_squared_distance('[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]'::vector, '[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]'::vector);")
+assert_no_error "simd-width + tail" "$out"
+assert_scalar "simd inner_product 17d ones" "$out" "inner_product" "17"
+assert_scalar "simd l2_squared sparse 17d" "$out" "vector_l2_squared_distance" "2"
+
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures pgvector feature check(s) failed" >&2
   exit 1
