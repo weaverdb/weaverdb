@@ -33,3 +33,4 @@ mtpgsql/src/include/parser/parse.h
 /build_test/
 hs_err_*.log
 docs/
+gradle-daemon-jvm.properties
