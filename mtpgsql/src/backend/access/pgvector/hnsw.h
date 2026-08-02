@@ -6,11 +6,9 @@
 #include <math.h>
 
 #include "access/genam.h"
-#include "access/parallel.h"
 #include "lib/pairingheap.h"
 #include "pgvector_index.h"
 #include "storage/bufpage.h"
-#include "storage/condition_variable.h"
 #include "storage/lwlock.h"
 #include "storage/s_lock.h"
 #include "utils/relptr.h"
@@ -224,37 +222,6 @@ typedef struct HnswGraph
 	bool		flushed;
 }			HnswGraph;
 
-typedef struct HnswShared
-{
-	/* Immutable state */
-	Oid			heaprelid;
-	Oid			indexrelid;
-	bool		isconcurrent;
-
-	/* Worker progress */
-	ConditionVariable workersdonecv;
-
-	/* Mutex for mutable state */
-	slock_t		mutex;
-
-	/* Mutable state */
-	int			nparticipantsdone;
-	double		reltuples;
-	HnswGraph	graphData;
-}			HnswShared;
-
-#define ParallelTableScanFromHnswShared(shared) \
-	(ParallelTableScanDesc) ((char *) (shared) + BUFFERALIGN(sizeof(HnswShared)))
-
-typedef struct HnswLeader
-{
-	ParallelContext *pcxt;
-	int			nparticipanttuplesorts;
-	HnswShared *hnswshared;
-	Snapshot	snapshot;
-	char	   *hnswarea;
-}			HnswLeader;
-
 typedef struct HnswWeaverParallelShared HnswWeaverParallelShared;
 
 typedef struct HnswAllocator
@@ -314,9 +281,7 @@ typedef struct HnswBuildState
 	MemoryContext tmpCtx;
 	HnswAllocator allocator;
 
-	/* Parallel builds */
-	HnswLeader *hnswleader;
-	HnswShared *hnswshared;
+	/* Weaver pthread parallel builds */
 	char	   *hnswarea;
 	HnswWeaverParallelShared *weaverParallel;
 }			HnswBuildState;
@@ -474,7 +439,6 @@ void		HnswUpdateConnection(char *base, HnswNeighborArray * neighbors, HnswElemen
 bool		HnswLoadNeighborTids(HnswElement element, ItemPointerData *indextids, Relation index, int m, int lm, int lc);
 void		HnswInitLockTranche(void);
 const		HnswTypeInfo *HnswGetTypeInfo(Relation index);
-PGDLLEXPORT void HnswParallelBuildMain(dsm_segment *seg, shm_toc *toc);
 
 /* Index access method implementation (PG7 entry points in pgvector_pg7_am.c) */
 IndexBuildResult *hnsw_buildindex(Relation heap, Relation index, PgvectorIndexInfo *indexInfo);

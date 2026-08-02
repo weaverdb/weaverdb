@@ -122,10 +122,6 @@ typedef struct BufferAccessStrategyData *BufferAccessStrategy;
 /* itemptr callback — full ItemPointer after postgres.h; use void* here */
 typedef bool (*IndexBulkDeleteCallback) (void *itemptr, void *callback_state);
 
-/* DSM / shared memory types (upstream parallel unused; Weaver uses pthreads) */
-typedef struct dsm_segment dsm_segment;
-typedef struct shm_toc shm_toc;
-
 /* VARBITTOTALLEN from modern pg */
 #ifndef VARBITTOTALLEN
 #define VARBITTOTALLEN(BITLEN)   (VARBITDATALEN(BITLEN))

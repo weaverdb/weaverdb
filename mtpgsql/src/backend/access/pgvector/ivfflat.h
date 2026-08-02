@@ -4,10 +4,8 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "access/parallel.h"
 #include "lib/pairingheap.h"
 #include "pgvector_index.h"
-#include "storage/condition_variable.h"
 #include "utils/sampling.h"
 #include "pgvector_tuplesort.h"
 #include "vector.h"
@@ -120,50 +118,6 @@ typedef struct IvfflatOptions
 	int			lists;			/* number of lists */
 }			IvfflatOptions;
 
-typedef struct IvfflatSpool
-{
-	Tuplesortstate *sortstate;
-	Relation	heap;
-	Relation	index;
-}			IvfflatSpool;
-
-typedef struct IvfflatShared
-{
-	/* Immutable state */
-	Oid			heaprelid;
-	Oid			indexrelid;
-	bool		isconcurrent;
-	int			scantuplesortstates;
-
-	/* Worker progress */
-	ConditionVariable workersdonecv;
-
-	/* Mutex for mutable state */
-	slock_t		mutex;
-
-	/* Mutable state */
-	int			nparticipantsdone;
-	double		reltuples;
-	double		indtuples;
-
-#ifdef IVFFLAT_KMEANS_DEBUG
-	double		inertia;
-#endif
-}			IvfflatShared;
-
-#define ParallelTableScanFromIvfflatShared(shared) \
-	(ParallelTableScanDesc) ((char *) (shared) + BUFFERALIGN(sizeof(IvfflatShared)))
-
-typedef struct IvfflatLeader
-{
-	ParallelContext *pcxt;
-	int			nparticipanttuplesorts;
-	IvfflatShared *ivfshared;
-	Sharedsort *sharedsort;
-	Snapshot	snapshot;
-	char	   *ivfcenters;
-}			IvfflatLeader;
-
 typedef struct IvfflatTypeInfo
 {
 	int			maxDimensions;
@@ -220,9 +174,6 @@ typedef struct IvfflatBuildState
 
 	/* Memory */
 	MemoryContext tmpCtx;
-
-	/* Parallel builds */
-	IvfflatLeader *ivfleader;
 }			IvfflatBuildState;
 
 typedef struct IvfflatMetaPageData
@@ -342,7 +293,6 @@ void		IvfflatInitPage(Buffer buf, Page page);
 void		IvfflatInitRegisterPage(Relation index, Buffer *buf, Page *page);
 void		IvfflatInit(void);
 const		IvfflatTypeInfo *IvfflatGetTypeInfo(Relation index);
-PGDLLEXPORT void IvfflatParallelBuildMain(dsm_segment *seg, shm_toc *toc);
 
 /* Index access method implementation (called from pgvector_pg7_am.c entry points) */
 IndexBuildResult *ivfflat_buildindex(Relation heap, Relation index, PgvectorIndexInfo *indexInfo);
