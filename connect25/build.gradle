@@ -36,8 +36,19 @@ tasks.named('test', Test) {
     useJUnitPlatform()
     maxParallelForks = 1
 
-    // Native libs are produced by the top-level CMake build (mkdir build; cmake ...).
-    systemProperty 'java.library.path', rootProject.file('build/mtpg/lib').absolutePath
+    // Native libs are produced by the top-level CMake test build (build_test/).
+    // PgvectorWeaverTestSupport also stages bin/initdb from build_test → connect25/build/mtpg.
+    systemProperty 'java.library.path', rootProject.file('build_test/mtpg/lib').absolutePath
+
+    // Forward optional scale knobs for PgvectorByteaBulkStressTest.
+    def bulkCount = System.getProperty('weaver.vector.bulk.count')
+    if (bulkCount != null) {
+        systemProperty 'weaver.vector.bulk.count', bulkCount
+    }
+    def bulkDim = System.getProperty('weaver.vector.bulk.dim')
+    if (bulkDim != null) {
+        systemProperty 'weaver.vector.bulk.dim', bulkDim
+    }
 
     maxHeapSize = '1G'
     javaLauncher = javaToolchains.launcherFor {

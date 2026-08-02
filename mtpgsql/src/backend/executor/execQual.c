@@ -1636,14 +1636,21 @@ ExecTargetList(List * targetlist,
 	 * form the new result tuple (in the "normal" context)
 	 */
 	newTuple = (HeapTuple) heap_formtuple(targettype, values, null_head);
-	if (econtext->ecxt_scantuple != NULL) {
+	/*
+	 * Copy identity/visibility from the representative scan tuple when one
+	 * exists. Empty aggregates (e.g. count(*) over 0 matching rows) leave
+	 * ecxt_scantuple set with val == NULL; do not dereference that.
+	 */
+	if (econtext->ecxt_scantuple != NULL &&
+	    econtext->ecxt_scantuple->val != NULL &&
+	    econtext->ecxt_scantuple->val->t_data != NULL) {
 		newTuple->t_self = econtext->ecxt_scantuple->val->t_self;
-          /*  we may want to know the exact visiblity of this tuple 
-           *  (ie HardCommit so copy this info as well  
-           */
-                newTuple->t_data->t_xmin = econtext->ecxt_scantuple->val->t_data->t_xmin;
-                newTuple->t_data->t_xmax = econtext->ecxt_scantuple->val->t_data->t_xmax;
-                newTuple->t_data->progress = econtext->ecxt_scantuple->val->t_data->progress;
+		/* we may want to know the exact visiblity of this tuple
+		 * (ie HardCommit so copy this info as well
+		 */
+		newTuple->t_data->t_xmin = econtext->ecxt_scantuple->val->t_data->t_xmin;
+		newTuple->t_data->t_xmax = econtext->ecxt_scantuple->val->t_data->t_xmax;
+		newTuple->t_data->progress = econtext->ecxt_scantuple->val->t_data->progress;
 	}
 exit:
 

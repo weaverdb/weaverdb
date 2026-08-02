@@ -582,10 +582,20 @@ ExecAgg(Agg *node)
 
 		/*
 		 * Store the representative input tuple in the tuple table slot
-		 * reserved for it.
+		 * reserved for it. When there was no input (empty aggregate), leave
+		 * ecxt_scantuple NULL so ExecTargetList does not copy from a cleared
+		 * slot's val pointer.
 		 */
-		ExecStoreTuple(inputTuple,aggstate->csstate.css_ScanTupleSlot,false);
-		econtext->ecxt_scantuple = aggstate->csstate.css_ScanTupleSlot;
+		if (inputTuple == NULL)
+		{
+			ExecClearTuple(aggstate->csstate.css_ScanTupleSlot);
+			econtext->ecxt_scantuple = NULL;
+		}
+		else
+		{
+			ExecStoreTuple(inputTuple, aggstate->csstate.css_ScanTupleSlot, false);
+			econtext->ecxt_scantuple = aggstate->csstate.css_ScanTupleSlot;
+		}
 
 		/*
 		 * Form a projection tuple using the aggregate results and the
