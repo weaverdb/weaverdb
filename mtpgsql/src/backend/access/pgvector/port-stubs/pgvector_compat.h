@@ -139,6 +139,7 @@ typedef bool (*IndexBulkDeleteCallback) (void *itemptr, void *callback_state);
 #include "catalog/pg_type.h"
 #include "access/itup.h"
 #include "access/tupdesc.h"
+#include "env/env.h"
 
 extern char *fmgr_c(FmgrInfo *finfo, FmgrValues *values, bool *isNull);
 /* pg_ltoa → Weaver ltoa (utils/adt/numutils.c); avoid pulling builtins.h here */
@@ -385,8 +386,17 @@ extern Datum  Float8GetDatum(float8 X);
 
 
 /* === PGVECTOR_AM_COMPAT_EXTRA === */
+/*
+ * Weaver cancel is Env-local (Env.cancelled + CheckForCancel), not the modern
+ * PG InterruptPending/ProcessInterrupts stack. Parallel index workers use
+ * DOL-style CreateEnv(parent) so CheckForCancel walks to the leader Env.
+ */
 #ifndef CHECK_FOR_INTERRUPTS
-#define CHECK_FOR_INTERRUPTS() ((void)0)
+#define CHECK_FOR_INTERRUPTS() \
+	do { \
+		if (CheckForCancel()) \
+			elog(ERROR, "Query Cancelled"); \
+	} while (0)
 #endif
 #ifndef unlikely
 #define unlikely(x) (x)
@@ -500,9 +510,14 @@ UnlockRelationForExtension(Relation rel, LOCKMODE mode)
 	(void) rel; (void) mode;
 }
 
+/*
+ * Upstream uses this for VacuumCostDelay pacing. Weaver has no VacuumCost*
+ * knobs — treat it as a cancel point only (same as core vacuum.c).
+ */
 static inline void
 vacuum_delay_point(void)
 {
+	CHECK_FOR_INTERRUPTS();
 }
 
 /*

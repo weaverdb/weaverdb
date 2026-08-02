@@ -6,10 +6,12 @@
 #include "pgvector_index.h"
 
 /*
- * Copy DB/user identity from the leader Env into the current worker Env.
- * Required before RelationInitialize / catalog opens in pthread build workers.
+ * DOL-style worker Env lifecycle for pthread index builds:
+ *   leader: env = pgvector_worker_create_env(GetEnv())  before pthread_create
+ *   worker: SetEnv(env); MemoryContextInit(); …; SetEnv(NULL)  (no DestroyEnv)
+ *   leader: DestroyEnv(env) after pthread_join (serialized parent unlink)
  */
-void pgvector_worker_attach_parent(Env *parent);
+Env *pgvector_worker_create_env(Env *parent);
 
 typedef struct Tuplesortstate Tuplesortstate;
 

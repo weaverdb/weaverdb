@@ -597,6 +597,8 @@ BuildCallback(Relation index, ItemPointer tid, Datum *values,
 	HnswGraph  *graph = buildstate->graph;
 	MemoryContext oldCtx;
 
+	CHECK_FOR_INTERRUPTS();
+
 	/* Skip nulls */
 	if (isnull[0])
 		return;
@@ -772,7 +774,7 @@ struct HnswWeaverParallelShared
 
 typedef struct HnswBuildWorkerArg
 {
-	Env						*parent_env;
+	Env						*env;		/* CreateEnv(parent) on leader */
 	HnswBuildState			*leader;
 	HnswWeaverParallelShared *shared;
 	BlockNumber				start_block;
@@ -879,26 +881,25 @@ static void *
 HnswBuildWorkerMain(void *argp)
 {
 	HnswBuildWorkerArg	   *arg = (HnswBuildWorkerArg *) argp;
-	Env					   *env = NULL;
+	Env					   *env = arg->env;
 	HnswBuildState			wstate;
 	double					reltuples = 0;
+	bool					inited_thread = false;
 
 	arg->ok = false;
 
-	/*
-	 * CreateEnv(parent) must run on a thread that already has GetEnv() set
-	 * (it MemoryContextSwitchTo's into the parent). Worker threads start with
-	 * no Env — use CreateEnv(NULL) like poolsweep/dbwriter, then copy identity.
-	 */
-	env = CreateEnv(NULL);
 	if (env == NULL)
 		return NULL;
 
+	/*
+	 * DOL-style: Env was CreateEnv(parent) on the leader. This thread only
+	 * binds it; DestroyEnv stays on the leader after join.
+	 */
 	SetEnv(env);
 	MemoryContextInit();
-	pgvector_worker_attach_parent(arg->parent_env);
 	SetProcessingMode(InitProcessing);
 	InitThread(NORMAL_THREAD);
+	inited_thread = true;
 	if (!CallableInitInvalidationState())
 		goto worker_failed;
 	RelationInitialize();
@@ -935,9 +936,10 @@ HnswBuildWorkerMain(void *argp)
 	arg->ok = true;
 
 worker_failed:
-	DestroyThread();
+	if (inited_thread)
+		DestroyThread();
 	SetEnv(NULL);
-	DestroyEnv(env);
+	/* Leader DestroyEnv(arg->env) after join. */
 	return NULL;
 }
 
@@ -954,6 +956,7 @@ BuildGraphParallel(HnswBuildState *buildstate, int nworkers)
 	Env		   *parent_env;
 	Size		hnswarea_size;
 	int			i;
+	int			nstarted = 0;
 	bool		ok = true;
 
 	parent_env = GetEnv();
@@ -981,7 +984,12 @@ BuildGraphParallel(HnswBuildState *buildstate, int nworkers)
 	{
 		BlockNumber nblocks = blocks_per_worker + (i < (int) extra ? 1 : 0);
 
-		args[i].parent_env = parent_env;
+		args[i].env = pgvector_worker_create_env(parent_env);
+		if (args[i].env == NULL)
+		{
+			ok = false;
+			break;
+		}
 		args[i].leader = buildstate;
 		args[i].shared = shared;
 		args[i].start_block = blk;
@@ -992,18 +1000,24 @@ BuildGraphParallel(HnswBuildState *buildstate, int nworkers)
 		{
 			ok = false;
 			args[i].ok = false;
-			i++;
 			break;
 		}
+		nstarted++;
 	}
 
-	for (int j = 0; j < i; j++)
-		pthread_join(threads[j], NULL);
+	for (i = 0; i < nstarted; i++)
+		pthread_join(threads[i], NULL);
 
-	for (int j = 0; j < i; j++)
+	for (i = 0; i < nworkers; i++)
 	{
-		if (!args[j].ok)
+		if (i < nstarted && !args[i].ok)
 			ok = false;
+		/* Leader-only DestroyEnv — safe parent context unlink. */
+		if (args[i].env != NULL)
+		{
+			DestroyEnv(args[i].env);
+			args[i].env = NULL;
+		}
 	}
 
 	if (!ok)
@@ -1013,7 +1027,7 @@ BuildGraphParallel(HnswBuildState *buildstate, int nworkers)
 
 	buildstate->reltuples = shared->reltuples;
 
-	ereport(DEBUG1, (errmsg("hnsw parallel build: %d workers, %.0f index tuples",
+	ereport(NOTICE, (errmsg("hnsw parallel build: %d workers, %.0f index tuples",
 							 nworkers, buildstate->graph->indtuples)));
 }
 

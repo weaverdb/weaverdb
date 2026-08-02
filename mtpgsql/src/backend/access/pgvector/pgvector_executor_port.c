@@ -15,19 +15,29 @@
 #include "storage/bufpage.h"
 #include "utils/lsyscache.h"
 
-void
-pgvector_worker_attach_parent(Env *parent)
+Env *
+pgvector_worker_create_env(Env *parent)
 {
-	Env		   *env = GetEnv();
+	Env		   *env;
 
-	if (env == NULL || parent == NULL)
-		return;
+	if (parent == NULL)
+		return NULL;
+
+	/*
+	 * Must run on the leader thread: CreateEnv(parent) → AllocSetContextCreate
+	 * → MemoryContextSwitchTo requires GetEnv(). Parent link gives workers
+	 * CheckForCancel() visibility of WCancel on the leader.
+	 */
+	env = CreateEnv(parent);
+	if (env == NULL)
+		return NULL;
 
 	env->DatabaseId = parent->DatabaseId;
 	env->DatabaseName = parent->DatabaseName;
 	env->DatabasePath = parent->DatabasePath;
 	env->UserName = parent->UserName;
 	env->UserId = parent->UserId;
+	return env;
 }
 
 #undef tuplesort_begin_heap
@@ -237,6 +247,7 @@ pgvector_heap_scan(Relation heap, Relation index, PgvectorIndexInfo *indexInfo,
 
 	while ((htup = heap_getnext(scan)) != NULL)
 	{
+		CHECK_FOR_INTERRUPTS();
 		pgvector_form_index_datum(indexInfo, heap, htup, values, isnull);
 		callback(index, &htup->t_self, values, isnull, true, callback_state);
 		reltuples += 1.0;
@@ -274,6 +285,8 @@ pgvector_heap_scan_block_range(Relation heap, Relation index,
 		OffsetNumber maxoff;
 		OffsetNumber offnum;
 
+		CHECK_FOR_INTERRUPTS();
+
 		buf = ReadBuffer(heap, blk);
 		LockBuffer(heap, buf, BUFFER_LOCK_SHARE);
 		page = BufferGetPage(buf);
@@ -298,8 +311,16 @@ pgvector_heap_scan_block_range(Relation heap, Relation index,
 			htup.t_info = 0;
 
 			pgvector_form_index_datum(indexInfo, heap, &htup, values, isnull);
+			/*
+			 * Match heap_getnext: drop the share lock before the callback so
+			 * CHECK_FOR_INTERRUPTS / elog(ERROR) cannot leave it held. The
+			 * pin keeps by-reference Datums stable for the callback.
+			 */
+			LockBuffer(heap, buf, BUFFER_LOCK_UNLOCK);
 			callback(index, &htup.t_self, values, isnull, true, callback_state);
 			reltuples += 1.0;
+			LockBuffer(heap, buf, BUFFER_LOCK_SHARE);
+			page = BufferGetPage(buf);
 		}
 
 		LockBuffer(heap, buf, BUFFER_LOCK_UNLOCK);

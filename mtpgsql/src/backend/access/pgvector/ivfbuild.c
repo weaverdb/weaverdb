@@ -200,6 +200,8 @@ BuildCallback(Relation index, ItemPointer tid, Datum *values,
 	IvfflatBuildState *buildstate = (IvfflatBuildState *) state;
 	MemoryContext oldCtx;
 
+	CHECK_FOR_INTERRUPTS();
+
 	/* Skip nulls */
 	if (isnull[0])
 		return;
@@ -587,7 +589,7 @@ typedef struct IvfflatWeaverParallelShared
 
 typedef struct IvfflatAssignWorkerArg
 {
-	Env				   *parent_env;
+	Env				   *env;		/* CreateEnv(parent) on leader */
 	IvfflatBuildState  *leader;
 	IvfflatWeaverParallelShared *shared;
 	BlockNumber			start_block;
@@ -661,26 +663,25 @@ static void *
 IvfflatAssignWorkerMain(void *argp)
 {
 	IvfflatAssignWorkerArg *arg = (IvfflatAssignWorkerArg *) argp;
-	Env		   *env = NULL;
+	Env		   *env = arg->env;
 	IvfflatBuildState wstate;
 	double		reltuples = 0;
+	bool		inited_thread = false;
 
 	arg->ok = false;
 
-	/*
-	 * CreateEnv(parent) must run on a thread that already has GetEnv() set
-	 * (it MemoryContextSwitchTo's into the parent). Worker threads start with
-	 * no Env — use CreateEnv(NULL) like poolsweep/dbwriter, then copy identity.
-	 */
-	env = CreateEnv(NULL);
 	if (env == NULL)
 		return NULL;
 
+	/*
+	 * DOL-style: Env was CreateEnv(parent) on the leader. This thread only
+	 * binds it; DestroyEnv stays on the leader after join.
+	 */
 	SetEnv(env);
 	MemoryContextInit();
-	pgvector_worker_attach_parent(arg->parent_env);
 	SetProcessingMode(InitProcessing);
 	InitThread(NORMAL_THREAD);
+	inited_thread = true;
 	if (!CallableInitInvalidationState())
 		goto worker_failed;
 	RelationInitialize();
@@ -715,9 +716,10 @@ IvfflatAssignWorkerMain(void *argp)
 	arg->ok = true;
 
 worker_failed:
-	DestroyThread();
+	if (inited_thread)
+		DestroyThread();
 	SetEnv(NULL);
-	DestroyEnv(env);
+	/* Leader DestroyEnv(arg->env) after join. */
 	return NULL;
 }
 
@@ -735,6 +737,7 @@ AssignTuplesParallel(IvfflatBuildState *buildstate, int nworkers)
 	Env		   *parent_env;
 	int			sortmem;
 	int			i;
+	int			nstarted = 0;
 	bool		ok = true;
 
 	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE, PROGRESS_IVFFLAT_PHASE_ASSIGN);
@@ -750,7 +753,7 @@ AssignTuplesParallel(IvfflatBuildState *buildstate, int nworkers)
 
 	threads = palloc(sizeof(pthread_t) * nworkers);
 	args = palloc0(sizeof(IvfflatAssignWorkerArg) * nworkers);
-	worker_sorts = palloc(sizeof(Tuplesortstate *) * nworkers);
+	worker_sorts = palloc0(sizeof(Tuplesortstate *) * nworkers);
 
 	MemSet(&shared, 0, sizeof(shared));
 	pthread_mutex_init(&shared.mutex, NULL);
@@ -763,7 +766,12 @@ AssignTuplesParallel(IvfflatBuildState *buildstate, int nworkers)
 	{
 		BlockNumber nblocks = blocks_per_worker + (i < (int) extra ? 1 : 0);
 
-		args[i].parent_env = parent_env;
+		args[i].env = pgvector_worker_create_env(parent_env);
+		if (args[i].env == NULL)
+		{
+			ok = false;
+			break;
+		}
 		args[i].leader = buildstate;
 		args[i].shared = &shared;
 		args[i].start_block = blk;
@@ -777,20 +785,30 @@ AssignTuplesParallel(IvfflatBuildState *buildstate, int nworkers)
 		{
 			ok = false;
 			args[i].ok = false;
-			i++;
 			break;
 		}
+		nstarted++;
 	}
 
-	for (int j = 0; j < i; j++)
-		pthread_join(threads[j], NULL);
+	for (i = 0; i < nstarted; i++)
+		pthread_join(threads[i], NULL);
 
-	for (int j = 0; j < nworkers; j++)
+	for (i = 0; i < nworkers; i++)
 	{
-		if (j < i && !args[j].ok)
+		if (i < nstarted && !args[i].ok)
 			ok = false;
-		if (j >= i && worker_sorts[j] != NULL)
-			tuplesort_end(worker_sorts[j]);
+		/* Leader-only DestroyEnv — safe parent context unlink. */
+		if (args[i].env != NULL)
+		{
+			DestroyEnv(args[i].env);
+			args[i].env = NULL;
+		}
+		/* Sorts for workers never started still need teardown. */
+		if (i >= nstarted && worker_sorts[i] != NULL)
+		{
+			tuplesort_end(worker_sorts[i]);
+			worker_sorts[i] = NULL;
+		}
 	}
 
 	pthread_mutex_destroy(&shared.mutex);
@@ -811,7 +829,7 @@ AssignTuplesParallel(IvfflatBuildState *buildstate, int nworkers)
 	buildstate->indtuples = shared.indtuples;
 	IvfflatMergeWorkerSorts(buildstate, worker_sorts, nworkers);
 
-	ereport(DEBUG1, (errmsg("ivfflat parallel assign: %d workers, %.0f tuples",
+	ereport(NOTICE, (errmsg("ivfflat parallel assign: %d workers, %.0f tuples",
 							 nworkers, buildstate->indtuples)));
 }
 
