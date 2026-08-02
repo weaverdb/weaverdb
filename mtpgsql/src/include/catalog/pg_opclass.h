@@ -171,5 +171,14 @@ DESCR("bit jaccard distance for hnsw");
 #define BIT_JACCARD_OPS_OID 2022
 DATA(insert OID = 2023 (	sparsevec_ops	   1846   ));
 DESCR("sparsevec btree operators");
+DATA(insert OID = 2024 (	vector_l1_ops	   1842   ));
+DESCR("vector L1 distance for hnsw");
+#define VECTOR_L1_OPS_OID 2024
+DATA(insert OID = 2025 (	halfvec_l1_ops	   1844   ));
+DESCR("halfvec L1 distance for hnsw");
+#define HALFVEC_L1_OPS_OID 2025
+DATA(insert OID = 2026 (	sparsevec_l1_ops  1846   ));
+DESCR("sparsevec L1 distance for hnsw");
+#define SPARSEVEC_L1_OPS_OID 2026
 
 #endif	 /* PG_OPCLASS_H */

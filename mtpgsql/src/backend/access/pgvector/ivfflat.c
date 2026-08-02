@@ -6,7 +6,6 @@
 
 #include "access/amapi.h"
 #include "access/genam.h"
-#include "access/reloptions.h"
 #include "commands/vacuum.h"
 #include "fmgr.h"
 #include "ivfflat.h"
@@ -14,8 +13,6 @@
 #include "utils/float.h"
 #include "utils/relcache.h"
 #include "vector.h"
-
-#define MarkGUCPrefixReserved(x) EmitWarningsOnPlaceholders(x)
 
 static SectionId ivfflat_env_id = SECTIONID("IVFL");
 
@@ -42,14 +39,6 @@ IvfflatGetEnv(void)
 	return info;
 }
 
-static relopt_kind ivfflat_relopt_kind;
-
-static const struct config_enum_entry ivfflat_iterative_scan_options[] = {
-	{"off", IVFFLAT_ITERATIVE_SCAN_OFF, false},
-	{"relaxed_order", IVFFLAT_ITERATIVE_SCAN_RELAXED, false},
-	{NULL, 0, false}
-};
-
 /*
  * Initialize index options and variables
  */
@@ -57,8 +46,7 @@ void
 IvfflatInit(void)
 {
 	(void) IvfflatGetEnv();
-	/* reloptions deferred; runtime knobs via SET/SHOW (pgvector_session_vars.c) */
-	(void) ivfflat_iterative_scan_options;
+	/* Runtime knobs via SET/SHOW (pgvector_session_vars.c) */
 }
 
 /*

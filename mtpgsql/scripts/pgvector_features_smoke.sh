@@ -666,6 +666,12 @@ assert_scalar "simd l1_distance 16d" "$out" "l1_distance" "136"
 assert_scalar "simd halfvec_inner_product 16d" "$out" "halfvec_inner_product" "1496"
 assert_scalar "simd halfvec_l2_squared 16d" "$out" "halfvec_l2_squared_distance" "1496"
 
+# Cosine: identical unit vectors → similarity 1 → distance 0 (SIMD fused path)
+out=$(run_session \
+  "select cosine_distance('[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]'::vector, '[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]'::vector);")
+assert_no_error "simd cosine identical" "$out"
+assert_scalar "simd cosine_distance identical 16d" "$out" "cosine_distance" "0"
+
 # 17-dim: full SIMD iterations + 1-element scalar tail
 out=$(run_session \
   "select inner_product('[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]'::vector, '[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]'::vector);" \
@@ -673,6 +679,52 @@ out=$(run_session \
 assert_no_error "simd-width + tail" "$out"
 assert_scalar "simd inner_product 17d ones" "$out" "inner_product" "17"
 assert_scalar "simd l2_squared sparse 17d" "$out" "vector_l2_squared_distance" "2"
+
+echo "--- HNSW L1 opclasses (vector / halfvec / sparsevec) ---"
+# Upstream wires L1 ANN for HNSW only; IVFFlat has no *_l1_ops.
+out=$(run_session \
+  "create table pv_feat_l1_v (id int, emb vector);" \
+  "insert into pv_feat_l1_v values (1, '[1,0,0]');" \
+  "insert into pv_feat_l1_v values (2, '[0,1,0]');" \
+  "insert into pv_feat_l1_v values (3, '[0,0,1]');" \
+  "create index pv_feat_l1_v_hnsw on pv_feat_l1_v using hnsw (emb vector_l1_ops) with (m = 8, ef_construction = 32);" \
+  "set enable_seqscan = off;" \
+  "select id from pv_feat_l1_v order by emb <+> '[1,0,0]' limit 1;")
+assert_no_error "vector_l1_ops hnsw" "$out"
+assert_ids "vector_l1_ops nearest" "$out" 1
+
+out=$(run_session \
+  "create table pv_feat_l1_hv (id int, emb halfvec);" \
+  "insert into pv_feat_l1_hv values (1, '[1,0,0]');" \
+  "insert into pv_feat_l1_hv values (2, '[0,1,0]');" \
+  "insert into pv_feat_l1_hv values (3, '[0,0,1]');" \
+  "create index pv_feat_l1_hv_hnsw on pv_feat_l1_hv using hnsw (emb halfvec_l1_ops) with (m = 8, ef_construction = 32);" \
+  "set enable_seqscan = off;" \
+  "select id from pv_feat_l1_hv order by emb <+> '[1,0,0]' limit 1;")
+assert_no_error "halfvec_l1_ops hnsw" "$out"
+assert_ids "halfvec_l1_ops nearest" "$out" 1
+
+out=$(run_session \
+  "create table pv_feat_l1_sv (id int, emb sparsevec);" \
+  "insert into pv_feat_l1_sv values (1, '{1:1}/3');" \
+  "insert into pv_feat_l1_sv values (2, '{2:1}/3');" \
+  "insert into pv_feat_l1_sv values (3, '{3:1}/3');" \
+  "create index pv_feat_l1_sv_hnsw on pv_feat_l1_sv using hnsw (emb sparsevec_l1_ops) with (m = 8, ef_construction = 32);" \
+  "set enable_seqscan = off;" \
+  "select id from pv_feat_l1_sv order by emb <+> '{1:1}/3' limit 1;")
+assert_no_error "sparsevec_l1_ops hnsw" "$out"
+assert_ids "sparsevec_l1_ops nearest" "$out" 1
+
+out=$(run_session \
+  "create table pv_feat_l1_ivf (id int, emb vector);" \
+  "create index pv_feat_l1_ivf_idx on pv_feat_l1_ivf using ivfflat (emb vector_l1_ops) with (lists = 2);")
+if echo "$out" | grep -qi ERROR; then
+  echo "OK: ivfflat vector_l1_ops rejected (HNSW-only, matches upstream)"
+else
+  echo "FAIL: expected ivfflat vector_l1_ops to fail" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
 
 echo "--- IVFFlat vacuum delete correctness (TID reuse) ---"
 # PageIndexMultiDelete must actually remove index items. If it no-ops, a stale

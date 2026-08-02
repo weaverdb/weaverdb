@@ -55,6 +55,18 @@ assert_ids() {
   echo "OK: $desc"
 }
 
+assert_no_error() {
+  local desc="$1"
+  local out="$2"
+  if echo "$out" | grep -qi ERROR; then
+    echo "FAIL: $desc" >&2
+    echo "$out" >&2
+    failures=$((failures + 1))
+    return 1
+  fi
+  return 0
+}
+
 setup_out=$(run_session \
   "create table pv_ob (id int, emb vector);" \
   "insert into pv_ob values (1, '[1,0,0]');" \
@@ -328,6 +340,92 @@ else
     failures=$((failures + 1))
   fi
 fi
+
+echo "--- HNSW iterative_scan under selective WHERE + ORDER BY ---"
+# Filter keeps only odd ids; nearest to [1,0,0] among odds is id=1 ([1,0,0]).
+# Without iterative scan, Index Scan may exhaust candidates before finding a
+# filtered match; relaxed_order resumes discarded candidates.
+out=$(run_session \
+  "create table pv_iter (id int, keep bool, emb vector);" \
+  "insert into pv_iter values (1, true, '[1,0,0]');" \
+  "insert into pv_iter values (2, false, '[0.99,0.1,0]');" \
+  "insert into pv_iter values (3, true, '[0,1,0]');" \
+  "insert into pv_iter values (4, false, '[0.98,0.2,0]');" \
+  "insert into pv_iter values (5, true, '[0,0,1]');" \
+  "insert into pv_iter values (6, false, '[0.97,0.3,0]');" \
+  "insert into pv_iter values (7, true, '[0.5,0.5,0]');" \
+  "insert into pv_iter values (8, false, '[0.96,0.4,0]');" \
+  "insert into pv_iter values (9, true, '[0.1,0.1,0.1]');" \
+  "insert into pv_iter values (10, false, '[0.95,0.5,0]');" \
+  "create index pv_iter_hnsw on pv_iter using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32);" \
+  "set enable_seqscan = off;" \
+  "set hnsw.ef_search = 10;" \
+  "set hnsw.iterative_scan = off;" \
+  "select id from pv_iter where keep order by emb <-> '[1,0,0]' limit 1;")
+assert_no_error "iterative_scan off filtered setup" "$out"
+# Even with off, small dataset usually finds id=1; assert filter correctness.
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+if [[ "$first" == "1" ]]; then
+  echo "OK: filtered ANN (iterative_scan=off) nearest keep=true is id=1"
+else
+  # Soft: off mode may miss; still require no ERROR and only keep=true ids if any
+  if [[ -n "$first" ]] && [[ "$first" =~ ^(1|3|5|7|9)$ ]]; then
+    echo "OK: filtered ANN (iterative_scan=off) returned keep=true id=$first"
+  else
+    echo "FAIL: iterative_scan=off filtered result (got: $(echo "$got" | tr '\n' ' '))" >&2
+    echo "$out" >&2
+    failures=$((failures + 1))
+  fi
+fi
+
+out=$(run_session \
+  "set enable_seqscan = off;" \
+  "set hnsw.ef_search = 10;" \
+  "set hnsw.iterative_scan = relaxed_order;" \
+  "set hnsw.max_scan_tuples = 20000;" \
+  "select id from pv_iter where keep order by emb <-> '[1,0,0]' limit 3;")
+assert_no_error "iterative_scan relaxed filtered" "$out"
+got=$(ids_from_output "$out")
+first=$(echo "$got" | sed -n '1p')
+# All returned must be keep=true odds; nearest must be 1
+bad=0
+while IFS= read -r line; do
+  [[ -z "$line" ]] && continue
+  if [[ ! "$line" =~ ^(1|3|5|7|9)$ ]]; then
+    bad=1
+  fi
+done <<< "$got"
+if [[ "$first" == "1" && "$bad" -eq 0 ]]; then
+  echo "OK: iterative_scan=relaxed_order filtered top-3 starts with 1, only keep=true"
+else
+  echo "FAIL: iterative_scan=relaxed filtered (got: $(echo "$got" | tr '\n' ' '))" >&2
+  echo "$out" >&2
+  failures=$((failures + 1))
+fi
+
+out=$(run_session \
+  "set enable_seqscan = off;" \
+  "set hnsw.iterative_scan = strict_order;" \
+  "select id from pv_iter where keep order by emb <-> '[1,0,0]' limit 1;")
+assert_no_error "iterative_scan strict filtered" "$out"
+assert_ids "iterative_scan=strict_order filtered nearest" "$out" 1
+
+echo "--- IVFFlat iterative_scan under selective WHERE ---"
+out=$(run_session \
+  "create table pv_iter_ivf (id int, keep bool, emb vector);" \
+  "insert into pv_iter_ivf values (1, true, '[1,0,0]');" \
+  "insert into pv_iter_ivf values (2, false, '[0.99,0.1,0]');" \
+  "insert into pv_iter_ivf values (3, true, '[0,1,0]');" \
+  "insert into pv_iter_ivf values (4, false, '[0.5,0.5,0]');" \
+  "insert into pv_iter_ivf values (5, true, '[0,0,1]');" \
+  "create index pv_iter_ivf_idx on pv_iter_ivf using ivfflat (emb vector_l2_ops) with (lists = 2);" \
+  "set enable_seqscan = off;" \
+  "set ivfflat.probes = 2;" \
+  "set ivfflat.iterative_scan = relaxed_order;" \
+  "select id from pv_iter_ivf where keep order by emb <-> '[1,0,0]' limit 1;")
+assert_no_error "ivfflat iterative_scan relaxed filtered" "$out"
+assert_ids "ivfflat iterative_scan filtered nearest" "$out" 1
 
 if [[ "$failures" -ne 0 ]]; then
   echo "$failures ORDER BY check(s) failed" >&2

@@ -6,7 +6,6 @@
 
 #include "access/amapi.h"
 #include "access/genam.h"
-#include "access/reloptions.h"
 #include "commands/vacuum.h"
 #include "fmgr.h"
 #include "env/env.h"

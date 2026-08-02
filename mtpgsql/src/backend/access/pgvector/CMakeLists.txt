@@ -29,8 +29,9 @@ set(SRC_FILES
     pgvector_vacuum_stats.c
     pairingheap.c
 )
-# pgvector_ivf_stubs.c replaced by ivfbuild.c / ivfscan.c when PG7 port complete.
-# hnsw.c excluded (modern GUC/reloptions/cost); pgvector_hnsw_stubs.c holds env/init only.
+# hnsw.c is excluded: modern GUC/reloptions/handler path. Runtime knobs live in
+# pgvector_session_vars.c; env/init is pgvector_hnsw_stubs.c. IVFFlat uses
+# ivfbuild.c / ivfscan.c (no separate stub translation unit).
 
 # create the library (as OBJECT so backend mtpg can link the objs)
 add_library(pgvector OBJECT ${SRC_FILES})

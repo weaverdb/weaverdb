@@ -311,6 +311,94 @@ simd_l1_distance_f32(const float *a, const float *b, int dim)
 }
 
 /*
+ * float32 cosine similarity: fused dot / sqrt(||a||² * ||b||²).
+ * Returns similarity in [-1,1] (caller converts to distance). Accumulates in
+ * float32 to match prior scalar VectorCosineSimilarity semantics.
+ */
+static inline double
+simd_cosine_similarity_f32(const float *a, const float *b, int dim)
+{
+#ifdef HAVE_AVX2
+	__m256		sum_ab = _mm256_setzero_ps();
+	__m256		sum_aa = _mm256_setzero_ps();
+	__m256		sum_bb = _mm256_setzero_ps();
+	int			i;
+	float		similarity = 0.0f;
+	float		norma = 0.0f;
+	float		normb = 0.0f;
+
+	for (i = 0; i + 8 <= dim; i += 8)
+	{
+		__m256		va = _mm256_loadu_ps(&a[i]);
+		__m256		vb = _mm256_loadu_ps(&b[i]);
+
+#if defined(__FMA__)
+		sum_ab = _mm256_fmadd_ps(va, vb, sum_ab);
+		sum_aa = _mm256_fmadd_ps(va, va, sum_aa);
+		sum_bb = _mm256_fmadd_ps(vb, vb, sum_bb);
+#else
+		sum_ab = _mm256_add_ps(sum_ab, _mm256_mul_ps(va, vb));
+		sum_aa = _mm256_add_ps(sum_aa, _mm256_mul_ps(va, va));
+		sum_bb = _mm256_add_ps(sum_bb, _mm256_mul_ps(vb, vb));
+#endif
+	}
+	similarity = simd_hsum_f32_avx(sum_ab);
+	norma = simd_hsum_f32_avx(sum_aa);
+	normb = simd_hsum_f32_avx(sum_bb);
+	for (; i < dim; i++)
+	{
+		similarity += a[i] * b[i];
+		norma += a[i] * a[i];
+		normb += b[i] * b[i];
+	}
+	return (double) similarity / sqrt((double) norma * (double) normb);
+#elif defined(HAVE_NEON)
+	float32x4_t sum_ab = vdupq_n_f32(0.0f);
+	float32x4_t sum_aa = vdupq_n_f32(0.0f);
+	float32x4_t sum_bb = vdupq_n_f32(0.0f);
+	int			i;
+	float		similarity = 0.0f;
+	float		norma = 0.0f;
+	float		normb = 0.0f;
+
+	for (i = 0; i + 4 <= dim; i += 4)
+	{
+		float32x4_t va = vld1q_f32(&a[i]);
+		float32x4_t vb = vld1q_f32(&b[i]);
+
+		sum_ab = vmlaq_f32(sum_ab, va, vb);
+		sum_aa = vmlaq_f32(sum_aa, va, va);
+		sum_bb = vmlaq_f32(sum_bb, vb, vb);
+	}
+	similarity = simd_hsum_f32_neon(sum_ab);
+	norma = simd_hsum_f32_neon(sum_aa);
+	normb = simd_hsum_f32_neon(sum_bb);
+	for (; i < dim; i++)
+	{
+		similarity += a[i] * b[i];
+		norma += a[i] * a[i];
+		normb += b[i] * b[i];
+	}
+	return (double) similarity / sqrt((double) norma * (double) normb);
+#else
+	{
+		float		similarity = 0.0f;
+		float		norma = 0.0f;
+		float		normb = 0.0f;
+		int			i;
+
+		for (i = 0; i < dim; i++)
+		{
+			similarity += a[i] * b[i];
+			norma += a[i] * a[i];
+			normb += b[i] * b[i];
+		}
+		return (double) similarity / sqrt((double) norma * (double) normb);
+	}
+#endif
+}
+
+/*
  * SIMD dot product for vectors (double accumulator for general use).
  * Prefers float32 SIMD lanes then promotes; falls back to scalar.
  */

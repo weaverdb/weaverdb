@@ -567,4 +567,19 @@ DATA(insert OID = 0 (  407 2021 2319 1 ));
  *	hnsw bit_jaccard_ops
  */
 DATA(insert OID = 0 (  407 2022 2320 1 ));
+
+/*
+ *	hnsw vector_l1_ops
+ */
+DATA(insert OID = 0 (  407 2024 2376 1 ));
+
+/*
+ *	hnsw halfvec_l1_ops
+ */
+DATA(insert OID = 0 (  407 2025 2377 1 ));
+
+/*
+ *	hnsw sparsevec_l1_ops
+ */
+DATA(insert OID = 0 (  407 2026 2378 1 ));
 #endif	 /* PG_AMOP_H */

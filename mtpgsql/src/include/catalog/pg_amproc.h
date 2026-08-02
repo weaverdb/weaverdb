@@ -193,6 +193,17 @@ DATA(insert OID = 0 (407 2021 2284 3));
 DATA(insert OID = 0 (407 2022 2282 1));
 DATA(insert OID = 0 (407 2022 2284 3));
 
+/* hnsw vector_l1_ops */
+DATA(insert OID = 0 (407 2024 2361 1));
+
+/* hnsw halfvec_l1_ops */
+DATA(insert OID = 0 (407 2025 2362 1));
+DATA(insert OID = 0 (407 2025 2266 3));
+
+/* hnsw sparsevec_l1_ops */
+DATA(insert OID = 0 (407 2026 2363 1));
+DATA(insert OID = 0 (407 2026 2280 3));
+
 
 /* hash */
 DATA(insert OID = 0 (405  421  449 1));

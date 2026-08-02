@@ -617,20 +617,8 @@ vector_negative_inner_product(PG_FUNCTION_ARGS)
 VECTOR_TARGET_CLONES static double
 VectorCosineSimilarity(int dim, float *ax, float *bx)
 {
-	float		similarity = 0.0;
-	float		norma = 0.0;
-	float		normb = 0.0;
-
-	/* Auto-vectorized */
-	for (int i = 0; i < dim; i++)
-	{
-		similarity += ax[i] * bx[i];
-		norma += ax[i] * ax[i];
-		normb += bx[i] * bx[i];
-	}
-
-	/* Use sqrt(a * b) over sqrt(a) * sqrt(b) */
-	return (double) similarity / sqrt((double) norma * (double) normb);
+	/* NEON (arm64) / AVX2 (x86) via utils/simd; scalar fallback otherwise */
+	return simd_cosine_similarity_f32(ax, bx, dim);
 }
 
 /*
