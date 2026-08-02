@@ -54,6 +54,12 @@ final class PgvectorWeaverTestSupport {
                 prop.setProperty("start_delay", "10");
                 prop.setProperty("stdlog", "TRUE");
                 prop.setProperty("disable_crc", "TRUE");
+                /*
+                 * SortMem (kB) backs maintenance_work_mem for IVFFlat kmeans.
+                 * Default 512 is too small for non-trivial lists; allow override.
+                 */
+                prop.setProperty("sortmem",
+                        System.getProperty("weaver.sortmem", "131072"));
                 DirectWeaverInitializer.initialize(prop);
             }
             initialized = true;

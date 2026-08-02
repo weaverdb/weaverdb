@@ -195,6 +195,12 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
             MaxBackends = GetIntProperty("maxbackends");
             if ( MaxBackends > MAXBACKENDS ) MaxBackends = MAXBACKENDS;
 	}
+	if ( PropertyIsValid("sortmem") ) {
+		int sortmem = GetIntProperty("sortmem");
+		/* SortMem is kilobytes; require at least one page worth. */
+		if (sortmem >= 4 * BLCKSZ / 1024)
+			SortMem = sortmem;
+	}
 	disableFsync = false;
 	if ( nofsync != NULL ) {
 		disableFsync = (toupper(nofsync[0]) == 'T') ? true : false;

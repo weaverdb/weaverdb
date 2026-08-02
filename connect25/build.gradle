@@ -50,7 +50,17 @@ tasks.named('test', Test) {
         systemProperty 'weaver.vector.bulk.dim', bulkDim
     }
 
-    maxHeapSize = '1G'
+    // Forward optional scale knobs for PgvectorByteaIvfBulkStressTest.
+    ['weaver.vector.ivf.count', 'weaver.vector.ivf.dim',
+     'weaver.vector.ivf.lists', 'weaver.vector.ivf.probes',
+     'weaver.sortmem'].each { key ->
+        def value = System.getProperty(key)
+        if (value != null) {
+            systemProperty key, value
+        }
+    }
+
+    maxHeapSize = '2G'
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(25)
     }
