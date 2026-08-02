@@ -184,8 +184,8 @@ public class PgvectorByteaBulkStressTest {
                     }
                 }
             } finally {
-                // GUCs are process-global in the embedded backend; restore so later
-                // count(*) / vacuum plans are not forced onto the HNSW index.
+                // enable_seqscan is per-connection (Env-local CostInfo); restore on
+                // this connection so later statements here use the default planner.
                 exec(conn, "set enable_seqscan = on");
             }
         }
