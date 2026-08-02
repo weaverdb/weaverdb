@@ -29,9 +29,8 @@ set(SRC_FILES
     pgvector_vacuum_stats.c
     pairingheap.c
 )
-# hnsw.c is excluded: modern GUC/reloptions/handler path. Runtime knobs live in
-# pgvector_session_vars.c; env/init is pgvector_hnsw_stubs.c. IVFFlat uses
-# ivfbuild.c / ivfscan.c (no separate stub translation unit).
+# Upstream hnsw.c (modern GUC/reloptions/handler) is omitted; Weaver uses
+# pgvector_pg7_am.c + pgvector_session_vars.c + pgvector_hnsw_stubs.c.
 
 # create the library (as OBJECT so backend mtpg can link the objs)
 add_library(pgvector OBJECT ${SRC_FILES})

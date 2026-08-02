@@ -1,5 +1,5 @@
 /*
- * HNSW env + lock tranche for WeaverDB (hnsw.c excluded; build/scan in hnswbuild.c / hnswscan.c).
+ * HNSW env + lock tranche for WeaverDB (build/scan in hnswbuild.c / hnswscan.c).
  */
 
 #include "postgres.h"
