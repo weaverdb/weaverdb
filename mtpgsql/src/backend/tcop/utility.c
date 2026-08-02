@@ -720,16 +720,29 @@ ProcessUtility(Node *parsetree,
 		case T_VacuumStmt:
 			(commandTag = "VACUUM");
 			CHECK_IF_ABORTED();
-                        if ( IsPoolsweepPaused() ) {
-                       	    Relation rel = RelationNameGetRelation(((VacuumStmt *) parsetree)->vacrel,DEFAULTDBOID);
-                            if ( RelationIsValid(rel) ) {
-                                lazy_open_vacuum_rel(rel->rd_id,false,false);
-                                if ( ((VacuumStmt *) parsetree)->analyze ) {
-                                    analyze_rel(rel->rd_id);
-                                }
-                            }
-                            RelationClose(rel);
-                        }
+			{
+				VacuumStmt *vstmt = (VacuumStmt *) parsetree;
+
+				/*
+				 * Named VACUUM always runs the lazy index-first path
+				 * synchronously so crash-ordering barriers apply.  When
+				 * poolsweep is active, database-wide VACUUM still queues
+				 * via SET vacuum / poolsweep jobs.
+				 */
+				if (vstmt->vacrel != NULL) {
+					Relation rel = RelationNameGetRelation(vstmt->vacrel, DEFAULTDBOID);
+
+					if (RelationIsValid(rel)) {
+						lazy_open_vacuum_rel(rel->rd_id, false, false);
+						if (vstmt->analyze)
+							analyze_rel(rel->rd_id);
+						RelationClose(rel);
+					} else
+						elog(ERROR, "Relation \"%s\" does not exist", vstmt->vacrel);
+				} else if (IsPoolsweepPaused()) {
+					lazy_vacuum_database(vstmt->verbose);
+				}
+			}
 			break;
 
 		case T_ExplainStmt:

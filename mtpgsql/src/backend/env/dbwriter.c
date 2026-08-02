@@ -117,6 +117,8 @@ struct writegroups {
     
     bool				isTransFriendly;
     bool				locked;
+    /* When set, FlushWriteGroup fsyncs path-cache files after SyncBuffers */
+    bool                                durable_sync;
     /*  for convenience, cache these here  */
     Oid                                 LogId;
     Oid                                 VarId;
@@ -473,7 +475,9 @@ int FlushWriteGroup(WriteGroup cart) {
     int release = 0;
     struct timeval t1,t2;
     long elapsed;
+    bool durable = cart->durable_sync;
     
+    cart->durable_sync = false;
     pthread_mutex_unlock(&cart->checkpoint);
     
     gettimeofday(&t1,NULL);
@@ -487,11 +491,19 @@ int FlushWriteGroup(WriteGroup cart) {
     sync->currstate = FLUSHING;
     release += SyncBuffers(sync,true);
     sync->currstate = NOT_READY;
-    if ( sync_buffers > max_logcount ) { 
+    /*
+     * Always fsync path-cache relations for a durable vacuum barrier.
+     * Otherwise CommitPackage (smgrsync) only runs when the sync buffer
+     * count crosses max_logcount — too weak for index-before-heap safety.
+     */
+    if ( durable || sync_buffers > max_logcount ) { 
         CommitPackage(sync);
         ClearLogs(sync);
+        if ( durable )
+            sync_buffers = 0;
     }
-    elog(DEBUG, "flushed out %d buffers",release);
+    elog(DEBUG, "flushed out %d buffers%s", release,
+         durable ? " (durable)" : "");
      
     gettimeofday(&t2,NULL);
     
@@ -815,6 +827,7 @@ void ResetWriteGroup(WriteGroup cart) {
 
     cart->isTransFriendly = true;
     cart->loggable = logging;
+    cart->durable_sync = false;
     
     cart->snapshot = NULL;
 }
@@ -1350,6 +1363,48 @@ bool FlushAllDirtyBuffers(bool wait) {
     
     UnlockWriteGroup(cart);
     
+    return iflushed;
+}
+
+bool FlushAllDirtyBuffersDurable(bool wait) {
+    if (!db_inited) {
+        return false;
+    }
+
+    WriteGroup cart = GetCurrentWriteGroup(false);
+    int releasecount = 0;
+    bool iflushed = false;
+
+    /*
+     * Wait out any in-progress flush before requesting durable_sync so we
+     * do not attach the flag to a FlushWriteGroup that already sampled it
+     * as false.
+     */
+    while (wait && cart->currstate == FLUSHING) {
+        pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
+    }
+
+    cart->durable_sync = true;
+
+    if (IsDBWriter()) {
+        while (FlushWriteGroup(cart) == 0) {
+            UnlockWriteGroup(cart);
+            cart = GetNextTarget(cart);
+            cart->durable_sync = true;
+        }
+        DTRACE_PROBE2(mtpg, dbwriter__circularflush, sync_buffers, releasecount);
+        elog(DEBUG, "durable flush released %d", releasecount);
+    } else {
+        SignalDBWriter(cart);
+        cart->currstate = FLUSHING;
+        iflushed = true;
+        while (wait && cart->currstate == FLUSHING) {
+            pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
+        }
+    }
+
+    UnlockWriteGroup(cart);
+
     return iflushed;
 }
 

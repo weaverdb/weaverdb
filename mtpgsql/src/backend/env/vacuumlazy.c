@@ -138,6 +138,7 @@ typedef struct LVRelStats {
 	/* List of TIDs of tuples we intend to delete */
 	/* NB: this list is ordered by TID address */
 	TupleCount      num_dead_tuples;	/* current # of entries */
+	TupleCount      num_unused_dead_tuples;	/* unused LPs recorded for orphan index cleanup */
 	TupleCount      num_aborted_tuples;	/* current # of entries */
 	TupleCount      num_recently_dead_tuples;	/* current # of entries */
 	TupleCount      max_dead_tuples;	/* # slots allocated in array */
@@ -201,6 +202,13 @@ static void
                 lazy_vacuum_rel(Relation onerel, bool scanonly, bool force_trim);
 static void
                 lazy_index_freespace(Relation onerel,bool alter);
+
+static void
+lazy_check_vacuum_crash_point(const char *point);
+
+/* Index cleanup → durable flush → heap cleanup (crash-safe order). */
+static void
+lazy_index_barrier_then_heap(Relation onerel, LVRelStats *vacrelstats);
 
 static void
                 vac_close_indexes(int nindexes, Relation * Irel);
@@ -618,8 +626,21 @@ lazy_scan_heap_page(Relation onerel, Buffer buf, LVRelStats * vacrelstats) {
                 itemid = PageGetItemId(page, offnum);
 
                 if (!ItemIdIsUsed(itemid)) {
+                        ItemPointerData unused_tid;
+
                         page_unused += 1;
                         nunused += 1;
+                        /*
+                         * Collect unused line pointers so index bulkdelete
+                         * can remove orphan TIDs left after a crash where
+                         * heap LPs were cleaned before durable index deletes.
+                         * Exclusive VACUUM does the same (vacuum.c).
+                         */
+                        if (!vacrelstats->scanonly) {
+                                ItemPointerSet(&unused_tid, blkno, offnum);
+                                lazy_record_dead_tuple(vacrelstats, &unused_tid);
+                                vacrelstats->num_unused_dead_tuples++;
+                        }
                         continue;
                 }
 
@@ -712,7 +733,7 @@ lazy_scan_heap_page(Relation onerel, Buffer buf, LVRelStats * vacrelstats) {
          */
         if (hastup) {
                 vacrelstats->nonempty_pages = blkno + 1;
-        } else {
+        } else if (vacrelstats->scanonly) {
           /*  this is a fix for previous mis-deeds when 
            *  PageRepairFragmentation didn't clear space if there 
            *  were not tuples in it, nothing should be accessing,
@@ -724,6 +745,12 @@ lazy_scan_heap_page(Relation onerel, Buffer buf, LVRelStats * vacrelstats) {
             PageCompactPage(page);
             nunused = PageRepairFragmentation(page);
             if ( freespace != PageGetFreeSpace(page) ) pgchanged = true;
+        } else {
+            /*
+             * Defer compact/repair until lazy_vacuum_heap after the
+             * durable index barrier. Compacting here would recycle LPs
+             * while indexes may still reference them.
+             */
         } 
 
         if (num_dead == vacrelstats->num_dead_tuples) {
@@ -805,19 +832,13 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
 			for (i = 0; i < nindexes; i++) {
                             TupleCount i_tup = lazy_vacuum_index(Irel[i], vacrelstats);
 			}
-			/*
-			 * flush the dirty buffers to make sure that the
-			 * index entries are gone before the heap entries
-			 * come out.
-			 */
-			FlushAllDirtyBuffers(true);
-			/* Remove tuples from heap */
-			lazy_vacuum_heap(onerel, vacrelstats);
+			lazy_index_barrier_then_heap(onerel, vacrelstats);
 
 			/* Forget the now-vacuumed tuples, and press on */
 			tups_vacuumed += vacrelstats->num_dead_tuples;
 			tups_aborted += vacrelstats->num_aborted_tuples;
 			vacrelstats->num_dead_tuples = 0;
+			vacrelstats->num_unused_dead_tuples = 0;
 			vacrelstats->num_aborted_tuples = 0;
 			tups_live_segment += vacrelstats->rel_live_segment_tuples;
 			tups_dead_segment += vacrelstats->rel_dead_segment_tuples;
@@ -920,17 +941,11 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
                     }
             }
 
-            /*
-             * flush the dirty buffers to make sure that the index
-             * entries are gone before the heap entries come out.
-             */
-            FlushAllDirtyBuffers(true);
-
-            /* Remove tuples from heap */
-            lazy_vacuum_heap(onerel, vacrelstats);
+            lazy_index_barrier_then_heap(onerel, vacrelstats);
             /*( vacuum stats  */
             tups_vacuumed += vacrelstats->num_dead_tuples;
             vacrelstats->num_dead_tuples = 0;
+            vacrelstats->num_unused_dead_tuples = 0;
 	} else {
             /* Scan indexes just to update pg_class statistics about them */
             if ( !vacrelstats->freespace_scan ) {
@@ -1030,16 +1045,14 @@ lazy_vacuum_heap(Relation onerel, LVRelStats * vacrelstats)
   *  will PageCompactPage reap pointers at the end.
   *  this should protect against any index pointers 
   *  pointing to a line pointer that disappears 
-  *  due to PageCompactPage
+  *  due to PageCompactPage.
+  *
+  *  LP recycle (lp_len=0 / compact) is only safe after
+  *  FlushAllDirtyBuffersDurable at the index-cleanup
+  *  barrier.  Do not move heap cleanup ahead of that
+  *  barrier.  Recovery-time index validation remains a
+  *  backstop for incomplete cycles.
   */
-/*      cant use this until we have a foolproof way of ensuring
- *      corruption does not occur due to index pointers 
- *      leading to the compacted linepointers 
- * 
- *      update 3/4/08.  should be able to compact pages
- *      now that indexes are scanned at recovery time for 
- *      bad pointers
- */
                 newmax = PageCompactPage(page);
                 unused_p = PageRepairFragmentation(page);
 		
@@ -1172,6 +1185,8 @@ static          TupleCount
 lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats)
 {
 	TupleCount      nitupsremoved = 0;
+	TupleCount      expected_heap_deletes;
+	TupleCount      unused_recorded;
 
 	VacRUsage       ru0;
 	char            rubuf[255];
@@ -1182,22 +1197,105 @@ lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats)
         
 	nitupsremoved = (TupleCount) index_bulkdelete(indrel, vacrelstats->num_dead_tuples, vacrelstats->dead_tuples);
 
-	/* if deleted tuples do not equal it is time to reindex  */
-	if (nitupsremoved != (vacrelstats->num_dead_tuples - vacrelstats->rel_dead_segment_tuples) ) {
-		vacuum_log(indrel,"Index: Deleted %ld Heap: Dead %ld Aborted %ld Segments %ld.",
-                     nitupsremoved,
-		     vacrelstats->num_dead_tuples,
-		     vacrelstats->num_aborted_tuples,
-		     vacrelstats->rel_dead_segment_tuples);
-                /*
-		AddReindexRequest(NameStr(indrel->rd_rel->relname), GetDatabaseName(),
-				  indrel->rd_id, GetDatabaseId());
-                */
+	unused_recorded = vacrelstats->num_unused_dead_tuples;
+	expected_heap_deletes = vacrelstats->num_dead_tuples
+		- vacrelstats->rel_dead_segment_tuples
+		- unused_recorded;
+
+	/*
+	 * Under-delete relative to live/dead heap TIDs usually means a prior
+	 * cycle already removed index entries (crash after durable index
+	 * barrier, before heap).  Continue with heap cleanup — that is the
+	 * intended restart path.  Over-delete vs the heap-only baseline is
+	 * expected when unused LPs were recorded so orphan index TIDs can be
+	 * removed.
+	 */
+	if (nitupsremoved < expected_heap_deletes) {
+		vacuum_log(indrel,
+			"Index/heap delete count mismatch (incomplete vacuum resume): "
+			"index deleted %ld, expected at least %ld "
+			"(dead %ld unused-LP %ld aborted %ld segments %ld). "
+			"Continuing heap cleanup; indexes were likely already cleaned.",
+			(long) nitupsremoved,
+			(long) expected_heap_deletes,
+			(long) vacrelstats->num_dead_tuples,
+			(long) unused_recorded,
+			(long) vacrelstats->num_aborted_tuples,
+			(long) vacrelstats->rel_dead_segment_tuples);
+		/*
+		 * If unused LPs were recorded but bulkdelete removed nothing,
+		 * schedule a full index recover/validate as a backstop for
+		 * orphans that may not have matched the dead-TID list.
+		 */
+		if (unused_recorded > 0 && nitupsremoved == 0) {
+			vacuum_log(indrel,
+				"Scheduling index recover/validate for possible orphan TIDs.");
+			AddRecoverRequest(GetDatabaseName(), GetDatabaseId());
+		}
+	} else if (nitupsremoved != expected_heap_deletes) {
+		vacuum_log(indrel,
+			"Index: Deleted %ld (including orphan cleanup); "
+			"heap dead %ld unused-LP %ld aborted %ld segments %ld.",
+			(long) nitupsremoved,
+			(long) vacrelstats->num_dead_tuples,
+			(long) unused_recorded,
+			(long) vacrelstats->num_aborted_tuples,
+			(long) vacrelstats->rel_dead_segment_tuples);
 	}
 	vacuum_log(indrel,"Index: Deleted %ld.", nitupsremoved);
 
 	vacuum_log(indrel,"%s", vac_show_rusage(&ru0, rubuf));
 	return nitupsremoved;
+}
+
+/*
+ * Test/injection hook: set property vacuum_crash_point or env
+ * WEAVER_VACUUM_CRASH_POINT to a barrier name (e.g. after_index_barrier)
+ * to FATAL at that point for crash-ordering tests.
+ */
+static void
+lazy_check_vacuum_crash_point(const char *point)
+{
+	char	   *prop = NULL;
+
+	if (point == NULL)
+		return;
+	if (PropertyIsValid("vacuum_crash_point"))
+		prop = GetProperty("vacuum_crash_point");
+	if (prop == NULL)
+		prop = getenv("WEAVER_VACUUM_CRASH_POINT");
+	if (prop != NULL && strcmp(prop, point) == 0)
+		elog(FATAL, "vacuum_crash_point=%s", point);
+}
+
+/*
+ * Crash invariant: index deletes must be on stable store before heap line
+ * pointers are cleared/recycled.  After a crash past this barrier, heap
+ * cleanup can safely resume; orphan dead heap rows are rediscovered by the
+ * next vacuum.  Never reverse this order in production.
+ *
+ * Test-only: vacuum_crash_point=skip_barrier_heap_then_crash skips the
+ * durable flush, cleans the heap, then FATAls — used to exercise orphan
+ * index recover after restart.
+ */
+static void
+lazy_index_barrier_then_heap(Relation onerel, LVRelStats *vacrelstats)
+{
+	char	   *prop = NULL;
+
+	if (PropertyIsValid("vacuum_crash_point"))
+		prop = GetProperty("vacuum_crash_point");
+	if (prop == NULL)
+		prop = getenv("WEAVER_VACUUM_CRASH_POINT");
+
+	if (prop != NULL && strcmp(prop, "skip_barrier_heap_then_crash") == 0) {
+		lazy_vacuum_heap(onerel, vacrelstats);
+		elog(FATAL, "vacuum_crash_point=skip_barrier_heap_then_crash");
+	}
+
+	FlushAllDirtyBuffersDurable(true);
+	lazy_check_vacuum_crash_point("after_index_barrier");
+	lazy_vacuum_heap(onerel, vacrelstats);
 }
 
 static bool

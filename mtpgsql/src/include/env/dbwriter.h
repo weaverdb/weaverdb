@@ -36,6 +36,11 @@ void DBCreateWriterThread(DBMode mode);
 void CommitDBBufferWrites(TransactionId xid,int state);
 
 bool FlushAllDirtyBuffers(bool wait);
+/*
+ * Durable vacuum barrier: write dirty buffers then fsync path-cache
+ * relations so index deletes are on stable store before heap LP cleanup.
+ */
+bool FlushAllDirtyBuffersDurable(bool wait);
 long RegisterBufferWrite(BufferDesc * bufHdr,bool release);
 
 long GetBufferGeneration(void);
