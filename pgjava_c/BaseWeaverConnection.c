@@ -244,10 +244,10 @@ void setInputLink(JNIEnv* env, jobject talkerObject, jlong linkid, CommArgs* use
         }
 
 	varname = (*env)->GetStringUTFChars(env,theVar,NULL);
-        
-        LinkInput(conn,base,varname,userspace->linkType,userspace,direct ? direct_pipein : transferin);
 
-        (*env)->ReleaseStringUTFChars(env,theVar,varname); 
+    LinkInput(conn,base,varname,userspace->linkType,userspace,direct ? direct_pipein : transferin);
+
+    (*env)->ReleaseStringUTFChars(env,theVar,varname);
 //  report errors
 	checkError(env,talkerObject,base);
 }

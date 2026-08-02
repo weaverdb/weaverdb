@@ -407,12 +407,12 @@ pq_putbytes(const char *s, size_t len)
 int
 pq_flush(void)
 {
-        Env* env = GetEnv();
+    Env* env = GetEnv();
 	CommCursor* cursor = (CommCursor*)env->pipeout;
 	if ( cursor == NULL ) return -1;
-        cursor->datamove(cursor->args, 0, cursor->buffer + cursor->ptr,cursor->end - cursor->ptr);
-        cursor->ptr = 0;
-        cursor->end = 0;
+    cursor->datamove(cursor->args, 0, cursor->buffer + cursor->ptr,cursor->end - cursor->ptr);
+    cursor->ptr = 0;
+    cursor->end = 0;
 	return 0;
 }
 

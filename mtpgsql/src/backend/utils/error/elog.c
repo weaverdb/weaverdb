@@ -379,13 +379,13 @@ elog(int lev, const char *fmt,...)
 		 */
 		pq_flush();
 	} else if (lev > DEBUG && WhereToSendOutput() == Local) {
-                pq_putbytes(notimestamp, strlen(notimestamp));
-                pq_putbytes("\n", 1);
-                pq_flush();
-        } else  if (Debugfile >= 0 && UseSyslog <= 1) {
+		pq_putbytes(notimestamp, strlen(notimestamp));
+		pq_putbytes("\n", 1);
+		pq_flush();
+	} else if (Debugfile >= 0 && UseSyslog <= 1) {
 		write(Debugfile, msg_buf, strlen(msg_buf));
 		write(Debugfile, "\n", 1);
-        }
+	}
 
 	/*
 	 * Perform error recovery action as specified by lev.
@@ -467,30 +467,27 @@ InitializeElog(const char* logfile, bool debug, bool redirecterr) {
 
 	Debugfile = -1;
 	ElogDebugIndentLevel = 0;
-        IgnoreDebugLevel = !debug;
+	IgnoreDebugLevel = !debug;
 
 	if (logfile != NULL)
 	{
-		if ((fd = open(logfile, O_CREAT | O_APPEND | O_WRONLY,
-					   0666)) < 0) {
-                    elog(FATAL, "InitializeElog: open of %s: %m",
-				 logfile);
-                } else {
-                    if (debug) {
-                        fprintf(stderr, "logging output to %s\n", logfile);
-                    }
-                    if (redirecterr) {
+		if ((fd = open(logfile, O_CREAT | O_APPEND | O_WRONLY, 0666)) < 0) {
+			elog(FATAL, "InitializeElog: open of %s: %m", logfile);
+		} else {
+			if (debug) {
+				fprintf(stderr, "logging output to %s\n", logfile);
+			}
+			if (redirecterr) {
         		close(fd);
-                        if (!freopen(logfile, "a", stderr)) {
-                            elog(FATAL, "InitializeElog: %s reopen as stderr: %m",
-				 logfile);
-                        } else {
-                            fd = fileno(stderr);
-                        }
-                    }
-                    Debugfile = fd;
-                    return Debugfile;
-                }
+				if (!freopen(logfile, "a", stderr)) {
+					elog(FATAL, "InitializeElog: %s reopen as stderr: %m", logfile);
+				} else {
+					fd = fileno(stderr);
+				}
+			}
+			Debugfile = fd;
+			return Debugfile;
+		}
 	}
 
 	/*

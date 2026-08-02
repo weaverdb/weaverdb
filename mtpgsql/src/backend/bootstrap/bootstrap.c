@@ -310,7 +310,7 @@ BootstrapMain(int argc, char *argv[])
 	
 
 	BaseInit();
-        InitializeElog(NULL, DebugMode, false);
+	InitializeElog(NULL, DebugMode, false);
 	SetDatabaseName(dbName);
 
 	if (!IsUnderPostmaster)
