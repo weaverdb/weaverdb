@@ -302,6 +302,7 @@ bool		ivfflat_insertindex(Relation index, Datum *values, bool *isnull, ItemPoint
 IndexBulkDeleteResult *ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 											   IndexBulkDeleteCallback callback, void *callback_state);
 IndexBulkDeleteResult *ivfflat_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats);
+BlockNumber ivfflat_recoverpage(Relation index, BlockNumber blkno);
 IndexScanDesc ivfflat_beginscanindex(Relation index, int nkeys, int norderbys);
 void		ivfflat_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys);
 bool		ivfflat_gettupleindex(IndexScanDesc scan, ScanDirection dir);

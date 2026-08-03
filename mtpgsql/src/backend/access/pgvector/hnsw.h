@@ -448,6 +448,7 @@ bool		hnsw_insertindex(Relation index, Datum *values, bool *isnull, ItemPointer 
 IndexBulkDeleteResult *hnsw_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 											IndexBulkDeleteCallback callback, void *callback_state);
 IndexBulkDeleteResult *hnsw_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats);
+BlockNumber hnsw_recoverpage(Relation index, BlockNumber blkno);
 IndexScanDesc hnsw_beginscanindex(Relation index, int nkeys, int norderbys);
 void		hnsw_rescanindex(IndexScanDesc scan, ScanKey keys, int nkeys, ScanKey orderbys, int norderbys);
 bool		hnsw_gettupleindex(IndexScanDesc scan, ScanDirection dir);

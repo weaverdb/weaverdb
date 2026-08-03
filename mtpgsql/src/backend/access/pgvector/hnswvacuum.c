@@ -1,14 +1,18 @@
 #include "postgres.h"
 
 #include "access/genam.h"
+#include "catalog/pg_index.h"
 #include "commands/vacuum.h"
+#include "env/env.h"
 #include "env/freespace.h"
 #include "hnsw.h"
 #include "nodes/pg_list.h"
 #include "storage/bufmgr.h"
+#include "storage/itemid.h"
 #include "storage/lmgr.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 
 #include "varatt.h"
 
@@ -670,4 +674,258 @@ hnsw_vacuumcleanupindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 	stats->num_pages = RelationGetNumberOfBlocks(rel);
 
 	return stats;
+}
+
+/*
+ * Heap TID is stale if the heap block is missing, the offset is past
+ * maxoff, or the line pointer is unused — same rule as btree recover.
+ */
+static bool
+HnswHeapTidIsStale(Relation heaprel, ItemPointer tid)
+{
+	Buffer		heapbuf;
+	Page		heappage;
+	OffsetNumber off;
+	bool		stale = false;
+
+	if (!ItemPointerIsValid(tid))
+		return true;
+
+	heapbuf = ReadBuffer(heaprel, ItemPointerGetBlockNumber(tid));
+	if (!BufferIsValid(heapbuf))
+		return true;
+
+	LockBuffer(heaprel, heapbuf, BUFFER_LOCK_SHARE);
+	heappage = BufferGetPage(heapbuf);
+	off = ItemPointerGetOffsetNumber(tid);
+	if (off > PageGetMaxOffsetNumber(heappage))
+		stale = true;
+	else if (!ItemIdIsUsed(PageGetItemId(heappage, off)))
+		stale = true;
+	LockBuffer(heaprel, heapbuf, BUFFER_LOCK_UNLOCK);
+	ReleaseBuffer(heaprel, heapbuf);
+	return stale;
+}
+
+/*
+ * Index TID (neighbor edge) is stale if the target index slot is unused or
+ * not an element tuple.
+ */
+static bool
+HnswIndexTidIsStale(Relation index, ItemPointer indextid)
+{
+	Buffer		buf;
+	Page		page;
+	OffsetNumber off;
+	ItemId		itemid;
+	HnswElementTuple etup;
+	bool		stale = false;
+
+	if (!ItemPointerIsValid(indextid))
+		return true;
+
+	buf = ReadBuffer(index, ItemPointerGetBlockNumber(indextid));
+	if (!BufferIsValid(buf))
+		return true;
+
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
+	page = BufferGetPage(buf);
+	off = ItemPointerGetOffsetNumber(indextid);
+	if (off > PageGetMaxOffsetNumber(page))
+		stale = true;
+	else
+	{
+		itemid = PageGetItemId(page, off);
+		if (!ItemIdIsUsed(itemid))
+			stale = true;
+		else
+		{
+			etup = (HnswElementTuple) PageGetItem(page, itemid);
+			if (!HnswIsElementTuple(etup) || etup->deleted)
+				stale = true;
+			else if (!ItemPointerIsValid(&etup->heaptids[0]))
+				stale = true;
+		}
+	}
+	LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+	ReleaseBuffer(index, buf);
+	return stale;
+}
+
+/*
+ * Recover one HNSW index page after crash.
+ *
+ * Element tuples: drop heaptids that point at unused/missing heap LPs (same
+ * invariant as btree recover / RemoveHeapTids). Neighbor tuples: invalidate
+ * edges to unused or emptied element slots. Full graph repair remains the
+ * job of the next vacuum; this only restores heap/index pointer consistency.
+ *
+ * Returns blkno if the page is empty (freespace candidate), else
+ * InvalidBlockNumber.
+ */
+BlockNumber
+hnsw_recoverpage(Relation index, BlockNumber blkno)
+{
+	Buffer		buf;
+	Page		page;
+	Relation	heaprel;
+	HeapTuple	indextup;
+	Oid			heapid;
+	OffsetNumber offno;
+	OffsetNumber maxoff;
+	bool		dryrun = IsReadOnlyProcessingMode();
+	bool		changed = false;
+	bool		empty;
+
+	if (blkno == HNSW_METAPAGE_BLKNO)
+		return InvalidBlockNumber;
+
+	buf = ReadBuffer(index, blkno);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
+	page = BufferGetPage(buf);
+
+	if (PageIsNew(page) || PageIsEmpty(page))
+	{
+		UnlockReleaseBuffer(buf);
+		return blkno;
+	}
+
+	if (HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID)
+	{
+		UnlockReleaseBuffer(buf);
+		return InvalidBlockNumber;
+	}
+
+	UnlockReleaseBuffer(buf);
+
+	if (dryrun)
+		return InvalidBlockNumber;
+
+	indextup = SearchSysCacheTuple(INDEXRELID,
+								   ObjectIdGetDatum(RelationGetRelid(index)),
+								   PointerGetDatum(NULL),
+								   PointerGetDatum(NULL),
+								   PointerGetDatum(NULL));
+	if (!HeapTupleIsValid(indextup))
+		return InvalidBlockNumber;
+
+	heapid = SysCacheGetAttr(INDEXRELID, indextup,
+							 Anum_pg_index_indrelid, NULL);
+	heaprel = RelationIdGetRelation(heapid, DEFAULTDBOID);
+	if (!RelationIsValid(heaprel))
+		return InvalidBlockNumber;
+
+	buf = ReadBuffer(index, blkno);
+	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
+	page = BufferGetPage(buf);
+	maxoff = PageGetMaxOffsetNumber(page);
+
+	for (offno = FirstOffsetNumber; offno <= maxoff; offno = OffsetNumberNext(offno))
+	{
+		ItemId		itemid = PageGetItemId(page, offno);
+		Pointer		item;
+
+		if (!ItemIdIsUsed(itemid))
+			continue;
+
+		item = PageGetItem(page, itemid);
+
+		if (HnswIsElementTuple((HnswElementTuple) item))
+		{
+			HnswElementTuple etup = (HnswElementTuple) item;
+			int			idx = 0;
+			bool		itemUpdated = false;
+
+			for (int i = 0; i < HNSW_HEAPTIDS; i++)
+			{
+				if (!ItemPointerIsValid(&etup->heaptids[i]))
+					break;
+
+				if (HnswHeapTidIsStale(heaprel, &etup->heaptids[i]))
+				{
+					itemUpdated = true;
+					elog(NOTICE,
+						 "hnsw: Removing orphan heaptid block: %lu offset: %u slot: %d",
+						 (unsigned long) blkno, offno, i);
+				}
+				else
+					etup->heaptids[idx++] = etup->heaptids[i];
+			}
+
+			if (itemUpdated)
+			{
+				for (int i = idx; i < HNSW_HEAPTIDS; i++)
+					ItemPointerSetInvalid(&etup->heaptids[i]);
+				if (!ItemPointerIsValid(&etup->heaptids[0]))
+					etup->deleted = 1;
+				changed = true;
+			}
+		}
+		else if (HnswIsNeighborTuple((HnswNeighborTuple) item))
+		{
+			HnswNeighborTuple ntup = (HnswNeighborTuple) item;
+			bool		itemUpdated = false;
+
+			for (int i = 0; i < ntup->count; i++)
+			{
+				ItemPointer indextid = &ntup->indextids[i];
+
+				if (!ItemPointerIsValid(indextid))
+					continue;
+
+				/*
+				 * Avoid locking the same page recursively when an edge
+				 * points at a slot on this page.
+				 */
+				if (ItemPointerGetBlockNumber(indextid) == blkno)
+				{
+					OffsetNumber toff = ItemPointerGetOffsetNumber(indextid);
+					ItemId		titemid;
+					HnswElementTuple tetup;
+
+					if (toff > PageGetMaxOffsetNumber(page) ||
+						!ItemIdIsUsed(PageGetItemId(page, toff)))
+					{
+						ItemPointerSetInvalid(indextid);
+						itemUpdated = true;
+						continue;
+					}
+					titemid = PageGetItemId(page, toff);
+					tetup = (HnswElementTuple) PageGetItem(page, titemid);
+					if (!HnswIsElementTuple(tetup) || tetup->deleted ||
+						!ItemPointerIsValid(&tetup->heaptids[0]))
+					{
+						ItemPointerSetInvalid(indextid);
+						itemUpdated = true;
+					}
+				}
+				else if (HnswIndexTidIsStale(index, indextid))
+				{
+					ItemPointerSetInvalid(indextid);
+					itemUpdated = true;
+					elog(NOTICE,
+						 "hnsw: Removing orphan neighbor edge block: %lu offset: %u edge: %d",
+						 (unsigned long) blkno, offno, i);
+				}
+			}
+
+			if (itemUpdated)
+				changed = true;
+		}
+	}
+
+	if (changed)
+		HnswWriteBuffer(index, buf);
+	else
+		UnlockReleaseBuffer(buf);
+
+	RelationClose(heaprel);
+
+	buf = ReadBuffer(index, blkno);
+	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
+	page = BufferGetPage(buf);
+	empty = PageIsNew(page) || PageIsEmpty(page);
+	UnlockReleaseBuffer(buf);
+
+	return empty ? blkno : InvalidBlockNumber;
 }

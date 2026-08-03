@@ -10,6 +10,7 @@ Lazy VACUUM deletes index TIDs first, then durably flushes (`FlushAllDirtyBuffer
 - Durable flush: [`dbwriter.c`](../mtpgsql/src/backend/env/dbwriter.c) `FlushAllDirtyBuffersDurable` → `CommitPackage` / `smgrsync`
 - Unused heap LPs are recorded so orphan index TIDs can be bulk-deleted after a crash
 - Index under-delete vs heap dead count logs an incomplete-vacuum resume and continues heap cleanup; unused-LP orphan backstop may `AddRecoverRequest`
+- Recoverpage backstops (amfreetuple slot): btree `btrecoverpage`, IVFFlat `ivfflatrecoverpage`, HNSW `hnswrecoverpage` — drop index entries / heaptids that point at unused heap LPs after crash recovery
 
 ## Crash injection
 

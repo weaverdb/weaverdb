@@ -224,6 +224,16 @@ ivfflatvacuumcleanup(Relation rel)
 	(void) ivfflat_vacuumcleanupindex(&info, &stats);
 }
 
+/*
+ * Crash recover one IVFFlat page (amfreetuple / recoverpage slot).
+ * Returns the block number if empty after cleanup, else InvalidBlockNumber.
+ */
+Datum
+ivfflatrecoverpage(Relation rel, BlockNumber block)
+{
+	return LongGetDatum(ivfflat_recoverpage(rel, block));
+}
+
 void
 ivfflatdelete(Relation rel, ItemPointer tid)
 {
@@ -387,6 +397,16 @@ hnswvacuumcleanup(Relation rel)
 	memset(&stats, 0, sizeof(stats));
 	/* PG7 does not thread IndexBulkDeleteResult from bulkdelete; refresh pages. */
 	(void) hnsw_vacuumcleanupindex(&info, &stats);
+}
+
+/*
+ * Crash recover one HNSW page (amfreetuple / recoverpage slot).
+ * Returns the block number if empty after cleanup, else InvalidBlockNumber.
+ */
+Datum
+hnswrecoverpage(Relation rel, BlockNumber block)
+{
+	return LongGetDatum(hnsw_recoverpage(rel, block));
 }
 
 void
