@@ -731,7 +731,19 @@ int LogWriteGroup(WriteGroup cart) {
         releasecount = LogBuffers(cart);
     }
 
-    if ( cart->dotransaction ) {
+    /*
+     * Harden commits only when shadow logging made the dirty pages
+     * recoverable.  Crash before SyncBuffers is then repaired by FPI
+     * replay, which restores heap and index pages together — so a
+     * committed xid cannot leave an orphaned heap item without its
+     * index entry.
+     *
+     * Without shadow logging there is no replay safety net.  Leave
+     * dotransaction set and harden in SyncWriteGroup after the pages
+     * are synced.  A mid-sync crash keeps the xid soft; TransRecover
+     * aborts it, so any heap-only residue is uncommitted and safe.
+     */
+    if ( cart->dotransaction && logging ) {
         LogTransactions(cart);
         for (x=0;x<cart->numberOfTrans;x++) {
             if ( cart->WaitingThreads[x] && !cart->wait_for_sync[x] ) {
@@ -743,7 +755,8 @@ int LogWriteGroup(WriteGroup cart) {
 
     pthread_mutex_lock(&cart->checkpoint);
     cart->currstate = LOGGED;
-    cart->dotransaction = false;
+    if ( logging )
+        cart->dotransaction = false;
     pthread_cond_broadcast(&cart->broadcaster);
     pthread_mutex_unlock(&cart->checkpoint);
     
@@ -760,9 +773,15 @@ int SyncWriteGroup(WriteGroup cart) {
     
     ClearLogs(cart);
     
+    /*
+     * No-shadow-log path: harden soft commits only after data pages
+     * and fsyncs completed.  Orphaned heap items from a crash above
+     * remain soft and become aborts on restart.
+     */
     if (cart->dotransaction && TransactionSystemInitialized) {
         trans_logged = LogTransactions(cart);
-        elog(DEBUG, "logged %d transactions", trans_logged);
+        elog(DEBUG, "logged %d transactions after sync", trans_logged);
+        cart->dotransaction = false;
     }
     
     for (x=0;x<cart->numberOfTrans;x++) {
