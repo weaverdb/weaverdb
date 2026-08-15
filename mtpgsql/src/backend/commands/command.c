@@ -40,6 +40,7 @@
 #include "catalog/heap.h"
 #include "miscadmin.h"
 #include "optimizer/prep.h"
+#include "storage/bufmgr.h"
 #ifdef USEACL
 #include "utils/acl.h"
 #endif
@@ -477,12 +478,14 @@ AlterTableAddColumn(const char *relationName,
 		attribute->atthasdef = (colDef->raw_default != NULL ||
 								colDef->cooked_default != NULL);
 
+		BeginCriticalIO();
 		heap_insert(attrdesc, attributeTuple);
 		if (hasindex)
 			CatalogIndexInsert(idescs,
 							   Num_pg_attr_indices,
 							   attrdesc,
 							   attributeTuple);
+		EndCriticalIO();
 	}
 
 	if (hasindex)
@@ -491,12 +494,14 @@ AlterTableAddColumn(const char *relationName,
 	heap_close(attrdesc, RowExclusiveLock);
 
 	((Form_pg_class) GETSTRUCT(reltup))->relnatts = maxatts;
+	BeginCriticalIO();
 	heap_update(rel, &reltup->t_self, reltup, NULL,NULL);
 
 	/* keep catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 	CatalogIndexInsert(ridescs, Num_pg_class_indices, rel, reltup);
 	CatalogCloseIndices(Num_pg_class_indices, ridescs);
+	EndCriticalIO();
 
 	heap_freetuple(reltup);
 
@@ -631,12 +636,14 @@ AlterTableAlterColumn(const char *relationName,
 			/* update to false */
 			newtuple = heap_copytuple(tuple);
 			((Form_pg_attribute) GETSTRUCT(newtuple))->atthasdef = FALSE;
+			BeginCriticalIO();
 			heap_update(attr_rel, &tuple->t_self, newtuple, NULL, NULL);
 
 			/* keep the system catalog indices current */
 			CatalogOpenIndices(Num_pg_attr_indices, Name_pg_attr_indices, irelations);
 			CatalogIndexInsert(irelations, Num_pg_attr_indices, attr_rel, newtuple);
 			CatalogCloseIndices(Num_pg_attr_indices, irelations);
+			EndCriticalIO();
 
 			/* get rid of actual default definition */
 			drop_default(myrelid, attnum);
@@ -1013,6 +1020,7 @@ AlterTableDropColumn(const char *relationName,
 	namestrcpy(&(attribute->attname), dropColname);
 	ATTRIBUTE_DROP_COLUMN(attribute);
 
+	BeginCriticalIO();
 	heap_update(attrdesc, &tup->t_self, tup, NULL, NULL);
 	hasindex = (!IsIgnoringSystemIndexes() && RelationGetForm(attrdesc)->relhasindex);
 	if (hasindex)
@@ -1022,6 +1030,7 @@ AlterTableDropColumn(const char *relationName,
 						   attrdesc, tup);
 		CatalogCloseIndices(Num_pg_attr_indices, idescs);
 	}
+	EndCriticalIO();
 	heap_close(attrdesc, NoLock);
 	heap_freetuple(tup);
 
@@ -1059,10 +1068,12 @@ AlterTableDropColumn(const char *relationName,
 
 		RemoveColumnReferences(myrelid, attnum, false, reltup);
 		/* update pg_class tuple */
+		BeginCriticalIO();
 		heap_update(rel, &reltup->t_self, reltup, NULL, NULL);
 		CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 		CatalogIndexInsert(ridescs, Num_pg_class_indices, rel, reltup);
 		CatalogCloseIndices(Num_pg_class_indices, ridescs);
+		EndCriticalIO();
 	}
 
 	heap_freetuple(reltup);

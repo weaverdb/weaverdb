@@ -21,6 +21,7 @@
 #include "catalog/pg_shadow.h"
 #include "commands/proclang.h"
 #include "fmgr.h"
+#include "storage/bufmgr.h"
 #include "utils/syscache.h"
 
 
@@ -130,6 +131,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 	tupDesc = rel->rd_att;
 	tup = heap_formtuple(tupDesc, values, nulls);
 
+	BeginCriticalIO();
 	heap_insert(rel, tup);
 
 	if (RelationGetForm(rel)->relhasindex)
@@ -140,6 +142,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 		CatalogIndexInsert(idescs, Num_pg_language_indices, rel, tup);
 		CatalogCloseIndices(Num_pg_language_indices, idescs);
 	}
+	EndCriticalIO();
 
 	heap_close(rel, RowExclusiveLock);
 }

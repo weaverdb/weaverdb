@@ -23,6 +23,7 @@
 #include "catalog/catname.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_proc.h"
+#include "storage/bufmgr.h"
 #include "utils/sets.h"
 #include "utils/syscache.h"
 #include "tcop/dest.h"
@@ -113,6 +114,7 @@ SetDefine(char *querystr, char *typename)
 									  replNull,
 									  repl);
 
+			BeginCriticalIO();
 			heap_update(procrel, &tup->t_self, newtup, NULL, NULL);
 
 			setoid = newtup->t_data->t_oid;
@@ -128,6 +130,7 @@ SetDefine(char *querystr, char *typename)
 			CatalogIndexInsert(idescs, Num_pg_proc_indices, procrel, newtup);
 			CatalogCloseIndices(Num_pg_proc_indices, idescs);
 		}
+		EndCriticalIO();
 		heap_close(procrel, RowExclusiveLock);
 	}
 	return setoid;

@@ -32,6 +32,7 @@
 #include "miscadmin.h"
 #include "parser/parse_agg.h"
 #include "parser/parse_func.h"
+#include "storage/bufmgr.h"
 #include "utils/acl.h"
 #include "utils/syscache.h"
 
@@ -153,6 +154,7 @@ ChangeAcl(char *relname,
 	values[Anum_pg_class_relacl - 1] = (Datum) new_acl;
 	tuple = heap_modifytuple(tuple, relation, values, nulls, replaces);
 
+	BeginCriticalIO();
 	heap_update(relation, &tuple->t_self, tuple, NULL,NULL);
 
 	/* keep the catalog indices up to date */
@@ -160,6 +162,7 @@ ChangeAcl(char *relname,
 					   idescs);
 	CatalogIndexInsert(idescs, Num_pg_class_indices, relation, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, idescs);
+	EndCriticalIO();
 
 	heap_close(relation, RowExclusiveLock);
 	if (free_old_acl)

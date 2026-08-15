@@ -27,6 +27,7 @@
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
 #include "parser/parse_func.h"
+#include "storage/bufmgr.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
@@ -312,6 +313,7 @@ OperatorShellMakeWithOpenRelation(Relation pg_operator_desc,
 	 *	close the relation
 	 * ----------------
 	 */
+	BeginCriticalIO();
 	heap_insert(pg_operator_desc, tup);
 	operatorObjectId = tup->t_data->t_oid;
 
@@ -323,6 +325,7 @@ OperatorShellMakeWithOpenRelation(Relation pg_operator_desc,
 		CatalogIndexInsert(idescs, Num_pg_operator_indices, pg_operator_desc, tup);
 		CatalogCloseIndices(Num_pg_operator_indices, idescs);
 	}
+	EndCriticalIO();
 
 	/* ----------------
 	 *	free the tuple and return the operator oid
@@ -820,6 +823,7 @@ OperatorDef(char *operatorName,
 								   nulls,
 								   replaces);
 
+			BeginCriticalIO();
 			heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 		}
 		else
@@ -832,6 +836,7 @@ OperatorDef(char *operatorName,
 		tupDesc = pg_operator_desc->rd_att;
 		tup = heap_formtuple(tupDesc, values, nulls);
 
+		BeginCriticalIO();
 		heap_insert(pg_operator_desc, tup);
 		operatorObjectId = tup->t_data->t_oid;
 
@@ -845,6 +850,7 @@ OperatorDef(char *operatorName,
 		CatalogIndexInsert(idescs, Num_pg_operator_indices, pg_operator_desc, tup);
 		CatalogCloseIndices(Num_pg_operator_indices, idescs);
 	}
+	EndCriticalIO();
 
 	heap_close(pg_operator_desc, RowExclusiveLock);
 
@@ -960,6 +966,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 									   nulls,
 									   replaces);
 
+				BeginCriticalIO();
 				heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 
 				if (RelationGetForm(pg_operator_desc)->relhasindex)
@@ -970,6 +977,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 					CatalogIndexInsert(idescs, Num_pg_operator_indices, pg_operator_desc, tup);
 					CatalogCloseIndices(Num_pg_operator_indices, idescs);
 				}
+				EndCriticalIO();
 			}
 		}
 		heap_endscan(pg_operator_scan);
@@ -992,6 +1000,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 							   nulls,
 							   replaces);
 
+		BeginCriticalIO();
 		heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 
 		if (RelationGetForm(pg_operator_desc)->relhasindex)
@@ -1002,6 +1011,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 			CatalogIndexInsert(idescs, Num_pg_operator_indices, pg_operator_desc, tup);
 			CatalogCloseIndices(Num_pg_operator_indices, idescs);
 		}
+		EndCriticalIO();
 
 		values[Anum_pg_operator_oprcom - 1] = (Datum) NULL;
 		replaces[Anum_pg_operator_oprcom - 1] = ' ';
@@ -1029,6 +1039,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 							   nulls,
 							   replaces);
 
+		BeginCriticalIO();
 		heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 
 		if (RelationGetForm(pg_operator_desc)->relhasindex)
@@ -1039,6 +1050,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 			CatalogIndexInsert(idescs, Num_pg_operator_indices, pg_operator_desc, tup);
 			CatalogCloseIndices(Num_pg_operator_indices, idescs);
 		}
+		EndCriticalIO();
 	}
 
 	heap_endscan(pg_operator_scan);

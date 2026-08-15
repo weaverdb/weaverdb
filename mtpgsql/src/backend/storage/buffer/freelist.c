@@ -85,6 +85,7 @@ static BufferDesc* GetHead(Relation rel) {
     int timerr = 0;
     long elapsed;
     struct timespec t1,t2;
+    int          ciosuspend = 0;
    
     clock_gettime(WHICH_CLOCK,&t1);
  /*   
@@ -105,6 +106,14 @@ static BufferDesc* GetHead(Relation rel) {
         if ( oplist->head == INVALID_DESCRIPTOR ) {
                 oplist->waiting++;
                 struct timespec waittime;
+
+                /*
+                 * Drop generation rdlock before waiting on freelist /
+                 * initiating a writer flush — SetBufferGeneration needs
+                 * the wrlock. Depth and pinned_generation stay set.
+                 */
+                if (ciosuspend == 0)
+                    ciosuspend = SuspendCriticalIO();
                 
                 ptimeout(&waittime,(buffer_wait + longwait));
                 timerr = pthread_cond_timedwait(&oplist->gate, &oplist->guard, &waittime);
@@ -146,6 +155,10 @@ static BufferDesc* GetHead(Relation rel) {
      */
     
     pthread_mutex_unlock(&which->guard);
+
+    if (ciosuspend != 0)
+        ResumeCriticalIO(ciosuspend);
+
     clock_gettime(WHICH_CLOCK,&t2);
 
     elapsed = (t2.tv_sec - t1.tv_sec) * 1000;      // sec to ms

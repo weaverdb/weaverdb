@@ -29,6 +29,7 @@
 #include "commands/comment.h"
 #include "miscadmin.h"
 #include "rewrite/rewriteRemove.h"
+#include "storage/bufmgr.h"
 #ifdef USEACL
 #include "utils/acl.h"
 #endif
@@ -179,6 +180,7 @@ CreateComments(Oid oid, char *comment)
 		{
 			desctuple = heap_modifytuple(searchtuple, description, values,
 										 nulls, replaces);
+			BeginCriticalIO();
 			heap_update(description, &searchtuple->t_self, desctuple, NULL, NULL);
 			modified = TRUE;
 		}
@@ -192,6 +194,7 @@ CreateComments(Oid oid, char *comment)
 		if ((comment != NULL) && (strlen(comment) > 0))
 		{
 			desctuple = heap_formtuple(tupDesc, values, nulls);
+			BeginCriticalIO();
 			heap_insert(description, desctuple);
 			modified = TRUE;
 		}
@@ -214,6 +217,7 @@ CreateComments(Oid oid, char *comment)
 							   desctuple);
 			CatalogCloseIndices(Num_pg_description_indices, idescs);
 		}
+		EndCriticalIO();
 		heap_freetuple(desctuple);
 
 	}

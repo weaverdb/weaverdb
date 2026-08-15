@@ -464,6 +464,9 @@ vfdwrite(SmgrInfo info, BlockNumber blocknum, char *buffer)
 		status = SM_FAIL;
 
         FileUnpin(fd, 4);
+	/* Writing at/past EOF grows the file; keep nblocks in sync. */
+	if (status == SM_SUCCESS && (long) (blocknum + 1) > info->nblocks)
+		info->nblocks = (long) (blocknum + 1);
 	return status;
 }
 
@@ -500,6 +503,8 @@ vfdflush(SmgrInfo info, BlockNumber blocknum, char *buffer)
         }
             
         FileUnpin(fd, 5);
+	if (status == SM_SUCCESS && (long) (blocknum + 1) > info->nblocks)
+		info->nblocks = (long) (blocknum + 1);
 	return status;
 }
 

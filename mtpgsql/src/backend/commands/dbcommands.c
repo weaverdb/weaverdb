@@ -123,6 +123,7 @@ createdb(const char *dbname, const char *dbpath, int encoding)
 	/*
 	 * Update table
 	 */
+	BeginCriticalIO();
 	heap_insert(pg_database_rel, tuple);
 
 	/*
@@ -140,6 +141,7 @@ createdb(const char *dbname, const char *dbpath, int encoding)
 		CatalogCloseIndices(Num_pg_database_indices, idescs);
 	}
 #endif
+	EndCriticalIO();
 
 	heap_close(pg_database_rel, NoLock);
 

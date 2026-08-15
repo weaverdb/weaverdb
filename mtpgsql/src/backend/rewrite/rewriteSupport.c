@@ -19,6 +19,7 @@
 #include "catalog/catname.h"
 #include "catalog/indexing.h"
 #include "rewrite/rewriteSupport.h"
+#include "storage/bufmgr.h"
 #include "utils/catcache.h"
 #include "utils/relcache.h"
 #include "utils/syscache.h"
@@ -114,12 +115,14 @@ setRelhasrulesInRelation(Oid relationId, bool relhasrules)
 	Assert(HeapTupleIsValid(tuple));
 
 	((Form_pg_class) GETSTRUCT(tuple))->relhasrules = relhasrules;
+	BeginCriticalIO();
 	heap_update(relationRelation, &tuple->t_self, tuple, NULL, NULL);
 
 	/* keep the catalog indices up to date */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, idescs);
 	CatalogIndexInsert(idescs, Num_pg_class_indices, relationRelation, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, idescs);
+	EndCriticalIO();
 
 	heap_freetuple(tuple);
 	heap_close(relationRelation, RowExclusiveLock);

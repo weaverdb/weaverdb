@@ -28,6 +28,7 @@
 #include "commands/trigger.h"
 #include "libpq/crypt.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "nodes/pg_list.h"
 #include "tcop/tcopprot.h"
 #ifdef USEACL
@@ -304,6 +305,7 @@ CreateUser(CreateUserStmt *stmt)
 	/*
 	 * Insert a new record in the pg_shadow table
 	 */
+	BeginCriticalIO();
 	if (heap_insert(pg_shadow_rel, tuple) == InvalidOid)
 		elog(ERROR, "CREATE USER: heap_insert failed");
 
@@ -320,6 +322,7 @@ CreateUser(CreateUserStmt *stmt)
 						   tuple);
 		CatalogCloseIndices(Num_pg_shadow_indices, idescs);
 	}
+	EndCriticalIO();
 
 	/*
 	 * Add the user to the groups specified. We'll just call the below
@@ -477,6 +480,7 @@ AlterUser(AlterUserStmt *stmt)
 	new_tuple = heap_formtuple(pg_shadow_dsc, new_record, new_record_nulls);
 	Assert(new_tuple);
 	/* XXX check return value of this? */
+	BeginCriticalIO();
 	heap_update(pg_shadow_rel, &tuple->t_self, new_tuple, NULL, NULL);
 
 
@@ -491,6 +495,7 @@ AlterUser(AlterUserStmt *stmt)
 						   tuple);
 		CatalogCloseIndices(Num_pg_shadow_indices, idescs);
 	}
+	EndCriticalIO();
 
 	/*
 	 * Write the updated pg_shadow data to the flat password file.
@@ -797,6 +802,7 @@ CreateGroup(CreateGroupStmt *stmt)
 	/*
 	 * Insert a new record in the pg_group_table
 	 */
+	BeginCriticalIO();
 	heap_insert(pg_group_rel, tuple);
 
 	/*
@@ -812,6 +818,7 @@ CreateGroup(CreateGroupStmt *stmt)
 						   tuple);
 		CatalogCloseIndices(Num_pg_group_indices, idescs);
 	}
+	EndCriticalIO();
 
 	heap_close(pg_group_rel, AccessExclusiveLock);
 }
@@ -960,6 +967,7 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 		new_record[Anum_pg_group_grolist - 1] = PointerGetDatum(newarray);
 
 		tuple = heap_formtuple(pg_group_dsc, new_record, new_record_nulls);
+		BeginCriticalIO();
 		heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL);
 
 		/* Update indexes */
@@ -973,6 +981,7 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 							   tuple);
 			CatalogCloseIndices(Num_pg_group_indices, idescs);
 		}
+		EndCriticalIO();
 	}							/* endif alter group add user */
 
 	else if (stmt->action == -1)/* drop users from group */
@@ -1068,6 +1077,7 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 			new_record[Anum_pg_group_grolist - 1] = PointerGetDatum(newarray);
 
 			tuple = heap_formtuple(pg_group_dsc, new_record, new_record_nulls);
+			BeginCriticalIO();
 			heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL);
 
 			/* Update indexes */
@@ -1081,6 +1091,7 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 								   tuple);
 				CatalogCloseIndices(Num_pg_group_indices, idescs);
 			}
+			EndCriticalIO();
 
 		}						/* endif group not null */
 	}							/* endif alter group drop user */

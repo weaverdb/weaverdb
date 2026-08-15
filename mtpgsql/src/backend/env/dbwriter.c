@@ -60,6 +60,7 @@
 #include "utils/inval.h"
 #include "utils/elog.h"
 #include "catalog/catname.h"
+#include "catalog/pg_class.h"
 #include "env/poolsweep.h"
 #include "env/freespace.h"
 #include "env/pg_crc.h"
@@ -838,6 +839,8 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
     int moved = 0;
     
     pthread_mutex_lock(&target->checkpoint);
+    if (src->generation > target->generation)
+        target->generation = src->generation;
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         
         if ( !src->buffers[i] ) {
@@ -986,6 +989,7 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
         
     int             position;
     bool            setxid = true;
+    int             ciosuspend = 0;
     
     cart = GetCurrentWriteGroup(true);
     
@@ -1014,8 +1018,12 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
             cart->wait_for_sync[position] = !IsLoggable();
             Assert(GetMyThread()->state == TRANS_COMMIT);
             while ( GetMyThread()->state != TRANS_DEFAULT ) {
+                if (ciosuspend == 0)
+                    ciosuspend = SuspendCriticalIO();
                 if (pthread_cond_wait(&cart->broadcaster, &cart->checkpoint)) {
                     UnlockWriteGroup(cart);
+                    if (ciosuspend != 0)
+                        ResumeCriticalIO(ciosuspend);
                     elog(FATAL, "[DBWriter]cannot attach to db write thread");
                 }
             }
@@ -1026,6 +1034,9 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
     }
     
     UnlockWriteGroup(cart);
+
+    if (ciosuspend != 0)
+        ResumeCriticalIO(ciosuspend);
     
     if ( setxid ) {
         Relation        LogRelation = RelationIdGetRelation(cart->LogId, DEFAULTDBOID);
@@ -1197,7 +1208,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
       /* Ignore buffers that were not dirtied by me */
         if (!list->buffers[i])
             continue;
-        
+
         if ( !forcommit ) {
             bool   exit = false;
             pthread_mutex_lock(&list->checkpoint);
@@ -1342,6 +1353,7 @@ bool FlushAllDirtyBuffers(bool wait) {
     WriteGroup          cart =  GetCurrentWriteGroup(false);
     int                 releasecount = 0;
     bool iflushed = false;
+    int                 ciosuspend = 0;
         
     if (IsDBWriter()) {
         while ( FlushWriteGroup(cart) == 0 ) {
@@ -1357,11 +1369,16 @@ bool FlushAllDirtyBuffers(bool wait) {
             iflushed = true;
         }
         while ( wait && cart->currstate == FLUSHING ) {
+            if (ciosuspend == 0)
+                ciosuspend = SuspendCriticalIO();
             pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
         }
     }
     
     UnlockWriteGroup(cart);
+
+    if (ciosuspend != 0)
+        ResumeCriticalIO(ciosuspend);
     
     return iflushed;
 }
@@ -1374,6 +1391,7 @@ bool FlushAllDirtyBuffersDurable(bool wait) {
     WriteGroup cart = GetCurrentWriteGroup(false);
     int releasecount = 0;
     bool iflushed = false;
+    int ciosuspend = 0;
 
     /*
      * Wait out any in-progress flush before requesting durable_sync so we
@@ -1381,6 +1399,8 @@ bool FlushAllDirtyBuffersDurable(bool wait) {
      * as false.
      */
     while (wait && cart->currstate == FLUSHING) {
+        if (ciosuspend == 0)
+            ciosuspend = SuspendCriticalIO();
         pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
     }
 
@@ -1399,11 +1419,16 @@ bool FlushAllDirtyBuffersDurable(bool wait) {
         cart->currstate = FLUSHING;
         iflushed = true;
         while (wait && cart->currstate == FLUSHING) {
+            if (ciosuspend == 0)
+                ciosuspend = SuspendCriticalIO();
             pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
         }
     }
 
     UnlockWriteGroup(cart);
+
+    if (ciosuspend != 0)
+        ResumeCriticalIO(ciosuspend);
 
     return iflushed;
 }

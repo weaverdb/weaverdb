@@ -157,9 +157,9 @@ DESCR("halfvec cosine distance for ivfflat/hnsw");
 DATA(insert OID = 1998 (	sparsevec_l2_ops  1846   ));
 DESCR("sparsevec L2 distance for hnsw");
 #define SPARSEVEC_L2_OPS_OID 1998
-DATA(insert OID = 1999 (	sparsevec_ip_ops  1846   ));
+DATA(insert OID = 2400 (	sparsevec_ip_ops  1846   ));
 DESCR("sparsevec inner product for hnsw");
-#define SPARSEVEC_IP_OPS_OID 1999
+#define SPARSEVEC_IP_OPS_OID 2400
 DATA(insert OID = 2020 (	sparsevec_cosine_ops 1846   ));
 DESCR("sparsevec cosine distance for hnsw");
 #define SPARSEVEC_COSINE_OPS_OID 2020

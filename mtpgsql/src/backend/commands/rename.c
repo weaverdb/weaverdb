@@ -27,6 +27,7 @@
 #include "catalog/catalog.h"
 #include "commands/rename.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "storage/smgr.h"
 #include "optimizer/prep.h"
 #ifdef USEACL
@@ -163,6 +164,7 @@ renameatt(char *relname,
 	StrNCpy(NameStr(((Form_pg_attribute) GETSTRUCT(oldatttup))->attname),
 			newattname, NAMEDATALEN);
 
+	BeginCriticalIO();
 	heap_update(attrelation, &oldatttup->t_self, oldatttup, NULL, NULL);
 
 	/* keep system catalog indices current */
@@ -173,6 +175,7 @@ renameatt(char *relname,
 		CatalogIndexInsert(irelations, Num_pg_attr_indices, attrelation, oldatttup);
 		CatalogCloseIndices(Num_pg_attr_indices, irelations);
 	}
+	EndCriticalIO();
 
 	heap_freetuple(oldatttup);
 	heap_close(attrelation, RowExclusiveLock);
@@ -296,12 +299,14 @@ renamerel(const char *oldrelname, const char *newrelname)
 	StrNCpy(NameStr(((Form_pg_class) GETSTRUCT(oldreltup))->relname),
 			newrelname, NAMEDATALEN);
 
+	BeginCriticalIO();
 	heap_update(relrelation, &oldreltup->t_self, oldreltup, NULL, NULL);
 
 	/* keep the system catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, irelations);
 	CatalogIndexInsert(irelations, Num_pg_class_indices, relrelation, oldreltup);
 	CatalogCloseIndices(Num_pg_class_indices, irelations);
+	EndCriticalIO();
 
 	heap_close(relrelation, NoLock);
 

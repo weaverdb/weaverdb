@@ -35,6 +35,7 @@
 #include "miscadmin.h"
 #include "parser/parse_oper.h"
 #include "parser/parse_relation.h"
+#include "storage/bufmgr.h"
 #ifdef USEACL
 #include "utils/acl.h"
 #endif
@@ -1725,10 +1726,12 @@ update_attstats(Oid relid, int natts, AnalyzeAttrStats ** vacattrstats)
 						nulls,
 						replaces);
 
+			BeginCriticalIO();
 			heap_update(sd, &oldtup->t_self, stup, &stup->t_self, NULL);
 		} else {
 			/* No, insert new tuple */
 			stup = heap_formtuple(sd->rd_att, values, nulls);
+			BeginCriticalIO();
 			heap_insert(sd, stup);
 		}
 
@@ -1738,6 +1741,7 @@ update_attstats(Oid relid, int natts, AnalyzeAttrStats ** vacattrstats)
 			CatalogIndexInsert(irelations, Num_pg_statistic_indices, sd, stup);
 			CatalogCloseIndices(Num_pg_statistic_indices, irelations);
 		}
+		EndCriticalIO();
 
 		heap_freetuple(stup);
 	}

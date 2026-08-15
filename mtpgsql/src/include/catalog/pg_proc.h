@@ -712,7 +712,7 @@ DESCR("r-tree(internal)");
 DATA(insert OID = 328 (  rtrescan		   PGUID 11 f t f 3 f 23 "0" 100 0 0 100  rtrescan - ));
 DESCR("r-tree(internal)");
 #endif /*  USEGEO  */
-DATA(insert OID = 1842 (  btrecoverpage		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  btrecoverpage - ));
+DATA(insert OID = 2399 (  btrecoverpage		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  btrecoverpage - ));
 DESCR("btree(internal)");
 DATA(insert OID = 330 (  btgettuple		   PGUID 11 f t f 2 f 23 "0" 100 0 0 100  btgettuple - ));
 DESCR("btree(internal)");
@@ -1031,10 +1031,11 @@ DESCR("convert packed bit bytea blob to varbit");
 DATA(insert OID = 2298 (  bit_to_bytea	   PGUID 11 f t t 1 f 17 "1562" 100 0 0 100  bit_to_bytea - ));
 DESCR("convert varbit to packed bit bytea blob");
 
-/* blob (OID 1803) twins: same C bodies as bytea converters (shared varlena layout). */
-DATA(insert OID = 2387 (  blob_to_vector	   PGUID 11 f t t 1 f 1842 "1803" 100 0 0 100  bytea_to_vector - ));
+/* blob (OID 1803) twins: same C bodies as bytea converters (shared varlena layout).
+ * OIDs must not collide with other pg_proc / catalog OIDs (see duplicate_oids). */
+DATA(insert OID = 2395 (  blob_to_vector	   PGUID 11 f t t 1 f 1842 "1803" 100 0 0 100  bytea_to_vector - ));
 DESCR("convert float32 blob to vector");
-DATA(insert OID = 2388 (  vector_to_blob	   PGUID 11 f t t 1 f 1803 "1842" 100 0 0 100  vector_to_bytea - ));
+DATA(insert OID = 2396 (  vector_to_blob	   PGUID 11 f t t 1 f 1803 "1842" 100 0 0 100  vector_to_bytea - ));
 DESCR("convert vector to float32 blob");
 DATA(insert OID = 2389 (  blob_to_halfvec	   PGUID 11 f t t 1 f 1844 "1803" 100 0 0 100  bytea_to_halfvec - ));
 DESCR("convert float16 blob to halfvec");
@@ -1070,15 +1071,15 @@ DESCR("quantize halfvec to bit");
 
 DATA(insert OID = 2339 (  vector_recv		   PGUID 11 f t t 3 f 1842 "0 0 23" 100 0 0 100  vector_recv - ));
 DESCR("vector binary receive");
-DATA(insert OID = 2340 (  vector_send		   PGUID 11 f t t 1 f 17 "1842" 100 0 0 100  vector_send - ));
+DATA(insert OID = 2401 (  vector_send		   PGUID 11 f t t 1 f 17 "1842" 100 0 0 100  vector_send - ));
 DESCR("vector binary send");
-DATA(insert OID = 2341 (  halfvec_recv		   PGUID 11 f t t 3 f 1844 "0 0 23" 100 0 0 100  halfvec_recv - ));
+DATA(insert OID = 2402 (  halfvec_recv		   PGUID 11 f t t 3 f 1844 "0 0 23" 100 0 0 100  halfvec_recv - ));
 DESCR("halfvec binary receive");
-DATA(insert OID = 2342 (  halfvec_send		   PGUID 11 f t t 1 f 17 "1844" 100 0 0 100  halfvec_send - ));
+DATA(insert OID = 2403 (  halfvec_send		   PGUID 11 f t t 1 f 17 "1844" 100 0 0 100  halfvec_send - ));
 DESCR("halfvec binary send");
-DATA(insert OID = 2343 (  sparsevec_recv	   PGUID 11 f t t 3 f 1846 "0 0 23" 100 0 0 100  sparsevec_recv - ));
+DATA(insert OID = 2404 (  sparsevec_recv	   PGUID 11 f t t 3 f 1846 "0 0 23" 100 0 0 100  sparsevec_recv - ));
 DESCR("sparsevec binary receive");
-DATA(insert OID = 2344 (  sparsevec_send	   PGUID 11 f t t 1 f 17 "1846" 100 0 0 100  sparsevec_send - ));
+DATA(insert OID = 2405 (  sparsevec_send	   PGUID 11 f t t 1 f 17 "1846" 100 0 0 100  sparsevec_send - ));
 DESCR("sparsevec binary send");
 /* vector / halfvec arithmetic, aggregates, leftover helpers (OIDs 2346+) */
 DATA(insert OID = 2346 (  vector_add		   PGUID 11 f t t 2 f 1842 "1842 1842" 100 0 0 100  vector_add - ));
@@ -1150,8 +1151,8 @@ DESCR("halfvec avg finalize (sum / count)");
 #define F_SPARSEVEC_TO_BYTEA	2296
 #define F_BYTEA_TO_BIT	2297
 #define F_BIT_TO_BYTEA	2298
-#define F_BLOB_TO_VECTOR	2387
-#define F_VECTOR_TO_BLOB	2388
+#define F_BLOB_TO_VECTOR	2395
+#define F_VECTOR_TO_BLOB	2396
 #define F_BLOB_TO_HALFVEC	2389
 #define F_HALFVEC_TO_BLOB	2390
 #define F_BLOB_TO_SPARSEVEC	2391
@@ -1161,11 +1162,11 @@ DESCR("halfvec avg finalize (sum / count)");
 #define F_BINARY_QUANTIZE	2337
 #define F_HALFVEC_BINARY_QUANTIZE	2338
 #define F_VECTOR_RECV	2339
-#define F_VECTOR_SEND	2340
-#define F_HALFVEC_RECV	2341
-#define F_HALFVEC_SEND	2342
-#define F_SPARSEVEC_RECV	2343
-#define F_SPARSEVEC_SEND	2344
+#define F_VECTOR_SEND	2401
+#define F_HALFVEC_RECV	2402
+#define F_HALFVEC_SEND	2403
+#define F_SPARSEVEC_RECV	2404
+#define F_SPARSEVEC_SEND	2405
 
 DATA(insert OID = 449 (  hashint2		   PGUID 11 f t t 1 f 23 "21" 100 0 0 100  hashint2 - ));
 DESCR("hash");

@@ -37,6 +37,7 @@
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/memutils.h"
+#include "storage/bufmgr.h"
 #include "storage/smgr.h"
 #include "storage/buffile.h"
 
@@ -1035,6 +1036,7 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
                     newtup = heap_modifytuple(&tuple,erel,values,nulls,replace);
                     ReleaseBuffer(erel,release);
 
+                    BeginCriticalIO();
                     heap_update(erel,&newtup->t_self,newtup,NULL,NULL);
                 }
                 set = true;
@@ -1055,6 +1057,7 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
             nulls[2] = ' ';   
 
             newtup = heap_formtuple(RelationGetDescr(erel),values,nulls);
+            BeginCriticalIO();
             heap_insert(erel,newtup);
         }
 
@@ -1068,6 +1071,7 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
                     CatalogIndexInsert(idescs, 1, erel, newtup);
                     CatalogCloseIndices(1, idescs);
             }
+            EndCriticalIO();
             heap_freetuple(newtup);
          }
 

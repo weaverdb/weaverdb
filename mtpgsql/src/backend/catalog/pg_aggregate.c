@@ -23,6 +23,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
@@ -255,6 +256,7 @@ AggregateCreate(char *aggName,
 											   values,
 											   nulls)))
 		elog(ERROR, "AggregateCreate: heap_formtuple failed");
+	BeginCriticalIO();
 	if (!OidIsValid(heap_insert(aggdesc, tup)))
 		elog(ERROR, "AggregateCreate: heap_insert failed");
 
@@ -266,6 +268,7 @@ AggregateCreate(char *aggName,
 		CatalogIndexInsert(idescs, Num_pg_aggregate_indices, aggdesc, tup);
 		CatalogCloseIndices(Num_pg_aggregate_indices, idescs);
 	}
+	EndCriticalIO();
 
 	heap_close(aggdesc, RowExclusiveLock);
 }

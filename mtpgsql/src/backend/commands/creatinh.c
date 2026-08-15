@@ -26,6 +26,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/pg_description.h"
 #include "commands/creatinh.h"
+#include "storage/bufmgr.h"
 #include "utils/syscache.h"
 #include "env/env.h"
 
@@ -505,6 +506,7 @@ StoreCatalogInheritance(Oid relationId, List *supers)
 
 		tuple = heap_formtuple(desc, datum, nullarr);
 
+		BeginCriticalIO();
 		heap_insert(relation, tuple);
 
 		if (RelationGetForm(relation)->relhasindex)
@@ -515,6 +517,7 @@ StoreCatalogInheritance(Oid relationId, List *supers)
 			CatalogIndexInsert(idescs, Num_pg_inherits_indices, relation, tuple);
 			CatalogCloseIndices(Num_pg_inherits_indices, idescs);
 		}
+		EndCriticalIO();
 
 		heap_freetuple(tuple);
 

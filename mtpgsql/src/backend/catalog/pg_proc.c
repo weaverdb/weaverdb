@@ -24,6 +24,7 @@
 #include "miscadmin.h"
 #include "optimizer/planner.h"
 #include "parser/parse_type.h"
+#include "storage/bufmgr.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/fmgrtab.h"
@@ -288,6 +289,7 @@ ProcedureCreate(char *procedureName,
 						 values,
 						 nulls);
 
+	BeginCriticalIO();
 	heap_insert(rel, tup);
 
 	if (RelationGetForm(rel)->relhasindex)
@@ -298,6 +300,7 @@ ProcedureCreate(char *procedureName,
 		CatalogIndexInsert(idescs, Num_pg_proc_indices, rel, tup);
 		CatalogCloseIndices(Num_pg_proc_indices, idescs);
 	}
+	EndCriticalIO();
 	heap_close(rel, RowExclusiveLock);
 	return tup->t_data->t_oid;
 }

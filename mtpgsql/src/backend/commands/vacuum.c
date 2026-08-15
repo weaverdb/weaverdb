@@ -36,6 +36,7 @@
 #include "commands/vacuum.h"
 #include "miscadmin.h"
 #include "parser/parse_oper.h"
+#include "storage/bufmgr.h"
 #include "storage/sinval.h"
 #include "storage/smgr.h"
 #include "tcop/tcopprot.h"
@@ -2087,10 +2088,12 @@ vc_updstats(Oid relid, long num_pages, long num_tuples, bool hasindex,
 						/* OK, store tuple and update indexes too */
 						Relation	irelations[Num_pg_statistic_indices];
 
+						BeginCriticalIO();
 						heap_insert(sd, stup);
 						CatalogOpenIndices(Num_pg_statistic_indices, Name_pg_statistic_indices, irelations);
 						CatalogIndexInsert(irelations, Num_pg_statistic_indices, sd, stup);
 						CatalogCloseIndices(Num_pg_statistic_indices, irelations);
+						EndCriticalIO();
 					}
 
 					/* release allocated space */

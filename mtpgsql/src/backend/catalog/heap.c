@@ -66,6 +66,7 @@
 #include "parser/parse_relation.h"
 #include "parser/parse_target.h"
 #include "rewrite/rewriteRemove.h"
+#include "storage/bufmgr.h"
 #include "storage/smgr.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
@@ -641,10 +642,12 @@ AddNewAttributeTuples(Oid new_rel_oid,
 							 ATTRIBUTE_TUPLE_SIZE,
 							 (char *) *dpp);
 
+		BeginCriticalIO();
 		heap_insert(rel, tup);
 
 		if (hasindex)
 			CatalogIndexInsert(idescs, Num_pg_attr_indices, rel, tup);
+		EndCriticalIO();
 
 		heap_freetuple(tup);
 		dpp++;
@@ -664,10 +667,12 @@ AddNewAttributeTuples(Oid new_rel_oid,
 							 ATTRIBUTE_TUPLE_SIZE,
 							 (char *) *dpp);
 
+		BeginCriticalIO();
 		heap_insert(rel, tup);
 
 		if (hasindex)
 			CatalogIndexInsert(idescs, Num_pg_attr_indices, rel, tup);
+		EndCriticalIO();
 
 		heap_freetuple(tup);
 		dpp++;
@@ -747,6 +752,7 @@ AddNewRelationTuple(Relation pg_class_desc,
 	/*
 	 * finally insert the new tuple and free it.
 	 */
+	BeginCriticalIO();
 	heap_insert(pg_class_desc, tup);
 
 	if (temp_relname)
@@ -763,6 +769,7 @@ AddNewRelationTuple(Relation pg_class_desc,
 		CatalogIndexInsert(idescs, Num_pg_class_indices, pg_class_desc, tup);
 		CatalogCloseIndices(Num_pg_class_indices, idescs);
 	}
+	EndCriticalIO();
 
 	heap_freetuple(tup);
 }
@@ -1822,11 +1829,13 @@ StoreAttrDefault(Relation rel, AttrNumber attnum, char *adbin,
 	values[Anum_pg_attrdef_adsrc - 1] = PointerGetDatum(textin(adsrc));
 	adrel = heap_openr(AttrDefaultRelationName, RowExclusiveLock);
 	tuple = heap_formtuple(adrel->rd_att, values, nulls);
+	BeginCriticalIO();
 	heap_insert(adrel, tuple);
 	CatalogOpenIndices(Num_pg_attrdef_indices, Name_pg_attrdef_indices,
 					   idescs);
 	CatalogIndexInsert(idescs, Num_pg_attrdef_indices, adrel, tuple);
 	CatalogCloseIndices(Num_pg_attrdef_indices, idescs);
+	EndCriticalIO();
 	heap_close(adrel, RowExclusiveLock);
 
 	pfree(DatumGetPointer(values[Anum_pg_attrdef_adbin - 1]));
@@ -1848,12 +1857,14 @@ StoreAttrDefault(Relation rel, AttrNumber attnum, char *adbin,
 	if (!attStruct->atthasdef)
 	{
 		attStruct->atthasdef = true;
+		BeginCriticalIO();
 		heap_update(attrrel, &atttup->t_self, atttup, NULL, NULL);
 		/* keep catalog indices current */
 		CatalogOpenIndices(Num_pg_attr_indices, Name_pg_attr_indices,
 						   attridescs);
 		CatalogIndexInsert(attridescs, Num_pg_attr_indices, attrrel, atttup);
 		CatalogCloseIndices(Num_pg_attr_indices, attridescs);
+		EndCriticalIO();
 	}
 	heap_close(attrrel, RowExclusiveLock);
 	heap_freetuple(atttup);
@@ -1905,11 +1916,13 @@ StoreRelCheck(Relation rel, char *ccname,char *ccbin)
 	values[Anum_pg_relcheck_rcsrc - 1] = PointerGetDatum(textin(ccsrc));
 	rcrel = heap_openr(RelCheckRelationName, RowExclusiveLock);
 	tuple = heap_formtuple(rcrel->rd_att, values, nulls);
+	BeginCriticalIO();
 	heap_insert(rcrel, tuple);
 	CatalogOpenIndices(Num_pg_relcheck_indices, Name_pg_relcheck_indices,
 					   idescs);
 	CatalogIndexInsert(idescs, Num_pg_relcheck_indices, rcrel, tuple);
 	CatalogCloseIndices(Num_pg_relcheck_indices, idescs);
+	EndCriticalIO();
 	heap_close(rcrel, RowExclusiveLock);
 
 	pfree(DatumGetPointer(values[Anum_pg_relcheck_rcname - 1]));
@@ -2197,6 +2210,7 @@ AddRelationRawConstraints(Relation rel,
 
 	relStruct->relchecks = numchecks;
 
+	BeginCriticalIO();
 	heap_update(relrel, &reltup->t_self, reltup, NULL,NULL);
 
 	/* keep catalog indices current */
@@ -2204,6 +2218,7 @@ AddRelationRawConstraints(Relation rel,
 					   relidescs);
 	CatalogIndexInsert(relidescs, Num_pg_class_indices, relrel, reltup);
 	CatalogCloseIndices(Num_pg_class_indices, relidescs);
+	EndCriticalIO();
 
 	heap_close(relrel, RowExclusiveLock);
 	heap_freetuple(reltup);
@@ -2286,12 +2301,14 @@ AddRelationStorageDirectives(Relation rel, List *rawConstraints)
 
                 extstore = heap_openr(ExtStoreRelationName, RowExclusiveLock);
                 
+                BeginCriticalIO();
                 RelationPutHeapTupleAtFreespace(extstore, tuple, 0);                
 	/* keep catalog indices current */
                 CatalogOpenIndices(Num_pg_extstore_indices, Name_pg_extstore_indices,
 					   relidescs);
                 CatalogIndexInsert(relidescs, Num_pg_extstore_indices, extstore, tuple);
                 CatalogCloseIndices(Num_pg_extstore_indices, relidescs);
+                EndCriticalIO();
         
                 heap_close(extstore, RowExclusiveLock);
                 heap_freetuple(tuple);

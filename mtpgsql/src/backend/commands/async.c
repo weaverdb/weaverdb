@@ -89,6 +89,7 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "utils/ps_status.h"
 #include "utils/syscache.h"
 #include "utils/trace.h"
@@ -252,6 +253,7 @@ Async_Listen(char *relname, int pid)
 
 	tupDesc = lRel->rd_att;
 	newtup = heap_formtuple(tupDesc, values, nulls);
+	BeginCriticalIO();
 	heap_insert(lRel, newtup);
 	if (RelationGetForm(lRel)->relhasindex)
 	{
@@ -261,6 +263,7 @@ Async_Listen(char *relname, int pid)
 		CatalogIndexInsert(idescs, Num_pg_listener_indices, lRel, newtup);
 		CatalogCloseIndices(Num_pg_listener_indices, idescs);
 	}
+	EndCriticalIO();
 
 	heap_freetuple(newtup);
 
@@ -528,6 +531,7 @@ AtCommit_Notify()
 					{
 						rTuple = heap_modifytuple(lTuple, lRel,
 												  value, nulls, repl);
+						BeginCriticalIO();
 						heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL);
 						if (RelationGetForm(lRel)->relhasindex)
 						{
@@ -537,6 +541,7 @@ AtCommit_Notify()
 							CatalogIndexInsert(idescs, Num_pg_listener_indices, lRel, rTuple);
 							CatalogCloseIndices(Num_pg_listener_indices, idescs);
 						}
+						EndCriticalIO();
 					}
 				}
 			}
@@ -794,6 +799,7 @@ ProcessIncomingNotify(void)
 			NotifyMyFrontEnd(relname, sourcePID);
 			/* Rewrite the tuple with 0 in notification column */
 			rTuple = heap_modifytuple(lTuple, lRel, value, nulls, repl);
+			BeginCriticalIO();
 			heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL);
 			if (RelationGetForm(lRel)->relhasindex)
 			{
@@ -803,6 +809,7 @@ ProcessIncomingNotify(void)
 				CatalogIndexInsert(idescs, Num_pg_listener_indices, lRel, rTuple);
 				CatalogCloseIndices(Num_pg_listener_indices, idescs);
 			}
+			EndCriticalIO();
 		}
 	}
 	heap_endscan(sRel);

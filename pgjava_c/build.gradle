@@ -61,8 +61,9 @@ tasks.named('test', Test) {
     useJUnitPlatform()
     maxParallelForks = 1
 
-    // Native libs are produced by the top-level CMake build (mkdir build; cmake ...).
-    systemProperty 'java.library.path', rootProject.file('build/mtpg/lib').absolutePath
+    // InstallNative initdbs from a copy of build_test/mtpg. Load natives from
+    // build_test directly so AM OIDs match and the dylib exists before BeforeAll.
+    systemProperty 'java.library.path', rootProject.file('build_test/mtpg/lib').absolutePath
 
     maxHeapSize = '1G'
     javaLauncher = javaToolchains.launcherFor {

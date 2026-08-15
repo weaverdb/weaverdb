@@ -221,6 +221,7 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
         int count               =0;
         
         info = MemoryContextAlloc(GetSmgrGlobals()->smgr_cxt,sizeof(SmgrData));
+        MemSet(info, 0, sizeof(SmgrData));
         
         info->which = which;
         namestrcpy(&info->relname,relname);
@@ -236,8 +237,17 @@ smgropen(int16 which, char *dbname, char *relname,Oid dbid, Oid relid)
                         info = NULL;
         		elog(ERROR, "cannot open %s-%s", relname, dbname);
                 }
-        } 
-        
+        }
+
+        /*
+         * Populate nblocks from the file. smgrread()'s EOF-as-extend path
+         * requires an accurate nblocks; leaving it uninitialized made the
+         * first ReadBuffer of pg_log block N (after ~32k xids) fail and
+         * DBWriter FATAL with "bad buffer read in transaction logging".
+         */
+        if (info != NULL)
+                (void) smgrnblocks(info);
+
         return info;
 }
 
@@ -282,8 +292,21 @@ smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer) {
     status = (*(smgrsw[info->which].smgr_read)) (info, blocknum, buffer);
 
     if (status != SM_SUCCESS) {
-        if (status == SM_FAIL_EOF && info->nblocks == blocknum) {
-            status = SM_SUCCESS;
+        /*
+         * Reading exactly one block past EOF yields a zeroed page and is
+         * how relations (notably pg_log) grow. Refresh nblocks from the
+         * file first — SmgrInfo may be stale after concurrent extend or
+         * may never have been initialized on open.
+         */
+        if (status == SM_FAIL_EOF) {
+            (void) (*(smgrsw[info->which].smgr_nblocks)) (info);
+            if (info->nblocks == (long) blocknum) {
+                status = SM_SUCCESS;
+            } else {
+                elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
+                        blocknum, NameStr(info->relname), NameStr(info->dbname), status);
+                status = SM_FAIL;
+            }
         } else {
             elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
                     blocknum, NameStr(info->relname), NameStr(info->dbname), status);

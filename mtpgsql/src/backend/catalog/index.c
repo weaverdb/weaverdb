@@ -40,6 +40,7 @@
 #include "optimizer/clauses.h"
 #include "optimizer/prep.h"
 #include "parser/parse_func.h"
+#include "storage/bufmgr.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -540,6 +541,7 @@ UpdateRelationRelation(Relation indexRelation, char *temp_relname)
 	 * ----------------
 	 */
 	tuple->t_data->t_oid = RelationGetRelid(indexRelation);
+	BeginCriticalIO();
 	heap_insert(pg_class, tuple);
 
 	if (temp_relname)
@@ -558,6 +560,7 @@ UpdateRelationRelation(Relation indexRelation, char *temp_relname)
 		CatalogIndexInsert(idescs, Num_pg_class_indices, pg_class, tuple);
 		CatalogCloseIndices(Num_pg_class_indices, idescs);
 	}
+	EndCriticalIO();
 
 	tupleOid = tuple->t_data->t_oid;
 	heap_freetuple(tuple);
@@ -654,9 +657,11 @@ AppendAttributeTuples(Relation indexRelation, int numatts)
 								 replace);
 	heap_freetuple(init_tuple);
 
+	BeginCriticalIO();
 	heap_insert(pg_attribute, cur_tuple);
 	if (hasind)
 		CatalogIndexInsert(idescs, Num_pg_attr_indices, pg_attribute, cur_tuple);
+	EndCriticalIO();
 
 	/* ----------------
 	 *	now we use the information in the index cur_tuple
@@ -684,9 +689,11 @@ AppendAttributeTuples(Relation indexRelation, int numatts)
 									 replace);
 		heap_freetuple(cur_tuple);
 
+		BeginCriticalIO();
 		heap_insert(pg_attribute, new_tuple);
 		if (hasind)
 			CatalogIndexInsert(idescs, Num_pg_attr_indices, pg_attribute, new_tuple);
+		EndCriticalIO();
 
 		/* ----------------
 		 *	ModifyHeapTuple returns a new copy of a cur_tuple
@@ -825,6 +832,7 @@ UpdateIndexRelation(Oid indexoid,
 	 *	XXX ADD INDEX TUPLES TOO
 	 * ----------------
 	 */
+	BeginCriticalIO();
 	heap_insert(pg_index, tuple);
 
 	/* ----------------
@@ -837,6 +845,7 @@ UpdateIndexRelation(Oid indexoid,
 		CatalogIndexInsert(idescs, Num_pg_index_indices, pg_index, tuple);
 		CatalogCloseIndices(Num_pg_index_indices, idescs);
 	}
+	EndCriticalIO();
 	/* ----------------
 	 *	close the relation and free the tuple
 	 * ----------------
@@ -1700,6 +1709,7 @@ UpdateStats(Oid relid, long reltuples)
 		replace[Anum_pg_class_reltuples - 1] = 'r';
 		values[Anum_pg_class_reltuples - 1] = LongGetDatum(reltuples);
 		newtup = heap_modifytuple(tuple, pg_class, values, nulls, replace);
+		BeginCriticalIO();
 		heap_update(pg_class, &tuple->t_self, newtup, NULL, NULL);
 		if (!IsIgnoringSystemIndexes())
 		{
@@ -1707,6 +1717,7 @@ UpdateStats(Oid relid, long reltuples)
 			CatalogIndexInsert(idescs, Num_pg_class_indices, pg_class, newtup);
 			CatalogCloseIndices(Num_pg_class_indices, idescs);
 		}
+		EndCriticalIO();
 		heap_freetuple(newtup);
 	}
 

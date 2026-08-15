@@ -22,6 +22,7 @@
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
 #include "parser/parse_func.h"
+#include "storage/bufmgr.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
@@ -224,6 +225,7 @@ TypeShellMakeWithOpenRelation(Relation pg_type_desc, char *typeName)
 	 *	insert the tuple in the relation and get the tuple's oid.
 	 * ----------------
 	 */
+	BeginCriticalIO();
 	heap_insert(pg_type_desc, tup);
 	typoid = tup->t_data->t_oid;
 
@@ -235,6 +237,7 @@ TypeShellMakeWithOpenRelation(Relation pg_type_desc, char *typeName)
 		CatalogIndexInsert(idescs, Num_pg_type_indices, pg_type_desc, tup);
 		CatalogCloseIndices(Num_pg_type_indices, idescs);
 	}
+	EndCriticalIO();
 	/* ----------------
 	 *	free the tuple and return the type-oid
 	 * ----------------
@@ -510,6 +513,7 @@ TypeCreate(char *typeName,
 							   nulls,
 							   replaces);
 
+		BeginCriticalIO();
 		heap_update(pg_type_desc, &tup->t_self, tup, NULL, NULL);
 
 		typeObjectId = tup->t_data->t_oid;
@@ -522,6 +526,7 @@ TypeCreate(char *typeName,
 							 values,
 							 nulls);
 
+		BeginCriticalIO();
 		heap_insert(pg_type_desc, tup);
 
 		typeObjectId = tup->t_data->t_oid;
@@ -541,6 +546,7 @@ TypeCreate(char *typeName,
 		CatalogIndexInsert(idescs, Num_pg_type_indices, pg_type_desc, tup);
 		CatalogCloseIndices(Num_pg_type_indices, idescs);
 	}
+	EndCriticalIO();
 
 	heap_close(pg_type_desc, RowExclusiveLock);
 
@@ -585,12 +591,14 @@ TypeRename(const char *oldTypeName, const char *newTypeName)
 
 	namestrcpy(&(((Form_pg_type) GETSTRUCT(oldtup))->typname), newTypeName);
 
+	BeginCriticalIO();
 	heap_update(pg_type_desc, &oldtup->t_self, oldtup, NULL, NULL);
 
 	/* update the system catalog indices */
 	CatalogOpenIndices(Num_pg_type_indices, Name_pg_type_indices, idescs);
 	CatalogIndexInsert(idescs, Num_pg_type_indices, pg_type_desc, oldtup);
 	CatalogCloseIndices(Num_pg_type_indices, idescs);
+	EndCriticalIO();
 
 	heap_freetuple(oldtup);
 	heap_close(pg_type_desc, RowExclusiveLock);

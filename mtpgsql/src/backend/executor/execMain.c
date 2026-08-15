@@ -43,6 +43,7 @@
 #include "miscadmin.h"
 #include "optimizer/var.h"
 #include "parser/parsetree.h"
+#include "storage/bufmgr.h"
 #ifdef USEACL
 #include "utils/acl.h"
 #endif
@@ -1315,6 +1316,12 @@ ExecPut(TupleTableSlot *slot,
 		ExecConstraints("ExecPut", resultRelationDesc, tuple, estate);
 
 	/*
+	 * Heap insert + index inserts are one CriticalIO unit so a generation
+	 * bump cannot interleave mid-write. AbortCriticalIO covers elog(ERROR).
+	 */
+	BeginCriticalIO();
+
+	/*
 	 * insert the tuple
 	 */
 	newId = heap_insert(resultRelationDesc,	tuple); /* heap tuple */
@@ -1330,6 +1337,8 @@ ExecPut(TupleTableSlot *slot,
 	numIndices = resultRelationInfo->ri_NumIndices;
 	if (numIndices > 0)
 		ExecInsertIndexTuples(slot, tupleid, estate, true);
+
+	EndCriticalIO();
         
         if ( ItemPointerIsValid(tupleid) ) {
             ctid=tuple->t_self;
@@ -1440,6 +1449,12 @@ ExecAppend(TupleTableSlot *slot,
 		ExecConstraints("ExecAppend", resultRelationDesc, tuple, estate);
 
 	/*
+	 * Heap insert + index inserts are one CriticalIO unit.
+	 * AbortCriticalIO covers elog(ERROR) longjmp.
+	 */
+	BeginCriticalIO();
+
+	/*
 	 * insert the tuple
 	 */
 	newId = heap_insert(resultRelationDesc,		/* relation desc */
@@ -1456,6 +1471,9 @@ ExecAppend(TupleTableSlot *slot,
 	numIndices = resultRelationInfo->ri_NumIndices;
 	if (numIndices > 0)
 		ExecInsertIndexTuples(slot, NULL, estate, false);
+
+	EndCriticalIO();
+
 	(estate->es_processed)++;
 	estate->es_lastoid = newId;
 
@@ -1631,6 +1649,12 @@ ExecReplace(TupleTableSlot *slot,
 		ExecConstraints("ExecReplace", resultRelationDesc, tuple, estate);
 
 	/*
+	 * Heap update + new index inserts are one CriticalIO unit.
+	 * AbortCriticalIO covers elog(ERROR); End on non-error early exits.
+	 */
+	BeginCriticalIO();
+
+	/*
 	 * replace the heap tuple
 	 */
 lreplace:;
@@ -1638,6 +1662,7 @@ lreplace:;
 	switch (result)
 	{
 		case HeapTupleSelfUpdated:
+			EndCriticalIO();
 			return;
 
 		case HeapTupleMayBeUpdated:
@@ -1660,11 +1685,14 @@ lreplace:;
 					goto lreplace;
 				}
 			}
+			EndCriticalIO();
 			return;
                 case HeapTupleBeingUpdated:
                     /* heap tuple is being updated and we started after them so just forget about the update */
+			EndCriticalIO();
                     return;
                 default:
+			EndCriticalIO();
 			elog(ERROR, "Unknown status %u from heap_update", result);
 			return;
 	}
@@ -1693,6 +1721,8 @@ lreplace:;
 	numIndices = resultRelationInfo->ri_NumIndices;
 	if (numIndices > 0)
 		ExecInsertIndexTuples(slot, NULL, estate, false);
+
+	EndCriticalIO();
 
 	/* AFTER ROW UPDATE Triggers */
 	if (resultRelationDesc->trigdesc)

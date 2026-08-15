@@ -113,9 +113,36 @@ typedef struct bufenv {
     BufferBlindId *		BufferBlindLastDirtied;	/* and its BlindId too */
     int                         total_pins;
     bool                        DidWrite;
+    int                         critical_io_depth;
+    long                        pinned_generation;	/* gen at CriticalIO unit start */
+    bool                        generation_lock_held;	/* rdlock currently held */
 } BufferEnv;
 
+/*
+ * Buffer-generation RW barrier
+ *
+ * CriticalIO is the shared (read) side: hold across a logical unit of
+ * heap + index writes so SetBufferGeneration cannot advance mid-unit.
+ * Call sites (ExecAppend/Replace/Put, CopyFrom, catalog heap+index
+ * updates) own Begin/EndCriticalIO; ShadowBufferIfNeeded does not —
+ * page access during those units is already covered by the outer hold.
+ *
+ * At BeginCriticalIO (depth 0→1) we snapshot buffer_generation into
+ * pinned_generation. ShadowBufferIfNeeded uses that pin for the whole
+ * unit so heap + index pages share one generation stamp.
+ *
+ * SetBufferGeneration is the exclusive (write) side: waits for all
+ * CriticalIO holders to drain, then publishes a new generation.
+ *
+ * Lock order when both are needed: buffer_generation_lock first, then
+ * per-buffer io_in_progress_lock. SetBufferGeneration must not be held
+ * across AdvanceBufferIO on the same thread. Backends waiting on the
+ * DBWriter must SuspendCriticalIO so the writer can take the wrlock.
+ * Suspend drops the rdlock only — depth and pinned_generation stay set
+ * so the unit does not span generations across freelist flush waits.
+ */
 static volatile long buffer_generation = 0;
+static pthread_rwlock_t buffer_generation_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 void		PrintBufferDescs(void);
 
@@ -618,6 +645,9 @@ ResetBufferPool(bool isCommit) {
     int			i;
     BufferEnv* env = GetBufferCxt();
     
+    /* Drop any CriticalIO held across an elog(ERROR) longjmp. */
+    AbortCriticalIO();
+
     /*	printf("reseting buffer pool\n");   */
     for (i = 0; i < MaxBuffers; i++) {
         if (env->PrivateRefCount[i] != 0) {
@@ -920,6 +950,8 @@ UnlockBuffers(void) {
     BufferDesc *buf;
     int			i;
     BufferEnv* bufenv = GetBufferCxt();
+
+    AbortCriticalIO();
     
     for (i = 0; i < MaxBuffers; i++) {
         if (bufenv->BufferLocks[i] == 0)
@@ -1459,6 +1491,9 @@ GetBufferCxt() {
         memset(env->BufferBlindLastDirtied , 0, MaxBuffers*sizeof(BufferBlindId));
         
         env->DidWrite    = false;
+        env->critical_io_depth = 0;
+        env->pinned_generation = 0;
+        env->generation_lock_held = false;
         
         MemoryContextSwitchTo(oldcxt);
         
@@ -1468,9 +1503,97 @@ GetBufferCxt() {
     return env;
 }
 
+/*
+ * BeginCriticalIO / EndCriticalIO — shared side of the generation barrier.
+ * Nested calls are counted so a single pthread_rwlock_rdlock is held.
+ *
+ * Hold across a logical unit of heap + index writes that must not observe
+ * a generation bump mid-unit. On depth 0→1 we pin buffer_generation so
+ * ShadowBufferIfNeeded stamps the whole unit with one generation even if
+ * SuspendCriticalIO drops the rdlock for freelist/DBWriter waits.
+ * AbortCriticalIO clears any held CriticalIO after elog(ERROR) longjmp.
+ *
+ * SuspendCriticalIO / ResumeCriticalIO drop and restore the rdlock only
+ * (depth and pin stay). Without that, SetBufferGeneration's wrlock
+ * deadlocks with backends that hold CriticalIO while waiting for the
+ * writer to free buffers.
+ */
+void
+BeginCriticalIO(void) {
+    BufferEnv *env = GetBufferCxt();
+
+    if (env->critical_io_depth++ == 0) {
+        pthread_rwlock_rdlock(&buffer_generation_lock);
+        env->pinned_generation = buffer_generation;
+        env->generation_lock_held = true;
+    }
+}
+
+void
+EndCriticalIO(void) {
+    BufferEnv *env = GetBufferCxt();
+
+    Assert(env->critical_io_depth > 0);
+    if (--env->critical_io_depth == 0) {
+        if (env->generation_lock_held) {
+            pthread_rwlock_unlock(&buffer_generation_lock);
+            env->generation_lock_held = false;
+        }
+        env->pinned_generation = 0;
+    }
+}
+
+void
+AbortCriticalIO(void) {
+    BufferEnv *env = GetBufferCxt();
+
+    if (env->critical_io_depth > 0) {
+        if (env->generation_lock_held) {
+            pthread_rwlock_unlock(&buffer_generation_lock);
+            env->generation_lock_held = false;
+        }
+        env->critical_io_depth = 0;
+        env->pinned_generation = 0;
+    }
+}
+
+int
+SuspendCriticalIO(void) {
+    BufferEnv *env = GetBufferCxt();
+    int depth = env->critical_io_depth;
+
+    /*
+     * Drop the rdlock so SetBufferGeneration can proceed, but keep depth
+     * and pinned_generation so ShadowBufferIfNeeded still uses the pin.
+     */
+    if (depth > 0 && env->generation_lock_held) {
+        pthread_rwlock_unlock(&buffer_generation_lock);
+        env->generation_lock_held = false;
+    }
+    return depth;
+}
+
+void
+ResumeCriticalIO(int depth) {
+    BufferEnv *env = GetBufferCxt();
+
+    if (depth <= 0)
+        return;
+
+    Assert(env->critical_io_depth == depth);
+    if (!env->generation_lock_held) {
+        pthread_rwlock_rdlock(&buffer_generation_lock);
+        env->generation_lock_held = true;
+    }
+}
+
 bool ShadowBufferIfNeeded(BufferDesc* bufHdr, bool forflush) {
     bool shadowed = false;
-    long gen = buffer_generation; //  this needs thread safety, read by any thread
+    BufferEnv *env = GetBufferCxt();
+    long gen = (env->critical_io_depth > 0)
+        ? env->pinned_generation
+        : buffer_generation;
+
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
     if (
         (bufHdr->generation < gen) || 
@@ -1495,5 +1618,7 @@ Block AdvanceBufferIO(BufferDesc* bufHdr, bool forflush) {
 
 void
 SetBufferGeneration(long generation) {
-    buffer_generation = generation; //  this needs thread safety, only set by dbwriter
+    pthread_rwlock_wrlock(&buffer_generation_lock);
+    buffer_generation = generation;
+    pthread_rwlock_unlock(&buffer_generation_lock);
 }

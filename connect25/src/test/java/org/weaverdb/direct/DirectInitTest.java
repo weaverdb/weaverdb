@@ -50,6 +50,9 @@ public class DirectInitTest {
                 prop.setProperty("start_delay", "10");
                 prop.setProperty("stdlog", "TRUE");
                 prop.setProperty("disable_crc", "TRUE");
+                /* Match PgvectorWeaverTestSupport — IVFFlat kmeans needs more than default 512kB. */
+                prop.setProperty("sortmem",
+                        System.getProperty("weaver.sortmem", "131072"));
                 
                 DirectWeaverInitializer.initialize(prop);
 

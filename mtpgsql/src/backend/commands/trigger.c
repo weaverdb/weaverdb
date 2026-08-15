@@ -26,6 +26,7 @@
 #include "commands/trigger.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #ifdef USEACL
 #include "utils/acl.h"
 #endif
@@ -277,10 +278,12 @@ CreateTrigger(CreateTrigStmt *stmt)
 	values[Anum_pg_trigger_tgattr - 1] = PointerGetDatum(tgattr);
 
 	tuple = heap_formtuple(tgrel->rd_att, values, nulls);
+	BeginCriticalIO();
 	heap_insert(tgrel, tuple);
 	CatalogOpenIndices(Num_pg_trigger_indices, Name_pg_trigger_indices, idescs);
 	CatalogIndexInsert(idescs, Num_pg_trigger_indices, tgrel, tuple);
 	CatalogCloseIndices(Num_pg_trigger_indices, idescs);
+	EndCriticalIO();
 	heap_freetuple(tuple);
 	heap_close(tgrel, RowExclusiveLock);
 
@@ -297,10 +300,12 @@ CreateTrigger(CreateTrigStmt *stmt)
 
 	((Form_pg_class) GETSTRUCT(tuple))->reltriggers = found + 1;
 	RelationInvalidateHeapTuple(pgrel, tuple);
+	BeginCriticalIO();
 	heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL);
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 	CatalogIndexInsert(ridescs, Num_pg_class_indices, pgrel, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, ridescs);
+	EndCriticalIO();
 	heap_freetuple(tuple);
 	heap_close(pgrel, RowExclusiveLock);
 
@@ -374,10 +379,12 @@ DropTrigger(DropTrigStmt *stmt)
 
 	((Form_pg_class) GETSTRUCT(tuple))->reltriggers = found;
 	RelationInvalidateHeapTuple(pgrel, tuple);
+	BeginCriticalIO();
 	heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL);
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 	CatalogIndexInsert(ridescs, Num_pg_class_indices, pgrel, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, ridescs);
+	EndCriticalIO();
 	heap_freetuple(tuple);
 	heap_close(pgrel, RowExclusiveLock);
 

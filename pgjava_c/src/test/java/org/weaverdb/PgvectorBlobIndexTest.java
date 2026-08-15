@@ -355,12 +355,13 @@ public class PgvectorBlobIndexTest {
             insertBlobBit(conn, BIT_TABLE, 3, BitVector.encode(false, false, true));
             exec(conn,
                     "create index " + BIT_TABLE + "_ivf on " + BIT_TABLE
-                            + " using ivfflat (emb bit_hamming_ops) with (lists = 2)");
+                            + " using ivfflat (emb bit_hamming_ops) with (lists = 1)");
         }
         List<Integer> got = orderByBlobQuery(
                 "select id from " + BIT_TABLE
                         + " order by emb <~> bytea_to_bit($q) limit 2",
                 BitVector.encode(true, false, false));
+        Assertions.assertEquals(2, got.size(), "expected 2 neighbors after IVF lists=1");
         Assertions.assertEquals(1, got.get(0).intValue());
         Assertions.assertTrue(got.get(1) == 2 || got.get(1) == 3);
     }
@@ -374,11 +375,12 @@ public class PgvectorBlobIndexTest {
             insertBlobBytea(conn, BIT_BYTEA_TABLE, 3, BitVector.encode(false, false, true));
             exec(conn,
                     "create index " + BIT_BYTEA_TABLE + "_ivf on " + BIT_BYTEA_TABLE
-                            + " using ivfflat (bytea_to_bit(emb) bit_hamming_ops) with (lists = 2)");
+                            + " using ivfflat (bytea_to_bit(emb) bit_hamming_ops) with (lists = 1)");
         }
         List<Integer> hamming = queryIds(
                 "select id from " + BIT_BYTEA_TABLE
                         + " order by bytea_to_bit(emb) <~> 'B100'::varbit limit 2");
+        Assertions.assertEquals(2, hamming.size(), "expected 2 neighbors after IVF lists=1");
         Assertions.assertEquals(1, hamming.get(0).intValue());
         Assertions.assertTrue(hamming.get(1) == 2 || hamming.get(1) == 3);
     }

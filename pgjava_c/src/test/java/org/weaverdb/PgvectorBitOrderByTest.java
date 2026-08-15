@@ -2,6 +2,11 @@
  *
  * ORDER BY varbit ANN distance via JNI prepared Statement.
  *
+ * Fixtures match pgvector_features_smoke.sh (B100, B110, B010) so Hamming /
+ * Jaccard distances are strict: id 2 is uniquely second-nearest to B100.
+ * IVFFlat with lists=2 needs probes>=2 on this tiny heap or only one list
+ * is searched and LIMIT 2 can return a single row.
+ *
  *-------------------------------------------------------------------------
  */
 
@@ -26,8 +31,8 @@ public class PgvectorBitOrderByTest {
         try (DBReference conn = DBReferenceManager.connect("template1")) {
             exec(conn, "create table pv_jni_bit_ob (id int, emb varbit)");
             exec(conn, "insert into pv_jni_bit_ob values (1, 'B100')");
-            exec(conn, "insert into pv_jni_bit_ob values (2, 'B010')");
-            exec(conn, "insert into pv_jni_bit_ob values (3, 'B001')");
+            exec(conn, "insert into pv_jni_bit_ob values (2, 'B110')");
+            exec(conn, "insert into pv_jni_bit_ob values (3, 'B010')");
         }
     }
 
@@ -51,9 +56,13 @@ public class PgvectorBitOrderByTest {
     @Test
     @Order(3)
     public void orderByHammingWithIvfflatIndex() throws Exception {
-        assertIds(
-                "select id from pv_jni_bit_ob order by emb <~> 'B100' limit 2",
-                1, 2);
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            exec(conn, "set ivfflat.probes = 2");
+            exec(conn, "set enable_seqscan = off");
+            assertIds(conn,
+                    "select id from pv_jni_bit_ob order by emb <~> 'B100' limit 2",
+                    1, 2);
+        }
     }
 
     @Test
@@ -62,14 +71,22 @@ public class PgvectorBitOrderByTest {
         try (DBReference conn = DBReferenceManager.connect("template1")) {
             exec(conn,
                     "create index pv_jni_bit_ob_jaccard on pv_jni_bit_ob using hnsw (emb bit_jaccard_ops) with (m = 8, ef_construction = 32)");
+            exec(conn, "set enable_seqscan = off");
+            assertIds(conn,
+                    "select id from pv_jni_bit_ob order by emb <%> 'B100' limit 2",
+                    1, 2);
         }
-        assertIds(
-                "select id from pv_jni_bit_ob order by emb <%> 'B100' limit 2",
-                1, 2);
     }
 
     private static void assertIds(String sql, int... expected) throws Exception {
-        List<Integer> got = queryIntColumn(sql, 1);
+        try (DBReference conn = DBReferenceManager.connect("template1")) {
+            assertIds(conn, sql, expected);
+        }
+    }
+
+    private static void assertIds(DBReference conn, String sql, int... expected)
+            throws Exception {
+        List<Integer> got = queryIntColumn(conn, sql, 1);
         Assertions.assertEquals(expected.length, got.size(), "row count for: " + sql);
         for (int i = 0; i < expected.length; i++) {
             Assertions.assertEquals(expected[i], got.get(i).intValue(),
@@ -77,11 +94,10 @@ public class PgvectorBitOrderByTest {
         }
     }
 
-    private static List<Integer> queryIntColumn(String sql, int columnIndex)
+    private static List<Integer> queryIntColumn(DBReference conn, String sql, int columnIndex)
             throws ExecutionException {
         List<Integer> rows = new ArrayList<>();
-        try (DBReference conn = DBReferenceManager.connect("template1");
-                Statement s = conn.statement(sql)) {
+        try (Statement s = conn.statement(sql)) {
             Output<Integer> out = s.linkOutput(columnIndex, Integer.class);
             s.execute();
             while (s.fetch()) {

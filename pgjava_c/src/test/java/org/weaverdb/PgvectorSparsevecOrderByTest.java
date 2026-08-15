@@ -25,18 +25,20 @@ public class PgvectorSparsevecOrderByTest {
     public static void setup() throws Exception {
         try (DBReference conn = DBReferenceManager.connect("template1")) {
             exec(conn, "create table pv_jni_sv_ob (id int, emb sparsevec)");
-            exec(conn, "insert into pv_jni_sv_ob values (1, '{1:1}/1')");
-            exec(conn, "insert into pv_jni_sv_ob values (2, '{2:1}/1')");
-            exec(conn, "insert into pv_jni_sv_ob values (3, '{3:1}/1')");
+            /* Dimensions must cover the highest index (1-based SQL indices). */
+            exec(conn, "insert into pv_jni_sv_ob values (1, '{1:1}/3')");
+            exec(conn, "insert into pv_jni_sv_ob values (2, '{2:1}/3')");
+            exec(conn, "insert into pv_jni_sv_ob values (3, '{3:1}/3')");
         }
     }
 
     @Test
     @Order(1)
     public void orderBySparsevecL2Limit2() throws Exception {
-        assertIds(
-                "select id from pv_jni_sv_ob order by emb <-> '{1:1}/1'::sparsevec limit 2",
-                1, 2);
+        /* Unit axes are equidistant for 2nd place — same as vector ORDER BY smoke. */
+        assertNearestThenTie(
+                "select id from pv_jni_sv_ob order by emb <-> '{1:1}/3'::sparsevec limit 2",
+                1, 2, 3);
     }
 
     @Test
@@ -51,18 +53,19 @@ public class PgvectorSparsevecOrderByTest {
     @Test
     @Order(3)
     public void orderBySparsevecL2WithHnswIndex() throws Exception {
-        assertIds(
-                "select id from pv_jni_sv_ob order by emb <-> '{1:1}/1'::sparsevec limit 2",
-                1, 2);
+        assertNearestThenTie(
+                "select id from pv_jni_sv_ob order by emb <-> '{1:1}/3'::sparsevec limit 2",
+                1, 2, 3);
     }
 
-    private static void assertIds(String sql, int... expected) throws Exception {
+    private static void assertNearestThenTie(String sql, int nearest, int tieA, int tieB)
+            throws Exception {
         List<Integer> got = queryIntColumn(sql, 1);
-        Assertions.assertEquals(expected.length, got.size(), "row count for: " + sql);
-        for (int i = 0; i < expected.length; i++) {
-            Assertions.assertEquals(expected[i], got.get(i).intValue(),
-                    "column id row " + (i + 1) + " for: " + sql);
-        }
+        Assertions.assertEquals(2, got.size(), "row count for: " + sql);
+        Assertions.assertEquals(nearest, got.get(0).intValue(),
+                "nearest for: " + sql);
+        Assertions.assertTrue(got.get(1) == tieA || got.get(1) == tieB,
+                "2nd should be " + tieA + "|" + tieB + " for: " + sql + ", got " + got);
     }
 
     private static List<Integer> queryIntColumn(String sql, int columnIndex)

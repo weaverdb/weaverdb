@@ -32,6 +32,7 @@
 #include "lib/stringinfo.h"
 #include "libpq/libpq.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "tcop/tcopprot.h"
 #ifdef USEACL
 #include "utils/acl.h"
@@ -922,6 +923,7 @@ CopyFrom(StringInfo attribute_buf,Relation rel, bool binary, bool oids, FILE *fp
 			if (rel->rd_att->constr)
 				ExecConstraints("CopyFrom", rel, tuple, estate);
 
+			BeginCriticalIO();
 			heap_insert(rel, tuple);
 
 			if (has_index)
@@ -955,6 +957,8 @@ CopyFrom(StringInfo attribute_buf,Relation rel, bool binary, bool oids, FILE *fp
 						pfree(indexRes);
 				}
 			}
+			EndCriticalIO();
+
 			/* AFTER ROW INSERT Triggers */
 			if (rel->trigdesc &&
 				rel->trigdesc->n_after_row[TRIGGER_EVENT_INSERT] > 0)
