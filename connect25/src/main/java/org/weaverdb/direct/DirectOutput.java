@@ -49,6 +49,9 @@ class DirectOutput<T> {
     DirectOutput(int index, Class<T> type) {
         this.index = index;
         this.type = TransferType.type(type);
+        if (this.type == null) {
+            throw new IllegalArgumentException("unsupported bind type: " + type);
+        }
         this.upcall = Linker.nativeLinker().upcallStub(transferOut.bindTo(this), FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT), Arena.ofAuto());
     }
     

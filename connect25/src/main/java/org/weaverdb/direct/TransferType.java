@@ -11,8 +11,11 @@
  */
 package org.weaverdb.direct;
 
+import java.io.Serializable;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
+import org.weaverdb.WeaverObjectLoader;
 import java.util.Date;
 import java.util.Map;
 import org.weaverdb.ExecutionException;
@@ -203,7 +206,10 @@ enum TransferType {
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
                 case DirectWeaverConnection.STRING:
-                    return new String(val.toArray(ValueLayout.JAVA_BYTE));
+                case DirectWeaverConnection.TEXT:
+                    byte[] chars = new byte[varLen];
+                    MemorySegment.copy(val, 0, MemorySegment.ofArray(chars), 0, varLen);
+                    return new String(chars, StandardCharsets.UTF_8);
                 default:
                     throw new ExecutionException("unable to convert");
             }
@@ -211,8 +217,12 @@ enum TransferType {
 
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            val.setString(0, (String)value);
-            return ((String)value).length();
+            byte[] bytes = ((String) value).getBytes(StandardCharsets.UTF_8);
+            if (bytes.length > varLen) {
+                throw new ExecutionException("string value exceeds transfer buffer");
+            }
+            MemorySegment.copy(MemorySegment.ofArray(bytes), 0, val, 0, bytes.length);
+            return bytes.length;
         }
     },
     DATE {
@@ -337,6 +347,32 @@ enum TransferType {
             val.setString(0, (String)value);
             return ((String)value).length();
         }
+    },
+    JAVA {
+        @Override
+        int getType() {
+            return DirectWeaverConnection.JAVA;
+        }
+
+        @Override
+        Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
+            byte[] buf = new byte[varLen];
+            MemorySegment.copy(val, 0, MemorySegment.ofArray(buf), 0, varLen);
+            return WeaverObjectLoader.java_out(buf);
+        }
+
+        @Override
+        int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
+            byte[] bytes = WeaverObjectLoader.java_in(value);
+            if (bytes == null) {
+                throw new ExecutionException("cannot serialize " + value.getClass().getName());
+            }
+            if (bytes.length > varLen) {
+                throw new ExecutionException("java value exceeds transfer buffer");
+            }
+            MemorySegment.copy(MemorySegment.ofArray(bytes), 0, val, 0, bytes.length);
+            return bytes.length;
+        }
     };
     
     public static Map<Class<?>, TransferType> types = Map.ofEntries(
@@ -346,11 +382,13 @@ enum TransferType {
         Map.entry(Short.class, TransferType.SHORT),
         Map.entry(Integer.class, TransferType.INTEGER),
         Map.entry(Float.class, TransferType.FLOAT),
+        Map.entry(Double.class, TransferType.DOUBLE),
         Map.entry(Long.class, TransferType.LONG),
         Map.entry(String.class, TransferType.STRING),
         Map.entry(Object.class, TransferType.OBJECT),
         Map.entry(Date.class, TransferType.DATE),
-        Map.entry(byte[].class, TransferType.BINARY)
+        Map.entry(byte[].class, TransferType.BINARY),
+        Map.entry(Serializable.class, TransferType.JAVA)
     );
     
     public static TransferType type(Class<?> type) {
@@ -360,7 +398,14 @@ enum TransferType {
         if (type != null && type.isArray() && type.getComponentType() == byte.class) {
             return TransferType.BINARY;
         }
-        return types.get(type);
+        TransferType mapped = types.get(type);
+        if (mapped != null) {
+            return mapped;
+        }
+        if (type != null && Serializable.class.isAssignableFrom(type)) {
+            return TransferType.JAVA;
+        }
+        return null;
     }
     
     private static <P> Class convertPrimative(Class type) {

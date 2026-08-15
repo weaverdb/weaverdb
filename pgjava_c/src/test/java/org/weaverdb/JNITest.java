@@ -33,7 +33,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -91,17 +90,11 @@ public class JNITest {
                 WeaverInitializer.initialize(prop);
     }
 
-    @Disabled
-    @org.junit.jupiter.api.AfterAll
-    public static void tearDownClass() throws Exception {
-        try {
-            WeaverInitializer.shutdown(Duration.ofSeconds(10));
-        } catch (TimeoutException to) {
-            System.err.println("connections live on shutdown");
-            System.gc();
-            WeaverInitializer.shutdown(Duration.ofSeconds(10));
-        }
-    }
+    /*
+     * Do not shut down here. InstallNative starts one shared engine for the
+     * whole Gradle JVM; @Disabled does not skip @AfterAll, and closing the
+     * backend leaves later classes with a null DBReference.
+     */
 
     @org.junit.jupiter.api.BeforeEach
     public void setUp() throws Exception {

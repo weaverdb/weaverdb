@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.weaverdb.direct.example.JavaFunctionDemoMethods;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -42,5 +43,14 @@ public class TransferTypeTest {
          assertNotNull(tt);
          tt = TransferType.type(boolean.class);
          assertNotNull(tt);
+     }
+
+     @Test
+     public void doubleAndSerializableMapToTransferTypes() {
+         assertEquals(TransferType.DOUBLE, TransferType.type(Double.class));
+         assertEquals(TransferType.DOUBLE, TransferType.type(double.class));
+         assertEquals(TransferType.JAVA, TransferType.type(java.io.Serializable.class));
+         assertEquals(TransferType.JAVA, TransferType.type(JavaFunctionDemoMethods.PersonInfo.class));
+         assertEquals(TransferType.STRING, TransferType.type(String.class));
      }
 }

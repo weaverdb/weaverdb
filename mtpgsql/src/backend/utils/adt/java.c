@@ -13,6 +13,7 @@
 
 #include <errno.h>
 #include <jni.h>
+#include <string.h>
 #include <strings.h>
 
 #include "postgres.h"
@@ -41,9 +42,11 @@ static pthread_key_t   attaches;
 #define INV_TAG_INT8        20
 #define INV_TAG_FLOAT8      701
 #define INV_TAG_BOOL        16
+#define INV_TAG_TEXT        25
+#define INV_TAG_VARCHAR     1043
 #define INV_TAG_JAVA_OBJECT 1830
 #define INV_TAG_NULL        -1
-#define INV_TAG_ERROR       -99   // Error payload written by Java invoker
+#define INV_TAG_ERROR       -99   /* Error payload written by Java invoker */
 
 /* FFM upcall-based Java function invoker (set via WRegisterJavaFunctionInvoker).
  * When non-NULL, the engine prefers this path over classic JNI for LANGUAGE 'java' calls.
@@ -92,17 +95,20 @@ static void DetachThread(void* thread);
  *       int         isStatic,    // 1 = static, 0 = instance
  *       const char *argData,     // binary block per JavaCallProtocol v1
  *       int         argDataLen,
- *       char       *resultOut    // writable buffer, caller manages size
+ *       char       *resultOut,   // writable buffer
+ *       int         resultOutLen
  *   );
  *
  * Java side: JavaFunctionInvoker.createUpcallStub()
  * Protocol:  JavaCallProtocol.java
  */
-typedef int (*InvokerFn)(const char*, const char*, const char*, int, const char*, int, char*);
+typedef int (*InvokerFn)(const char*, const char*, const char*, int, const char*, int, char*, int);
 
-static int  InvokeJavaViaFFMInvoker(JavaFunction def, int nargs, jvalue* args, jvalue* result);
-static void BuildArgBlockForInvoker(JavaFunction def, int nargs, jvalue* args, char** outBlock, int* outLen);
-static void ParseInvokerResult(const char* buf, int bufLen, Oid returnType, jvalue* out);
+static Datum InvokeJavaViaFFMFromDatums(JavaFunction def, int nargs, Datum *args, bool *isNull);
+static void BuildArgBlockFromDatums(JavaFunction def, int nargs, Datum *args, char **outBlock, int *outLen);
+static Datum ParseInvokerResultToDatum(const char *buf, int bufLen, Oid returnType, bool *isNull);
+static int  CountJvmDescriptorParams(const char *desc);
+static char *EnsureCap(char *buf, int *capacity, int pos, int need);
 
 static int  CallJavaInvokerWithGrowableResult(InvokerFn fn,
                                               const char *cname, const char *mname, const char *mdesc,
@@ -110,12 +116,13 @@ static int  CallJavaInvokerWithGrowableResult(InvokerFn fn,
                                               const char *argBlock, int argLen,
                                               char **resultBufOut, int *resultLenOut);
 static int  InspectWrittenResultSize(const char *buf, int bufSize);
+static int  ResultLooksLikeError(const char *buf, int bufSize);
 
 static void FunctionCacheInit() {
     HASHCTL ctl;
-    JNIEnv* jenv;
 
-    GetJavaEnv(&jenv);
+    if (function_table != NULL)
+        return;
 
     function_cache_cxt = AllocSetContextCreate(NULL,
             "JavaFunctionCache",
@@ -152,6 +159,7 @@ SetJVM(JavaVM * java, const char *ol)
 void
 WRegisterJavaFunctionInvoker(void* invokerFn)
 {
+    FunctionCacheInit();
     java_ffm_invoker = invokerFn;
 }
 
@@ -183,89 +191,156 @@ DetachThread(void* thread) {
  * we prefer the FFM upcall path.
  * ======================================================== */
 
+static char *
+EnsureCap(char *buf, int *capacity, int pos, int need)
+{
+    while (pos + need > *capacity) {
+        *capacity *= 2;
+        buf = repalloc(buf, *capacity);
+    }
+    return buf;
+}
+
+static int
+CountJvmDescriptorParams(const char *desc)
+{
+    const char *p;
+    int n = 0;
+
+    if (desc == NULL || *desc != '(')
+        return -1;
+    p = desc + 1;
+    while (*p != '\0' && *p != ')') {
+        switch (*p) {
+            case 'B':
+            case 'C':
+            case 'D':
+            case 'F':
+            case 'I':
+            case 'J':
+            case 'S':
+            case 'Z':
+                n++;
+                p++;
+                break;
+            case 'L':
+                n++;
+                while (*p != '\0' && *p != ';')
+                    p++;
+                if (*p == ';')
+                    p++;
+                break;
+            case '[':
+                while (*p == '[')
+                    p++;
+                if (*p == 'L') {
+                    while (*p != '\0' && *p != ';')
+                        p++;
+                    if (*p == ';')
+                        p++;
+                } else if (*p != '\0') {
+                    p++;
+                }
+                n++;
+                break;
+            default:
+                return -1;
+        }
+    }
+    return n;
+}
+
 /*
- * Build a protocol v1 arg block from the jvalue array.
+ * Build a protocol v1 arg block directly from SQL Datums.
+ * VARCHAR/TEXT go as UTF-8; JAVAOID as already-serialized bytes. No JNI.
  */
 static void
-BuildArgBlockForInvoker(JavaFunction def, int nargs, jvalue* args, char** outBlock, int* outLen)
+BuildArgBlockFromDatums(JavaFunction def, int nargs, Datum *args, char **outBlock, int *outLen)
 {
     int capacity = 8192;
-    char* buf = palloc(capacity);
+    char *buf = palloc(capacity);
     int pos = 4; /* numArgs */
     int count = 0;
 
     for (int i = 0; i < nargs; i++) {
         Oid argtype = (i < def->nargs) ? def->argTypes[i] : 0;
-        if (pos + 64 > capacity) {
-            capacity *= 2;
-            buf = repalloc(buf, capacity);
+        buf = EnsureCap(buf, &capacity, pos, 64);
+
+        if (argtype != INT4OID && argtype != BOOLOID && DatumGetPointer(args[i]) == NULL) {
+            *(int *)(buf + pos) = INV_TAG_NULL; pos += 4;
+            *(int *)(buf + pos) = 0; pos += 4;
+            count++;
+            continue;
         }
 
         switch (argtype) {
             case INT4OID:
-                *(int*)(buf + pos) = INV_TAG_INT4; pos += 4;
-                *(int*)(buf + pos) = 4; pos += 4;
-                *(int*)(buf + pos) = args[i].i; pos += 4;
+                *(int *)(buf + pos) = INV_TAG_INT4; pos += 4;
+                *(int *)(buf + pos) = 4; pos += 4;
+                *(int *)(buf + pos) = DatumGetInt32(args[i]); pos += 4;
                 break;
             case INT8OID:
-                *(int*)(buf + pos) = INV_TAG_INT8; pos += 4;
-                *(int*)(buf + pos) = 8; pos += 4;
-                *(long*)(buf + pos) = args[i].j; pos += 8;
+                *(int *)(buf + pos) = INV_TAG_INT8; pos += 4;
+                *(int *)(buf + pos) = 8; pos += 4;
+                *(long *)(buf + pos) = *(long *)DatumGetPointer(args[i]); pos += 8;
                 break;
             case FLOAT8OID:
-                *(int*)(buf + pos) = INV_TAG_FLOAT8; pos += 4;
-                *(int*)(buf + pos) = 8; pos += 4;
-                *(double*)(buf + pos) = args[i].d; pos += 8;
+                *(int *)(buf + pos) = INV_TAG_FLOAT8; pos += 4;
+                *(int *)(buf + pos) = 8; pos += 4;
+                *(double *)(buf + pos) = *(double *)DatumGetPointer(args[i]); pos += 8;
                 break;
             case BOOLOID:
-                *(int*)(buf + pos) = INV_TAG_BOOL; pos += 4;
-                *(int*)(buf + pos) = 1; pos += 4;
-                buf[pos++] = args[i].z ? 1 : 0;
+                *(int *)(buf + pos) = INV_TAG_BOOL; pos += 4;
+                *(int *)(buf + pos) = 1; pos += 4;
+                buf[pos++] = DatumGetChar(args[i]) ? 1 : 0;
                 break;
+            case TEXTOID:
+            case VARCHAROID:
+            case LZTEXTOID:
             case JAVAOID:
-            default:
-                if (args[i].l != NULL) {
-                    bytea* ser = javain(args[i].l);
-                    int slen = VARSIZE(ser) - VARHDRSZ;
-                    *(int*)(buf + pos) = INV_TAG_JAVA_OBJECT; pos += 4;
-                    *(int*)(buf + pos) = slen; pos += 4;
-                    memcpy(buf + pos, VARDATA(ser), slen);
+                {
+                    Datum flat = materialize_blob_datum(args[i]);
+                    bytea *payload = (bytea *) DatumGetPointer(flat);
+                    int slen = VARSIZE(payload) - VARHDRSZ;
+                    int tag = (argtype == JAVAOID) ? INV_TAG_JAVA_OBJECT : INV_TAG_VARCHAR;
+
+                    buf = EnsureCap(buf, &capacity, pos, 8 + slen);
+                    *(int *)(buf + pos) = tag; pos += 4;
+                    *(int *)(buf + pos) = slen; pos += 4;
+                    memcpy(buf + pos, VARDATA(payload), slen);
                     pos += slen;
-                    pfree(ser);
-                } else {
-                    *(int*)(buf + pos) = INV_TAG_NULL; pos += 4;
-                    *(int*)(buf + pos) = 0; pos += 4;
+                    if (flat != args[i])
+                        pfree(DatumGetPointer(flat));
                 }
                 break;
+            default:
+                elog(ERROR, "java argument type %lu is not supported on the FFM path", (unsigned long) argtype);
         }
         count++;
     }
 
-    *(int*)buf = count;
+    *(int *)buf = count;
     *outBlock = buf;
     *outLen = pos;
 }
 
-/*
- * Call the FFM-registered Java invoker (upcall).
- * Returns 0 on success.
- */
-static int
-InvokeJavaViaFFMInvoker(JavaFunction def, int nargs, jvalue* args, jvalue* result)
+static Datum
+InvokeJavaViaFFMFromDatums(JavaFunction def, int nargs, Datum *args, bool *isNull)
 {
-    if (java_ffm_invoker == NULL)
-        return -1;
-
     InvokerFn fn = (InvokerFn) java_ffm_invoker;
-
-    char* argBlock = NULL;
+    char *argBlock = NULL;
     int argLen = 0;
-    BuildArgBlockForInvoker(def, nargs, args, &argBlock, &argLen);
-
     char *dynamicResult = NULL;
-    int  dynamicResultLen = 0;
+    int dynamicResultLen = 0;
+    int rc;
+    Datum result;
 
-    int rc = CallJavaInvokerWithGrowableResult(
+    if (fn == NULL)
+        elog(ERROR, "FFM Java function invoker is not registered");
+
+    BuildArgBlockFromDatums(def, nargs, args, &argBlock, &argLen);
+
+    rc = CallJavaInvokerWithGrowableResult(
         fn,
         def->className ? def->className : "",
         def->methodName ? def->methodName : "",
@@ -277,15 +352,14 @@ InvokeJavaViaFFMInvoker(JavaFunction def, int nargs, jvalue* args, jvalue* resul
 
     pfree(argBlock);
 
-    if (rc == 0 && dynamicResult != NULL) {
-        ParseInvokerResult(dynamicResult, dynamicResultLen, def->returnType, result);
+    if (dynamicResult != NULL) {
+        result = ParseInvokerResultToDatum(dynamicResult, dynamicResultLen, def->returnType, isNull);
         pfree(dynamicResult);
-    } else {
-        if (dynamicResult) pfree(dynamicResult);
-        elog(ERROR, "Java function invocation failed (rc=%d)", rc);
+        return result;
     }
 
-    return rc;
+    elog(ERROR, "Java function invocation failed (rc=%d)", rc);
+    return PointerGetDatum(NULL);
 }
 
 /*
@@ -323,18 +397,20 @@ CallJavaInvokerWithGrowableResult(
     while (attempts < MAX_ATTEMPTS) {
         memset(currentBuf, 0, currentSize);
 
-        rc = fn(cname, mname, mdesc, isStaticFlag, argBlock, argLen, currentBuf);
+        rc = fn(cname, mname, mdesc, isStaticFlag, argBlock, argLen, currentBuf, currentSize);
 
-        if (rc != 0) {
-            /* Invocation itself failed */
+        /* Inspect what Java wrote to decide if the buffer was big enough.
+         * On failure the invoker still writes TAG_ERROR into this buffer.
+         */
+        int written = InspectWrittenResultSize(currentBuf, currentSize);
+        bool haveError = ResultLooksLikeError(currentBuf, currentSize);
+
+        if (rc != 0 && !(haveError && written <= currentSize)) {
             if (currentBuf != stackBuf) pfree(currentBuf);
             *resultBufOut = NULL;
             *resultLenOut = 0;
             return rc;
         }
-
-        /* Inspect what Java wrote to decide if the buffer was big enough */
-        int written = InspectWrittenResultSize(currentBuf, currentSize);
 
         if (written <= currentSize) {
             /* Success - buffer was sufficient */
@@ -347,7 +423,7 @@ CallJavaInvokerWithGrowableResult(
                 *resultBufOut = currentBuf;
             }
             *resultLenOut = written;
-            return 0;
+            return rc;
         }
 
         /* Buffer was too small — grow and retry */
@@ -400,59 +476,80 @@ InspectWrittenResultSize(const char *buf, int bufSize)
     return totalNeeded;
 }
 
-/*
- * Parse the result block written by the Java invoker (following JavaCallProtocol v1)
- * and fill the jvalue according to returnType.
- */
-static void
-ParseInvokerResult(const char* buf, int bufLen, Oid returnType, jvalue* out)
+static int
+ResultLooksLikeError(const char *buf, int bufSize)
 {
-    if (bufLen < 4) {
-        out->l = NULL;
-        return;
+    if (bufSize < 12)
+        return 0;
+    return *(int *)buf == 1 && *(int *)(buf + 4) == INV_TAG_ERROR;
+}
+
+/*
+ * Parse the result block written by the Java invoker into a SQL Datum.
+ * TAG_ERROR becomes elog(ERROR) with the Java exception text.
+ */
+static Datum
+ParseInvokerResultToDatum(const char *buf, int bufLen, Oid returnType, bool *isNull)
+{
+    long offset;
+    int tag;
+    int vlen;
+
+    if (isNull)
+        *isNull = false;
+
+    if (bufLen < 4)
+        elog(ERROR, "Java function returned an empty result");
+
+    if (*(int *)buf <= 0) {
+        if (isNull)
+            *isNull = true;
+        return PointerGetDatum(NULL);
     }
 
-    int numVals = *(int*)buf;
-    if (numVals <= 0) {
-        out->l = NULL;
-        return;
-    }
+    offset = 4;
+    if (offset + 8 > bufLen)
+        elog(ERROR, "Java function returned a truncated result");
 
-    long offset = 4;
-    if (offset + 8 > bufLen) {
-        out->l = NULL;
-        return;
-    }
+    tag = *(int *)(buf + offset); offset += 4;
+    vlen = *(int *)(buf + offset); offset += 4;
 
-    int tag = *(int*)(buf + offset); offset += 4;
-    int vlen = *(int*)(buf + offset); offset += 4;
+    if (tag != INV_TAG_NULL && tag != INV_TAG_ERROR && offset + vlen > bufLen)
+        elog(ERROR, "Java function returned a truncated result");
 
     switch (tag) {
         case INV_TAG_INT4:
-            out->i = *(int*)(buf + offset);
-            break;
+            return Int32GetDatum(*(int *)(buf + offset));
         case INV_TAG_INT8:
-            out->j = *(long*)(buf + offset);
-            break;
+            {
+                void *data = palloc(8);
+                memcpy(data, buf + offset, 8);
+                return PointerGetDatum(data);
+            }
         case INV_TAG_FLOAT8:
-            out->d = *(double*)(buf + offset);
-            break;
+            {
+                void *data = palloc(8);
+                memcpy(data, buf + offset, 8);
+                return PointerGetDatum(data);
+            }
         case INV_TAG_BOOL:
-            out->z = *(buf + offset) != 0;
-            break;
+            return CharGetDatum(*(buf + offset) != 0);
+        case INV_TAG_TEXT:
+        case INV_TAG_VARCHAR:
+            {
+                bytea *string = palloc(vlen + VARHDRSZ + 1);
+                SETVARSIZE(string, vlen + VARHDRSZ);
+                memcpy(VARDATA(string), buf + offset, vlen);
+                VARDATA(string)[vlen] = '\0';
+                return PointerGetDatum(string);
+            }
         case INV_TAG_JAVA_OBJECT:
             {
-                if (vlen <= 0) {
-                    out->l = NULL;
-                    break;
-                }
-                bytea* ser = (bytea*) palloc(vlen + VARHDRSZ);
+                bytea *ser = (bytea *) palloc(vlen + VARHDRSZ);
                 SETVARSIZE(ser, vlen + VARHDRSZ);
                 memcpy(VARDATA(ser), buf + offset, vlen);
-                out->l = javaout(ser);
-                pfree(ser);
+                return PointerGetDatum(ser);
             }
-            break;
         case INV_TAG_ERROR:
             {
                 if (vlen > 0) {
@@ -460,17 +557,19 @@ ParseInvokerResult(const char* buf, int bufLen, Oid returnType, jvalue* out)
                     memcpy(msg, buf + offset, vlen);
                     msg[vlen] = '\0';
                     elog(ERROR, "Java function error: %s", msg);
-                    pfree(msg);
-                } else {
-                    elog(ERROR, "Java function error (no message)");
                 }
+                elog(ERROR, "Java function error (no message)");
             }
             break;
         case INV_TAG_NULL:
+            if (isNull)
+                *isNull = true;
+            return PointerGetDatum(NULL);
         default:
-            out->l = NULL;
-            break;
+            elog(ERROR, "Java function returned unsupported result tag %d (sql type %lu)", tag, (unsigned long) returnType);
     }
+
+    return PointerGetDatum(NULL);
 }
 
 void SetJavaObjectLoader(const char* l) {
@@ -656,18 +755,20 @@ fmgr_javaA(const char* function, int nargs, Oid* types, Datum *args, Oid* return
 	jvalue          rval;
         jvalue        jargs[FUNC_MAX_ARGS];
 	Datum           ret_datum;
-        Oid foid;
-        Oid rtype;
-        const char            *clazz;
-        const char            *method;
-        const char            *sig;
         int x=0;
-                
+        JavaFunction def = GetJavaCallArgs(function, nargs, types);
+
+        if (returnType != NULL) {
+            *returnType = def->returnType;
+        }
+
+        if (java_ffm_invoker != NULL) {
+            return InvokeJavaViaFFMFromDatums(def, nargs, args, isNull);
+        }
+
 	GetJavaEnv(&jenv);
 
 	(*jenv)->PushLocalFrame(jenv, 10);
-
-        JavaFunction def = GetJavaCallArgs(function, nargs, types);
 
         for (x=0;x<nargs;x++) {
             jargs[x] = ConvertToJavaArg(def->argTypes[x], args[x]);
@@ -681,10 +782,6 @@ fmgr_javaA(const char* function, int nargs, Oid* types, Datum *args, Oid* return
 	ret_datum = ConvertFromJavaArg(def->returnType, rval, isNull);
 	(*jenv)->PopLocalFrame(jenv, NULL);
 
-        if (returnType != NULL) {
-            *returnType = def->returnType;
-        }
-
 	return ret_datum;
 }
 
@@ -692,13 +789,18 @@ Datum
 fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, bool* isNull)
 {
 	JNIEnv         *jenv;
-	jclass          converter;
-	jmethodID       in;
 	jvalue          rval;
 	Datum           ret_datum;
         jvalue        jargs[FUNC_MAX_ARGS];
-        Oid foid;
         int x;
+
+        if (returnType != NULL) {
+            *returnType = jinfo->returnType;
+        }
+
+        if (java_ffm_invoker != NULL) {
+            return InvokeJavaViaFFMFromDatums(jinfo, nargs, args, isNull);
+        }
 
         GetJavaEnv(&jenv);
 
@@ -717,10 +819,6 @@ fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, b
 	ret_datum = ConvertFromJavaArg(jinfo->returnType, rval,isNull);
 
 	(*jenv)->PopLocalFrame(jenv, NULL);
-
-        if (returnType != NULL) {
-            *returnType = jinfo->returnType;
-        }
 
 	return ret_datum;
 
@@ -1037,15 +1135,12 @@ GetJavaFunction(const char *name, int nargs, Oid * types)
 JavaFunction
 GetJavaCallArgs(const char *name, int nargs, Oid * argtypes)
 {
-	JNIEnv         *jenv;
-	jclass          converter = NULL;
-	jstring         classid;
+	JNIEnv         *jenv = NULL;
         bool hfound = false;
-        char                 buffer[128];
         JavaFunction            definition = NULL;            
         NameData             lookup;
 
-	GetJavaEnv(&jenv);
+        FunctionCacheInit();
 
         memset(NameStr(lookup), '\0', NAMEDATALEN);
 
@@ -1074,16 +1169,6 @@ GetJavaCallArgs(const char *name, int nargs, Oid * argtypes)
                     *mark = '\0';
                     javaname = mark + 1;
 
-                    definition->clazz = (*jenv)->NewGlobalRef(jenv, (*jenv)->FindClass(jenv, javasrc));
-                    definition->method = (*jenv)->GetStaticMethodID(jenv, definition->clazz, javaname, javasig);
-                    definition->isStatic = true;
-                    if (definition->method == NULL) {
-                        if ((*jenv)->ExceptionCheck(jenv)) {
-                            (*jenv)->ExceptionClear(jenv);
-                        }
-                        definition->method = (*jenv)->GetMethodID(jenv, definition->clazz, javaname, javasig);
-                        definition->isStatic = false;
-                    }
                     definition->returnType = DatumGetObjectId(SysCacheGetAttr(PROCNAME, func, Anum_pg_proc_prorettype, NULL));
                     definition->nargs = nargs;
                     memmove(definition->argTypes,argtypes, sizeof(Oid) * nargs);
@@ -1094,6 +1179,28 @@ GetJavaCallArgs(const char *name, int nargs, Oid * argtypes)
                     definition->methodName = pstrdup(javaname);
                     definition->methodDesc = pstrdup(javasig);
                     MemoryContextSwitchTo(oldcxt);
+
+                    {
+                        int dparams = CountJvmDescriptorParams(javasig);
+                        definition->isStatic = (dparams < 0) ? true : (nargs == dparams);
+                    }
+
+                    if (java_ffm_invoker == NULL) {
+                        GetJavaEnv(&jenv);
+                        definition->clazz = (*jenv)->NewGlobalRef(jenv, (*jenv)->FindClass(jenv, javasrc));
+                        definition->method = (*jenv)->GetStaticMethodID(jenv, definition->clazz, javaname, javasig);
+                        definition->isStatic = true;
+                        if (definition->method == NULL) {
+                            if ((*jenv)->ExceptionCheck(jenv)) {
+                                (*jenv)->ExceptionClear(jenv);
+                            }
+                            definition->method = (*jenv)->GetMethodID(jenv, definition->clazz, javaname, javasig);
+                            definition->isStatic = false;
+                        }
+                    } else {
+                        definition->clazz = NULL;
+                        definition->method = NULL;
+                    }
 
                     pfree((void*)javasrc);
                     pfree((void*)javasig);
@@ -1113,20 +1220,6 @@ jvalue
 CallJavaFunction(JavaFunction def, int nargs, jvalue* args) {
         jvalue         rval;
         jobject        target = NULL;
-
-        /* Prefer FFM upcall invoker when available (primary path) */
-        if (java_ffm_invoker != NULL) {
-            if (InvokeJavaViaFFMInvoker(def, nargs, args, &rval) == 0) {
-                return rval;
-            }
-            /* FFM path failed — this is unexpected in normal operation */
-            elog(NOTICE, "FFM Java function invoker failed, falling back to legacy JNI path");
-        } else {
-            /* No FFM invoker registered — using legacy JNI path.
-             * This is normal for old WeaverInitializer users, but new code should
-             * prefer DirectWeaverInitializer + FFM.
-             */
-        }
 
 	JNIEnv         *jenv;
         GetJavaEnv(&jenv);

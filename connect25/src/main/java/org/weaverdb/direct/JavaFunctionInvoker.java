@@ -10,11 +10,8 @@ import java.lang.invoke.MethodType;
 import java.util.concurrent.ConcurrentHashMap;
 import org.weaverdb.WeaverObjectLoader;
 import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_BOOLEAN;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 /**
  * FFM-based invoker for WeaverDB Java stored procedures / functions (LANGUAGE 'java').
@@ -52,7 +49,35 @@ public final class JavaFunctionInvoker {
     // Cache: key = "className.methodName:descriptor"
     private final ConcurrentHashMap<String, MethodHandle> methodCache = new ConcurrentHashMap<>();
 
-    private final MethodHandles.Lookup lookup = MethodHandles.lookup();
+    private final MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+
+    private MethodHandle resolveHandle(String classStr, String methodStr, String descStr, int isStaticFlag) {
+        try {
+            Class<?> clazz = Class.forName(classStr);
+            MethodType fullMt = MethodType.fromMethodDescriptorString(descStr, clazz.getClassLoader());
+            /*
+             * FunctionInstaller stores the JVM descriptor without a receiver.
+             * SQL nargs is one larger than the descriptor for instance methods.
+             */
+            if (isStaticFlag == 1) {
+                try {
+                    return lookup.findStatic(clazz, methodStr, fullMt);
+                } catch (NoSuchMethodException | IllegalAccessException e) {
+                    return lookup.findVirtual(clazz, methodStr, fullMt);
+                }
+            }
+            try {
+                return lookup.findVirtual(clazz, methodStr, fullMt);
+            } catch (NoSuchMethodException | IllegalAccessException e) {
+                return lookup.findStatic(clazz, methodStr, fullMt);
+            }
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to resolve Java function handle: "
+                    + classStr + "." + methodStr + ":" + descStr, e);
+        }
+    }
 
     /**
      * === Java Call Protocol v1 (defined in JavaCallProtocol) ===
@@ -65,17 +90,15 @@ public final class JavaFunctionInvoker {
      *       int isStatic,
      *       MemorySegment argData,
      *       int argDataLen,
-     *       MemorySegment resultOut
+     *       MemorySegment resultOut,
+     *       int resultOutLen
      *   )
      *
      * See JavaCallProtocol.java for the exact binary layout.
      *
-     * Current status (checkpoint):
-     * - Protocol definition + Java-side parsing/writing is implemented.
-     * - C side now has full bridge: BuildArgBlockForInvoker + InvokeJavaViaFFMInvoker + ParseInvokerResult.
-     * - CallJavaFunction prefers FFM upcall path when registered.
-     * - Strings (class/method/desc) are now stored in FuncDef for the invoker.
-     * - Result parsing (including JAVA_OBJECT via javaout) is implemented on C side.
+     * Protocol v1 covers int4/int8/float8/bool/varchar/java/null plus TAG_ERROR.
+     * C builds the arg block from SQL Datums and turns the result (or error
+     * message) back into a Datum without a JNI jvalue round-trip.
      */
     private int invoke(
             MemorySegment className,      // const char* (null-terminated UTF-8)
@@ -84,32 +107,26 @@ public final class JavaFunctionInvoker {
             int isStaticFlag,
             MemorySegment argData,        // const char* raw arg block
             int argDataLen,
-            MemorySegment resultOut       // char* writable result buffer
+            MemorySegment resultOut,      // char* writable result buffer
+            int resultOutLen
     ) {
         try {
-            String classStr = className.getString(0);
+            if (argDataLen > 0) {
+                argData = argData.reinterpret(argDataLen);
+            }
+            if (resultOutLen > 0) {
+                resultOut = resultOut.reinterpret(resultOutLen);
+            }
+            String classStr = className.reinterpret(4096).getString(0).replace('/', '.');
+            methodName = methodName.reinterpret(4096);
+            methodDesc = methodDesc.reinterpret(4096);
             String methodStr = methodName.getString(0);
             String descStr = methodDesc.getString(0);
 
-            String cacheKey = classStr + "." + methodStr + ":" + descStr;
+            String cacheKey = classStr + "." + methodStr + ":" + descStr + ":" + isStaticFlag;
 
-            MethodHandle mh = methodCache.computeIfAbsent(cacheKey, key -> {
-                try {
-                    Class<?> clazz = Class.forName(classStr);
-                    MethodType fullMt = MethodType.fromMethodDescriptorString(descStr, clazz.getClassLoader());
-
-                    if (isStaticFlag == 1) {
-                        return lookup.findStatic(clazz, methodStr, fullMt);
-                    } else {
-                        // For instance methods, the descriptor from the catalog includes the receiver
-                        // as the first parameter (thanks to FunctionInstaller). We must drop it.
-                        MethodType realMt = fullMt.dropParameterTypes(0, 1);
-                        return lookup.findVirtual(clazz, methodStr, realMt);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to resolve Java function handle: " + key, e);
-                }
-            });
+            MethodHandle mh = methodCache.computeIfAbsent(cacheKey,
+                    key -> resolveHandle(classStr, methodStr, descStr, isStaticFlag));
 
             // Always parse the actual number of arguments sent from C (includes receiver for instance methods)
             int numArgsFromProtocol = JavaCallProtocol.readInt4(argData, 0);
@@ -135,16 +152,18 @@ public final class JavaFunctionInvoker {
             return 0; // success
 
         } catch (Throwable t) {
-            // Report the error back through the result buffer using the protocol.
-            // The C side will turn this into a proper database error.
             String msg = t.getClass().getSimpleName() + ": " + t.getMessage();
             if (t.getCause() != null) {
                 msg += " (caused by " + t.getCause().getClass().getSimpleName() + ")";
             }
-            JavaCallProtocol.writeError(resultOut, msg);
-
-            // Still return non-zero so C knows something went wrong,
-            // but the detailed message is in the result buffer.
+            try {
+                if (resultOutLen > 0 && resultOut.byteSize() < resultOutLen) {
+                    resultOut = resultOut.reinterpret(resultOutLen);
+                }
+                JavaCallProtocol.writeError(resultOut, msg);
+            } catch (Throwable ignored) {
+                /* result buffer unusable; C still sees rc != 0 */
+            }
             return -1;
         }
     }
@@ -186,6 +205,10 @@ public final class JavaFunctionInvoker {
                     args[i] = JavaCallProtocol.readBool(argData, offset);
                     offset += 1;
                     break;
+                case JavaCallProtocol.TAG_VARCHAR:
+                    args[i] = JavaCallProtocol.readString(argData, offset, valueLen);
+                    offset += valueLen;
+                    break;
                 case JavaCallProtocol.TAG_JAVA_OBJECT:
                     byte[] serialized = JavaCallProtocol.readBytes(argData, offset, valueLen);
                     args[i] = WeaverObjectLoader.java_out(serialized);
@@ -222,18 +245,31 @@ public final class JavaFunctionInvoker {
         } else if (result instanceof Long) {
             JavaCallProtocol.writeInt4(resultOut, off, JavaCallProtocol.TAG_INT8); off += 4;
             JavaCallProtocol.writeInt4(resultOut, off, 8); off += 4;
-            resultOut.set(JAVA_LONG, off, (Long) result);
+            JavaCallProtocol.writeInt8(resultOut, off, (Long) result);
         } else if (result instanceof Double) {
             JavaCallProtocol.writeInt4(resultOut, off, JavaCallProtocol.TAG_FLOAT8); off += 4;
             JavaCallProtocol.writeInt4(resultOut, off, 8); off += 4;
-            resultOut.set(JAVA_DOUBLE, off, (Double) result);
+            JavaCallProtocol.writeFloat8(resultOut, off, (Double) result);
         } else if (result instanceof Boolean) {
             JavaCallProtocol.writeInt4(resultOut, off, JavaCallProtocol.TAG_BOOL); off += 4;
             JavaCallProtocol.writeInt4(resultOut, off, 1); off += 4;
-            resultOut.set(JAVA_BOOLEAN, off, (Boolean) result);
+            JavaCallProtocol.writeBool(resultOut, off, (Boolean) result);
+        } else if (result instanceof String) {
+            byte[] utf8 = ((String) result).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            JavaCallProtocol.writeInt4(resultOut, off, JavaCallProtocol.TAG_VARCHAR); off += 4;
+            JavaCallProtocol.writeInt4(resultOut, off, utf8.length); off += 4;
+            JavaCallProtocol.writeBytes(resultOut, off, utf8);
+        } else if (result instanceof Float) {
+            JavaCallProtocol.writeInt4(resultOut, off, JavaCallProtocol.TAG_FLOAT8); off += 4;
+            JavaCallProtocol.writeInt4(resultOut, off, 8); off += 4;
+            JavaCallProtocol.writeFloat8(resultOut, off, ((Float) result).doubleValue());
         } else {
             // Complex object -> serialize using existing mechanism
             byte[] serialized = WeaverObjectLoader.java_in(result);
+            if (serialized == null) {
+                throw new IllegalArgumentException("Cannot serialize " + result.getClass().getName()
+                        + " as a Java SQL value (not Serializable?)");
+            }
             JavaCallProtocol.writeInt4(resultOut, off, JavaCallProtocol.TAG_JAVA_OBJECT); off += 4;
             JavaCallProtocol.writeInt4(resultOut, off, serialized.length); off += 4;
             for (int i = 0; i < serialized.length; i++) {
@@ -254,7 +290,8 @@ public final class JavaFunctionInvoker {
      *       int         isStatic,    // 1 = static, 0 = instance
      *       const char *argData,     // binary block per JavaCallProtocol v1
      *       int         argDataLen,
-     *       char       *resultOut    // writable buffer
+     *       char       *resultOut,   // writable buffer
+     *       int         resultOutLen
      *   );
      *
      * See also: JavaCallProtocol.java for the arg/result block layout.
@@ -266,7 +303,7 @@ public final class JavaFunctionInvoker {
                     .findVirtual(JavaFunctionInvoker.class, "invoke",
                             MethodType.methodType(int.class,
                                     MemorySegment.class, MemorySegment.class, MemorySegment.class,
-                                    int.class, MemorySegment.class, int.class, MemorySegment.class))
+                                    int.class, MemorySegment.class, int.class, MemorySegment.class, int.class))
                     .bindTo(this);
         } catch (NoSuchMethodException | IllegalAccessException e) {
             throw new RuntimeException("Failed to create invoker upcall", e);
@@ -280,7 +317,8 @@ public final class JavaFunctionInvoker {
                 JAVA_INT,  // isStatic
                 ADDRESS,   // argData     (const char* raw argument block per JavaCallProtocol)
                 JAVA_INT,  // argDataLen
-                ADDRESS    // resultOut   (char* writable buffer for result per JavaCallProtocol)
+                ADDRESS,   // resultOut   (char* writable buffer for result per JavaCallProtocol)
+                JAVA_INT   // resultOutLen
         );
 
         // IMPORTANT: We use Arena.global() here because this upcall stub must remain

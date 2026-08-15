@@ -4,11 +4,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Minimal test for the FFM Java function invoker (LANGUAGE 'java' via upcalls).
- *
- * This exercises the upcall stub creation and basic registration path on the
- * Java side. Full end-to-end testing (calling from native C code) requires
- * the native library to be rebuilt with current sources.
+ * Stub-level checks for the FFM Java function invoker.
+ * SQL end-to-end coverage lives in {@link JavaStoredProcedureTest}.
  */
 public class JavaFunctionInvokerTest {
 

@@ -46,18 +46,23 @@ public final class JavaCallProtocol {
 
     public static final int HEADER_SIZE = 4; // numArgs
 
+    /* Packed protocol fields are not naturally aligned. */
+    private static final ValueLayout.OfInt INT4 = ValueLayout.JAVA_INT.withByteAlignment(1);
+    private static final ValueLayout.OfLong INT8 = ValueLayout.JAVA_LONG.withByteAlignment(1);
+    private static final ValueLayout.OfDouble FLOAT8 = ValueLayout.JAVA_DOUBLE.withByteAlignment(1);
+
     public static int writeInt4(MemorySegment buf, long offset, int value) {
-        buf.set(ValueLayout.JAVA_INT, offset, value);
+        buf.set(INT4, offset, value);
         return 4;
     }
 
     public static int writeInt8(MemorySegment buf, long offset, long value) {
-        buf.set(ValueLayout.JAVA_LONG, offset, value);
+        buf.set(INT8, offset, value);
         return 8;
     }
 
     public static int writeFloat8(MemorySegment buf, long offset, double value) {
-        buf.set(ValueLayout.JAVA_DOUBLE, offset, value);
+        buf.set(FLOAT8, offset, value);
         return 8;
     }
 
@@ -81,15 +86,15 @@ public final class JavaCallProtocol {
     // ====================== Simple Reader Helpers ======================
 
     public static int readInt4(MemorySegment buf, long offset) {
-        return buf.get(ValueLayout.JAVA_INT, offset);
+        return buf.get(INT4, offset);
     }
 
     public static long readInt8(MemorySegment buf, long offset) {
-        return buf.get(ValueLayout.JAVA_LONG, offset);
+        return buf.get(INT8, offset);
     }
 
     public static double readFloat8(MemorySegment buf, long offset) {
-        return buf.get(ValueLayout.JAVA_DOUBLE, offset);
+        return buf.get(FLOAT8, offset);
     }
 
     public static boolean readBool(MemorySegment buf, long offset) {
@@ -158,6 +163,17 @@ public final class JavaCallProtocol {
             return this;
         }
 
+        public ArgBlockBuilder addVarchar(String s) {
+            byte[] utf8 = (s == null) ? new byte[0] : s.getBytes(StandardCharsets.UTF_8);
+            ensureCapacity(pos + 8 + utf8.length);
+            writeInt4At(pos, TAG_VARCHAR); pos += 4;
+            writeInt4At(pos, utf8.length); pos += 4;
+            System.arraycopy(utf8, 0, buffer, pos, utf8.length);
+            pos += utf8.length;
+            count++;
+            return this;
+        }
+
         public ArgBlockBuilder addJavaObject(byte[] serialized) {
             ensureCapacity(pos + 8 + serialized.length);
             writeInt4At(pos, TAG_JAVA_OBJECT); pos += 4;
@@ -214,10 +230,10 @@ public final class JavaCallProtocol {
         byte[] msgBytes = message.getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
         // Write protocol header manually (avoiding removed helper)
-        resultOut.set(java.lang.foreign.ValueLayout.JAVA_INT, 0, 1); // num values = 1
+        writeInt4(resultOut, 0, 1);
         long off = 4;
-        resultOut.set(java.lang.foreign.ValueLayout.JAVA_INT, off, TAG_ERROR); off += 4;
-        resultOut.set(java.lang.foreign.ValueLayout.JAVA_INT, off, msgBytes.length); off += 4;
+        writeInt4(resultOut, off, TAG_ERROR); off += 4;
+        writeInt4(resultOut, off, msgBytes.length); off += 4;
 
         for (int i = 0; i < msgBytes.length; i++) {
             resultOut.set(java.lang.foreign.ValueLayout.JAVA_BYTE, off + i, msgBytes[i]);

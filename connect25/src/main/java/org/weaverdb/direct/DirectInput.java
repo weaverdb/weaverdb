@@ -21,6 +21,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import org.weaverdb.ExecutionException;
+import org.weaverdb.WeaverObjectLoader;
 
 /**
  *
@@ -48,6 +49,9 @@ class DirectInput<T> {
     DirectInput(String name, Class<T> type) {
         this.name = name;
         this.type = TransferType.type(type);
+        if (this.type == null) {
+            throw new IllegalArgumentException("unsupported bind type: " + type);
+        }
     }
     
     int getType() {
@@ -63,11 +67,15 @@ class DirectInput<T> {
                 if (value == null) {
                     return -1;
                 }
+                if (this.type == TransferType.JAVA) {
+                    byte[] serialized = WeaverObjectLoader.java_in(value);
+                    return serialized == null ? -1 : serialized.length;
+                }
                 if (value instanceof byte[] bytes) {
                     return bytes.length;
                 }
                 if (value instanceof String s) {
-                    return s.length();
+                    return s.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
                 }
                 return 1;
             }

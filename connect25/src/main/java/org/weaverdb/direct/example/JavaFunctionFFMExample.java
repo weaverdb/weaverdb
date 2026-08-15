@@ -3,37 +3,20 @@ package org.weaverdb.direct.example;
 import org.weaverdb.*;
 import org.weaverdb.direct.DirectWeaverInitializer;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.Properties;
 
 /**
  * End-to-end example showing how to use Java stored procedures
- * (LANGUAGE 'java') with the modern FFM client path.
+ * (LANGUAGE 'java') with the FFM client path.
  *
- * This demonstrates the intended usage after the FFM upcall invoker work.
- *
- * How to run (example):
- *   1. Build the project (native + Java).
- *   2. Run this class with Java 25+ and --enable-native-access=ALL-UNNAMED.
- *   3. It will create/use ./testdb and register/call a simple Java function.
- *
- * Current status notes:
- * - Initialization via DirectWeaverInitializer automatically registers the
- *   FFM-based Java function invoker (no JNI required for the connection layer).
- * - Function registration via FunctionInstaller still works.
- * - Execution of the Java function will go through the new upcall path
- *   (instead of the classic JNI path) when the invoker is registered.
- *
- * Some wiring in the C backend (argument/result conversion for complex cases,
- * full error propagation) is still being completed.
+ * Run with Java 25+ and --enable-native-access=ALL-UNNAMED after building
+ * libweaver and the Java modules.
  */
 public class JavaFunctionFFMExample {
 
-    /**
-     * Entry point for the more complete FFM Java function demonstration.
-     * See JavaFunctionDemoMethods for the actual functions being registered.
-     */
     public static void main(String[] args) throws Exception {
-        // 1. Initialize using the FFM path (this also registers the Java invoker)
         Properties props = new Properties();
         props.setProperty("datadir", System.getProperty("user.dir") + "/testdb");
         props.setProperty("allow_anonymous", "true");
@@ -51,36 +34,31 @@ public class JavaFunctionFFMExample {
             }
         }));
 
-        // 2. Connect using the FFM-backed DBReference
         try (DBReference c = DBReferenceManager.connect("template1")) {
-
-            // 3. Register several Java functions using the existing installer.
-            //    These come from the companion demo class for variety.
             FunctionInstaller installer = new FunctionInstaller(c);
-
-            var lookup = java.lang.invoke.MethodHandles.lookup();
+            var lookup = MethodHandles.lookup();
             var demoClass = JavaFunctionDemoMethods.class;
 
             System.out.println("Registering Java functions from JavaFunctionDemoMethods...");
 
             installer.installFunction("greet", lookup.findStatic(
                     demoClass, "greet",
-                    java.lang.invoke.MethodType.methodType(String.class, String.class)));
+                    MethodType.methodType(String.class, String.class)));
 
             installer.installFunction("enrich_person", lookup.findStatic(
                     demoClass, "enrichPerson",
-                    java.lang.invoke.MethodType.methodType(
+                    MethodType.methodType(
                             JavaFunctionDemoMethods.PersonInfo.class,
                             JavaFunctionDemoMethods.PersonInfo.class)));
 
-            // Also register an instance method example
-            var instanceDemo = new JavaFunctionDemoMethods("Value:");
-            installer.installFunction("format_with_prefix", lookup.findVirtual(
+            installer.installFunction("format_with_prefix", lookup.findStatic(
                     demoClass, "formatWithPrefix",
-                    java.lang.invoke.MethodType.methodType(String.class, int.class))
-                    .bindTo(instanceDemo));
+                    MethodType.methodType(String.class, String.class, int.class)));
 
-            // 4. Demonstrate calling them from SQL
+            installer.installFunction("instance_format", lookup.findVirtual(
+                    demoClass, "formatWithPrefix",
+                    MethodType.methodType(String.class, int.class)));
+
             System.out.println("\n--- Calling greet (returns String) ---");
             try (Statement s = c.statement("SELECT greet($name) AS greeting")) {
                 Input<String> name = s.linkInput("name", String.class);
@@ -95,7 +73,6 @@ public class JavaFunctionFFMExample {
 
             System.out.println("\n--- Calling enrich_person (JAVA_OBJECT round-trip) ---");
             try (Statement s = c.statement("SELECT enrich_person($p) AS info")) {
-                // For complex objects we can pass them directly when using the Java API
                 Input<JavaFunctionDemoMethods.PersonInfo> person =
                         s.linkInput("p", JavaFunctionDemoMethods.PersonInfo.class);
                 Output<JavaFunctionDemoMethods.PersonInfo> info =
@@ -108,21 +85,36 @@ public class JavaFunctionFFMExample {
                 }
             }
 
-            System.out.println("\n--- Calling instance method via format_with_prefix ---");
-            try (Statement s = c.statement("SELECT format_with_prefix($val) AS formatted")) {
+            System.out.println("\n--- Calling static format_with_prefix ---");
+            try (Statement s = c.statement("SELECT format_with_prefix($prefix, $val) AS formatted")) {
+                Input<String> prefix = s.linkInput("prefix", String.class);
                 Input<Integer> val = s.linkInput("val", Integer.class);
                 Output<String> formatted = s.linkOutput(1, String.class);
 
+                prefix.set("Value:");
                 val.set(42);
                 s.execute();
                 if (s.fetch()) {
-                    System.out.println("format_with_prefix(42) = " + formatted.get());
+                    System.out.println("format_with_prefix('Value:', 42) = " + formatted.get());
+                }
+            }
+
+            System.out.println("\n--- Calling instance method via java receiver ---");
+            try (Statement s = c.statement("SELECT instance_format($recv, $val) AS formatted")) {
+                Input<JavaFunctionDemoMethods> recv =
+                        s.linkInput("recv", JavaFunctionDemoMethods.class);
+                Input<Integer> val = s.linkInput("val", Integer.class);
+                Output<String> formatted = s.linkOutput(1, String.class);
+
+                recv.set(new JavaFunctionDemoMethods("Value:"));
+                val.set(42);
+                s.execute();
+                if (s.fetch()) {
+                    System.out.println("instance_format(Value:, 42) = " + formatted.get());
                 }
             }
 
             System.out.println("\nAll Java functions executed successfully through the FFM upcall path!");
         }
     }
-
-    // Note: Real Java methods are now in the companion class JavaFunctionDemoMethods.
 }

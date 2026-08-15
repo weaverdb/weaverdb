@@ -1,27 +1,50 @@
 package org.weaverdb.direct.example;
 
+import java.io.Serial;
+import java.io.Serializable;
+
 /**
- * A small set of demo methods intended to be registered as SQL functions
- * via the FFM Java function path (LANGUAGE 'java').
- *
- * These are more interesting than the trivial addOne example and exercise
- * different parts of the current implementation:
- *   - Returning String (TEXT/VARCHAR)
- *   - Simple Java object (JAVA_OBJECT) round-trip
- *   - Instance method
+ * Demo methods registered as SQL functions via the FFM Java function path
+ * (LANGUAGE 'java').
  */
-public class JavaFunctionDemoMethods {
+public class JavaFunctionDemoMethods implements Serializable {
 
-    // ---------------------------------------------------------------------
-    // Static methods
-    // ---------------------------------------------------------------------
+    @Serial
+    private static final long serialVersionUID = 1L;
 
-    /** Returns a greeting string. Good for testing TEXT/VARCHAR return. */
     public static String greet(String name) {
         if (name == null || name.isBlank()) {
             return "Hello, stranger!";
         }
         return "Hello, " + name + "!";
+    }
+
+    public static String echo(String value) {
+        return value;
+    }
+
+    public static int addInts(int a, int b) {
+        return a + b;
+    }
+
+    public static long addLongs(long a, long b) {
+        return a + b;
+    }
+
+    public static double addDoubles(double a, double b) {
+        return a + b;
+    }
+
+    public static boolean flag(boolean value) {
+        return !value;
+    }
+
+    public static int failLoudly(String why) {
+        throw new IllegalStateException(why != null ? why : "failed");
+    }
+
+    public static String formatWithPrefix(String prefix, int value) {
+        return (prefix != null ? prefix : "Result:") + " " + value;
     }
 
     /**
@@ -39,27 +62,20 @@ public class JavaFunctionDemoMethods {
         );
     }
 
-    // ---------------------------------------------------------------------
-    // Instance method example
-    // ---------------------------------------------------------------------
-
     private final String prefix;
 
     public JavaFunctionDemoMethods(String prefix) {
         this.prefix = prefix != null ? prefix : "Result:";
     }
 
-    /** Instance method that prefixes a number. */
     public String formatWithPrefix(int value) {
         return prefix + " " + value;
     }
 
-    // ---------------------------------------------------------------------
-    // Simple value class for JAVA_OBJECT demo
-    // ---------------------------------------------------------------------
+    public static final class PersonInfo implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
 
-    /** A tiny immutable value class for demonstrating object round-tripping. */
-    public static final class PersonInfo {
         private final String name;
         private final int age;
         private final boolean verified;
