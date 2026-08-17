@@ -1584,6 +1584,7 @@ WriteGroup GetCurrentWriteGroup(bool forcommit) {
             cart != log_group || 
             (
                 cart->currstate == RUNNING ||
+                cart->currstate == FLUSHING ||
                 cart->currstate == LOGGED ||
                 cart->currstate == SYNCED ||
                 cart->currstate == COMPLETED ||
