@@ -3,11 +3,10 @@
  * Child JVM for the Java index/heap crash harness.
  *
  * Roles:
- *   setup   — initdb-already-done datadir; create DB + durable schema, wrapup
- *   crash   — multiuser engine, mark ready, mutate until SIGKILL
- *   recover — replay shadow log, VACUUM, check index TIDs vs heap
- *
- * Not loaded into the Gradle test JVM. The parent SIGKILLs this process.
+ *   setup   — create DB + durable schema, wrapup, exit
+ *   crash   — mutate until SIGKILL (no wrapup)
+ *   recover — cold start of this process only; never wrapup or re-init.
+ *             The parent starts a new JVM if this one dies at init.
  *
  *-------------------------------------------------------------------------
  */
@@ -120,6 +119,14 @@ public final class IndexHeapCrashWorker {
                 return 0;
             }
             case "crash" -> {
+                int n = IndexHeapCrashSupport.countRows();
+                System.out.println("IHC: SETUP_ROWS=" + n);
+                System.out.flush();
+                if (n <= 0) {
+                    System.out.println("IHC: FAIL setup not durable after wrapup");
+                    System.out.flush();
+                    return 1;
+                }
                 IndexHeapCrashSupport.markReady(gate);
                 IndexHeapCrashSupport.runCrashWorkload(scenario, rng, startN, maxId, burst);
                 return 0;
@@ -135,7 +142,7 @@ public final class IndexHeapCrashWorker {
                     System.out.println("IHC: FAIL");
                 }
                 System.out.flush();
-                IndexHeapCrashSupport.shutdownEngine();
+                /* Discard this JVM. Do not wrapup or initialize() again. */
                 return r.code.exit;
             }
             default -> {

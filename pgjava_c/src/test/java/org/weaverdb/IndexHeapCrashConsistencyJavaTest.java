@@ -2,9 +2,8 @@
  *
  * Java multiuser index/heap crash-consistency test.
  *
- * Orchestrates child JVMs (WeaverInitializer / GoMultiuser / pg_shadowlog).
- * The JUnit JVM does not load the engine and is never the SIGKILL target.
- * Production code has no crash hooks.
+ * Orchestrates child JVMs. Recover is always a new process against the
+ * crashed datadir (no wrapup+re-init). The JUnit JVM does not load the engine.
  *
  * Smoke (default Gradle test): a few timed-kill rounds.
  * Overnight:

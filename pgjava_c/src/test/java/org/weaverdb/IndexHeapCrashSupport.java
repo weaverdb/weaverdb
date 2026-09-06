@@ -2,9 +2,8 @@
  *
  * Shared helpers for the Java multiuser index/heap crash harness.
  *
- * Child JVMs start through WeaverInitializer → initweaverbackend() /
- * GoMultiuser() so pg_shadowlog is on. Crash injection stays outside
- * production code (parent SIGKILL and optional test-only write interceptor).
+ * Each child JVM starts Weaver once. Recover processes never wrapup
+ * or initialize() a second time; the parent starts a new JVM instead.
  *
  *-------------------------------------------------------------------------
  */
@@ -110,7 +109,7 @@ final class IndexHeapCrashSupport {
         p.setProperty("allow_anonymous", "true");
         p.setProperty("disable_crc", "TRUE");
         p.setProperty("transcareful", "false");
-        p.setProperty("stdlog", "FALSE");
+        p.setProperty("stdlog", System.getProperty("weaver.crash.stdlog", "FALSE"));
         p.setProperty("sortmem", System.getProperty("weaver.sortmem", "131072"));
         WeaverInitializer.initialize(p);
     }
@@ -135,7 +134,9 @@ final class IndexHeapCrashSupport {
     }
 
     static boolean isBootstrapXid(Throwable t) {
-        return containsIgnoreCase(message(t), "this should not be happening");
+        String m = message(t);
+        return containsIgnoreCase(m, "this should not be happening")
+                || containsIgnoreCase(m, "SYSTEM HALT");
     }
 
     static boolean isDuplicateKey(Throwable t) {

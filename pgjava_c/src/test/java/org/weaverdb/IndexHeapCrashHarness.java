@@ -2,14 +2,21 @@
  *
  * Parent orchestrator for Java multiuser index/heap crash-consistency.
  *
- * Each round:
- *   1. initdb (CLI; bootstrap xid is all-or-nothing)
- *   2. setup JVM — WeaverInitializer / GoMultiuser, durable schema, wrapup
- *   3. crash JVM — same multiuser path; SIGKILL or write-interceptor kill
- *   4. recover JVM — shadow-log replay, VACUUM, index TID vs heap checks
+ * Each round uses a new process for every engine lifetime:
+ *   1. initdb (CLI)
+ *   2. setup JVM — schema, wrapup, process exit
+ *   3. crash JVM — SIGKILL or write-interceptor kill (no wrapup)
+ *   4. recover JVM — cold start on that datadir, VACUUM, consistency checks,
+ *      then process exit without wrapup/re-init
  *
- * The Gradle test JVM never loads the engine. Killing a child does not
- * take down JUnit. Production code has no crash points.
+ * Recover never wrapup+initialize in the same JVM. If recover init FATALs,
+ * the parent starts another recover JVM against the same datadir. That is
+ * not treated as a failed initdb.
+ *
+ * Setup/crash init halt (Ami xid / SYSTEM HALT before READY) still retries
+ * the whole round with a new datadir.
+ *
+ * The Gradle test JVM never loads the engine.
  *
  *-------------------------------------------------------------------------
  */
@@ -44,6 +51,7 @@ public final class IndexHeapCrashHarness {
         public boolean keepOnFail;
         public String scenarioFilter;
         public boolean smoke;
+        public int recoverJvmAttempts = 5;
         public IndexHeapCrashSupport.Scenario[] scenarioPool;
 
         public static Config smoke() {
@@ -85,6 +93,9 @@ public final class IndexHeapCrashHarness {
             }
             if ((v = System.getProperty("weaver.crash.keep")) != null) {
                 c.keepOnFail = v.equals("1") || Boolean.parseBoolean(v);
+            }
+            if ((v = System.getProperty("weaver.crash.recover.jvms")) != null) {
+                c.recoverJvmAttempts = Integer.parseInt(v);
             }
             if ("1".equals(System.getProperty("weaver.crash.smoke"))) {
                 c.smoke = true;
@@ -138,7 +149,7 @@ public final class IndexHeapCrashHarness {
                 + " rounds=" + cfg.rounds
                 + " mtpg=" + cfg.mtpg
                 + " injector=" + (hasInjector ? 1 : 0)
-                + " mode=multiuser shadowlog=on"
+                + " mode=multiuser shadowlog=on recover_jvms=" + cfg.recoverJvmAttempts
                 + (cfg.smoke ? " smoke=1" : ""));
 
         int completed = 0;
@@ -149,17 +160,19 @@ public final class IndexHeapCrashHarness {
                         + completed + " rounds");
                 break;
             }
+            IndexHeapCrashSupport.Scenario scenario = pickScenario(cfg, rng);
             int retries = 0;
             while (true) {
-                int rc = runRound(cfg, rng, round, injector);
+                int rc = runRound(cfg, rng, round, retries, scenario, injector);
                 if (rc == IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit) {
                     retries++;
                     if (retries >= 5) {
                         System.err.println("FAIL: round " + round
-                                + ": recover missing bootstrap xid after 5 initdb retries");
+                                + ": missing bootstrap xid after 5 initdb retries");
                         return 1;
                     }
                     System.out.println("  re-running initdb for round " + round
+                            + " scenario=" + scenario.name().toLowerCase(Locale.ROOT)
                             + " (attempt " + (retries + 1) + ")");
                     continue;
                 }
@@ -188,14 +201,14 @@ public final class IndexHeapCrashHarness {
         }
     }
 
-    private static int runRound(Config cfg, Random rng, int round, Path injector) throws Exception {
-        IndexHeapCrashSupport.Scenario scenario = pickScenario(cfg, rng);
+    private static int runRound(Config cfg, Random rng, int round, int retry,
+            IndexHeapCrashSupport.Scenario scenario, Path injector) throws Exception {
         Path datadir = Files.createTempDirectory("weaver-ihc-java-");
         Path workdir = Files.createTempDirectory("weaver-ihc-java-sql-");
         boolean keep = false;
         try {
             System.out.println("-- round " + round + " scenario=" + scenario.name().toLowerCase(Locale.ROOT)
-                    + " --");
+                    + (retry > 0 ? " retry=" + retry : "") + " --");
             int init = runProcess(new ProcessBuilder(cfg.mtpg.resolve("bin/initdb").toString(),
                     "-D", datadir.toString()),
                     workdir.resolve("initdb.out"), cfg.timeoutSec);
@@ -205,38 +218,41 @@ public final class IndexHeapCrashHarness {
                 keep = cfg.keepOnFail;
                 return 1;
             }
+            syncFilesystem();
 
             int setup = spawnWorker(cfg, datadir, workdir, "setup", scenario, cfg.seed + round,
                     null, false, injector);
             System.out.println("  setup rc=" + setup);
+            String setupOut = read(workdir.resolve("setup.out"));
             if (setup != 0) {
                 dump(workdir, "setup");
+                if (isInitHalt(setup, setupOut, "IHC: SETUP_OK")) {
+                    return IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
+                }
                 keep = cfg.keepOnFail;
-                return isBootstrapXidResult(setup, read(workdir.resolve("setup.out")))
-                        ? IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit : 1;
+                return 1;
             }
-            System.out.print(read(workdir.resolve("setup.out")));
-            int probe = spawnWorker(cfg, datadir, workdir, "probe", scenario, cfg.seed + round,
-                    null, false, injector);
-            if (probe != 0) {
-                dump(workdir, "setup");
-                dump(workdir, "probe");
-                keep = cfg.keepOnFail;
-                System.err.println("FAIL: setup rows were not durable after wrapup");
-                return isBootstrapXidResult(probe, read(workdir.resolve("probe.out")))
-                        ? IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit : 1;
-            }
-            System.out.print(read(workdir.resolve("probe.out")));
+            System.out.print(setupOut);
+            syncFilesystem();
 
             Path gate = workdir.resolve("crash.gate");
             Files.deleteIfExists(gate);
+            long crashSeed = cfg.seed + round * 17L + retry * 1009L;
             Process crash = startWorker(cfg, datadir, workdir, "crash", scenario,
-                    cfg.seed + round * 17L, gate, scenario.usesWrites(), injector);
+                    crashSeed, gate, scenario.usesWrites(), injector);
             boolean ready = waitReady(crash, gate, Duration.ofSeconds(Math.min(cfg.timeoutSec, 20)));
-            if (!ready && !crash.isAlive()) {
+            if (!ready) {
+                if (crash.isAlive()) {
+                    crash.destroyForcibly();
+                    crash.waitFor(5, TimeUnit.SECONDS);
+                }
                 dump(workdir, "crash");
-                System.err.println("FAIL: crash worker died before ready");
+                String crashOut = read(workdir.resolve("crash.out"));
+                if (isInitHalt(crashExit(crash), crashOut, "IHC: READY")) {
+                    return IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
+                }
                 keep = cfg.keepOnFail;
+                System.err.println("FAIL: crash worker died before ready");
                 return 1;
             }
             if (scenario.usesWrites()) {
@@ -254,21 +270,44 @@ public final class IndexHeapCrashHarness {
             }
             System.out.println("  child exited rc=" + crash.exitValue());
             Thread.sleep(150);
+            syncFilesystem();
 
-            int recover = spawnWorker(cfg, datadir, workdir, "recover", scenario,
-                    cfg.seed + round * 31L, null, false, injector);
-            String recoverOut = read(workdir.resolve("recover.out"));
-            System.out.print(recoverOut);
-            if (isBootstrapXidResult(recover, recoverOut)) {
-                return IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
-            }
-            if (recover != 0 || !recoverOut.contains("IHC: CONSISTENT")) {
-                dump(workdir, "recover");
+            int recoverJvms = Math.max(1, cfg.recoverJvmAttempts);
+            String lastRecoverOut = "";
+            int lastRecoverRc = 1;
+            for (int rj = 1; rj <= recoverJvms; rj++) {
+                String stem = "recover." + rj;
+                System.out.println("  recover JVM " + rj + "/" + recoverJvms
+                        + " (new process, same datadir)");
+                lastRecoverRc = spawnWorker(cfg, datadir, workdir, "recover", scenario,
+                        cfg.seed + round * 31L + retry * 17L + rj * 13L, null, false, injector,
+                        stem);
+                lastRecoverOut = read(workdir.resolve(stem + ".out"));
+                System.out.print(lastRecoverOut);
+                if (lastRecoverRc == 0 && lastRecoverOut.contains("IHC: CONSISTENT")) {
+                    return 0;
+                }
+                if (isInitHalt(lastRecoverRc, lastRecoverOut, "IHC: recover vacuum")) {
+                    if (rj < recoverJvms) {
+                        System.out.println("  recover JVM " + rj
+                                + " died at init; starting a new JVM on the same datadir");
+                        continue;
+                    }
+                    dump(workdir, stem);
+                    System.err.println("FAIL: recover init failed after " + recoverJvms
+                            + " new JVMs on the crashed datadir (not retrying initdb)");
+                    keep = cfg.keepOnFail;
+                    return 1;
+                }
+                dump(workdir, stem);
                 System.err.println("FAIL: recover did not confirm index/heap consistency");
                 keep = cfg.keepOnFail;
                 return 1;
             }
-            return 0;
+            dump(workdir, "recover." + recoverJvms);
+            System.err.println("FAIL: recover did not confirm index/heap consistency");
+            keep = cfg.keepOnFail;
+            return 1;
         } finally {
             if (!keep) {
                 deleteQuiet(datadir);
@@ -292,25 +331,65 @@ public final class IndexHeapCrashHarness {
         return pool[rng.nextInt(pool.length)];
     }
 
-    private static boolean isBootstrapXidResult(int rc, String out) {
-        if (rc == IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit) {
-            return true;
+    /**
+     * Child died before the engine reached {@code startedMarker}.
+     * Setup/crash: parent retries the round with a new datadir.
+     * Recover: parent starts a new JVM on the same datadir.
+     */
+    private static boolean isInitHalt(int rc, String out, String startedMarker) {
+        boolean reached = out != null && startedMarker != null && out.contains(startedMarker);
+        if (out != null) {
+            if (out.contains("IHC: BOOTSTRAP_XID")
+                    || IndexHeapCrashSupport.containsIgnoreCase(out, "this should not be happening")) {
+                return true;
+            }
+            if (reached) {
+                return false;
+            }
+            if (IndexHeapCrashSupport.containsIgnoreCase(out, "SYSTEM HALT")) {
+                return true;
+            }
         }
-        if (out == null) {
+        if (reached) {
             return false;
         }
-        return out.contains("IHC: BOOTSTRAP_XID")
-                || IndexHeapCrashSupport.containsIgnoreCase(out, "this should not be happening");
+        return rc == IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit
+                || rc == 134 || rc == 6;
+    }
+
+    private static int crashExit(Process crash) {
+        try {
+            return crash.exitValue();
+        } catch (IllegalThreadStateException e) {
+            return 1;
+        }
+    }
+
+    private static void syncFilesystem() {
+        try {
+            Process p = new ProcessBuilder("sync")
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            p.waitFor(10, TimeUnit.SECONDS);
+        } catch (Exception ignored) {
+        }
     }
 
     private static int spawnWorker(Config cfg, Path datadir, Path workdir, String role,
             IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, boolean injectWrites,
             Path injector) throws Exception {
-        Process p = startWorker(cfg, datadir, workdir, role, scenario, seed, gate, injectWrites, injector);
+        return spawnWorker(cfg, datadir, workdir, role, scenario, seed, gate, injectWrites, injector, role);
+    }
+
+    private static int spawnWorker(Config cfg, Path datadir, Path workdir, String role,
+            IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, boolean injectWrites,
+            Path injector, String outStem) throws Exception {
+        Process p = startWorker(cfg, datadir, workdir, role, scenario, seed, gate, injectWrites, injector, outStem);
         if (!p.waitFor(cfg.timeoutSec, TimeUnit.SECONDS)) {
             p.destroyForcibly();
             p.waitFor(5, TimeUnit.SECONDS);
-            dump(workdir, role);
+            dump(workdir, outStem);
             System.err.println("FAIL: " + role + " worker timed out");
             return 1;
         }
@@ -320,6 +399,12 @@ public final class IndexHeapCrashHarness {
     private static Process startWorker(Config cfg, Path datadir, Path workdir, String role,
             IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, boolean injectWrites,
             Path injector) throws IOException {
+        return startWorker(cfg, datadir, workdir, role, scenario, seed, gate, injectWrites, injector, role);
+    }
+
+    private static Process startWorker(Config cfg, Path datadir, Path workdir, String role,
+            IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, boolean injectWrites,
+            Path injector, String outStem) throws IOException {
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
         List<String> cmd = new ArrayList<>();
         cmd.add(java.toString());
@@ -342,12 +427,12 @@ public final class IndexHeapCrashHarness {
         if (gate != null) {
             cmd.add("--gate=" + gate.toAbsolutePath());
         }
-        cmd.add("--trace=" + workdir.resolve(role + ".trace").toAbsolutePath());
+        cmd.add("--trace=" + workdir.resolve(outStem + ".trace").toAbsolutePath());
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(cfg.repoRoot.toFile());
         pb.redirectErrorStream(true);
-        pb.redirectOutput(workdir.resolve(role + ".out").toFile());
+        pb.redirectOutput(workdir.resolve(outStem + ".out").toFile());
         pb.environment().remove("DYLD_INSERT_LIBRARIES");
         pb.environment().remove("DYLD_FORCE_FLAT_NAMESPACE");
         pb.environment().remove("LD_PRELOAD");

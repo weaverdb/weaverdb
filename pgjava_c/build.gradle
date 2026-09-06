@@ -88,6 +88,8 @@ tasks.named('test', Test) {
 tasks.register('indexHeapCrashLong', Test) {
     group = 'verification'
     description = 'Long-running Java multiuser index/heap crash-consistency (child JVM SIGKILL)'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform {
         includeTags 'crash-long'
     }
@@ -96,7 +98,7 @@ tasks.register('indexHeapCrashLong', Test) {
     systemProperty 'weaver.repo.root', rootProject.projectDir.absolutePath
     ['weaver.crash.rounds', 'weaver.crash.duration.sec', 'weaver.crash.seed',
      'weaver.crash.scenario', 'weaver.crash.include.writes', 'weaver.crash.keep',
-     'weaver.crash.timeout.sec', 'weaver.sortmem'].each { key ->
+     'weaver.crash.timeout.sec', 'weaver.crash.recover.jvms', 'weaver.sortmem'].each { key ->
         def value = System.getProperty(key)
         if (value != null) {
             systemProperty key, value
