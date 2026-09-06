@@ -253,6 +253,19 @@ CancelEnvAndJoin(Env* env) {
     if ( id != 0 ) pthread_join(id,&result);
 }
 
+void
+CancelAllEnvs(void)
+{
+    int counter;
+
+    pthread_mutex_lock(&envlock);
+    for (counter = 0; counter < GetMaxBackends(); counter++) {
+        if (envmap[counter] != NULL)
+            envmap[counter]->cancelled = true;
+    }
+    pthread_mutex_unlock(&envlock);
+}
+
 Env* CreateEnv(Env* parent) {
         bool canproceed = false;
 
@@ -677,6 +690,9 @@ IsMultiuser()
 
 bool CheckForCancel() {
 	Env* env = GetEnv();
+
+        if (WeaverIsPanicked())
+            return true;
         
         if ( CurrentMode == ShutdownProcessing ) return true;
 	

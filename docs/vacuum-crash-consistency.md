@@ -25,7 +25,14 @@ Lazy VACUUM deletes index TIDs first, then durably flushes (`FlushAllDirtyBuffer
 # JUnit (named VACUUM path)
 ./gradlew :pgjava_c:test --tests 'org.weaverdb.VacuumIndexCrashConsistencyTest'
 
+# JUnit in-process randomized invariants (no crash; vacuum WriteBuffer + unique reinsert)
+./gradlew :pgjava_c:test --tests 'org.weaverdb.PersistenceInvariantFuzzerTest'
+
 # CLI crash-ordering smoke (requires build/mtpg)
 chmod +x mtpgsql/scripts/vacuum_crash_ordering_smoke.sh
 ./mtpgsql/scripts/vacuum_crash_ordering_smoke.sh
+
+# Seeded crash-restart fuzzer (btree + HNSW + IVFFlat; print seed to replay)
+./mtpgsql/scripts/persistence_crash_fuzzer.sh
+./mtpgsql/scripts/persistence_crash_fuzzer.sh 1740000000 4
 ```

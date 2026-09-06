@@ -85,17 +85,21 @@ static SectionId   connection_section_id = SECTIONID("CONN");
 
 #define READY(target, err, usingTransaction)  \
     SetEnv(target->env);\
+    target->env->canJump = true;\
     \
     err = setjmp(target->env->errorContext);\
     if (err != 0) {\
-        strncpy(connection->env->state, "ABORTONLY", 39);\
+        target->env->canJump = false;\
+        strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);\
         target->stage = TRAN_ABORTONLY;\
         SetAbortOnly();\
-        if (usingTransaction) { \
+        if (usingTransaction && !WeaverIsPanicked()) { \
             CommitTransactionCommand(); \
         } \
         WHandleError(target,err); \
-        WResetQuery(connection,true); \
+        if (!WeaverIsPanicked()) { \
+            WResetQuery(connection,true); \
+        } \
     } else {\
         target->CDA.rc = 0;\
         if (usingTransaction) { \
@@ -107,6 +111,7 @@ static SectionId   connection_section_id = SECTIONID("CONN");
             CommitTransactionCommand(); \
         } \
     } \
+    if ((target)->env) (target)->env->canJump = false; \
     SetEnv(NULL);  \
 
 
@@ -1403,12 +1408,15 @@ WStreamExec(OpaqueWConn conn, const char *statement) {
     long err;
 
     SetEnv(connection->env);
+    connection->env->canJump = true;
 
     err = setjmp(connection->env->errorContext);
     if (err != 0) {
         /*  cannot use READY/RELEASE b/c semantics for streamed connections is different */
+        connection->env->canJump = false;
         SetAbortOnly();
-        CommitTransactionCommand();
+        if (!WeaverIsPanicked())
+            CommitTransactionCommand();
         WHandleError(connection, err);
     } else {
         connection->CDA.rc = 0;
@@ -1425,6 +1433,7 @@ WStreamExec(OpaqueWConn conn, const char *statement) {
         pq_flush();
         CommitTransactionCommand();
     }
+    connection->env->canJump = false;
     connection->stage = TRAN_INVALID;
     SetEnv(NULL);
     return err;

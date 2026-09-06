@@ -111,6 +111,7 @@ typedef struct Environment {
 	int 			errorcode;
 	Size 			tupleSize;
         jmp_buf			errorContext;
+	bool			canJump;		/* setjmp(errorContext) is live */
 /*  global sets  */
 	char* 			DatabaseName;  
 	char* 			DatabasePath;  
@@ -244,7 +245,11 @@ bool IsMultiuser(void);
 void clearerror(Env* env);
 bool CheckForCancel(void);
 void CancelEnvAndJoin(Env* env);
+void CancelAllEnvs(void);
 pthread_t FindChildThread(Env* env);
+
+bool WeaverIsPanicked(void);
+void WeaverPanicShutdown(const char *msg);
 
 bool IsLoggable(void);
 bool IsTransactionCareful(void);

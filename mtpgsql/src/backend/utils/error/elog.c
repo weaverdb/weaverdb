@@ -434,14 +434,13 @@ elog(int lev, const char *fmt,...)
                 printf("SYSTEM HALT: from thread %ld\n",(long)pthread_self());
                 printf("%s", msg_buf);
                 fprintf(stderr, "%s\n", msg_buf);
-                #ifdef MACOSX
-                kill(getpid(),SIGABRT);
-                #else
-                        /*
-                sigsend(P_PID,P_MYID,SIGABRT);
-                         */
+                /*
+                 * Embedded / JVM: tear the instance down without killing the
+                 * host process.  Do not flush buffers (memory may be wrong).
+                 * Standalone backends still proc_exit() below.
+                 */
+                WeaverPanicShutdown(msg_buf);
                 abort();
-                #endif
             } else {
                 /*
                  * Serious crash time. Postmaster will observe nonzero process

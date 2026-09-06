@@ -12,6 +12,8 @@
  *-------------------------------------------------------------------------
  */
 #include <unistd.h>
+#include <signal.h>
+#include <pthread.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
 #ifdef SUNOS
@@ -88,6 +90,8 @@ static char					lock_name[255];
 static HTAB*        properties;
 
 static bool initialized = false;
+static volatile sig_atomic_t weaver_panicked = 0;
+static volatile sig_atomic_t weaver_panic_reentered = 0;
 
 static void CreateProperties(void);
 
@@ -426,11 +430,61 @@ if ( master ) {
 bool 
 isinitialized() {
         bool check = false;
+        if (weaver_panicked)
+            return false;
         pthread_mutex_lock(&init_lock);
          check = initialized;
         pthread_mutex_unlock(&init_lock);
         
         return check;
+}
+
+bool
+WeaverIsPanicked(void)
+{
+    return weaver_panicked != 0;
+}
+
+void
+WeaverPanicShutdown(const char *msg)
+{
+    Env *penv;
+
+    if (weaver_panic_reentered) {
+        if (IsDBWriter() || IsPoolsweep())
+            pthread_exit(NULL);
+        abort();
+    }
+    weaver_panic_reentered = 1;
+    weaver_panicked = 1;
+
+    initialized = false;
+    SetProcessingMode(ShutdownProcessing);
+    PanicStopDBWriter();
+    CancelAllEnvs();
+
+    penv = GetEnv();
+    if (penv != NULL && msg != NULL) {
+        strncpy(penv->errortext, msg, 255);
+        penv->errortext[255] = '\0';
+        strncpy(penv->state, "PANIC", 39);
+        penv->InError = true;
+        if (penv->errorcode == 0)
+            penv->errorcode = 250;
+    }
+
+    /* Background threads: leave without flushing. Do not join. */
+    if (IsDBWriter() || IsPoolsweep())
+        pthread_exit(NULL);
+
+    if (penv != NULL && penv->canJump) {
+        if (penv->errorcode != 0)
+            longjmp(penv->errorContext, penv->errorcode);
+        longjmp(penv->errorContext, 250);
+    }
+
+    /* Init / no setjmp: keep previous process-abort behavior. */
+    abort();
 }
 
 int

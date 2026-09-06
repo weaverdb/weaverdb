@@ -47,6 +47,7 @@ long GetBufferGeneration(void);
 
 void ClearAllDBWrites(BufferDesc* bufHdr);
 void ShutdownDBWriter(void);
+void PanicStopDBWriter(void);
 bool IsDBWriter(void);
 
 void ResetAccessCounts(Oid relid,Oid dbid);

@@ -17,7 +17,7 @@
 
 #define NOTICE	0				/* random info - no special action */
 #define ERROR	(-1)			/* user error - return to known state */
-#define FATAL	1				/* fatal error - abort process */
+#define FATAL	1				/* fatal error - abort process (embedded: panic-shutdown instance) */
 #define REALLYFATAL 2			/* take down the other backends with me */
 #define STOP	REALLYFATAL
 #define DEBUG	(-2)			/* debug message */

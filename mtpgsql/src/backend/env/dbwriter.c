@@ -1495,6 +1495,12 @@ static WriteGroup GetNextTarget(WriteGroup last) {
     return cart;
 }
 
+void
+PanicStopDBWriter(void)
+{
+    stopped = true;
+}
+
 void ShutdownDBWriter(void) {
     WriteGroup     cart = NULL;
     
