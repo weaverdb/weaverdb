@@ -11,8 +11,10 @@
 #include "lib/pairingheap.h"
 #include "access/heapam.h"
 #include "pgvector_scan.h"
+#include "pgvector_pagewalk.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
+#include "storage/itemid.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
@@ -46,27 +48,42 @@ static void
 GetScanLists(IndexScanDesc scan, Datum value)
 {
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
+	Relation	index = pgvector_scan_index_rel(scan);
 	BlockNumber nextblkno = IVFFLAT_HEAD_BLKNO;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			steps = 0;
 	int			listCount = 0;
 	double		maxDistance = DBL_MAX;
 
 	/* Search all list pages */
-	while (BlockNumberIsValid(nextblkno))
+	while (PgvectorBlockInRange(index, nextblkno) && steps++ < nblocks)
 	{
 		Buffer		cbuf;
 		Page		cpage;
 		OffsetNumber maxoffno;
 
-		cbuf = ReadBuffer(pgvector_scan_index_rel(scan), nextblkno);
-		LockBuffer(pgvector_scan_index_rel(scan), cbuf, BUFFER_LOCK_SHARE);
+		cbuf = ReadBuffer(index, nextblkno);
+		LockBuffer(index, cbuf, BUFFER_LOCK_SHARE);
 		cpage = BufferGetPage(cbuf);
 
-		maxoffno = PageGetMaxOffsetNumber(cpage);
+		if (PageIsNew(cpage) || PageIsEmpty(cpage) ||
+			IvfflatPageGetOpaque(cpage)->page_id != IVFFLAT_PAGE_ID)
+		{
+			UnlockReleaseBuffer(cbuf);
+			break;
+		}
+
+		maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(cpage));
 
 		for (OffsetNumber offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 		{
-			IvfflatList list = (IvfflatList) PageGetItem(cpage, PageGetItemId(cpage, offno));
+			ItemId		itemid = PageGetItemId(cpage, offno);
+			IvfflatList list;
 			double		distance;
+
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			list = (IvfflatList) PageGetItem(cpage, itemid);
 
 			/* Use procinfo from the index instead of scan key for performance */
 			distance = DatumGetFloat8(so->distfunc(so->procinfo, so->collation, PointerGetDatum(&list->center), value));
@@ -104,11 +121,12 @@ GetScanLists(IndexScanDesc scan, Datum value)
 			}
 		}
 
-		nextblkno = IvfflatPageGetOpaque(cpage)->nextblkno;
+		nextblkno = PgvectorSafeNextBlkno(index, BufferGetBlockNumber(cbuf),
+										 IvfflatPageGetOpaque(cpage)->nextblkno);
 
 		do {
-			LockBuffer(pgvector_scan_index_rel(scan), cbuf, BUFFER_LOCK_UNLOCK);
-			ReleaseBuffer(pgvector_scan_index_rel(scan), cbuf);
+			LockBuffer(index, cbuf, BUFFER_LOCK_UNLOCK);
+			ReleaseBuffer(index, cbuf);
 		} while (0);
 	}
 
@@ -125,9 +143,11 @@ static void
 GetScanItems(IndexScanDesc scan, Datum value)
 {
 	IvfflatScanOpaque so = (IvfflatScanOpaque) scan->opaque;
-	TupleDesc	tupdesc = RelationGetDescr(pgvector_scan_index_rel(scan));
+	Relation	index = pgvector_scan_index_rel(scan);
+	TupleDesc	tupdesc = RelationGetDescr(index);
 	TupleTableSlot *slot = so->vslot;
 	int			batchProbes = 0;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
 
 	tuplesort_reset(so->sortstate);
 
@@ -135,18 +155,25 @@ GetScanItems(IndexScanDesc scan, Datum value)
 	while (so->listIndex < so->maxProbes && (++batchProbes) <= so->probes)
 	{
 		BlockNumber searchPage = so->listPages[so->listIndex++];
+		int			entry_steps = 0;
 
 		/* Search all entry pages for list */
-		while (BlockNumberIsValid(searchPage))
+		while (PgvectorBlockInRange(index, searchPage) && entry_steps++ < nblocks)
 		{
 			Buffer		buf;
 			Page		page;
 			OffsetNumber maxoffno;
 
-			buf = ReadBufferExtended(pgvector_scan_index_rel(scan), MAIN_FORKNUM, searchPage, RBM_NORMAL, so->bas);
-			LockBuffer(pgvector_scan_index_rel(scan), buf, BUFFER_LOCK_SHARE);
+			buf = ReadBufferExtended(index, MAIN_FORKNUM, searchPage, RBM_NORMAL, so->bas);
+			LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 			page = BufferGetPage(buf);
-			maxoffno = PageGetMaxOffsetNumber(page);
+			if (PageIsNew(page) || PageIsEmpty(page) ||
+				IvfflatPageGetOpaque(page)->page_id != IVFFLAT_PAGE_ID)
+			{
+				UnlockReleaseBuffer(buf);
+				break;
+			}
+			maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
 			for (OffsetNumber offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 			{
@@ -155,6 +182,8 @@ GetScanItems(IndexScanDesc scan, Datum value)
 				bool		isnull;
 				ItemId		itemid = PageGetItemId(page, offno);
 
+				if (!ItemIdIsUsed(itemid))
+					continue;
 				itup = (IndexTuple) PageGetItem(page, itemid);
 				datum = index_getattr(itup, 1, tupdesc, &isnull);
 
@@ -177,9 +206,10 @@ GetScanItems(IndexScanDesc scan, Datum value)
 				tuplesort_puttupleslot(so->sortstate, slot);
 			}
 
-			searchPage = IvfflatPageGetOpaque(page)->nextblkno;
+			searchPage = PgvectorSafeNextBlkno(index, BufferGetBlockNumber(buf),
+											  IvfflatPageGetOpaque(page)->nextblkno);
 
-			do { LockBuffer(pgvector_scan_index_rel(scan), buf, BUFFER_LOCK_UNLOCK); ReleaseBuffer(pgvector_scan_index_rel(scan), buf); } while (0);
+			do { LockBuffer(index, buf, BUFFER_LOCK_UNLOCK); ReleaseBuffer(index, buf); } while (0);
 		}
 	}
 

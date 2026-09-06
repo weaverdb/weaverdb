@@ -7,11 +7,16 @@
 #include "env/env.h"
 #include "ivfflat.h"
 #include "env/freespace.h"
+#include "pgvector_pagewalk.h"
 #include "storage/bufmgr.h"
 #include "storage/itemid.h"
+#include "storage/itemptr.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/syscache.h"
+
+#define IvfflatBlockInRange	PgvectorBlockInRange
+#define IvfflatSafeNextBlkno	PgvectorSafeNextBlkno
 
 
 /*
@@ -24,12 +29,18 @@ ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 	Relation	index = info->index;
 	BlockNumber blkno = IVFFLAT_HEAD_BLKNO;
 	BufferAccessStrategy bas = GetAccessStrategy(BAS_BULKREAD);
+	BlockNumber nblocks;
+	int			list_steps = 0;
 
 	if (stats == NULL)
 		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
 
+	nblocks = RelationGetNumberOfBlocks(index);
+	if (nblocks <= IVFFLAT_HEAD_BLKNO)
+		return stats;
+
 	/* Iterate over list pages */
-	while (BlockNumberIsValid(blkno))
+	while (IvfflatBlockInRange(index, blkno) && list_steps++ < nblocks)
 	{
 		Buffer		cbuf;
 		Page		cpage;
@@ -43,17 +54,34 @@ ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 		cpage = BufferGetPage(cbuf);
 
 		cmaxoffno = PageGetMaxOffsetNumber(cpage);
+		if (cmaxoffno > MaxOffsetNumber)
+			cmaxoffno = MaxOffsetNumber;
+
+		if (PageIsNew(cpage) || PageIsEmpty(cpage) ||
+			IvfflatPageGetOpaque(cpage)->page_id != IVFFLAT_PAGE_ID)
+		{
+			UnlockReleaseBuffer(cbuf);
+			break;
+		}
 
 		/* Iterate over lists */
 		for (coffno = FirstOffsetNumber; coffno <= cmaxoffno; coffno = OffsetNumberNext(coffno))
 		{
-			IvfflatList list = (IvfflatList) PageGetItem(cpage, PageGetItemId(cpage, coffno));
+			ItemId		itemid = PageGetItemId(cpage, coffno);
+			IvfflatList list;
 
+			if (!ItemIdIsUsed(itemid))
+			{
+				listPages[coffno - FirstOffsetNumber] = InvalidBlockNumber;
+				continue;
+			}
+			list = (IvfflatList) PageGetItem(cpage, itemid);
 			listPages[coffno - FirstOffsetNumber] = list->startPage;
 		}
 
 		listInfo.blkno = blkno;
-		blkno = IvfflatPageGetOpaque(cpage)->nextblkno;
+		blkno = IvfflatSafeNextBlkno(index, blkno,
+									 IvfflatPageGetOpaque(cpage)->nextblkno);
 
 		UnlockReleaseBuffer(cbuf);
 
@@ -61,9 +89,10 @@ ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 		{
 			BlockNumber searchPage = listPages[coffno - FirstOffsetNumber];
 			BlockNumber insertPage = InvalidBlockNumber;
+			int			entry_steps = 0;
 
 			/* Iterate over entry pages */
-			while (BlockNumberIsValid(searchPage))
+			while (IvfflatBlockInRange(index, searchPage) && entry_steps++ < nblocks)
 			{
 				Buffer		buf;
 				Page		page;
@@ -75,25 +104,32 @@ ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 				vacuum_delay_point();
 
 				buf = ReadBufferExtended(index, MAIN_FORKNUM, searchPage, RBM_NORMAL, bas);
-
-				/*
-				 * ambulkdelete cannot delete entries from pages that are
-				 * pinned by other backends
-				 *
-				 * https://www.postgresql.org/docs/current/index-locking.html
-				 */
 				LockBufferForCleanup(buf);
 
 				page = BufferGetPage(buf);
+				if (PageIsNew(page) || PageIsEmpty(page) ||
+					IvfflatPageGetOpaque(page)->page_id != IVFFLAT_PAGE_ID)
+				{
+					UnlockReleaseBuffer(buf);
+					break;
+				}
 
 				maxoffno = PageGetMaxOffsetNumber(page);
+				if (maxoffno > MaxOffsetNumber)
+					maxoffno = MaxOffsetNumber;
 				ndeletable = 0;
 
 				/* Find deleted tuples */
 				for (offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 				{
-					IndexTuple	itup = (IndexTuple) PageGetItem(page, PageGetItemId(page, offno));
-					ItemPointer htup = &(itup->t_tid);
+					ItemId		itemid = PageGetItemId(page, offno);
+					IndexTuple	itup;
+					ItemPointer htup;
+
+					if (!ItemIdIsUsed(itemid))
+						continue;
+					itup = (IndexTuple) PageGetItem(page, itemid);
+					htup = &(itup->t_tid);
 
 					if (callback(htup, callback_state))
 					{
@@ -109,7 +145,8 @@ ivfflat_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 				if (!BlockNumberIsValid(insertPage) && ndeletable > 0)
 					insertPage = searchPage;
 
-				searchPage = IvfflatPageGetOpaque(page)->nextblkno;
+				searchPage = IvfflatSafeNextBlkno(index, BufferGetBlockNumber(buf),
+												  IvfflatPageGetOpaque(page)->nextblkno);
 
 				if (ndeletable > 0)
 				{
@@ -173,8 +210,10 @@ static bool
 IvfflatIsListPage(Relation index, BlockNumber blkno)
 {
 	BlockNumber cur = IVFFLAT_HEAD_BLKNO;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			steps = 0;
 
-	while (BlockNumberIsValid(cur))
+	while (IvfflatBlockInRange(index, cur) && steps++ < nblocks)
 	{
 		Buffer		buf;
 		Page		page;
@@ -185,7 +224,7 @@ IvfflatIsListPage(Relation index, BlockNumber blkno)
 		buf = ReadBuffer(index, cur);
 		LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 		page = BufferGetPage(buf);
-		cur = IvfflatPageGetOpaque(page)->nextblkno;
+		cur = IvfflatSafeNextBlkno(index, cur, IvfflatPageGetOpaque(page)->nextblkno);
 		UnlockReleaseBuffer(buf);
 	}
 	return false;
@@ -204,6 +243,9 @@ IvfflatHeapTidIsStale(Relation heaprel, ItemPointer tid)
 	bool		stale = false;
 
 	if (!ItemPointerIsValid(tid))
+		return true;
+	if (!BlockNumberIsValid(ItemPointerGetBlockNumber(tid)) ||
+		ItemPointerGetBlockNumber(tid) >= RelationGetNumberOfBlocks(heaprel))
 		return true;
 
 	heapbuf = ReadBuffer(heaprel, ItemPointerGetBlockNumber(tid));
@@ -240,6 +282,7 @@ ivfflat_recoverpage(Relation index, BlockNumber blkno)
 	OffsetNumber maxoff;
 	OffsetNumber deletable[MaxOffsetNumber];
 	int			ndeletable = 0;
+	int			ncheck;
 	bool		dryrun = IsReadOnlyProcessingMode();
 	bool		empty;
 
@@ -287,26 +330,63 @@ ivfflat_recoverpage(Relation index, BlockNumber blkno)
 	buf = ReadBuffer(index, blkno);
 	LockBufferForCleanup(buf);
 	page = BufferGetPage(buf);
-	maxoff = PageGetMaxOffsetNumber(page);
+	maxoff = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
+	ncheck = 0;
 	for (offno = FirstOffsetNumber; offno <= maxoff; offno = OffsetNumberNext(offno))
 	{
-		ItemId		itemid = PageGetItemId(page, offno);
-		IndexTuple	itup;
-		ItemPointer htup;
+		if (ItemIdIsUsed(PageGetItemId(page, offno)))
+			ncheck++;
+	}
+	if (ncheck > 0)
+	{
+		ItemPointerData *tids = palloc(sizeof(ItemPointerData) * ncheck);
+		OffsetNumber *offs = palloc(sizeof(OffsetNumber) * ncheck);
+		bool	   *stale = palloc(sizeof(bool) * ncheck);
+		int			i;
 
-		if (!ItemIdIsUsed(itemid))
-			continue;
-
-		itup = (IndexTuple) PageGetItem(page, itemid);
-		htup = &(itup->t_tid);
-		if (IvfflatHeapTidIsStale(heaprel, htup))
+		ncheck = 0;
+		for (offno = FirstOffsetNumber; offno <= maxoff; offno = OffsetNumberNext(offno))
 		{
-			deletable[ndeletable++] = offno;
+			ItemId		itemid = PageGetItemId(page, offno);
+			IndexTuple	itup;
+
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			itup = (IndexTuple) PageGetItem(page, itemid);
+			offs[ncheck] = offno;
+			tids[ncheck] = itup->t_tid;
+			ncheck++;
+		}
+
+		LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+		for (i = 0; i < ncheck; i++)
+			stale[i] = IvfflatHeapTidIsStale(heaprel, &tids[i]);
+		LockBufferForCleanup(buf);
+		page = BufferGetPage(buf);
+		maxoff = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
+
+		for (i = 0; i < ncheck; i++)
+		{
+			ItemId		itemid;
+			IndexTuple	itup;
+
+			if (!stale[i] || offs[i] > maxoff)
+				continue;
+			itemid = PageGetItemId(page, offs[i]);
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			itup = (IndexTuple) PageGetItem(page, itemid);
+			if (!ItemPointerEquals(&itup->t_tid, &tids[i]))
+				continue;
+			deletable[ndeletable++] = offs[i];
 			elog(NOTICE,
 				 "ivfflat: Removing orphan index tuple block: %lu offset: %u",
-				 (unsigned long) blkno, offno);
+				 (unsigned long) blkno, offs[i]);
 		}
+		pfree(tids);
+		pfree(offs);
+		pfree(stale);
 	}
 
 	if (ndeletable > 0)

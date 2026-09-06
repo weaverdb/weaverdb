@@ -7,11 +7,13 @@
 #include "fmgr.h"
 #include "hnsw.h"
 #include "env/freespace.h"
+#include "pgvector_pagewalk.h"
 #include "lib/pairingheap.h"
 #include "nodes/pg_list.h"
 #include "port/atomics.h"
 #include "sparsevec.h"
 #include "storage/bufmgr.h"
+#include "storage/itemid.h"
 #include "utils/datum.h"
 #include "utils/rel.h"
 #include "vector.h"
@@ -581,15 +583,53 @@ HnswLoadElementImpl(BlockNumber blkno, OffsetNumber offno, double *distance, Hns
 	Buffer		buf;
 	Page		page;
 	HnswElementTuple etup;
+	ItemId		itemid;
+	Size		itemsz;
+	Size		vecsize;
+
+	if (!PgvectorBlockInRange(index, blkno) ||
+		offno < FirstOffsetNumber)
+		return;
 
 	/* Read vector */
 	buf = ReadBuffer(index, blkno);
 	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 
-	etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, offno));
+	if (PageIsNew(page) || PageIsEmpty(page) ||
+		HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID ||
+		offno > PageGetMaxOffsetNumber(page))
+	{
+		UnlockReleaseBuffer(buf);
+		return;
+	}
 
-	Assert(HnswIsElementTuple(etup));
+	itemid = PageGetItemId(page, offno);
+	if (!ItemIdIsUsed(itemid))
+	{
+		UnlockReleaseBuffer(buf);
+		return;
+	}
+	itemsz = ItemIdGetLength(itemid);
+	if (itemsz < offsetof(HnswElementTupleData, data) + VARHDRSZ)
+	{
+		UnlockReleaseBuffer(buf);
+		return;
+	}
+
+	etup = (HnswElementTuple) PageGetItem(page, itemid);
+	if (!HnswIsElementTuple(etup) || etup->deleted)
+	{
+		UnlockReleaseBuffer(buf);
+		return;
+	}
+	vecsize = VARSIZE_ANY(&etup->data);
+	if (vecsize < VARHDRSZ ||
+		offsetof(HnswElementTupleData, data) + vecsize > itemsz)
+	{
+		UnlockReleaseBuffer(buf);
+		return;
+	}
 
 	/* Calculate distance */
 	if (distance != NULL)
@@ -805,12 +845,25 @@ HnswLoadNeighborTids(HnswElement element, ItemPointerData *indextids, Relation i
 	Page		page;
 	HnswNeighborTuple ntup;
 	int			start;
+	OffsetNumber off;
+
+	if (!BlockNumberIsValid(element->neighborPage) ||
+		element->neighborPage >= RelationGetNumberOfBlocks(index) ||
+		!OffsetNumberIsValid(element->neighborOffno))
+		return false;
 
 	buf = ReadBuffer(index, element->neighborPage);
 	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
+	off = element->neighborOffno;
+	if (off > PageGetMaxOffsetNumber(page) ||
+		!ItemIdIsUsed(PageGetItemId(page, off)))
+	{
+		UnlockReleaseBuffer(buf);
+		return false;
+	}
 
-	ntup = (HnswNeighborTuple) PageGetItem(page, PageGetItemId(page, element->neighborOffno));
+	ntup = (HnswNeighborTuple) PageGetItem(page, PageGetItemId(page, off));
 
 	/*
 	 * Ensure the neighbor tuple has not been deleted or replaced between
@@ -850,6 +903,9 @@ HnswLoadUnvisitedFromDisk(HnswElement element, HnswUnvisited * unvisited, int *u
 
 		if (!ItemPointerIsValid(indextid))
 			break;
+
+		if (!PgvectorBlockInRange(index, ItemPointerGetBlockNumber(indextid)))
+			continue;
 
 		tidhash_insert(v->tids, *indextid, &found);
 

@@ -7,7 +7,9 @@
 #include "fmgr.h"
 #include "ivfflat.h"
 #include "nodes/execnodes.h"
+#include "pgvector_pagewalk.h"
 #include "storage/bufmgr.h"
+#include "storage/itemid.h"
 #include "storage/lmgr.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -20,6 +22,8 @@ FindInsertPage(Relation index, Datum *values, BlockNumber *insertPage, ListInfo 
 {
 	double		minDistance = DBL_MAX;
 	BlockNumber nextblkno = IVFFLAT_HEAD_BLKNO;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			steps = 0;
 	FmgrInfo   *procinfo;
 	Oid			collation;
 
@@ -31,7 +35,7 @@ FindInsertPage(Relation index, Datum *values, BlockNumber *insertPage, ListInfo 
 	collation = InvalidOid;
 
 	/* Search all list pages */
-	while (BlockNumberIsValid(nextblkno))
+	while (PgvectorBlockInRange(index, nextblkno) && steps++ < nblocks)
 	{
 		Buffer		cbuf;
 		Page		cpage;
@@ -40,14 +44,24 @@ FindInsertPage(Relation index, Datum *values, BlockNumber *insertPage, ListInfo 
 		cbuf = ReadBuffer(index, nextblkno);
 		LockBuffer(index, cbuf, BUFFER_LOCK_SHARE);
 		cpage = BufferGetPage(cbuf);
-		maxoffno = PageGetMaxOffsetNumber(cpage);
+		if (PageIsNew(cpage) || PageIsEmpty(cpage) ||
+			IvfflatPageGetOpaque(cpage)->page_id != IVFFLAT_PAGE_ID)
+		{
+			UnlockReleaseBuffer(cbuf);
+			break;
+		}
+
+		maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(cpage));
 
 		for (OffsetNumber offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 		{
+			ItemId		itemid = PageGetItemId(cpage, offno);
 			IvfflatList list;
 			double		distance;
 
-			list = (IvfflatList) PageGetItem(cpage, PageGetItemId(cpage, offno));
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			list = (IvfflatList) PageGetItem(cpage, itemid);
 			distance = DatumGetFloat8(FunctionCall2Coll(procinfo, collation, values[0], PointerGetDatum(&list->center)));
 
 			if (distance < minDistance || !BlockNumberIsValid(*insertPage))
@@ -59,7 +73,8 @@ FindInsertPage(Relation index, Datum *values, BlockNumber *insertPage, ListInfo 
 			}
 		}
 
-		nextblkno = IvfflatPageGetOpaque(cpage)->nextblkno;
+		nextblkno = PgvectorSafeNextBlkno(index, BufferGetBlockNumber(cbuf),
+										 IvfflatPageGetOpaque(cpage)->nextblkno);
 
 		UnlockReleaseBuffer(cbuf);
 	}

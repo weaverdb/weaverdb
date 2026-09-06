@@ -27,9 +27,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * In-process randomized persistence invariants (no crash injection).
  *
  * A FATAL crash would kill the JVM, so restart coverage lives in
- * {@code mtpgsql/scripts/persistence_crash_fuzzer.sh} (vacuum_crash_point)
- * and {@code mtpgsql/scripts/index_heap_crash_consistency.sh} (external
- * SIGKILL / test-only write interceptor, no production crashers). This test
+ * {@code mtpgsql/scripts/persistence_crash_fuzzer.sh} (vacuum_crash_point),
+ * {@code mtpgsql/scripts/index_heap_crash_consistency.sh} (embed SQL SIGKILL),
+ * and {@link IndexHeapCrashConsistencyJavaTest} (child-JVM SIGKILL, multiuser).
+ * This test
  * fuzzes the path that <em>can</em> run inside InstallNative: random delete /
  * vacuum / unique re-insert on a btree, plus HNSW + IVFFlat so vacuum WriteBuffer
  * mutations stay consistent with the heap.

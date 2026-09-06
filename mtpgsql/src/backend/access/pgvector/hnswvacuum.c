@@ -7,8 +7,10 @@
 #include "env/freespace.h"
 #include "hnsw.h"
 #include "nodes/pg_list.h"
+#include "pgvector_pagewalk.h"
 #include "storage/bufmgr.h"
 #include "storage/itemid.h"
+#include "storage/itemptr.h"
 #include "storage/lmgr.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -23,6 +25,29 @@ static bool
 DeletedContains(tidhash_hash * deleted, ItemPointer indextid)
 {
 	return tidhash_lookup(deleted, *indextid) != NULL;
+}
+
+/*
+ * Mid-write crashes can leave garbage nextblkno / neighbor TIDs. Never
+ * ReadBuffer those — Weaver will wait on I/O or grow the file.
+ */
+#define HnswBlockInRange		PgvectorBlockInRange
+#define HnswSafeNextElementBlkno	PgvectorSafeNextBlkno
+
+static int
+HnswNeighborStoredCount(ItemId itemid, HnswNeighborTuple ntup)
+{
+	Size		itemsz;
+	int			maxcount;
+
+	itemsz = ItemIdGetLength(itemid);
+	if (itemsz < offsetof(HnswNeighborTupleData, indextids))
+		return 0;
+	maxcount = (itemsz - offsetof(HnswNeighborTupleData, indextids)) /
+		sizeof(ItemPointerData);
+	if (ntup->count > maxcount)
+		return maxcount;
+	return ntup->count;
 }
 
 /*
@@ -42,12 +67,14 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 
 	/* Store separately since highestPoint.level is uint8 */
 	int			highestLevel = -1;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			steps = 0;
 
 	/* Initialize highest point */
 	highestPoint->blkno = InvalidBlockNumber;
 	highestPoint->offno = InvalidOffsetNumber;
 
-	while (BlockNumberIsValid(blkno))
+	while (HnswBlockInRange(index, blkno) && steps++ < nblocks)
 	{
 		Buffer		buf;
 		Page		page;
@@ -60,14 +87,25 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 		buf = ReadBufferExtended(index, MAIN_FORKNUM, blkno, RBM_NORMAL, bas);
 		LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 		page = BufferGetPage(buf);
-		maxoffno = PageGetMaxOffsetNumber(page);
+		if (PageIsNew(page) || PageIsEmpty(page) ||
+			HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID)
+		{
+			UnlockReleaseBuffer(buf);
+			break;
+		}
+		maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
 		/* Iterate over nodes */
 		for (offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 		{
-			HnswElementTuple etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, offno));
+			ItemId		itemid = PageGetItemId(page, offno);
+			HnswElementTuple etup;
 			int			idx = 0;
 			bool		itemUpdated = false;
+
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			etup = (HnswElementTuple) PageGetItem(page, itemid);
 
 			/* Skip neighbor tuples */
 			if (!HnswIsElementTuple(etup))
@@ -125,7 +163,8 @@ RemoveHeapTids(HnswVacuumState * vacuumstate)
 			}
 		}
 
-		blkno = HnswPageGetOpaque(page)->nextblkno;
+		blkno = HnswSafeNextElementBlkno(index, BufferGetBlockNumber(buf),
+										 HnswPageGetOpaque(page)->nextblkno);
 
 		/*
 		 * Persist heap-TID compaction. UnlockReleaseBuffer alone would drop
@@ -150,13 +189,24 @@ NeedsUpdated(HnswVacuumState * vacuumstate, HnswElement element)
 	Page		page;
 	HnswNeighborTuple ntup;
 	bool		needsUpdated = false;
+	int			count;
 
-	if (!BlockNumberIsValid(element->neighborPage) || !OffsetNumberIsValid(element->neighborOffno))
+	if (!HnswBlockInRange(index, element->neighborPage) ||
+		!OffsetNumberIsValid(element->neighborOffno))
+		return false;
+
+	if (element->neighborOffno < FirstOffsetNumber)
 		return false;
 
 	buf = ReadBufferExtended(index, MAIN_FORKNUM, element->neighborPage, RBM_NORMAL, bas);
 	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
+	if (element->neighborOffno > PageGetMaxOffsetNumber(page) ||
+		!ItemIdIsUsed(PageGetItemId(page, element->neighborOffno)))
+	{
+		UnlockReleaseBuffer(buf);
+		return false;
+	}
 	ntup = (HnswNeighborTuple) PageGetItem(page, PageGetItemId(page, element->neighborOffno));
 
 	if (!HnswIsNeighborTuple(ntup))
@@ -166,7 +216,8 @@ NeedsUpdated(HnswVacuumState * vacuumstate, HnswElement element)
 	}
 
 	/* Check neighbors */
-	for (int i = 0; i < ntup->count; i++)
+	count = HnswNeighborStoredCount(PageGetItemId(page, element->neighborOffno), ntup);
+	for (int i = 0; i < count; i++)
 	{
 		ItemPointer indextid = &ntup->indextids[i];
 
@@ -183,8 +234,8 @@ NeedsUpdated(HnswVacuumState * vacuumstate, HnswElement element)
 
 	/* Also update if layer 0 is not full */
 	/* This could indicate too many candidates being deleted during insert */
-	if (!needsUpdated && ntup->count > 0)
-		needsUpdated = !ItemPointerIsValid(&ntup->indextids[ntup->count - 1]);
+	if (!needsUpdated && count > 0)
+		needsUpdated = !ItemPointerIsValid(&ntup->indextids[count - 1]);
 
 	UnlockReleaseBuffer(buf);
 
@@ -227,6 +278,8 @@ RepairGraphElement(HnswVacuumState * vacuumstate, HnswElement element, HnswEleme
 	HnswSetNeighborTuple(base, ntup, element, m);
 
 	/* Get neighbor page */
+	if (!HnswBlockInRange(index, element->neighborPage))
+		return;
 	buf = ReadBufferExtended(index, MAIN_FORKNUM, element->neighborPage, RBM_NORMAL, bas);
 	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 
@@ -336,6 +389,8 @@ RepairGraph(HnswVacuumState * vacuumstate)
 	Relation	index = vacuumstate->index;
 	BufferAccessStrategy bas = vacuumstate->bas;
 	BlockNumber blkno = HNSW_HEAD_BLKNO;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			steps = 0;
 
 	/*
 	 * Wait for inserts to complete. Inserts before this point may have
@@ -347,7 +402,7 @@ RepairGraph(HnswVacuumState * vacuumstate)
 	/* Repair entry point first */
 	RepairGraphEntryPoint(vacuumstate);
 
-	while (BlockNumberIsValid(blkno))
+	while (HnswBlockInRange(index, blkno) && steps++ < nblocks)
 	{
 		Buffer		buf;
 		Page		page;
@@ -364,13 +419,26 @@ RepairGraph(HnswVacuumState * vacuumstate)
 		buf = ReadBufferExtended(index, MAIN_FORKNUM, blkno, RBM_NORMAL, bas);
 		LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 		page = BufferGetPage(buf);
-		maxoffno = PageGetMaxOffsetNumber(page);
+		if (PageIsNew(page) || PageIsEmpty(page) ||
+			HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID)
+		{
+			UnlockReleaseBuffer(buf);
+			MemoryContextSwitchTo(oldCtx);
+			MemoryContextReset(vacuumstate->tmpCtx);
+			break;
+		}
+		maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
 		/* Load items into memory to minimize locking */
 		for (offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 		{
-			HnswElementTuple etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, offno));
+			ItemId		itemid = PageGetItemId(page, offno);
+			HnswElementTuple etup;
 			HnswElement element;
+
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			etup = (HnswElementTuple) PageGetItem(page, itemid);
 
 			/* Skip neighbor tuples */
 			if (!HnswIsElementTuple(etup))
@@ -387,7 +455,8 @@ RepairGraph(HnswVacuumState * vacuumstate)
 			elements = lappend(elements, element);
 		}
 
-		blkno = HnswPageGetOpaque(page)->nextblkno;
+		blkno = HnswSafeNextElementBlkno(index, blkno,
+										 HnswPageGetOpaque(page)->nextblkno);
 
 		UnlockReleaseBuffer(buf);
 
@@ -452,6 +521,8 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 	BlockNumber insertPage = InvalidBlockNumber;
 	Relation	index = vacuumstate->index;
 	BufferAccessStrategy bas = vacuumstate->bas;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			steps = 0;
 
 	/*
 	 * Wait for index scans to complete. Scans before this point may contain
@@ -461,7 +532,7 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 	LockPage(index, HNSW_SCAN_LOCK, ExclusiveLock);
 	UnlockPage(index, HNSW_SCAN_LOCK, ExclusiveLock);
 
-	while (BlockNumberIsValid(blkno))
+	while (HnswBlockInRange(index, blkno) && steps++ < nblocks)
 	{
 		Buffer		buf;
 		Page		page;
@@ -482,17 +553,28 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 		LockBufferForCleanup(buf);
 
 		page = BufferGetPage(buf);
-		maxoffno = PageGetMaxOffsetNumber(page);
+		if (PageIsNew(page) || PageIsEmpty(page) ||
+			HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID)
+		{
+			UnlockReleaseBuffer(buf);
+			break;
+		}
+		maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
 		/* Update element and neighbors together */
 		for (offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 		{
-			HnswElementTuple etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, offno));
+			ItemId		eitemid = PageGetItemId(page, offno);
+			HnswElementTuple etup;
 			HnswNeighborTuple ntup;
 			Buffer		nbuf;
 			Page		npage;
 			BlockNumber neighborPage;
 			OffsetNumber neighborOffno;
+
+			if (!ItemIdIsUsed(eitemid))
+				continue;
+			etup = (HnswElementTuple) PageGetItem(page, eitemid);
 
 			/* Skip neighbor tuples */
 			if (!HnswIsElementTuple(etup))
@@ -521,11 +603,22 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 				nbuf = buf;
 				npage = page;
 			}
+			else if (!HnswBlockInRange(index, neighborPage))
+				continue;
 			else
 			{
 				nbuf = ReadBufferExtended(index, MAIN_FORKNUM, neighborPage, RBM_NORMAL, bas);
 				LockBuffer(index, nbuf, BUFFER_LOCK_EXCLUSIVE);
 				npage = BufferGetPage(nbuf);
+			}
+
+			if (neighborOffno < FirstOffsetNumber ||
+				neighborOffno > PageGetMaxOffsetNumber(npage) ||
+				!ItemIdIsUsed(PageGetItemId(npage, neighborOffno)))
+			{
+				if (nbuf != buf)
+					UnlockReleaseBuffer(nbuf);
+				continue;
 			}
 
 			ntup = (HnswNeighborTuple) PageGetItem(npage, PageGetItemId(npage, neighborOffno));
@@ -536,7 +629,7 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 			memset(&etup->data, 0, VARSIZE_ANY(&etup->data));
 
 			/* Overwrite neighbors */
-			for (int i = 0; i < ntup->count; i++)
+			for (int i = 0; i < HnswNeighborStoredCount(PageGetItemId(npage, neighborOffno), ntup); i++)
 				ItemPointerSetInvalid(&ntup->indextids[i]);
 
 			/* Increment version */
@@ -566,7 +659,8 @@ MarkDeleted(HnswVacuumState * vacuumstate)
 			page = BufferGetPage(buf);
 		}
 
-		blkno = HnswPageGetOpaque(page)->nextblkno;
+		blkno = HnswSafeNextElementBlkno(index, blkno,
+										 HnswPageGetOpaque(page)->nextblkno);
 
 		/*
 		 * Persist in-place deleted marks. UnlockReleaseBuffer alone would
@@ -639,6 +733,11 @@ hnsw_bulkdeleteindex(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
 {
 	HnswVacuumState vacuumstate;
 
+	if (stats == NULL)
+		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
+	if (RelationGetNumberOfBlocks(info->index) <= HNSW_HEAD_BLKNO)
+		return stats;
+
 	InitVacuumState(&vacuumstate, info, stats, callback, callback_state);
 
 	/* Pass 1: Remove heap TIDs */
@@ -690,6 +789,8 @@ HnswHeapTidIsStale(Relation heaprel, ItemPointer tid)
 
 	if (!ItemPointerIsValid(tid))
 		return true;
+	if (!HnswBlockInRange(heaprel, ItemPointerGetBlockNumber(tid)))
+		return true;
 
 	heapbuf = ReadBuffer(heaprel, ItemPointerGetBlockNumber(tid));
 	if (!BufferIsValid(heapbuf))
@@ -723,6 +824,8 @@ HnswIndexTidIsStale(Relation index, ItemPointer indextid)
 
 	if (!ItemPointerIsValid(indextid))
 		return true;
+	if (!HnswBlockInRange(index, ItemPointerGetBlockNumber(indextid)))
+		return true;
 
 	buf = ReadBuffer(index, ItemPointerGetBlockNumber(indextid));
 	if (!BufferIsValid(buf))
@@ -752,6 +855,74 @@ HnswIndexTidIsStale(Relation index, ItemPointer indextid)
 	return stale;
 }
 
+typedef struct HnswRecoverCheck
+{
+	OffsetNumber offno;
+	int16		kind;			/* 0 = element heaptid, 1 = neighbor edge */
+	int16		idx;
+	ItemPointerData tid;
+	bool		stale;
+} HnswRecoverCheck;
+
+static int
+HnswCollectRecoverChecks(Page page, OffsetNumber maxoff, HnswRecoverCheck *checks)
+{
+	OffsetNumber offno;
+	int			ncheck = 0;
+
+	for (offno = FirstOffsetNumber; offno <= maxoff; offno = OffsetNumberNext(offno))
+	{
+		ItemId		itemid = PageGetItemId(page, offno);
+		Pointer		item;
+		int			i;
+		int			count;
+
+		if (!ItemIdIsUsed(itemid))
+			continue;
+		item = PageGetItem(page, itemid);
+		if (HnswIsElementTuple((HnswElementTuple) item))
+		{
+			HnswElementTuple etup = (HnswElementTuple) item;
+
+			for (i = 0; i < HNSW_HEAPTIDS; i++)
+			{
+				if (!ItemPointerIsValid(&etup->heaptids[i]))
+					break;
+				if (checks != NULL)
+				{
+					checks[ncheck].offno = offno;
+					checks[ncheck].kind = 0;
+					checks[ncheck].idx = (int16) i;
+					checks[ncheck].tid = etup->heaptids[i];
+					checks[ncheck].stale = false;
+				}
+				ncheck++;
+			}
+		}
+		else if (HnswIsNeighborTuple((HnswNeighborTuple) item))
+		{
+			HnswNeighborTuple ntup = (HnswNeighborTuple) item;
+
+			count = HnswNeighborStoredCount(itemid, ntup);
+			for (i = 0; i < count; i++)
+			{
+				if (!ItemPointerIsValid(&ntup->indextids[i]))
+					continue;
+				if (checks != NULL)
+				{
+					checks[ncheck].offno = offno;
+					checks[ncheck].kind = 1;
+					checks[ncheck].idx = (int16) i;
+					checks[ncheck].tid = ntup->indextids[i];
+					checks[ncheck].stale = false;
+				}
+				ncheck++;
+			}
+		}
+	}
+	return ncheck;
+}
+
 /*
  * Recover one HNSW index page after crash.
  *
@@ -776,6 +947,9 @@ hnsw_recoverpage(Relation index, BlockNumber blkno)
 	bool		dryrun = IsReadOnlyProcessingMode();
 	bool		changed = false;
 	bool		empty;
+	HnswRecoverCheck *checks = NULL;
+	int			ncheck;
+	int			i;
 
 	if (blkno == HNSW_METAPAGE_BLKNO)
 		return InvalidBlockNumber;
@@ -818,101 +992,122 @@ hnsw_recoverpage(Relation index, BlockNumber blkno)
 	buf = ReadBuffer(index, blkno);
 	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 	page = BufferGetPage(buf);
-	maxoff = PageGetMaxOffsetNumber(page);
+	maxoff = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
-	for (offno = FirstOffsetNumber; offno <= maxoff; offno = OffsetNumberNext(offno))
+	/*
+	 * Collect TIDs, drop the exclusive page lock, then inspect heap / other
+	 * index pages. Holding exclusive here while LockBuffer SHARE on another
+	 * page deadlocks with concurrent vacuum bulkdelete / poolsweep recover.
+	 */
+	ncheck = HnswCollectRecoverChecks(page, maxoff, NULL);
+	if (ncheck > 0)
+		checks = palloc(sizeof(HnswRecoverCheck) * ncheck);
+	ncheck = HnswCollectRecoverChecks(page, maxoff, checks);
+	LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+
+	for (i = 0; i < ncheck; i++)
 	{
-		ItemId		itemid = PageGetItemId(page, offno);
+		if (checks[i].kind == 0)
+			checks[i].stale = HnswHeapTidIsStale(heaprel, &checks[i].tid);
+		else if (ItemPointerGetBlockNumber(&checks[i].tid) == blkno)
+		{
+			OffsetNumber toff = ItemPointerGetOffsetNumber(&checks[i].tid);
+
+			checks[i].stale = true;
+			if (toff >= FirstOffsetNumber && toff <= maxoff)
+			{
+				ItemId		titemid = PageGetItemId(page, toff);
+				HnswElementTuple tetup;
+
+				if (ItemIdIsUsed(titemid))
+				{
+					tetup = (HnswElementTuple) PageGetItem(page, titemid);
+					if (HnswIsElementTuple(tetup) && !tetup->deleted &&
+						ItemPointerIsValid(&tetup->heaptids[0]))
+						checks[i].stale = false;
+				}
+			}
+		}
+		else
+			checks[i].stale = HnswIndexTidIsStale(index, &checks[i].tid);
+	}
+
+	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
+	page = BufferGetPage(buf);
+	maxoff = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
+
+	for (i = 0; i < ncheck; i++)
+	{
+		ItemId		itemid;
 		Pointer		item;
 
+		if (!checks[i].stale)
+			continue;
+		offno = checks[i].offno;
+		if (offno > maxoff)
+			continue;
+		itemid = PageGetItemId(page, offno);
 		if (!ItemIdIsUsed(itemid))
 			continue;
-
 		item = PageGetItem(page, itemid);
-
-		if (HnswIsElementTuple((HnswElementTuple) item))
+		if (checks[i].kind == 0)
 		{
 			HnswElementTuple etup = (HnswElementTuple) item;
-			int			idx = 0;
-			bool		itemUpdated = false;
 
-			for (int i = 0; i < HNSW_HEAPTIDS; i++)
-			{
-				if (!ItemPointerIsValid(&etup->heaptids[i]))
-					break;
-
-				if (HnswHeapTidIsStale(heaprel, &etup->heaptids[i]))
-				{
-					itemUpdated = true;
-					elog(NOTICE,
-						 "hnsw: Removing orphan heaptid block: %lu offset: %u slot: %d",
-						 (unsigned long) blkno, offno, i);
-				}
-				else
-					etup->heaptids[idx++] = etup->heaptids[i];
-			}
-
-			if (itemUpdated)
-			{
-				for (int i = idx; i < HNSW_HEAPTIDS; i++)
-					ItemPointerSetInvalid(&etup->heaptids[i]);
-				if (!ItemPointerIsValid(&etup->heaptids[0]))
-					etup->deleted = 1;
-				changed = true;
-			}
+			if (!HnswIsElementTuple(etup) || checks[i].idx >= HNSW_HEAPTIDS)
+				continue;
+			if (!ItemPointerEquals(&etup->heaptids[checks[i].idx], &checks[i].tid))
+				continue;
+			ItemPointerSetInvalid(&etup->heaptids[checks[i].idx]);
+			elog(NOTICE,
+				 "hnsw: Removing orphan heaptid block: %lu offset: %u slot: %d",
+				 (unsigned long) blkno, offno, checks[i].idx);
+			changed = true;
 		}
 		else if (HnswIsNeighborTuple((HnswNeighborTuple) item))
 		{
 			HnswNeighborTuple ntup = (HnswNeighborTuple) item;
-			bool		itemUpdated = false;
+			int			count = HnswNeighborStoredCount(itemid, ntup);
 
-			for (int i = 0; i < ntup->count; i++)
-			{
-				ItemPointer indextid = &ntup->indextids[i];
-
-				if (!ItemPointerIsValid(indextid))
-					continue;
-
-				/*
-				 * Avoid locking the same page recursively when an edge
-				 * points at a slot on this page.
-				 */
-				if (ItemPointerGetBlockNumber(indextid) == blkno)
-				{
-					OffsetNumber toff = ItemPointerGetOffsetNumber(indextid);
-					ItemId		titemid;
-					HnswElementTuple tetup;
-
-					if (toff > PageGetMaxOffsetNumber(page) ||
-						!ItemIdIsUsed(PageGetItemId(page, toff)))
-					{
-						ItemPointerSetInvalid(indextid);
-						itemUpdated = true;
-						continue;
-					}
-					titemid = PageGetItemId(page, toff);
-					tetup = (HnswElementTuple) PageGetItem(page, titemid);
-					if (!HnswIsElementTuple(tetup) || tetup->deleted ||
-						!ItemPointerIsValid(&tetup->heaptids[0]))
-					{
-						ItemPointerSetInvalid(indextid);
-						itemUpdated = true;
-					}
-				}
-				else if (HnswIndexTidIsStale(index, indextid))
-				{
-					ItemPointerSetInvalid(indextid);
-					itemUpdated = true;
-					elog(NOTICE,
-						 "hnsw: Removing orphan neighbor edge block: %lu offset: %u edge: %d",
-						 (unsigned long) blkno, offno, i);
-				}
-			}
-
-			if (itemUpdated)
-				changed = true;
+			if (checks[i].idx >= count)
+				continue;
+			if (!ItemPointerEquals(&ntup->indextids[checks[i].idx], &checks[i].tid))
+				continue;
+			ItemPointerSetInvalid(&ntup->indextids[checks[i].idx]);
+			elog(NOTICE,
+				 "hnsw: Removing orphan neighbor edge block: %lu offset: %u edge: %d",
+				 (unsigned long) blkno, offno, checks[i].idx);
+			changed = true;
 		}
 	}
+
+	if (changed)
+	{
+		for (offno = FirstOffsetNumber; offno <= maxoff; offno = OffsetNumberNext(offno))
+		{
+			ItemId		itemid = PageGetItemId(page, offno);
+			HnswElementTuple etup;
+			int			idx = 0;
+
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			etup = (HnswElementTuple) PageGetItem(page, itemid);
+			if (!HnswIsElementTuple(etup))
+				continue;
+			for (i = 0; i < HNSW_HEAPTIDS; i++)
+			{
+				if (ItemPointerIsValid(&etup->heaptids[i]))
+					etup->heaptids[idx++] = etup->heaptids[i];
+			}
+			for (i = idx; i < HNSW_HEAPTIDS; i++)
+				ItemPointerSetInvalid(&etup->heaptids[i]);
+			if (!ItemPointerIsValid(&etup->heaptids[0]))
+				etup->deleted = 1;
+		}
+	}
+
+	if (checks != NULL)
+		pfree(checks);
 
 	if (changed)
 		HnswWriteBuffer(index, buf);

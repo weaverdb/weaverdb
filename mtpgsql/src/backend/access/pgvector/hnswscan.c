@@ -8,7 +8,10 @@
 #include "lib/pairingheap.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
+#include "pgvector_pagewalk.h"
 #include "pgvector_scan.h"
+#include "storage/bufmgr.h"
+#include "storage/itemid.h"
 #include "storage/lmgr.h"
 #include "utils/float.h"
 #include "utils/memutils.h"
@@ -203,6 +206,8 @@ hnsw_plain_gettuple(IndexScanDesc scan)
 {
 	HnswScanOpaque so = (HnswScanOpaque) scan->opaque;
 	Relation	index = pgvector_hnsw_index_rel(scan);
+	BlockNumber nblocks;
+	int			steps = 0;
 
 	if (!so->plainScan)
 	{
@@ -213,7 +218,8 @@ hnsw_plain_gettuple(IndexScanDesc scan)
 		pgstat_count_index_scan(index);
 	}
 
-	while (BlockNumberIsValid(so->plainBlkno))
+	nblocks = RelationGetNumberOfBlocks(index);
+	while (PgvectorBlockInRange(index, so->plainBlkno) && steps++ < nblocks)
 	{
 		Buffer		buf;
 		Page		page;
@@ -223,11 +229,22 @@ hnsw_plain_gettuple(IndexScanDesc scan)
 		buf = ReadBuffer(index, so->plainBlkno);
 		LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 		page = BufferGetPage(buf);
-		maxoffno = PageGetMaxOffsetNumber(page);
+		if (PageIsNew(page) || PageIsEmpty(page) ||
+			HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID)
+		{
+			UnlockReleaseBuffer(buf);
+			so->plainBlkno = InvalidBlockNumber;
+			return false;
+		}
+		maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
 		for (; so->plainOffno <= maxoffno; so->plainOffno = OffsetNumberNext(so->plainOffno))
 		{
-			etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, so->plainOffno));
+			ItemId		itemid = PageGetItemId(page, so->plainOffno);
+
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			etup = (HnswElementTuple) PageGetItem(page, itemid);
 
 			if (!HnswIsElementTuple(etup))
 				continue;
@@ -246,7 +263,8 @@ hnsw_plain_gettuple(IndexScanDesc scan)
 			so->plainTidIdx = 0;
 		}
 
-		so->plainBlkno = HnswPageGetOpaque(page)->nextblkno;
+		so->plainBlkno = PgvectorSafeNextBlkno(index, BufferGetBlockNumber(buf),
+											  HnswPageGetOpaque(page)->nextblkno);
 		so->plainOffno = FirstOffsetNumber;
 		UnlockReleaseBuffer(buf);
 	}

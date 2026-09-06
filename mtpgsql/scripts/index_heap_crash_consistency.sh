@@ -12,7 +12,9 @@
 #
 # The crash target is killed from the outside (SIGKILL and/or a test-only
 # write interceptor). Production code has no crash points. SIGKILL the
-# embed worker, not a JVM.
+# embed worker, not a JVM. The Java-API equivalent (child JVM via
+# WeaverInitializer) is pgjava_c IndexHeapCrashConsistencyJavaTest /
+# ./gradlew :pgjava_c:indexHeapCrashLong.
 #
 # Each round:
 #   1. Fresh datadir, table with unique btree + HNSW + IVFFlat (or crash

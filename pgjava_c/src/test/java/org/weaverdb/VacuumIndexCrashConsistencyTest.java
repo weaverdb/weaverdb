@@ -30,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * Seeded crash-restart fuzzing: mtpgsql/scripts/persistence_crash_fuzzer.sh
  * External SIGKILL / write-interceptor suite (no production crashers):
  * mtpgsql/scripts/index_heap_crash_consistency.sh
+ * Java child-JVM SIGKILL (multiuser + shadow log): IndexHeapCrashConsistencyJavaTest.
  * In-process random vacuum invariants: PersistenceInvariantFuzzerTest.
  */
 @ExtendWith({InstallNative.class})

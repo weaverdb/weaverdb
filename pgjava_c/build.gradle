@@ -58,12 +58,21 @@ jar {
 }
 
 tasks.named('test', Test) {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'crash-long'
+    }
     maxParallelForks = 1
 
     // InstallNative initdbs from a copy of build_test/mtpg. Load natives from
     // build_test directly so AM OIDs match and the dylib exists before BeforeAll.
     systemProperty 'java.library.path', rootProject.file('build_test/mtpg/lib').absolutePath
+    ['weaver.crash.rounds', 'weaver.crash.scenario', 'weaver.crash.seed',
+     'weaver.crash.keep'].each { key ->
+        def value = System.getProperty(key)
+        if (value != null) {
+            systemProperty key, value
+        }
+    }
 
     maxHeapSize = '1G'
     javaLauncher = javaToolchains.launcherFor {
@@ -73,6 +82,36 @@ tasks.named('test', Test) {
     jvmArgs '-verbose:jni', '--enable-native-access=ALL-UNNAMED'
     testLogging {
         events "passed"
+    }
+}
+
+tasks.register('indexHeapCrashLong', Test) {
+    group = 'verification'
+    description = 'Long-running Java multiuser index/heap crash-consistency (child JVM SIGKILL)'
+    useJUnitPlatform {
+        includeTags 'crash-long'
+    }
+    maxParallelForks = 1
+    systemProperty 'java.library.path', rootProject.file('build_test/mtpg/lib').absolutePath
+    systemProperty 'weaver.repo.root', rootProject.projectDir.absolutePath
+    ['weaver.crash.rounds', 'weaver.crash.duration.sec', 'weaver.crash.seed',
+     'weaver.crash.scenario', 'weaver.crash.include.writes', 'weaver.crash.keep',
+     'weaver.crash.timeout.sec', 'weaver.sortmem'].each { key ->
+        def value = System.getProperty(key)
+        if (value != null) {
+            systemProperty key, value
+        }
+    }
+    outputs.upToDateWhen { false }
+    timeout = java.time.Duration.ofHours(8)
+    maxHeapSize = '1G'
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    testLogging {
+        events 'passed', 'failed', 'standardOut', 'standardError'
+        showStandardStreams = true
     }
 }
 

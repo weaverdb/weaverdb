@@ -2,6 +2,9 @@
  *
  * Count ivfflat/hnsw index entries for lazy VACUUM (no ORDER BY scan).
  *
+ * Mid-write crashes can leave garbage nextblkno. Bound every chain walk
+ * to RelationGetNumberOfBlocks so we never ReadBuffer out of range.
+ *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
@@ -10,7 +13,9 @@
 #include "catalog/pg_am.h"
 #include "hnsw.h"
 #include "ivfflat.h"
+#include "pgvector_pagewalk.h"
 #include "storage/bufmgr.h"
+#include "storage/itemid.h"
 #include "utils/rel.h"
 
 static TupleCount
@@ -18,8 +23,10 @@ hnsw_count_index_tuples(Relation index)
 {
 	TupleCount	count = 0;
 	BlockNumber blkno = HNSW_HEAD_BLKNO;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			steps = 0;
 
-	while (BlockNumberIsValid(blkno))
+	while (PgvectorBlockInRange(index, blkno) && steps++ < nblocks)
 	{
 		Buffer		buf;
 		Page		page;
@@ -29,16 +36,25 @@ hnsw_count_index_tuples(Relation index)
 		buf = ReadBuffer(index, blkno);
 		LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 		page = BufferGetPage(buf);
-		maxoffno = PageGetMaxOffsetNumber(page);
+		if (PageIsNew(page) || PageIsEmpty(page) ||
+			HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID)
+		{
+			UnlockReleaseBuffer(buf);
+			break;
+		}
+		maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
 		for (offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
 		{
+			ItemId		itemid = PageGetItemId(page, offno);
 			HnswElementTuple etup;
 			int			i;
 
-			etup = (HnswElementTuple) PageGetItem(page, PageGetItemId(page, offno));
+			if (!ItemIdIsUsed(itemid))
+				continue;
+			etup = (HnswElementTuple) PageGetItem(page, itemid);
 
-			if (!HnswIsElementTuple(etup))
+			if (!HnswIsElementTuple(etup) || etup->deleted)
 				continue;
 
 			for (i = 0; i < HNSW_HEAPTIDS; i++)
@@ -49,7 +65,7 @@ hnsw_count_index_tuples(Relation index)
 			}
 		}
 
-		blkno = HnswPageGetOpaque(page)->nextblkno;
+		blkno = PgvectorSafeNextBlkno(index, blkno, HnswPageGetOpaque(page)->nextblkno);
 		UnlockReleaseBuffer(buf);
 	}
 
@@ -61,28 +77,52 @@ ivfflat_count_index_tuples(Relation index)
 {
 	TupleCount	count = 0;
 	BlockNumber listBlkno = IVFFLAT_HEAD_BLKNO;
+	BlockNumber nblocks = RelationGetNumberOfBlocks(index);
+	int			list_steps = 0;
 
-	while (BlockNumberIsValid(listBlkno))
+	while (PgvectorBlockInRange(index, listBlkno) && list_steps++ < nblocks)
 	{
 		Buffer		cbuf;
 		Page		cpage;
 		OffsetNumber coffno;
 		OffsetNumber cmaxoffno;
+		BlockNumber listPages[MaxOffsetNumber];
 
 		cbuf = ReadBuffer(index, listBlkno);
 		LockBuffer(index, cbuf, BUFFER_LOCK_SHARE);
 		cpage = BufferGetPage(cbuf);
-		cmaxoffno = PageGetMaxOffsetNumber(cpage);
+		if (PageIsNew(cpage) || PageIsEmpty(cpage) ||
+			IvfflatPageGetOpaque(cpage)->page_id != IVFFLAT_PAGE_ID)
+		{
+			UnlockReleaseBuffer(cbuf);
+			break;
+		}
+		cmaxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(cpage));
 
 		for (coffno = FirstOffsetNumber; coffno <= cmaxoffno; coffno = OffsetNumberNext(coffno))
 		{
+			ItemId		itemid = PageGetItemId(cpage, coffno);
 			IvfflatList list;
-			BlockNumber entryBlkno;
 
-			list = (IvfflatList) PageGetItem(cpage, PageGetItemId(cpage, coffno));
-			entryBlkno = list->startPage;
+			if (!ItemIdIsUsed(itemid))
+			{
+				listPages[coffno - FirstOffsetNumber] = InvalidBlockNumber;
+				continue;
+			}
+			list = (IvfflatList) PageGetItem(cpage, itemid);
+			listPages[coffno - FirstOffsetNumber] = list->startPage;
+		}
 
-			while (BlockNumberIsValid(entryBlkno))
+		listBlkno = PgvectorSafeNextBlkno(index, listBlkno,
+										 IvfflatPageGetOpaque(cpage)->nextblkno);
+		UnlockReleaseBuffer(cbuf);
+
+		for (coffno = FirstOffsetNumber; coffno <= cmaxoffno; coffno = OffsetNumberNext(coffno))
+		{
+			BlockNumber entryBlkno = listPages[coffno - FirstOffsetNumber];
+			int			entry_steps = 0;
+
+			while (PgvectorBlockInRange(index, entryBlkno) && entry_steps++ < nblocks)
 			{
 				Buffer		buf;
 				Page		page;
@@ -92,18 +132,25 @@ ivfflat_count_index_tuples(Relation index)
 				buf = ReadBuffer(index, entryBlkno);
 				LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 				page = BufferGetPage(buf);
-				maxoffno = PageGetMaxOffsetNumber(page);
+				if (PageIsNew(page) || PageIsEmpty(page) ||
+					IvfflatPageGetOpaque(page)->page_id != IVFFLAT_PAGE_ID)
+				{
+					UnlockReleaseBuffer(buf);
+					break;
+				}
+				maxoffno = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
 
 				for (offno = FirstOffsetNumber; offno <= maxoffno; offno = OffsetNumberNext(offno))
-					count++;
+				{
+					if (ItemIdIsUsed(PageGetItemId(page, offno)))
+						count++;
+				}
 
-				entryBlkno = IvfflatPageGetOpaque(page)->nextblkno;
+				entryBlkno = PgvectorSafeNextBlkno(index, BufferGetBlockNumber(buf),
+												   IvfflatPageGetOpaque(page)->nextblkno);
 				UnlockReleaseBuffer(buf);
 			}
 		}
-
-		listBlkno = IvfflatPageGetOpaque(cpage)->nextblkno;
-		UnlockReleaseBuffer(cbuf);
 	}
 
 	return count;
