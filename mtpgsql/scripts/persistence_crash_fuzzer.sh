@@ -16,7 +16,9 @@
 #   - A deleted unique id is re-insertable (no stale index TID)
 #   - ANN ORDER BY does not return deleted ids
 #
-# Not yet wired (needs C hooks): mid-CriticalIO insert, cart FLUSHING join.
+# Not yet covered here: mid-CriticalIO insert / cart FLUSHING join via
+# in-process hooks. External SIGKILL coverage for those windows lives in
+# mtpgsql/scripts/index_heap_crash_consistency.sh (no production crashers).
 #
 # Usage:
 #   ./mtpgsql/scripts/persistence_crash_fuzzer.sh [seed] [rounds] [mtpg_prefix]

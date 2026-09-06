@@ -28,6 +28,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * Crash-injection scenarios (WEAVER_VACUUM_CRASH_POINT / vacuum_crash_point)
  * are exercised by mtpgsql/scripts/vacuum_crash_ordering_smoke.sh.
  * Seeded crash-restart fuzzing: mtpgsql/scripts/persistence_crash_fuzzer.sh
+ * External SIGKILL / write-interceptor suite (no production crashers):
+ * mtpgsql/scripts/index_heap_crash_consistency.sh
  * In-process random vacuum invariants: PersistenceInvariantFuzzerTest.
  */
 @ExtendWith({InstallNative.class})

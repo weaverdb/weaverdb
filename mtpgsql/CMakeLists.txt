@@ -1,6 +1,15 @@
 
 add_subdirectory(src)
 
+# Test-only crash injector (LD_PRELOAD / DYLD_INSERT_LIBRARIES) and the
+# multiuser embed SQL driver used by the crash-consistency harness.
+# Neither is linked into production libraries or the postgres executable.
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "Android" AND NOT CMAKE_CROSSCOMPILING)
+	add_subdirectory(src/test/crash_injector)
+	add_subdirectory(src/test/embed_sql)
+	add_dependencies(postgres weaver_crash_injector weaver_embed_sql)
+endif()
+
 set(DBHOME dbhome.tar)
 
 if (CMAKE_CROSSCOMPILING) 
