@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Index-to-heap crash consistency harness (multiuser + shadow log).
 #
-# Initdb is CLI and all-or-nothing: if it succeeds, the bootstrap xid is
-# durable; if it fails, the datadir is junk and initdb must be rerun.
-# Production does not try to reconstruct that xid after a crash.
+# Initdb is CLI and all-or-nothing: if it succeeds, Ami xid 512 is committed
+# on disk. If Ami is not committed after initdb, that is fatal for the suite.
+# Production does not reconstruct that xid after a crash, and Ami must never
+# be overwritten with 0.
 #
 # Every SQL process after initdb — setup, crash target, and recover —
 # is weaver_embed_sql, which starts through initweaverbackend() /
@@ -130,8 +131,9 @@ fi
 SCENARIOS="dml_timed vacuum_timed mixed_timed build_hnsw_timed dml_writes vacuum_writes mixed_writes build_btree_timed"
 if [[ "${WEAVER_CRASH_SMOKE:-}" == "1" && -z "${WEAVER_CRASH_SCENARIO:-}" && "${WEAVER_CRASH_INCLUDE_WRITES:-}" != "1" ]]; then
   # Write-count kills can hit initdb-durable pg_log pages. A missing
-  # bootstrap xid is not a recovery case (re-initdb). Keep write
-  # scenarios in the long suite; CI smoke uses timed SIGKILL after ready.
+  # Ami xid after a successful initdb is a crash-recovery failure, not a
+  # reason to re-run initdb. Keep write scenarios in the long suite; CI
+  # smoke uses timed SIGKILL after ready.
   SCENARIOS="dml_timed vacuum_timed mixed_timed build_hnsw_timed build_btree_timed"
 fi
 if [[ -n "${WEAVER_CRASH_SCENARIO:-}" ]]; then
@@ -405,11 +407,10 @@ index_exists() {
 }
 
 # Recover FATAL "this should not be happening" means AmiTransactionId is
-# not committed. That bit is written by a successful initdb and is not
-# reconstructed after a crash. A test kill that clobbers it is the same
-# as a failed initdb: throw the datadir away and retry.
+# not committed. That bit is written by a successful initdb and must not
+# be overwritten with 0. After initdb has been checked, this is fatal.
 is_missing_bootstrap_xid() {
-  echo "$1" | grep -q "this should not be happening"
+  echo "$1" | grep -qE "this should not be happening|Ami xid 512"
 }
 
 assert_consistent() {
@@ -418,8 +419,8 @@ assert_consistent() {
   echo "  vacuum + recover"
   out="$(sql_may_error persistcrash "vacuum ihc_t;")"
   if is_missing_bootstrap_xid "$out"; then
-    echo "  recover missing bootstrap xid (initdb-durable; retry round)" >&2
-    return 2
+    echo "$out" >&2
+    fail "Ami xid 512 was committed after initdb but missing after crash"
   fi
   if echo "$out" | grep -qiE 'ERROR:|FATAL'; then
     echo "$out" >&2
@@ -511,8 +512,8 @@ select id from ihc_t order by emb <-> '[1,0,0]' limit 8;
 
   out="$(sql_may_error persistcrash "vacuum ihc_t;")"
   if is_missing_bootstrap_xid "$out"; then
-    echo "  recover missing bootstrap xid (initdb-durable; retry round)" >&2
-    return 2
+    echo "$out" >&2
+    fail "Ami xid 512 was committed after initdb but missing after crash"
   fi
   if echo "$out" | grep -qiE 'ERROR:|FATAL'; then
     echo "$out" >&2
@@ -538,6 +539,12 @@ run_round() {
   DATADIR="$(mktemp -d "${TMPDIR:-/tmp}/weaver-ihc.XXXXXX")"
   WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/weaver-ihc-sql.XXXXXX")"
   "$INITDB" -D "$DATADIR" >/dev/null
+  echo "  checking Ami xid after initdb"
+  ami_out="$(sql_may_error template1 "select 1;")"
+  if is_missing_bootstrap_xid "$ami_out"; then
+    echo "$ami_out" >&2
+    fail "Ami xid 512 not committed after initdb; ending tests"
+  fi
   run_sql template1 "create database persistcrash;" >/dev/null
 
   echo "-- round $round scenario=$scenario --"
@@ -667,18 +674,12 @@ create index ihc_ivf on ihc_t using ivfflat (emb vector_l2_ops) with (lists = 2)
 
   append_churn "$sqlf"
   launch_and_crash "$sqlf" "$crash_mode"
-  set +e
   assert_consistent
-  ac=$?
-  set -e
 
   rm -rf "$DATADIR" "$WORKDIR"
   DATADIR=""
   WORKDIR=""
 
-  if [[ "$ac" -eq 2 ]]; then
-    return 2
-  fi
   echo "OK round $round"
   return 0
 }
@@ -692,25 +693,13 @@ while [[ "$r" -le "$ROUNDS" ]]; do
       break
     fi
   fi
-  retries=0
-  while true; do
-    set +e
-    run_round "$r"
-    rc=$?
-    set -e
-    if [[ "$rc" -eq 2 ]]; then
-      retries=$((retries + 1))
-      if [[ "$retries" -ge 5 ]]; then
-        fail "round $r: recover missing bootstrap xid after 5 initdb retries"
-      fi
-      echo "  re-running initdb for round $r (attempt $((retries + 1)))"
-      continue
-    fi
-    if [[ "$rc" -ne 0 ]]; then
-      exit "$rc"
-    fi
-    break
-  done
+  set +e
+  run_round "$r"
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    exit "$rc"
+  fi
   r=$((r + 1))
 done
 

@@ -591,7 +591,7 @@ HeapTupleSatisfiesVacuum(HeapTupleHeader tuple, TransactionId OldestXmin)
 {
 	 bool xmin_committed = false;
 	 bool xmax_committed = false;
-	 
+
 	if (!(tuple->t_infomask & HEAP_XMIN_COMMITTED))
 	{
 		if ((tuple->t_infomask & HEAP_XMIN_INVALID))
@@ -599,7 +599,7 @@ HeapTupleSatisfiesVacuum(HeapTupleHeader tuple, TransactionId OldestXmin)
 		else if (TransactionIdDidCommit(tuple->t_xmin))  {
 			xmin_committed = true;
 			if ( TransactionIdDidHardCommit(tuple->t_xmin))
-				tuple->t_infomask |= HEAP_XMIN_COMMITTED;
+                            tuple->t_infomask |= HEAP_XMIN_COMMITTED;
 		}
 		else if (TransactionIdDidAbort(tuple->t_xmin))
 		{
@@ -640,7 +640,7 @@ HeapTupleSatisfiesVacuum(HeapTupleHeader tuple, TransactionId OldestXmin)
 		if (TransactionIdDidCommit(tuple->t_xmax)) {
 			xmax_committed = true;
 			if ( TransactionIdDidHardCommit(tuple->t_xmax))
-				tuple->t_infomask |= HEAP_XMAX_COMMITTED;
+                            tuple->t_infomask |= HEAP_XMAX_COMMITTED;
 		}
 		else if (TransactionIdDidAbort(tuple->t_xmax))
 		{
@@ -657,7 +657,7 @@ HeapTupleSatisfiesVacuum(HeapTupleHeader tuple, TransactionId OldestXmin)
 		{
 			return HEAPTUPLE_DELETE_IN_PROGRESS;
 		}
-		/* Should only get here if we set XMAX_COMMITTED */
+		/* Should only get here if xmax hard-committed */
 		Assert(xmax_committed);
 	}
 
@@ -670,24 +670,38 @@ HeapTupleSatisfiesVacuum(HeapTupleHeader tuple, TransactionId OldestXmin)
 		/* "deleting" xact really only marked it for update */
                 return HEAPTUPLE_LIVE;
 	}
-#ifdef NOTUSED
-	if (TransactionIdEquals(tuple->t_xmin, tuple->t_xmax))
-	{
-		/*
-		 * inserter also deleted it, so it was never visible to anyone
-		 * else
-		 */
-		return HEAPTUPLE_DEAD;
-	}
-#endif
 	if (tuple->t_xmax >= OldestXmin)
 	{
 		/* deleting xact is too recent, tuple could still be visible */
 		return HEAPTUPLE_RECENTLY_DEAD;
 	}
+        if (tuple->t_infomask & HEAP_XMAX_COMMITTED) {
+            return HEAPTUPLE_DEAD;
+        } else {
+            return HEAPTUPLE_RECENTLY_DEAD;
+        }   
+}
 
-	/* Otherwise, it's dead and removable */
-	return HEAPTUPLE_DEAD;
+bool
+HeapTupleIsHardCommittedDead(HeapTupleHeader tuple)
+{
+	if (tuple == NULL)
+		return false;
+	if (tuple->t_hoff < offsetof(HeapTupleHeaderData, t_bits))
+		return false;
+	if (tuple->t_infomask & HEAP_XMIN_INVALID)
+		return false;
+	if (!TransactionIdIsValid(tuple->t_xmin) || tuple->t_xmin <= AmiTransactionId)
+		return false;
+	if (!TransactionIdDidHardCommit(tuple->t_xmin))
+		return false;
+	if (tuple->t_infomask & HEAP_XMAX_INVALID)
+		return false;
+	if (!TransactionIdIsValid(tuple->t_xmax) || tuple->t_xmax <= AmiTransactionId)
+		return false;
+	if (tuple->t_infomask & HEAP_MARKED_FOR_UPDATE)
+		return false;
+	return TransactionIdDidHardCommit(tuple->t_xmax);
 }
 
 void 

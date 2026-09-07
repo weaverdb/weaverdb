@@ -733,10 +733,18 @@ ProcessUtility(Node *parsetree,
 					Relation rel = RelationNameGetRelation(vstmt->vacrel, DEFAULTDBOID);
 
 					if (RelationIsValid(rel)) {
-						lazy_open_vacuum_rel(rel->rd_id, false, false);
-						if (vstmt->analyze)
-							analyze_rel(rel->rd_id);
+						Oid		relid = rel->rd_id;
+
+						/*
+						 * Drop the lookup pin before vacuum. lazy_open
+						 * opens the heap again; holding both showed
+						 * "refcount of 2 at commit" if commit ran while
+						 * vacuum still held its pin.
+						 */
 						RelationClose(rel);
+						lazy_open_vacuum_rel(relid, false, false);
+						if (vstmt->analyze)
+							analyze_rel(relid);
 					} else
 						elog(ERROR, "Relation \"%s\" does not exist", vstmt->vacrel);
 				} else if (IsPoolsweepPaused()) {

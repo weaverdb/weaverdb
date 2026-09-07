@@ -1,5 +1,6 @@
 #include "postgres.h"
 
+#include <float.h>
 #include <math.h>
 
 #include "access/genam.h"
@@ -11,6 +12,7 @@
 #include "lib/pairingheap.h"
 #include "nodes/pg_list.h"
 #include "port/atomics.h"
+#include "halfvec.h"
 #include "sparsevec.h"
 #include "storage/bufmgr.h"
 #include "storage/itemid.h"
@@ -129,6 +131,23 @@ HnswClearBuildParams(Oid indexId)
 	}
 }
 
+static bool
+HnswMetaPageIsUsable(Page page)
+{
+	HnswMetaPage metap;
+
+	if (PageIsNew(page) || PageIsEmpty(page))
+		return false;
+	if (HnswPageGetOpaque(page)->page_id != HNSW_PAGE_ID)
+		return false;
+	metap = HnswPageGetMeta(page);
+	if (metap->magicNumber != HNSW_MAGIC_NUMBER)
+		return false;
+	if (metap->m < HNSW_MIN_M || metap->m > HNSW_MAX_M)
+		return false;
+	return true;
+}
+
 static void
 HnswReadMetaParams(Relation index, int *m, int *efConstruction)
 {
@@ -137,18 +156,30 @@ HnswReadMetaParams(Relation index, int *m, int *efConstruction)
 	HnswMetaPage metap;
 
 	buf = ReadBuffer(index, HNSW_METAPAGE_BLKNO);
+	if (!BufferIsValid(buf))
+		return;
 	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
-	metap = HnswPageGetMeta(page);
 
-	if (unlikely(metap->magicNumber != HNSW_MAGIC_NUMBER))
-		elog(ERROR, "hnsw index is not valid");
+	if (!HnswMetaPageIsUsable(page))
+	{
+		UnlockReleaseBuffer(buf);
+		return;
+	}
+
+	metap = HnswPageGetMeta(page);
 
 	if (m != NULL)
 		*m = (int) metap->m;
 
 	if (efConstruction != NULL)
-		*efConstruction = (int) metap->efConstruction;
+	{
+		int			ef = (int) metap->efConstruction;
+
+		if (ef < HNSW_MIN_EF_CONSTRUCTION || ef > HNSW_MAX_EF_CONSTRUCTION)
+			ef = HNSW_DEFAULT_EF_CONSTRUCTION;
+		*efConstruction = ef;
+	}
 
 	UnlockReleaseBuffer(buf);
 }
@@ -361,19 +392,36 @@ HnswGetMetaPageInfo(Relation index, int *m, HnswElement * entryPoint)
 	HnswMetaPage metap;
 
 	buf = ReadBuffer(index, HNSW_METAPAGE_BLKNO);
+	if (!BufferIsValid(buf))
+	{
+		if (m != NULL)
+			*m = HNSW_DEFAULT_M;
+		if (entryPoint != NULL)
+			*entryPoint = NULL;
+		return;
+	}
 	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
-	metap = HnswPageGetMeta(page);
 
-	if (unlikely(metap->magicNumber != HNSW_MAGIC_NUMBER))
-		elog(ERROR, "hnsw index is not valid");
+	if (!HnswMetaPageIsUsable(page))
+	{
+		UnlockReleaseBuffer(buf);
+		if (m != NULL)
+			*m = HNSW_DEFAULT_M;
+		if (entryPoint != NULL)
+			*entryPoint = NULL;
+		return;
+	}
+
+	metap = HnswPageGetMeta(page);
 
 	if (m != NULL)
 		*m = metap->m;
 
 	if (entryPoint != NULL)
 	{
-		if (BlockNumberIsValid(metap->entryBlkno))
+		if (BlockNumberIsValid(metap->entryBlkno) &&
+			PgvectorBlockInRange(index, metap->entryBlkno))
 		{
 			*entryPoint = HnswInitElementFromBlock(metap->entryBlkno, metap->entryOffno);
 			(*entryPoint)->level = metap->entryLevel;
@@ -532,6 +580,42 @@ HnswSetNeighborTuple(char *base, HnswNeighborTuple ntup, HnswElement e, int m)
 }
 
 /*
+ * Stored index value must fit in avail bytes and claim a plausible dim.
+ * Torn VARSIZE/dim would otherwise make datumCopy or CheckDims SIGSEGV
+ * during vacuum graph repair.
+ */
+static bool
+HnswVarlenaIsSane(Pointer p, Size avail)
+{
+	Size		size;
+	int16		dim;
+
+	if (p == NULL || avail < offsetof(Vector, x))
+		return false;
+	size = VARSIZE_ANY(p);
+	if (size < offsetof(Vector, x) || size > avail || size > BLCKSZ)
+		return false;
+	dim = ((Vector *) p)->dim;
+	if (dim < 1 || dim > VECTOR_MAX_DIM)
+		return false;
+	if (VECTOR_SIZE(dim) <= size)
+		return true;
+	if (HALFVEC_SIZE(dim) <= size)
+		return true;
+	return false;
+}
+
+bool
+HnswElementTupleValueIsSane(HnswElementTuple etup, Size itemsz)
+{
+	Size		hdr = offsetof(HnswElementTupleData, data);
+
+	if (etup == NULL || !HnswIsElementTuple(etup) || itemsz < hdr + VARHDRSZ)
+		return false;
+	return HnswVarlenaIsSane((Pointer) &etup->data, itemsz - hdr);
+}
+
+/*
  * Load an element from a tuple
  */
 void
@@ -540,9 +624,17 @@ HnswLoadElementFromTuple(HnswElement element, HnswElementTuple etup, bool loadHe
 	element->level = etup->level;
 	element->deleted = etup->deleted;
 	element->version = etup->version;
-	element->neighborPage = ItemPointerGetBlockNumber(&etup->neighbortid);
-	element->neighborOffno = ItemPointerGetOffsetNumber(&etup->neighbortid);
 	element->heaptidsLength = 0;
+	if (ItemPointerIsValid(&etup->neighbortid))
+	{
+		element->neighborPage = ItemPointerGetBlockNumber(&etup->neighbortid);
+		element->neighborOffno = ItemPointerGetOffsetNumber(&etup->neighbortid);
+	}
+	else
+	{
+		element->neighborPage = InvalidBlockNumber;
+		element->neighborOffno = InvalidOffsetNumber;
+	}
 
 	if (loadHeaptids)
 	{
@@ -559,9 +651,14 @@ HnswLoadElementFromTuple(HnswElement element, HnswElementTuple etup, bool loadHe
 	if (loadVec)
 	{
 		char	   *base = NULL;
-		Datum		value = datumCopy(PointerGetDatum(&etup->data), (Oid) 0, false, (Size) -1);
 
-		HnswPtrStore(base, element->value, (char *) DatumGetPointer(value));
+		HnswPtrStore(base, element->value, (char *) NULL);
+		if (HnswVarlenaIsSane((Pointer) &etup->data, BLCKSZ))
+		{
+			Datum		value = datumCopy(PointerGetDatum(&etup->data), (Oid) 0, false, (Size) -1);
+
+			HnswPtrStore(base, element->value, (char *) DatumGetPointer(value));
+		}
 	}
 }
 
@@ -571,6 +668,26 @@ HnswLoadElementFromTuple(HnswElement element, HnswElementTuple etup, bool loadHe
 static inline double
 HnswGetDistance(Datum a, Datum b, HnswSupport * support)
 {
+	Pointer		pa = DatumGetPointer(a);
+	Pointer		pb = DatumGetPointer(b);
+	Vector	   *va;
+	Vector	   *vb;
+
+	/*
+	 * Torn neighbor TIDs can produce an element whose vector was never
+	 * loaded, or a loaded header whose dim/VARSIZE does not match. Distance
+	 * functions then SIGSEGV in CheckDims or walk past the allocation.
+	 */
+	if (pa == NULL || pb == NULL)
+		return DBL_MAX;
+	if (!HnswVarlenaIsSane(pa, VARSIZE_ANY(pa)) ||
+		!HnswVarlenaIsSane(pb, VARSIZE_ANY(pb)))
+		return DBL_MAX;
+	va = (Vector *) pa;
+	vb = (Vector *) pb;
+	if (va->dim != vb->dim)
+		return DBL_MAX;
+
 	return DatumGetFloat8(FunctionCall2Coll(support->procinfo, support->collation, a, b));
 }
 
@@ -593,6 +710,8 @@ HnswLoadElementImpl(BlockNumber blkno, OffsetNumber offno, double *distance, Hns
 
 	/* Read vector */
 	buf = ReadBuffer(index, blkno);
+	if (!BufferIsValid(buf))
+		return;
 	LockBuffer(index, buf, BUFFER_LOCK_SHARE);
 	page = BufferGetPage(buf);
 
@@ -618,7 +737,8 @@ HnswLoadElementImpl(BlockNumber blkno, OffsetNumber offno, double *distance, Hns
 	}
 
 	etup = (HnswElementTuple) PageGetItem(page, itemid);
-	if (!HnswIsElementTuple(etup) || etup->deleted)
+	if (!HnswIsElementTuple(etup) || etup->deleted ||
+		!HnswElementTupleValueIsSane(etup, itemsz))
 	{
 		UnlockReleaseBuffer(buf);
 		return;
@@ -1137,15 +1257,28 @@ static bool
 CheckElementCloser(char *base, HnswCandidate * e, List *r, HnswSupport * support)
 {
 	HnswElement eElement = HnswPtrAccess(base, e->element);
-	Datum		eValue = HnswGetValue(base, eElement);
+	Datum		eValue;
 	ListCell   *lc2;
+
+	if (eElement == NULL)
+		return false;
+	eValue = HnswGetValue(base, eElement);
+	if (DatumGetPointer(eValue) == NULL)
+		return false;
 
 	foreach(lc2, r)
 	{
 		HnswCandidate *ri = lfirst(lc2);
 		HnswElement riElement = HnswPtrAccess(base, ri->element);
-		Datum		riValue = HnswGetValue(base, riElement);
-		float		distance = HnswGetDistance(eValue, riValue, support);
+		Datum		riValue;
+		float		distance;
+
+		if (riElement == NULL)
+			continue;
+		riValue = HnswGetValue(base, riElement);
+		if (DatumGetPointer(riValue) == NULL)
+			continue;
+		distance = HnswGetDistance(eValue, riValue, support);
 
 		if (distance <= e->distance)
 			return false;
@@ -1390,8 +1523,8 @@ HnswFindElementNeighbors(char *base, HnswElement element, HnswElement entryPoint
 	if (inMemory)
 		PrecomputeHash(base, element);
 
-	/* No neighbors if no entry point */
-	if (entryPoint == NULL)
+	/* No neighbors if no entry point or the element's vector is unusable */
+	if (entryPoint == NULL || DatumGetPointer(q.value) == NULL)
 		return;
 
 	/* Get entry point and level */

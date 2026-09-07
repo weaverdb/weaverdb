@@ -405,6 +405,7 @@ InitPostgres(const char *dbname)
  *  that point to unused heap items need to be 
  *  removed.
  */            
+#ifdef NOTUSED
             {
                 List* dbids = smgrdbrecoverylist();
                 List*  item;
@@ -422,6 +423,7 @@ InitPostgres(const char *dbname)
                     PoolsweepDestroy();
                 }
             }
+#endif /* NOTUSED */
         }
 }
 

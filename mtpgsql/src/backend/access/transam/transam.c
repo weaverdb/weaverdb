@@ -492,6 +492,13 @@ InitializeTransactionLog(void)
 	 * ----------------
 	 */
 	SpinAcquire(OidGenLockId);
+
+	/*
+	 * Load the durable low water mark before testing Ami. Fresh shm
+	 * starts at 0, so DidCommit(Ami) would otherwise read pg_log page 0
+	 * even when Ami is already below the on-disk baseline.
+	 */
+	InitTransactionLowWaterMark();
 	
 /* set the variable cache low water mark here we need to do this before any checks 
 of the pg_log for commits
@@ -504,7 +511,7 @@ of the pg_log for commits
 		 * ----------------
 		 */
 		if ( IsMultiuser() ) 
-			elog(FATAL,"this should not be happening");
+			elog(FATAL,"this should not be happening: Ami xid 512 is not committed");
 		elog(DEBUG,"inititalizing transaction system");
 		TransactionLogUpdate(AmiTransactionId, XID_COMMIT);
 		info->cachedTestXid = AmiTransactionId;
@@ -530,7 +537,6 @@ of the pg_log for commits
 		SetTransactionRecoveryCheckpoint(GetNewTransactionId());
 		SpinAcquire(OidGenLockId);
 	}
-	InitTransactionLowWaterMark();
         VacuumTransactionLog();
         
 	SpinRelease(OidGenLockId);

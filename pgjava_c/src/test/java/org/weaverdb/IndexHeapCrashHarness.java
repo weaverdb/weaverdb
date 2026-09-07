@@ -9,12 +9,13 @@
  *   4. recover JVM — cold start on that datadir, VACUUM, consistency checks,
  *      then process exit without wrapup/re-init
  *
- * Recover never wrapup+initialize in the same JVM. If recover init FATALs,
- * the parent starts another recover JVM against the same datadir. That is
- * not treated as a failed initdb.
+ * Recover never wrapup+initialize in the same JVM. If recover init FATALs
+ * with a missing Ami xid, that is a crash-recovery failure: Ami was
+ * committed at initdb and must not be overwritten with 0. The suite stops.
  *
- * Setup/crash init halt (Ami xid / SYSTEM HALT before READY) still retries
- * the whole round with a new datadir.
+ * If Ami is not committed after initdb, that is also fatal for the suite
+ * (not a retry). Setup/crash Ami halt is likewise not retried with a new
+ * datadir.
  *
  * The Gradle test JVM never loads the engine.
  *
@@ -161,25 +162,9 @@ public final class IndexHeapCrashHarness {
                 break;
             }
             IndexHeapCrashSupport.Scenario scenario = pickScenario(cfg, rng);
-            int retries = 0;
-            while (true) {
-                int rc = runRound(cfg, rng, round, retries, scenario, injector);
-                if (rc == IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit) {
-                    retries++;
-                    if (retries >= 5) {
-                        System.err.println("FAIL: round " + round
-                                + ": missing bootstrap xid after 5 initdb retries");
-                        return 1;
-                    }
-                    System.out.println("  re-running initdb for round " + round
-                            + " scenario=" + scenario.name().toLowerCase(Locale.ROOT)
-                            + " (attempt " + (retries + 1) + ")");
-                    continue;
-                }
-                if (rc != 0) {
-                    return rc;
-                }
-                break;
+            int rc = runRound(cfg, rng, round, 0, scenario, injector);
+            if (rc != 0) {
+                return rc;
             }
             completed++;
             System.out.println("OK round " + round);
@@ -220,19 +205,41 @@ public final class IndexHeapCrashHarness {
             }
             syncFilesystem();
 
+            System.out.println("  Ami check JVM after initdb");
+            int ami = spawnWorker(cfg, datadir, workdir, "amicheck", scenario, cfg.seed + round,
+                    null, false, injector);
+            String amiOut = read(workdir.resolve("amicheck.out"));
+            System.out.print(amiOut);
+            if (!amiOut.contains("IHC: AMI_OK")
+                    || (ami != 0 && !completedThenHotspotAbort(ami, amiOut, "IHC: AMI_OK"))) {
+                dump(workdir, "amicheck");
+                System.err.println("FAIL: Ami xid 512 not committed after initdb; ending tests");
+                keep = true;
+                return IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
+            }
+            if (ami != 0) {
+                System.out.println("  note: amicheck JVM aborted after AMI_OK (HotSpot compiler); continuing");
+            }
+            syncFilesystem();
+
             int setup = spawnWorker(cfg, datadir, workdir, "setup", scenario, cfg.seed + round,
                     null, false, injector);
             System.out.println("  setup rc=" + setup);
             String setupOut = read(workdir.resolve("setup.out"));
-            if (setup != 0) {
+            System.out.print(setupOut);
+            if (setup != 0 && !completedThenHotspotAbort(setup, setupOut, "IHC: SETUP_OK")) {
                 dump(workdir, "setup");
-                if (isInitHalt(setup, setupOut, "IHC: SETUP_OK")) {
+                if (isAmiHalt(setup, setupOut)) {
+                    System.err.println("FAIL: Ami xid 512 not committed at setup after initdb; ending tests");
+                    keep = true;
                     return IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
                 }
                 keep = cfg.keepOnFail;
                 return 1;
             }
-            System.out.print(setupOut);
+            if (setup != 0) {
+                System.out.println("  note: setup JVM aborted after SETUP_OK (HotSpot compiler); continuing");
+            }
             syncFilesystem();
 
             Path gate = workdir.resolve("crash.gate");
@@ -248,7 +255,9 @@ public final class IndexHeapCrashHarness {
                 }
                 dump(workdir, "crash");
                 String crashOut = read(workdir.resolve("crash.out"));
-                if (isInitHalt(crashExit(crash), crashOut, "IHC: READY")) {
+                if (isAmiHalt(crashExit(crash), crashOut)) {
+                    System.err.println("FAIL: Ami xid 512 missing in crash JVM after initdb; ending tests");
+                    keep = true;
                     return IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
                 }
                 keep = cfg.keepOnFail;
@@ -269,6 +278,9 @@ public final class IndexHeapCrashHarness {
                 crash.waitFor(5, TimeUnit.SECONDS);
             }
             System.out.println("  child exited rc=" + crash.exitValue());
+            if (engineStdlog()) {
+                System.out.print(read(workdir.resolve("crash.out")));
+            }
             Thread.sleep(150);
             syncFilesystem();
 
@@ -284,8 +296,19 @@ public final class IndexHeapCrashHarness {
                         stem);
                 lastRecoverOut = read(workdir.resolve(stem + ".out"));
                 System.out.print(lastRecoverOut);
-                if (lastRecoverRc == 0 && lastRecoverOut.contains("IHC: CONSISTENT")) {
+                if (lastRecoverOut.contains("IHC: CONSISTENT")
+                        && (lastRecoverRc == 0
+                        || completedThenHotspotAbort(lastRecoverRc, lastRecoverOut, "IHC: CONSISTENT"))) {
+                    if (lastRecoverRc != 0) {
+                        System.out.println("  note: recover JVM aborted after CONSISTENT (HotSpot compiler); treating as ok");
+                    }
                     return 0;
+                }
+                if (isAmiHalt(lastRecoverRc, lastRecoverOut)) {
+                    dump(workdir, stem);
+                    System.err.println("FAIL: Ami xid 512 was committed after initdb but missing after crash; ending tests");
+                    keep = true;
+                    return IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
                 }
                 if (isInitHalt(lastRecoverRc, lastRecoverOut, "IHC: recover vacuum")) {
                     if (rj < recoverJvms) {
@@ -332,29 +355,45 @@ public final class IndexHeapCrashHarness {
     }
 
     /**
+     * Ami xid 512 is written by a successful initdb and must never be
+     * overwritten with 0. Missing Ami is fatal for the suite.
+     */
+    private static boolean isAmiHalt(int rc, String out) {
+        if (out != null) {
+            if (out.contains("IHC: BOOTSTRAP_XID")
+                    || IndexHeapCrashSupport.containsIgnoreCase(out, "this should not be happening")
+                    || IndexHeapCrashSupport.containsIgnoreCase(out, "Ami xid 512")) {
+                return true;
+            }
+        }
+        return rc == IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit;
+    }
+
+    /**
+     * Worker printed {@code marker} then the HotSpot compiler aborted the
+     * process (Zulu 25 C1 LinearScan SIGSEGV). The role already finished.
+     */
+    private static boolean completedThenHotspotAbort(int rc, String out, String marker) {
+        if (out == null || marker == null || !out.contains(marker)) {
+            return false;
+        }
+        return rc == 134 || rc == 139 || rc == 133;
+    }
+
+    /**
      * Child died before the engine reached {@code startedMarker}.
-     * Setup/crash: parent retries the round with a new datadir.
      * Recover: parent starts a new JVM on the same datadir.
+     * Ami missing is handled by {@link #isAmiHalt(int, String)} first.
      */
     private static boolean isInitHalt(int rc, String out, String startedMarker) {
         boolean reached = out != null && startedMarker != null && out.contains(startedMarker);
-        if (out != null) {
-            if (out.contains("IHC: BOOTSTRAP_XID")
-                    || IndexHeapCrashSupport.containsIgnoreCase(out, "this should not be happening")) {
-                return true;
-            }
-            if (reached) {
-                return false;
-            }
-            if (IndexHeapCrashSupport.containsIgnoreCase(out, "SYSTEM HALT")) {
-                return true;
-            }
-        }
         if (reached) {
             return false;
         }
-        return rc == IndexHeapCrashSupport.RecoverCode.BOOTSTRAP_XID.exit
-                || rc == 134 || rc == 6;
+        if (out != null && IndexHeapCrashSupport.containsIgnoreCase(out, "SYSTEM HALT")) {
+            return true;
+        }
+        return rc == 134 || rc == 6;
     }
 
     private static int crashExit(Process crash) {
@@ -411,6 +450,13 @@ public final class IndexHeapCrashHarness {
         cmd.add("--enable-native-access=ALL-UNNAMED");
         cmd.add("-Djava.library.path=" + cfg.mtpg.resolve("lib"));
         cmd.add("-Xmx512m");
+        /* Zulu 25 C1 SIGSEGVs in LinearScan on this 2.7k-byte JDK method. */
+        cmd.add("-XX:CompileCommand=quiet");
+        cmd.add("-XX:CompileCommand=exclude,jdk.internal.classfile.impl.StackMapGenerator::processBlock");
+        String stdlog = System.getProperty("weaver.crash.stdlog");
+        if (stdlog != null && !stdlog.isBlank()) {
+            cmd.add("-Dweaver.crash.stdlog=" + stdlog);
+        }
         String cp = System.getProperty("java.class.path");
         if (cp != null && !cp.isBlank()) {
             cmd.add("-cp");
@@ -477,6 +523,11 @@ public final class IndexHeapCrashHarness {
         String ext = isDarwin() ? "dylib" : "so";
         Path p = mtpg.resolve("lib/libweaver_crash_injector." + ext);
         return Files.isRegularFile(p) ? p : null;
+    }
+
+    private static boolean engineStdlog() {
+        String v = System.getProperty("weaver.crash.stdlog", "FALSE");
+        return !v.isBlank() && Character.toUpperCase(v.charAt(0)) == 'T';
     }
 
     private static boolean isDarwin() {

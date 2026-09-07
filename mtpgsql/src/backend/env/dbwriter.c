@@ -1048,17 +1048,7 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
         TransBlockNumberSetXidStatus(LogRelation, xid, setstate);
         
         RelationClose(LogRelation);
-        /*  this makes sure that all soft commits come though this section of code in a
-         * serial fashion.  Basically, check to make sure that the prior
-         * soft commit is done commiting by checking the thread state
-         */
-        if ( setstate == XID_SOFT_COMMIT ) {
-            /* wait for the soft_xid just before this one to commit before proceeding
-             * to insure proper serialization */
-/*
-            XactLockTableWait(soft_xid);
-*/
-        }
+
         ResetThreadState(GetMyThread());
     }
     
@@ -1240,7 +1230,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 iostatus = WriteBufferIO(bufHdr, WRITE_FLUSH);
                 if (iostatus == IO_SUCCESS) {
                     Relation target = RelationIdGetRelation(bufHdr->tag.relId.relId,DEFAULTDBOID);
-                    Block blk = AdvanceBufferIO(bufHdr, !forcommit);
+                    Block blk = AdvanceBufferIO(bufHdr, true);
                     status = smgrflush(target->rd_smgr, bufHdr->tag.blockNum, blk);
                     written = true;
                     

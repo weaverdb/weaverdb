@@ -825,7 +825,7 @@ vc_scanheap(VRelStats *vacrelstats, Relation onerel,
 			
 			if ( vacrelstats->fixflags ) {
 				if ( tuple.t_data->t_infomask & HEAP_XMIN_COMMITTED ) {
-					if ( tuple.t_data->t_xmin != InvalidTransactionId && !TransactionIdDidCommit(tuple.t_data->t_xmin) ) {
+					if ( tuple.t_data->t_xmin != InvalidTransactionId && !TransactionIdDidHardCommit(tuple.t_data->t_xmin) ) {
 						elog(vacrelstats->MESSAGE_LEVEL,
 						"fixing mismarked xmin commit tuple %s - blk:%d off:%d",
 						RelationGetRelationName(onerel),blkno,offnum);
@@ -834,7 +834,7 @@ vc_scanheap(VRelStats *vacrelstats, Relation onerel,
 					}
 				}
 				if ( tuple.t_data->t_infomask & HEAP_XMAX_COMMITTED ) {
-					if ( tuple.t_data->t_xmax != InvalidTransactionId && !TransactionIdDidCommit(tuple.t_data->t_xmax) ) {
+					if ( tuple.t_data->t_xmax != InvalidTransactionId && !TransactionIdDidHardCommit(tuple.t_data->t_xmax) ) {
 						elog(vacrelstats->MESSAGE_LEVEL,
 						"fixing mismarked xmax commit tuple %s - blk:%d off:%d",
 						RelationGetRelationName(onerel),blkno,offnum);
@@ -883,6 +883,12 @@ vc_scanheap(VRelStats *vacrelstats, Relation onerel,
 			if (tuple.t_data->t_infomask & HEAP_XMIN_COMMITTED &&
 				!(tuple.t_data->t_infomask & HEAP_XMAX_INVALID))
 			{
+				if ((tuple.t_data->t_infomask & HEAP_XMAX_COMMITTED) &&
+					!TransactionIdDidHardCommit(tuple.t_data->t_xmax))
+				{
+					tuple.t_data->t_infomask &= ~HEAP_XMAX_COMMITTED;
+					pgchanged = true;
+				}
 				if (tuple.t_data->t_infomask & HEAP_XMAX_COMMITTED)
 				{
 					if (tuple.t_data->t_infomask & HEAP_MARKED_FOR_UPDATE)
@@ -898,7 +904,15 @@ vc_scanheap(VRelStats *vacrelstats, Relation onerel,
 					tuple.t_data->t_infomask |= HEAP_XMAX_INVALID;
 					pgchanged = true;
 				}
-				else if (TransactionIdDidCommit(tuple.t_data->t_xmax))
+				else if (TransactionIdDidSoftCommit(tuple.t_data->t_xmax))
+				{
+					/*
+					 * Delete is not durable. Crash recovery would abort
+					 * this xmax; do not collect the TID for index cleanup.
+					 */
+					do_shrinking = false;
+				}
+				else if (TransactionIdDidHardCommit(tuple.t_data->t_xmax))
 				{
 					if (tuple.t_data->t_infomask & HEAP_MARKED_FOR_UPDATE)
 					{
@@ -933,7 +947,8 @@ vc_scanheap(VRelStats *vacrelstats, Relation onerel,
 				{
 					tupgone = false;
 					nkeep++;
-					if (!(tuple.t_data->t_infomask & HEAP_XMAX_COMMITTED) )
+					if (!(tuple.t_data->t_infomask & HEAP_XMAX_COMMITTED) &&
+						TransactionIdDidHardCommit(tuple.t_data->t_xmax))
 					{
 						tuple.t_data->t_infomask |= HEAP_XMAX_COMMITTED;
 						pgchanged = true;

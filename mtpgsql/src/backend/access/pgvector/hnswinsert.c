@@ -3,6 +3,7 @@
 #include "access/genam.h"
 #include "hnsw.h"
 #include "pgvector_index.h"
+#include "pgvector_pagewalk.h"
 #include "nodes/execnodes.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
@@ -72,9 +73,15 @@ HnswFreeOffset(Relation index, Buffer buf, Page page, HnswElement element, Size 
 				*nbuf = buf;
 				*npage = page;
 			}
+			else if (!PgvectorBlockInRange(index, neighborPage))
+			{
+				return false;
+			}
 			else
 			{
 				*nbuf = ReadBuffer(index, neighborPage);
+				if (!BufferIsValid(*nbuf))
+					return false;
 				LockBuffer(index, *nbuf, BUFFER_LOCK_EXCLUSIVE);
 
 				/* Skip WAL for now */
@@ -356,6 +363,14 @@ LoadElementsForInsert(HnswNeighborArray * neighbors, HnswQuery * q, int *idx, Re
 		HnswLoadElement(element, &distance, q, index, support, true, NULL);
 		hc->distance = distance;
 
+		/*
+		 * Torn neighbor TIDs can leave an element with no vector.
+		 * Prune it the same as a deleted node so SelectNeighbors
+		 * never calls CheckDims on a NULL Vector.
+		 */
+		if (DatumGetPointer(HnswGetValue(base, element)) == NULL)
+			element->heaptidsLength = 0;
+
 		/* Prune element if being deleted */
 		if (element->heaptidsLength == 0)
 		{
@@ -587,6 +602,9 @@ FindDuplicateOnDisk(Relation index, HnswElement element)
 		HnswCandidate *neighbor = &neighbors->items[i];
 		HnswElement neighborElement = HnswPtrAccess(base, neighbor->element);
 		Datum		neighborValue = HnswGetValue(base, neighborElement);
+
+		if (DatumGetPointer(value) == NULL || DatumGetPointer(neighborValue) == NULL)
+			continue;
 
 		/* Exit early since ordered by distance */
 		if (!datumIsEqual(value, neighborValue, (Oid) 0, false, (Size) -1))

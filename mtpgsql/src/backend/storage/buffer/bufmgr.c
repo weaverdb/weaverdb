@@ -1609,11 +1609,13 @@ bool ShadowBufferIfNeeded(BufferDesc* bufHdr, bool forflush) {
 
 
 Block AdvanceBufferIO(BufferDesc* bufHdr, bool forflush) {
-    ShadowBufferIfNeeded(bufHdr, forflush);
     if (bufHdr->kind != RELKIND_SPECIAL) {
+        ShadowBufferIfNeeded(bufHdr, forflush);
         PageInsertChecksum((Page)bufHdr->shadow);
+        return (Block)bufHdr->shadow;
+    } else {
+        return (Block)bufHdr->data;
     }
-    return (Block)bufHdr->shadow;
 }
 
 void

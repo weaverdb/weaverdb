@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -96,6 +97,24 @@ final class IndexHeapCrashSupport {
         }
     }
 
+    /** Live heap tuple plus crash-visibility xids from the tuple header. */
+    static final class HeapItem {
+        final int id;
+        final long xmin;
+        final long xmax;
+
+        HeapItem(int id, long xmin, long xmax) {
+            this.id = id;
+            this.xmin = xmin;
+            this.xmax = xmax;
+        }
+
+        @Override
+        public String toString() {
+            return id + "(xmin=" + xmin + ",xmax=" + xmax + ")";
+        }
+    }
+
     private IndexHeapCrashSupport() {
     }
 
@@ -136,6 +155,7 @@ final class IndexHeapCrashSupport {
     static boolean isBootstrapXid(Throwable t) {
         String m = message(t);
         return containsIgnoreCase(m, "this should not be happening")
+                || containsIgnoreCase(m, "Ami xid 512")
                 || containsIgnoreCase(m, "SYSTEM HALT");
     }
 
@@ -256,6 +276,20 @@ final class IndexHeapCrashSupport {
         StringBuilder log = new StringBuilder();
         try (DBReference conn = DBReferenceManager.connect(DB)) {
             try {
+                conn.execute("set enable_indexscan = off");
+                conn.execute("set enable_seqscan = on");
+                String before = formatHeapItems(queryHeapItems(conn));
+                log.append("  heap items before vacuum: ").append(before).append('\n');
+                System.out.println("  heap items before vacuum: " + before);
+                System.out.flush();
+            } catch (ExecutionException e) {
+                if (isBootstrapXid(e)) {
+                    return new CheckResult(RecoverCode.BOOTSTRAP_XID,
+                            "recover missing Ami xid 512 after crash (committed at initdb; not retrying)\n");
+                }
+                log.append("  heap seqscan before vacuum failed: ").append(message(e)).append('\n');
+            }
+            try {
                 System.out.println("IHC: recover vacuum");
                 System.out.flush();
                 conn.execute("vacuum " + TABLE);
@@ -264,26 +298,31 @@ final class IndexHeapCrashSupport {
             } catch (ExecutionException e) {
                 if (isBootstrapXid(e)) {
                     return new CheckResult(RecoverCode.BOOTSTRAP_XID,
-                            "recover missing bootstrap xid (initdb-durable; retry round)\n");
+                            "recover missing Ami xid 512 after crash (committed at initdb; not retrying)\n");
                 }
                 return fail(log, e, "post-crash vacuum failed");
             }
             log.append("  vacuum + recover\n");
 
-            List<Integer> heap;
+            List<HeapItem> heapItems;
             try {
                 conn.execute("set enable_indexscan = off");
                 conn.execute("set enable_seqscan = on");
-                heap = queryHeapSeqscan(conn);
+                heapItems = queryHeapItems(conn);
             } catch (ExecutionException e) {
                 if (isBootstrapXid(e)) {
                     return new CheckResult(RecoverCode.BOOTSTRAP_XID,
-                            "recover missing bootstrap xid (initdb-durable; retry round)\n");
+                            "recover missing Ami xid 512 after crash (committed at initdb; not retrying)\n");
                 }
                 return fail(log, e, "heap seqscan failed");
             }
 
+            List<Integer> heap = idsOf(heapItems);
             log.append("  heap ids: ").append(heap.isEmpty() ? "<empty>" : heap).append('\n');
+            log.append("  heap items: ").append(formatHeapItems(heapItems)).append('\n');
+            System.out.println("  heap ids: " + (heap.isEmpty() ? "<empty>" : heap));
+            System.out.println("  heap items: " + formatHeapItems(heapItems));
+            System.out.flush();
 
             if (heap.isEmpty()) {
                 return fail(log, null,
@@ -303,7 +342,7 @@ final class IndexHeapCrashSupport {
 
             try {
                 if (relationExists(conn, BTREE)) {
-                    CheckResult btree = checkBtreePointsAtHeap(conn, heap, heapSet, maxId, rng, log);
+                    CheckResult btree = checkBtreePointsAtHeap(conn, heapItems, heap, heapSet, maxId, rng, log);
                     if (btree != null) {
                         return btree;
                     }
@@ -323,7 +362,7 @@ final class IndexHeapCrashSupport {
             } catch (ExecutionException e) {
                 if (isBootstrapXid(e)) {
                     return new CheckResult(RecoverCode.BOOTSTRAP_XID,
-                            "recover missing bootstrap xid (initdb-durable; retry round)\n");
+                            "recover missing Ami xid 512 after crash (committed at initdb; not retrying)\n");
                 }
                 return fail(log, e, "post-crash consistency check failed");
             }
@@ -331,14 +370,15 @@ final class IndexHeapCrashSupport {
         } catch (ExecutionException e) {
             if (isBootstrapXid(e)) {
                 return new CheckResult(RecoverCode.BOOTSTRAP_XID,
-                        "recover missing bootstrap xid (initdb-durable; retry round)\n");
+                        "recover missing Ami xid 512 after crash (committed at initdb; not retrying)\n");
             }
             return fail(log, e, "cannot connect after crash");
         }
     }
 
-    private static CheckResult checkBtreePointsAtHeap(DBReference conn, List<Integer> heap,
-            Set<Integer> heapSet, int maxId, Random rng, StringBuilder log) throws ExecutionException {
+    private static CheckResult checkBtreePointsAtHeap(DBReference conn, List<HeapItem> heapItems,
+            List<Integer> heap, Set<Integer> heapSet, int maxId, Random rng, StringBuilder log)
+            throws ExecutionException {
         conn.execute("set enable_seqscan = off");
         conn.execute("set enable_indexscan = on");
         List<Integer> idxIds = queryIds(conn);
@@ -347,6 +387,12 @@ final class IndexHeapCrashSupport {
         if (!heap.equals(idxIds)) {
             log.append("  heap: ").append(heap).append('\n');
             log.append("  idx:  ").append(idxIds).append('\n');
+            log.append("  heap items: ").append(formatHeapItems(heapItems)).append('\n');
+            log.append("  heap-only: ").append(formatHeapItems(onlyIn(heapItems, idxIds))).append('\n');
+            log.append("  idx-only:  ").append(onlyInIds(idxIds, heap)).append('\n');
+            System.out.println("  heap-only: " + formatHeapItems(onlyIn(heapItems, idxIds)));
+            System.out.println("  idx-only:  " + onlyInIds(idxIds, heap));
+            System.out.flush();
             return fail(log, null, "unique btree scan disagrees with heap seqscan");
         }
         log.append("  OK btree ids match heap\n");
@@ -471,17 +517,65 @@ final class IndexHeapCrashSupport {
      * Heap read that does not ORDER BY the unique key, so a torn btree cannot
      * masquerade as an empty seqscan.
      */
-    static List<Integer> queryHeapSeqscan(DBReference conn) throws ExecutionException {
-        List<Integer> ids = new ArrayList<>();
-        try (Statement s = conn.statement("select id from " + TABLE)) {
+    static List<HeapItem> queryHeapItems(DBReference conn) throws ExecutionException {
+        List<HeapItem> items = new ArrayList<>();
+        try (Statement s = conn.statement("select id, xmin, xmax from " + TABLE)) {
             Output<Integer> id = s.linkOutput(1, Integer.class);
+            Output<Long> xmin = s.linkOutput(2, Long.class);
+            Output<Long> xmax = s.linkOutput(3, Long.class);
             s.execute();
             while (s.fetch()) {
-                ids.add(id.get());
+                Integer i = id.get();
+                Long xn = xmin.get();
+                Long xx = xmax.get();
+                items.add(new HeapItem(i == null ? 0 : i,
+                        xn == null ? 0L : xn,
+                        xx == null ? 0L : xx));
             }
         }
-        ids.sort(Integer::compareTo);
+        items.sort(Comparator.comparingInt(h -> h.id));
+        return items;
+    }
+
+    static List<Integer> idsOf(List<HeapItem> items) {
+        List<Integer> ids = new ArrayList<>(items.size());
+        for (HeapItem h : items) {
+            ids.add(h.id);
+        }
         return ids;
+    }
+
+    static String formatHeapItems(List<HeapItem> items) {
+        if (items == null || items.isEmpty()) {
+            return "<empty>";
+        }
+        return items.toString();
+    }
+
+    static List<HeapItem> onlyIn(List<HeapItem> items, List<Integer> idxIds) {
+        Set<Integer> idx = new LinkedHashSet<>(idxIds);
+        List<HeapItem> out = new ArrayList<>();
+        for (HeapItem h : items) {
+            if (!idx.contains(h.id)) {
+                out.add(h);
+            }
+        }
+        return out;
+    }
+
+    static List<Integer> onlyInIds(List<Integer> left, List<Integer> right) {
+        Set<Integer> r = new LinkedHashSet<>(right);
+        List<Integer> out = new ArrayList<>();
+        for (Integer id : left) {
+            if (!r.contains(id)) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
+    static List<Integer> queryHeapSeqscan(DBReference conn) throws ExecutionException {
+        return idsOf(queryHeapItems(conn));
     }
 
     static boolean relationExists(DBReference conn, String name) throws ExecutionException {

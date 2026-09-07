@@ -25,6 +25,7 @@
 #include "catalog/index.h"
 #include "utils/tuplesort.h"
 #include "utils/syscache.h"
+#include "env/freespace.h"
 
 typedef struct
 {
@@ -49,6 +50,7 @@ static void _bt_fixlevel(Relation rel, Buffer buf, BlockNumber limit);
 static void _bt_fixup(Relation rel, Buffer buf);
 
 static OffsetNumber _bt_getoff(Page page, BlockNumber blkno);
+static bool _bt_child_block_exists(Relation rel, BlockNumber blkno);
 
 static Buffer _bt_newroot(Relation rel, Buffer lbuf, Buffer rbuf);
 
@@ -1904,6 +1906,19 @@ _bt_getoff(Page page, BlockNumber blkno)
 }
 
 /*
+ * True if blkno names an existing non-meta btree page.  P_NONE (0) is both
+ * the metapage and the leftmost/rightmost sibling sentinel.  P_NEW is
+ * InvalidBlockNumber; passing it to _bt_getbuf would extend the relation.
+ */
+static bool
+_bt_child_block_exists(Relation rel, BlockNumber blkno)
+{
+	if (blkno == P_NONE || blkno == P_NEW)
+		return false;
+	return blkno < RelationGetNumberOfBlocks(rel);
+}
+
+/*
  *	_bt_pgaddtup() -- add a tuple to a particular page in the index.
  *
  *		This routine adds the tuple to the page as requested.  It does
@@ -1991,39 +2006,48 @@ _bt_isequal(TupleDesc itupdesc, Page page, OffsetNumber offnum,
 
 bool
 _bt_validate_node(Relation rel, BlockNumber block) {
-    bool changed,empty;
+    bool changed = false;
+    bool empty;
     bool dryrun = IsReadOnlyProcessingMode();
     Buffer buffer = _bt_getbuf(rel, block, BT_READ);
     Page page = BufferGetPage(buffer);
     BTPageOpaque opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-        OffsetNumber current;
+    OffsetNumber current;
 
     empty = (P_ISREAPED(opaque) || P_ISFREE(opaque));
     _bt_relbuf(rel, buffer);
 
-   if (!empty && !dryrun) {
+    if (!empty && !dryrun) {
         buffer = _bt_getbuf(rel, block, BT_WRITE);
+        page = BufferGetPage(buffer);
+        opaque = (BTPageOpaque) PageGetSpecialPointer(page);
         for (current = P_FIRSTDATAKEY(opaque); current <= PageGetMaxOffsetNumber(page); current = OffsetNumberNext(current)) {
             bool deleteit = false;
-
+            BlockNumber cblk;
             BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, current));
             ItemPointer pointer = &item->bti_itup.t_tid;
-            Buffer child = _bt_getbuf(rel, ItemPointerGetBlockNumber(pointer), BT_READ);
 
-            if (!BufferIsValid(child)) {
+            cblk = ItemPointerGetBlockNumber(pointer);
+            if (!_bt_child_block_exists(rel, cblk)) {
                 deleteit = true;
             } else {
-                Page childPage = BufferGetPage(child);
+                Buffer child = _bt_getbuf(rel, cblk, BT_READ);
 
-                if (ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(childPage)) {
-                    ItemId childitem = PageGetItemId(childPage, ItemPointerGetOffsetNumber(pointer));
-                    if (!ItemIdIsUsed(childitem)) {
+                if (!BufferIsValid(child)) {
+                    deleteit = true;
+                } else {
+                    Page childPage = BufferGetPage(child);
+
+                    if (ItemPointerGetOffsetNumber(pointer) <= PageGetMaxOffsetNumber(childPage)) {
+                        ItemId childitem = PageGetItemId(childPage, ItemPointerGetOffsetNumber(pointer));
+                        if (!ItemIdIsUsed(childitem)) {
+                            deleteit = true;
+                        }
+                    } else {
                         deleteit = true;
                     }
-                } else {
-                    deleteit = true;
+                    _bt_relbuf(rel, child);
                 }
-                _bt_relbuf(rel, child);
             }
 
             if (deleteit) {
@@ -2065,6 +2089,8 @@ _bt_validate_leaf(Relation rel, BlockNumber block) {
 
     if (!empty && !dryrun) {
         buffer = _bt_getbuf(rel, block, BT_WRITE);
+        page = BufferGetPage(buffer);
+        opaque = (BTPageOpaque) PageGetSpecialPointer(page);
         HeapTuple heap = SearchSysCacheTuple(INDEXRELID, ObjectIdGetDatum(rel->rd_id), PointerGetDatum(NULL), PointerGetDatum(NULL), PointerGetDatum(NULL));
         Oid heapid = SysCacheGetAttr(INDEXRELID, heap, Anum_pg_index_indrelid, NULL);
         Relation heaprel = RelationIdGetRelation(heapid, DEFAULTDBOID);
@@ -2124,12 +2150,20 @@ _bt_validate_leaf(Relation rel, BlockNumber block) {
 
 bool
 _bt_reap(Relation rel, BlockNumber block) {
-    BlockNumber parent,left,right;
+    BlockNumber parent, left, right;
+    bool empty;
+    Buffer buffer;
+    Buffer pbuffer = InvalidBuffer;
+    Page page;
+    BTPageOpaque opaque;
+    OffsetNumber bo = InvalidOffsetNumber;
 
-    bool reaped,empty;
-    Buffer buffer = _bt_getbuf(rel, block, BT_READ);
-    Page page = BufferGetPage(buffer);
-    BTPageOpaque opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+    if (!_bt_child_block_exists(rel, block))
+        return false;
+
+    buffer = _bt_getbuf(rel, block, BT_READ);
+    page = BufferGetPage(buffer);
+    opaque = (BTPageOpaque) PageGetSpecialPointer(page);
 
     empty = _bt_empty(page);
     parent = opaque->btpo_parent;
@@ -2137,48 +2171,62 @@ _bt_reap(Relation rel, BlockNumber block) {
     right = opaque->btpo_next;
 
     _bt_relbuf(rel, buffer);
-    
-    if (!empty) {
+
+    if (!empty)
         return false;
+
+    /*
+     * If the parent still has a downlink to this page, leave the page in
+     * the tree.  Only unlink orphans.  Never pass P_NEW/P_NONE or an
+     * out-of-range blkno to _bt_getbuf: P_NEW extends the relation, and
+     * P_NONE is the metapage.
+     */
+    if (_bt_child_block_exists(rel, parent)) {
+        pbuffer = _bt_getbuf(rel, parent, BT_WRITE);
+        bo = _bt_getoff(BufferGetPage(pbuffer), block);
+        if (bo != InvalidOffsetNumber) {
+            _bt_relbuf(rel, pbuffer);
+            return false;
+        }
     }
 
-    Buffer pbuffer = _bt_getbuf(rel, parent, BT_WRITE);
-    Page ppage = BufferGetPage(buffer);
-    OffsetNumber bo = _bt_getoff(page, block);
-    
-    if (bo == InvalidOffsetNumber) {
-        Buffer lbuffer = _bt_getbuf(rel,left,BT_WRITE);
+    if (_bt_child_block_exists(rel, left)) {
+        Buffer lbuffer = _bt_getbuf(rel, left, BT_WRITE);
         Page lpage = BufferGetPage(lbuffer);
         BTPageOpaque lopaque = (BTPageOpaque) PageGetSpecialPointer(lpage);
-        Assert(lopaque->btpo_next == block);
-        lopaque->btpo_next = right;
 
-        buffer = _bt_getbuf(rel, block, BT_WRITE);
-        page = BufferGetPage(buffer);
-        opaque = (BTPageOpaque) PageGetSpecialPointer(page);
-        Assert(opaque->btpo_prev == left);
-        Assert(opaque->btpo_next == right);
-        Assert(opaque->btpo_parent == parent);
-        opaque->btpo_parent = InvalidBlockNumber;
-        opaque->btpo_next = InvalidBlockNumber;
-        opaque->btpo_prev = InvalidBlockNumber;
-        opaque->btpo_flags = BTP_FREE | BTP_REAPED;
+        if (lopaque->btpo_next == block) {
+            lopaque->btpo_next = right;
+            _bt_wrtbuf(rel, lbuffer);
+        } else {
+            _bt_relbuf(rel, lbuffer);
+        }
+    }
 
-        Buffer rbuffer = _bt_getbuf(rel,right,BT_WRITE);
+    buffer = _bt_getbuf(rel, block, BT_WRITE);
+    page = BufferGetPage(buffer);
+    opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+    opaque->btpo_parent = InvalidBlockNumber;
+    opaque->btpo_next = InvalidBlockNumber;
+    opaque->btpo_prev = InvalidBlockNumber;
+    opaque->btpo_flags = BTP_FREE | BTP_REAPED;
+    _bt_wrtbuf(rel, buffer);
+
+    if (_bt_child_block_exists(rel, right)) {
+        Buffer rbuffer = _bt_getbuf(rel, right, BT_WRITE);
         Page rpage = BufferGetPage(rbuffer);
         BTPageOpaque ropaque = (BTPageOpaque) PageGetSpecialPointer(rpage);
-        Assert(ropaque->btpo_prev == block);
-        ropaque->btpo_prev = left;
 
-        _bt_wrtbuf(rel, rbuffer);
-        _bt_wrtbuf(rel, buffer);
-        _bt_wrtbuf(rel, lbuffer);
-        reaped = true;
-    } else {
-        reaped = false;
-    }    
-    _bt_relbuf(rel, pbuffer);
+        if (ropaque->btpo_prev == block) {
+            ropaque->btpo_prev = left;
+            _bt_wrtbuf(rel, rbuffer);
+        } else {
+            _bt_relbuf(rel, rbuffer);
+        }
+    }
 
-    return reaped;
-    // unlink from tree
+    if (BufferIsValid(pbuffer))
+        _bt_relbuf(rel, pbuffer);
+
+    return true;
 }

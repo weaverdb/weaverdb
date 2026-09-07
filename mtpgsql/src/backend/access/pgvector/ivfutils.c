@@ -9,6 +9,7 @@
 #include "halfvec.h"
 #include "ivfflat.h"
 #include "env/freespace.h"
+#include "pgvector_pagewalk.h"
 #include "storage/bufmgr.h"
 #include "utils/relcache.h"
 #include "utils/varbit.h"
@@ -325,11 +326,40 @@ IvfflatUpdateList(Relation index, ListInfo listInfo,
 	Page		page;
 	IvfflatList list;
 	bool		changed = false;
+	ItemId		itemid;
+	OffsetNumber maxoff;
+
+	if (!PgvectorBlockInRange(index, listInfo.blkno))
+		return;
 
 	buf = ReadBufferExtended(index, forkNum, listInfo.blkno, RBM_NORMAL, NULL);
 	LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 	page = BufferGetPage(buf);
-	list = (IvfflatList) PageGetItem(page, PageGetItemId(page, listInfo.offno));
+	if (PageIsNew(page) || PageChecksumIsInit(page) || PageIsEmpty(page) ||
+		IvfflatPageGetOpaque(page)->page_id != IVFFLAT_PAGE_ID)
+	{
+		LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+		ReleaseBuffer(index, buf);
+		return;
+	}
+
+	maxoff = PgvectorClampMaxOff(PageGetMaxOffsetNumber(page));
+	if (listInfo.offno < FirstOffsetNumber || listInfo.offno > maxoff)
+	{
+		LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+		ReleaseBuffer(index, buf);
+		return;
+	}
+
+	itemid = PageGetItemId(page, listInfo.offno);
+	if (!ItemIdIsUsed(itemid))
+	{
+		LockBuffer(index, buf, BUFFER_LOCK_UNLOCK);
+		ReleaseBuffer(index, buf);
+		return;
+	}
+
+	list = (IvfflatList) PageGetItem(page, itemid);
 
 	if (BlockNumberIsValid(insertPage) && insertPage != list->insertPage)
 	{

@@ -2508,7 +2508,7 @@ lazy_vacuum_database(bool verbose)
 }
 
 void  vacuum_log(Relation rel, char* pattern, ...) {
-    char            msg[256];
+    char            msg[512];
     va_list         args;
 
     va_start(args, pattern);

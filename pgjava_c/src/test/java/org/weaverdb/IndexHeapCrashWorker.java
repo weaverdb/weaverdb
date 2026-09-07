@@ -3,9 +3,10 @@
  * Child JVM for the Java index/heap crash harness.
  *
  * Roles:
- *   setup   — create DB + durable schema, wrapup, exit
- *   crash   — mutate until SIGKILL (no wrapup)
- *   recover — cold start of this process only; never wrapup or re-init.
+ *   amicheck — cold start after initdb; Ami xid 512 must already be committed
+ *   setup    — create DB + durable schema, wrapup, exit
+ *   crash    — mutate until SIGKILL (no wrapup)
+ *   recover  — cold start of this process only; never wrapup or re-init.
  *             The parent starts a new JVM if this one dies at init.
  *
  *-------------------------------------------------------------------------
@@ -48,13 +49,18 @@ public final class IndexHeapCrashWorker {
             } catch (Exception ignored) {
             }
         } finally {
-            System.exit(code);
+            System.out.flush();
+            System.err.flush();
+            /* Skip Shutdown.exit() so C1 cannot keep compiling JDK methods
+             * (Zulu 25 LinearScan SIGSEGV on StackMapGenerator.processBlock)
+             * after this process has already finished its role. */
+            Runtime.getRuntime().halt(code);
         }
     }
 
     static int run(String[] args) throws Exception {
         if (args.length < 2) {
-            System.err.println("usage: IndexHeapCrashWorker setup|crash|recover <datadir> [options]");
+            System.err.println("usage: IndexHeapCrashWorker amicheck|setup|crash|recover <datadir> [options]");
             return 3;
         }
         String role = args[0];
@@ -93,6 +99,13 @@ public final class IndexHeapCrashWorker {
         Random rng = new Random(seed);
 
         switch (role) {
+            case "amicheck" -> {
+                IndexHeapCrashSupport.shutdownEngine();
+                trace(trace, "ami committed after initdb");
+                System.out.println("IHC: AMI_OK");
+                System.out.flush();
+                return 0;
+            }
             case "setup" -> {
                 IndexHeapCrashSupport.createDatabase();
                 trace(trace, "database created");

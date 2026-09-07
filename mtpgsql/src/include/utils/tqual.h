@@ -127,6 +127,12 @@ typedef enum
 PG_EXTERN HTSV_Result HeapTupleSatisfiesVacuum(HeapTupleHeader tuple,
 						 TransactionId OldestXmin);
 
+/*
+ * True iff xmin and xmax both hard-committed and the tuple is not
+ * merely marked for update. Recoverpage may drop index TIDs only then.
+ */
+PG_EXTERN bool HeapTupleIsHardCommittedDead(HeapTupleHeader tuple);
+
 
 #ifdef __cplusplus
 }

@@ -66,10 +66,13 @@ FindInsertPage(Relation index, Datum *values, BlockNumber *insertPage, ListInfo 
 
 			if (distance < minDistance || !BlockNumberIsValid(*insertPage))
 			{
-				*insertPage = list->insertPage;
+				BlockNumber cand = list->insertPage;
+
 				listInfo->blkno = nextblkno;
 				listInfo->offno = offno;
 				minDistance = distance;
+				if (PgvectorBlockInRange(index, cand))
+					*insertPage = cand;
 			}
 		}
 
@@ -117,7 +120,8 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 
 	/* Find the insert page - sets the page and list info */
 	FindInsertPage(index, &value, &insertPage, &listInfo);
-	Assert(BlockNumberIsValid(insertPage));
+	if (!PgvectorBlockInRange(index, insertPage))
+		insertPage = InvalidBlockNumber;
 	originalInsertPage = insertPage;
 
 	/* Form tuple */
@@ -128,6 +132,18 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 	itemsz = MAXALIGN(IndexTupleSize(itup));
 	Assert(itemsz <= BLCKSZ - MAXALIGN(SizeOfPageHeaderData) - MAXALIGN(sizeof(IvfflatPageOpaqueData)) - sizeof(ItemIdData));
 
+	/* No list insert page yet: allocate one. */
+	if (!BlockNumberIsValid(insertPage))
+	{
+		LockRelationForExtension(index, ExclusiveLock);
+		buf = IvfflatNewBuffer(index, MAIN_FORKNUM);
+		UnlockRelationForExtension(index, ExclusiveLock);
+		page = BufferGetPage(buf);
+		IvfflatInitPage(buf, page);
+		insertPage = BufferGetBlockNumber(buf);
+	}
+	else
+	{
 	/* Find a page to insert the item */
 	for (;;)
 	{
@@ -135,11 +151,15 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 		LockBuffer(index, buf, BUFFER_LOCK_EXCLUSIVE);
 
 		page = BufferGetPage(buf);
+		if (PageIsNew(page) || PageChecksumIsInit(page) ||
+			IvfflatPageGetOpaque(page)->page_id != IVFFLAT_PAGE_ID)
+			IvfflatInitPage(buf, page);
 
 		if (PageGetFreeSpace(page) >= itemsz)
 			break;
 
-		insertPage = IvfflatPageGetOpaque(page)->nextblkno;
+		insertPage = PgvectorSafeNextBlkno(index, BufferGetBlockNumber(buf),
+										  IvfflatPageGetOpaque(page)->nextblkno);
 
 		if (BlockNumberIsValid(insertPage))
 		{
@@ -178,6 +198,7 @@ InsertTuple(Relation index, Datum *values, bool *isnull, ItemPointer heap_tid)
 			page = BufferGetPage(buf);
 			break;
 		}
+	}
 	}
 
 	/* Add to next offset */

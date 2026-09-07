@@ -229,8 +229,14 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	Buffer		buf = InvalidBuffer;
 
 	if (blkno != P_NEW) {
+		BlockNumber nblocks;
+
 		/* Read an existing block of the relation */
-            Assert(blkno == BTREE_METAPAGE || blkno < RelationGetNumberOfBlocks(rel));
+		nblocks = RelationGetNumberOfBlocks(rel);
+		if (blkno != BTREE_METAPAGE && blkno >= nblocks) {
+			elog(ERROR, "error reading index page %ld for index %s",
+				 (long) blkno, RelationGetRelationName(rel));
+		}
 		buf = ReadBuffer(rel, blkno);
                 if ( !BufferIsValid(buf) ) {
 /*  ok this is will undoubtly cause buffer leaks and 
@@ -244,12 +250,13 @@ _bt_getbuf(Relation rel, BlockNumber blkno, int access)
 	{
 		Page		page;
                 BTPageOpaque opaque;
-                BTPageOpaqueData init = {
-                    BTP_REAPED,
-                    0,
-                    InvalidBlockNumber,
-                    0
-                };
+                BTPageOpaqueData init;
+
+		MemSet(&init, 0, sizeof(init));
+		init.btpo_prev = P_NONE;
+		init.btpo_next = P_NONE;
+		init.btpo_parent = InvalidBlockNumber;
+		init.btpo_flags = BTP_REAPED;
                  /*
 		 * Extend the relation by one page.
 		 *

@@ -353,6 +353,7 @@ transaction system  */
  *  that point to unused heap items need to be 
  *  removed.
  */
+#ifdef NOTUSED
         {
             List* dbids = smgrdbrecoverylist();
             List*  item;
@@ -368,7 +369,7 @@ transaction system  */
                 smgrcompleterecovery();
             }
         }
-    
+#endif /* NOTUSED */
 	dbname = NULL;
 
  	SetProcessingMode(NormalProcessing);   

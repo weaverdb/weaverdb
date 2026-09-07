@@ -18,10 +18,6 @@
  *-------------------------------------------------------------------------
  */
 
-#include <signal.h>
-
-
-
 #include "postgres.h"
 
 #include "env/env.h"
@@ -38,6 +34,72 @@ extern VariableCache ShmemVariableCache;
 /* defined in tramsam.c  */
 static XidStatus
 TransBlockGetXidStatus(Block tblock,TransactionId transactionId);
+
+static const char *
+xid_status_name(XidStatus status)
+{
+	switch (status)
+	{
+		case XID_INPROGRESS:
+			return "inprogress(0)";
+		case XID_ABORT:
+			return "abort(1)";
+		case XID_SOFT_COMMIT:
+			return "soft_commit(2)";
+		case XID_COMMIT:
+			return "commit(3)";
+		default:
+			return "unknown";
+	}
+}
+
+static size_t
+xid_status_tb_size(void)
+{
+	unsigned long seg = 0;
+
+	return sizeof(seg) * 4;
+}
+
+static unsigned long
+xid_status_shift(Index index, size_t tb_size)
+{
+	return ((tb_size * 2) - 2) - ((index % tb_size) * 2);
+}
+
+static XidStatus
+xid_status_from_word(unsigned long word, Index index, size_t tb_size)
+{
+	const unsigned long mask = 3;
+
+	return (XidStatus) ((word >> xid_status_shift(index, tb_size)) & mask);
+}
+
+static bool
+xid_shares_ami_page(TransactionId transactionId)
+{
+	unsigned long itemsPerBlock = TP_NumXidStatusPerBlock;
+
+	if (ShmemVariableCache != NULL
+		&& ShmemVariableCache->xid_low_water_mark > AmiTransactionId)
+		return false;
+	return (transactionId / itemsPerBlock) == (AmiTransactionId / itemsPerBlock);
+}
+
+static XidStatus
+TransPageGetXidStatus(Block tblock, TransactionId transactionId)
+{
+	Index		index;
+	volatile unsigned long *finder;
+	size_t		tb_size = xid_status_tb_size();
+
+	if (tblock == NULL)
+		return XID_INPROGRESS;
+	index = transactionId % TP_NumXidStatusPerBlock;
+	finder = ((volatile unsigned long *) tblock + (index / tb_size));
+	return xid_status_from_word(*finder, index, tb_size);
+}
+
 /* ----------------------------------------------------------------
  *					  general support routines
  * ----------------------------------------------------------------
@@ -107,36 +169,14 @@ TransComputeBlockNumber(Relation relation,		/* relation to test */
 XidStatus
 TransBlockGetXidStatus(Block tblock,TransactionId transactionId)
 {
-	Index		index;
-	volatile unsigned long  *   finder;
-	unsigned long		seg;
-        size_t                  tb_size = sizeof(seg) * 4;
-   const unsigned long            mask = 3;
+	XidStatus	xstatus;
 
 /*  Lock this just to see if the problems with weird updates goes away  */
-	S_LOCK(&SLockArray[XidSetLockId]);   
+	S_LOCK(&SLockArray[XidSetLockId]);
+	xstatus = TransPageGetXidStatus(tblock, transactionId);
+	S_UNLOCK(&SLockArray[XidSetLockId]);
 
-	/* ----------------
-	 *	calculate the index into the transaction data where
-	 *	our transaction status is located
-	 *
-	 *	XXX this will be replaced soon when we move to the
-	 *		new transaction id scheme -cim 3/23/90
-	 *
-	 *	The old system has now been replaced. -mer 5/24/92
-	 * ----------------
-	 */
-	index = transactionId % TP_NumXidStatusPerBlock;
-	seg = index / tb_size;
-	finder = ((volatile unsigned long*)tblock + seg);
-	seg = *finder;
-
-	seg >>= (((tb_size * 2) - 2) - ((index % tb_size) * 2));
-	seg = seg & mask;
-
-	S_UNLOCK(&SLockArray[XidSetLockId]);   
-
-	return (XidStatus) seg;
+	return xstatus;
 }
 
 /* --------------------------------
@@ -154,9 +194,16 @@ TransBlockSetXidStatus(Block tblock,
 	volatile unsigned long  *       finder;
 	unsigned long 			seg = 0;
 	unsigned long 			ref = 0;
+	unsigned long			updated = 0;
 	unsigned long                   mask = 3;
 	unsigned long 			shift = 0;
-    size_t                  tb_size = sizeof(seg) * 4;
+	size_t                  tb_size = xid_status_tb_size();
+	XidStatus				oldstatus;
+	XidStatus				newstatus;
+	XidStatus				old_ami;
+	XidStatus				new_ami;
+	Index					amiIndex;
+	bool					protect_ami;
 
 	/* ----------------
 	 *	calculate the index into the transaction data where
@@ -190,7 +237,7 @@ TransBlockSetXidStatus(Block tblock,
 			elog(NOTICE,
 				 "TransBlockSetXidStatus: invalid status: %d (ignored)",
 				 xstatus);
-			break;
+			return;
 	}
 
 
@@ -199,20 +246,37 @@ TransBlockSetXidStatus(Block tblock,
 	seg <<= (((tb_size * 2 ) - 2) - shift);
 	mask <<= (((tb_size * 2 ) - 2) - shift);
 	finder = ((volatile unsigned long*)tblock + (index / tb_size));
+	amiIndex = AmiTransactionId % TP_NumXidStatusPerBlock;
+	protect_ami = xid_shares_ami_page(transactionId)
+		&& (index / tb_size) == (amiIndex / tb_size);
 
 	S_LOCK(&SLockArray[XidSetLockId]);	
 
 	ref = *finder;
+	oldstatus = xid_status_from_word(ref, index, tb_size);
+	old_ami = xid_status_from_word(ref, amiIndex, tb_size);
 
         /*  check to see that no mutually exclusive state 
             has already been set 
         */
 /*  erase the right bits  */
-            ref &= ~(mask);
-/*  write the new values to the right bits */
-            ref |= seg;
+            updated = (ref & ~(mask)) | seg;
+	newstatus = xid_status_from_word(updated, index, tb_size);
+	new_ami = xid_status_from_word(updated, amiIndex, tb_size);
+
+	if (protect_ami && old_ami != XID_INPROGRESS && new_ami == XID_INPROGRESS)
+	{
+		S_UNLOCK(&SLockArray[XidSetLockId]);
+		elog(FATAL, "Ami xid 512 overwritten with 0 by xid %llu (%s -> %s) word %lx -> %lx",
+			 (unsigned long long) transactionId,
+			 xid_status_name(oldstatus),
+			 xid_status_name(newstatus),
+			 ref, updated);
+		return;
+	}
+
 /*  write the long section to the block */
-            *finder = ref;
+            *finder = updated;
 
 	S_UNLOCK(&SLockArray[XidSetLockId]);
 }
