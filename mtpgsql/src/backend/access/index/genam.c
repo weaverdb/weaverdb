@@ -49,10 +49,40 @@
 
 #include "postgres.h"
 #include "env/env.h"
+#include "env/properties.h"
 #include "access/genam.h"
 #include "storage/smgr.h"
 #include "nodes/pg_list.h"
 #include "utils/relcache.h"
+
+#include <stdio.h>
+#include <stdarg.h>
+
+bool
+TraceIndexEnabled(void)
+{
+	static int cached = -1;
+
+	if (cached < 0)
+		cached = (PropertyIsValid("trace_index") && GetBoolProperty("trace_index"))
+			? 1 : 0;
+	return cached != 0;
+}
+
+void
+TraceIndexOp(const char *fmt, ...)
+{
+	va_list ap;
+
+	if (!TraceIndexEnabled())
+		return;
+	fprintf(stderr, "INDEX: ");
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	fputc('\n', stderr);
+	fflush(stderr);
+}
 
 /* ----------------------------------------------------------------
  *		general access method routines
@@ -210,7 +240,12 @@ index_recoverpage(Relation rel,BlockNumber page) {
     if ( rel->rd_rel->relkind == RELKIND_INDEX ) {
         RegProcedure procedure = rel->rd_am->amfreetuple;   /*  this one is deprecated and we are using the slot for recover page */
         if ( RegProcedureIsValid(procedure) ) {
-            return DatumGetLong(fmgr(procedure, rel, page));
+            BlockNumber out = DatumGetLong(fmgr(procedure, rel, page));
+
+            TraceIndexOp("recoverpage %s in=%lu out=%lu",
+                         RelationGetRelationName(rel),
+                         (unsigned long) page, (unsigned long) out);
+            return out;
         }
     }
     return InvalidBlockNumber;

@@ -1050,7 +1050,7 @@ lazy_vacuum_heap(Relation onerel, LVRelStats * vacrelstats)
   *  due to PageCompactPage.
   *
   *  LP recycle (lp_len=0 / compact) is only safe after
-  *  FlushAllDirtyBuffersDurable at the index-cleanup
+  *  FlushAllDirtyBuffers at the index-cleanup
   *  barrier.  Do not move heap cleanup ahead of that
   *  barrier.  Recovery-time index validation remains a
   *  backstop for incomplete cycles.
@@ -1226,7 +1226,7 @@ lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats)
 	/*
 	 * amvacuumcleanup (HNSW/IVFFlat graph repair stats, etc.) must run
 	 * here — still inside the pre-barrier window — so any pages it
-	 * dirties are included in FlushAllDirtyBuffersDurable before heap
+	 * dirties are included in FlushAllDirtyBuffers before heap
 	 * LP cleanup.  Do not move this past lazy_index_barrier_then_heap.
 	 */
 	index_vacuumcleanup(indrel);
@@ -1327,7 +1327,7 @@ lazy_index_barrier_then_heap(Relation onerel, LVRelStats *vacrelstats)
 		elog(FATAL, "vacuum_crash_point=skip_barrier_heap_then_crash");
 	}
 
-	FlushAllDirtyBuffersDurable(true);
+	FlushAllDirtyBuffers(true);
 	lazy_check_vacuum_crash_point("after_index_barrier");
 	lazy_vacuum_heap(onerel, vacrelstats);
 }

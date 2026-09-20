@@ -70,6 +70,8 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/blobstorage.h"
+#include "access/xact.h"
+#include "catalog/pg_type.h"
 #include "fmgr.h"
 #include "utils/relcache.h"
 #include "utils/mcxt.h"
@@ -203,6 +205,54 @@ index_insert(Relation relation,
 	specificResult = (InsertIndexResult)
 		DatumGetPointer(fmgr(procedure, relation, datum, nulls, heap_t_ctid, heapRel, is_put));
 
+	if (TraceIndexEnabled()) {
+		const char *res = "null";
+		char keybuf[32];
+		char heapbuf[40];
+		char idxbuf[40];
+
+		keybuf[0] = '\0';
+		if (specificResult != NULL) {
+			switch (specificResult->result) {
+				case INDEX_INSERTED:
+					res = "inserted";
+					break;
+				case INDEX_UNIQUE_VIOLATION:
+					res = "unique_violation";
+					break;
+				case INDEX_QUEUED:
+					res = "queued";
+					break;
+				default:
+					res = "other";
+					break;
+			}
+		}
+		if (datum != NULL && nulls != NULL && nulls[0] != 'n'
+			&& RelationGetDescr(relation) != NULL
+			&& RelationGetDescr(relation)->natts >= 1
+			&& RelationGetDescr(relation)->attrs[0]->atttypid == INT4OID) {
+			snprintf(keybuf, sizeof(keybuf), " key=%d", DatumGetInt32(datum[0]));
+		}
+		if (ItemPointerIsValid(heap_t_ctid))
+			snprintf(heapbuf, sizeof(heapbuf), "(%lu,%u)",
+					 (unsigned long) ItemPointerGetBlockNumber(heap_t_ctid),
+					 (unsigned) ItemPointerGetOffsetUnchecked(heap_t_ctid));
+		else
+			snprintf(heapbuf, sizeof(heapbuf), "(invalid)");
+		if (specificResult != NULL && ItemPointerIsValid(&specificResult->pointer))
+			snprintf(idxbuf, sizeof(idxbuf), "(%lu,%u)",
+					 (unsigned long) ItemPointerGetBlockNumber(&specificResult->pointer),
+					 (unsigned) ItemPointerGetOffsetUnchecked(&specificResult->pointer));
+		else
+			snprintf(idxbuf, sizeof(idxbuf), "(invalid)");
+		TraceIndexOp("insert %s heap=%s%s xid=%lu result=%s idx=%s",
+					 RelationGetRelationName(relation),
+					 heapbuf, keybuf,
+					 (unsigned long) GetCurrentTransactionId(),
+					 res, idxbuf);
+	}
+
 	/* must be pfree'ed */
 	return specificResult;
 }
@@ -219,6 +269,16 @@ index_delete(Relation relation, ItemPointer indexItem)
 	RELATION_CHECKS;
 	GET_REL_PROCEDURE(delete, amdelete);
 
+	if (ItemPointerIsValid(indexItem))
+		TraceIndexOp("delete %s idx=(%lu,%u) xid=%lu",
+					 RelationGetRelationName(relation),
+					 (unsigned long) ItemPointerGetBlockNumber(indexItem),
+					 (unsigned) ItemPointerGetOffsetUnchecked(indexItem),
+					 (unsigned long) GetCurrentTransactionId());
+	else
+		TraceIndexOp("delete %s idx=(invalid) xid=%lu",
+					 RelationGetRelationName(relation),
+					 (unsigned long) GetCurrentTransactionId());
 	fmgr(procedure, relation, indexItem);
 }
 
@@ -229,6 +289,9 @@ TupleCount index_bulkdelete(Relation relation,int delcount, ItemPointerData* del
 	RELATION_CHECKS;
 	GET_REL_PROCEDURE(bulkdelete, ambulkdelete);
 
+	TraceIndexOp("bulkdelete %s count=%d xid=%lu",
+				 RelationGetRelationName(relation), delcount,
+				 (unsigned long) GetCurrentTransactionId());
 	return (TupleCount)DatumGetLong(fmgr(procedure, relation, delcount, del_heappointers));
 }
 
@@ -246,6 +309,9 @@ index_vacuumcleanup(Relation relation)
 	if (!RegProcedureIsValid(procedure))
 		return;
 
+	TraceIndexOp("vacuumcleanup %s xid=%lu",
+				 RelationGetRelationName(relation),
+				 (unsigned long) GetCurrentTransactionId());
 	fmgr(procedure, relation);
 }
 

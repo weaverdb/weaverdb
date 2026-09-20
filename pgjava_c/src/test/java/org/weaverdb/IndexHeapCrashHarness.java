@@ -323,11 +323,13 @@ public final class IndexHeapCrashHarness {
                     return 1;
                 }
                 dump(workdir, stem);
+                highlightTornSplit(workdir, lastRecoverOut);
                 System.err.println("FAIL: recover did not confirm index/heap consistency");
                 keep = cfg.keepOnFail;
                 return 1;
             }
             dump(workdir, "recover." + recoverJvms);
+            highlightTornSplit(workdir, lastRecoverOut);
             System.err.println("FAIL: recover did not confirm index/heap consistency");
             keep = cfg.keepOnFail;
             return 1;
@@ -457,6 +459,10 @@ public final class IndexHeapCrashHarness {
         if (stdlog != null && !stdlog.isBlank()) {
             cmd.add("-Dweaver.crash.stdlog=" + stdlog);
         }
+        String traceIndex = System.getProperty("weaver.crash.trace_index");
+        if (traceIndex != null && !traceIndex.isBlank()) {
+            cmd.add("-Dweaver.crash.trace_index=" + traceIndex);
+        }
         String cp = System.getProperty("java.class.path");
         if (cp != null && !cp.isBlank()) {
             cmd.add("-cp");
@@ -557,6 +563,49 @@ public final class IndexHeapCrashHarness {
             return "";
         }
         return Files.readString(p, StandardCharsets.UTF_8);
+    }
+
+    /** Pull split-unit / split-torn lines so a non-atomic CriticalIO persist is obvious. */
+    private static void highlightTornSplit(Path workdir, String recoverOut) {
+        try {
+            String crashOut = read(workdir.resolve("crash.out"));
+            List<String> hits = new ArrayList<>();
+            for (String src : new String[] { crashOut, recoverOut == null ? "" : recoverOut }) {
+                for (String line : src.split("\\R")) {
+                    if (line.contains("split-torn")
+                            || line.contains("TORN_CART")
+                            || line.contains("split-incomplete")
+                            || line.contains("split-unit persist")
+                            || line.contains("split-unit begin")
+                            || line.contains("split-unit end")
+                            || line.contains("missing split right")
+                            || line.contains("FLUSH: equal-gen recopy")
+                            || line.contains("FLUSH: log recopy")
+                            || line.contains("FLUSH: sync recopy")
+                            || line.contains("FLUSH: log-write")
+                            || line.contains("FLUSH: LogBuffers end")) {
+                        hits.add(line);
+                    }
+                }
+            }
+            if (hits.isEmpty()) {
+                return;
+            }
+            if (hits.size() > 80) {
+                System.err.println("... " + (hits.size() - 80) + " earlier FLUSH/split lines omitted ...");
+                hits = hits.subList(hits.size() - 80, hits.size());
+            }
+            System.err.println("---- torn split / CriticalIO unit ----");
+            for (String line : hits) {
+                System.err.println(line);
+            }
+            if (crashOut.contains("TORN_CART")
+                    || (recoverOut != null && (recoverOut.contains("split-torn")
+                    || recoverOut.contains("missing split right")))) {
+                System.err.println("FAIL: btree split did not persist left/right/sibling as one CriticalIO write");
+            }
+        } catch (IOException ignored) {
+        }
     }
 
     private static void dump(Path workdir, String role) {

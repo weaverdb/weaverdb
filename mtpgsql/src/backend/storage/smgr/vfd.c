@@ -756,35 +756,39 @@ vfdexpirelogs() {
 
 int
 vfdreplaylogs() {
-    bool logged = false;
-        
-      char* logfile_path = GetProperty("vfdlogfile");
-      
-      if ( logfile_path == NULL ) {
+    File logfile;
+    char* logfile_path = GetProperty("vfdlogfile");
+    char oldname[1024];
+    int len;
+
+    if ( logfile_path == NULL ) {
         logfile_path = "pg_shadowlog";
-      }
-        
-    File logfile = _openlogfile(logfile_path,true);
-    logged = _vfdreplaylogfile(logfile,false);
-    log_count = LogBuffer.LogHeader.log_id + 1;
-    FileClose(logfile);
-    
-    if ( !logged ) {
-        char newname[1024];
-       
-        memset(newname,0x00,1024);
-        int len = strlen(logfile_path);
-    
-        strncpy(newname,logfile_path,len);
-        strncpy(newname + len,".old",4);
-    
-        logfile = _openlogfile(newname,true);
-        if (logfile >= 0) {
-            _vfdreplaylogfile(logfile,true);
-            FileClose(logfile);
-        }
     }
-    
+
+    /*
+     * Replay pg_shadowlog.old first, then the current log. ClearLogs
+     * renames a completed log to .old after SyncBuffers; a crash can
+     * leave those pages not durable. The current file is newer and
+     * must overlay the expired snapshot. Both are full page replays.
+     */
+    memset(oldname, 0x00, sizeof(oldname));
+    len = strlen(logfile_path);
+    strncpy(oldname, logfile_path, len);
+    strncpy(oldname + len, ".old", 4);
+
+    logfile = _openlogfile(oldname, true);
+    if (logfile >= 0) {
+        _vfdreplaylogfile(logfile, false);
+        FileClose(logfile);
+    }
+
+    logfile = _openlogfile(logfile_path, true);
+    if (logfile >= 0) {
+        _vfdreplaylogfile(logfile, false);
+        FileClose(logfile);
+    }
+
+    log_count = LogBuffer.LogHeader.log_id + 1;
     return SM_SUCCESS;
 }
 
@@ -797,12 +801,11 @@ _vfdreplaylogfile(File logfile, bool indexonly) {
     long id = 0;
     bool logged = false;
     
-    vfd_log("--- Replaying VFD storage manager log ---");
-   	 
     if ( logfile < 0 ) {
         vfd_log("Log File not valid. exiting.");
-        return SM_SUCCESS;
+        return false;
     }
+    vfd_log("--- Replaying VFD storage manager log %s ---", FileGetName(logfile));
     FilePin(logfile,0);
     end = FileSeek(logfile,0,SEEK_END);
     FileSeek(logfile,0,SEEK_SET);

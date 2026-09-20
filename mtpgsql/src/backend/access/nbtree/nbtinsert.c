@@ -17,9 +17,12 @@
 #include "postgres.h"
 #include "env/env.h"
 #include "env/poolsweep.h"
+#include "access/genam.h"
 #include "access/heapam.h"
 #include "access/nbtree.h"
+#include "access/xact.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "utils/tqual.h"
 #include "utils/relcache.h"
 #include "catalog/index.h"
@@ -43,6 +46,7 @@ typedef struct
 } FindSplitData;
 
 
+static long _bt_split_write(Relation rel, Buffer buf, const char *role);
 static void _bt_fixtree(Relation rel, BlockNumber blkno);
 static void _bt_fixbranch(Relation rel, BlockNumber lblkno,
 			  BlockNumber rblkno, BTStack true_stack);
@@ -516,9 +520,20 @@ _bt_insertonpg(Relation rel,
 									  &newitemonleft);
 
 		/* split the buffer into left and right halves */
+		TraceIndexOp("split begin %s left=%lu off=%u onleft=%d xid=%lu",
+					 RelationGetRelationName(rel),
+					 (unsigned long) BufferGetBlockNumber(buf),
+					 (unsigned) firstright, (int) newitemonleft,
+					 (unsigned long) GetCurrentTransactionId());
 		rbuf = _bt_split(rel, buf, firstright,
 						 newitemoff, itemsz, btitem, newitemonleft,
 						 &itup_off, &itup_blkno);
+		TraceIndexOp("split done %s left=%lu right=%lu new=(%lu,%u) xid=%lu",
+					 RelationGetRelationName(rel),
+					 (unsigned long) BufferGetBlockNumber(buf),
+					 (unsigned long) BufferGetBlockNumber(rbuf),
+					 (unsigned long) itup_blkno, (unsigned) itup_off,
+					 (unsigned long) GetCurrentTransactionId());
 
 		/*----------
 		 * By here,
@@ -662,6 +677,28 @@ _bt_insertuple(Relation rel, Buffer buf,
 }
 
 /*
+ * Dirty a split buffer and emit the write-group / shadow generation so a
+ * crash log can show whether left, new right, and old sibling landed on
+ * the same cart. cart=-1 means the write did not register on a write group.
+ */
+static long
+_bt_split_write(Relation rel, Buffer buf, const char *role)
+{
+	long		cart = WriteNoReleaseBufferGen(rel, buf);
+
+	TraceIndexOp("split-unit write %s role=%s blk=%lu cart=%ld shadow=%ld pin=%ld crit=%d xid=%lu",
+				 RelationGetRelationName(rel),
+				 role,
+				 (unsigned long) BufferGetBlockNumber(buf),
+				 cart,
+				 BufferGetIOGeneration(buf),
+				 GetPinnedBufferGeneration(),
+				 GetCriticalIODepth(),
+				 (unsigned long) GetCurrentTransactionId());
+	return cart;
+}
+
+/*
  *	_bt_split() -- split a page in the btree.
  *
  *		On entry, buf is the page to split, and is write-locked and pinned.
@@ -696,6 +733,15 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 				rightoff;
 	OffsetNumber maxoff;
 	OffsetNumber i;
+	BlockNumber	leftblk;
+	BlockNumber	rightblk;
+	BlockNumber	sibblk;
+	long		stub_cart = -1;
+	long		left_cart = -1;
+	long		right_cart = -1;
+	long		sib_cart = -1;
+	long		pin_gen;
+	bool		torn_cart;
 //	BTItem		lhikey;
 
 	rbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
@@ -709,12 +755,19 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	oopaque = (BTPageOpaque) PageGetSpecialPointer(orig_leftpage);
 	lopaque = (BTPageOpaque) PageGetSpecialPointer(leftpage);
 	ropaque = (BTPageOpaque) PageGetSpecialPointer(rightpage);
-        
+
         lopaque->btpo_parent = InvalidBlockNumber; 
         lopaque->btpo_flags |= BTP_SPLIT;
         
         memmove(orig_rightpage,leftpage,PageGetPageSize(orig_rightpage));
-        WriteNoReleaseBuffer(rel,rbuf);
+        stub_cart = WriteNoReleaseBufferGen(rel, rbuf);
+        TraceIndexOp("split-unit stub-right %s blk=%lu cart=%ld shadow=%ld pin=%ld xid=%lu (before CriticalIO)",
+                     RelationGetRelationName(rel),
+                     (unsigned long) BufferGetBlockNumber(rbuf),
+                     stub_cart,
+                     BufferGetIOGeneration(rbuf),
+                     GetPinnedBufferGeneration(),
+                     (unsigned long) GetCurrentTransactionId());
         LockBuffer(rel,rbuf,BT_NONE);
         LockBuffer(rel,buf,BT_NONE);
 
@@ -866,7 +919,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 */
 	if (!P_RIGHTMOST(ropaque))
 	{
-		sbuf = _bt_getbuf(rel, ropaque->btpo_next, BT_READYWRITE);	
+		sbuf = _bt_getbuf(rel, ropaque->btpo_next, BT_READYWRITE);
 		spage = BufferGetPage(sbuf);
                 BTPageOpaque sopaque = (BTPageOpaque) PageGetSpecialPointer(spage);
                 sopaque->btpo_prev = BufferGetBlockNumber(rbuf);
@@ -888,17 +941,63 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	 * page always be clean, and the most efficient way to guarantee this
 	 * is just to compact the data by reinserting it into a new left page.
 	 */
-        LockBuffer(rel,buf,BT_WRITE);
-	PageRestoreTempPage(leftpage, orig_leftpage);
-        LockBuffer(rel,buf,BT_NONE);
-        
-        LockBuffer(rel,rbuf,BT_WRITE);
-	PageRestoreTempPage(rightpage, orig_rightpage);
-        LockBuffer(rel,rbuf,BT_NONE);
-        /* write and release the old right sibling */
-	if (BufferIsValid(sbuf))
-		_bt_wrtbuf(rel, sbuf);
+	leftblk = BufferGetBlockNumber(buf);
+	rightblk = BufferGetBlockNumber(rbuf);
+	sibblk = BufferIsValid(sbuf) ? BufferGetBlockNumber(sbuf) : P_NONE;
 
+	TraceIndexOp("split-unit begin %s left=%lu right=%lu sibling=%lu "
+				 "expect left.next=%lu right.prev=%lu right.next=%lu sibling.prev=%lu xid=%lu",
+				 RelationGetRelationName(rel),
+				 (unsigned long) leftblk,
+				 (unsigned long) rightblk,
+				 (unsigned long) sibblk,
+				 (unsigned long) rightblk,
+				 (unsigned long) leftblk,
+				 (unsigned long) ropaque->btpo_next,
+				 (unsigned long) rightblk,
+				 (unsigned long) GetCurrentTransactionId());
+
+        BeginCriticalIO();
+	pin_gen = GetPinnedBufferGeneration();
+        LockBuffer(rel,rbuf,BT_WRITE);
+	PageRestoreTempPage(rightpage, BufferGetPage(rbuf));
+        LockBuffer(rel,rbuf,BT_NONE);
+        right_cart = _bt_split_write(rel, rbuf, "right");
+
+        LockBuffer(rel,buf,BT_WRITE);
+	PageRestoreTempPage(leftpage, BufferGetPage(buf));
+        LockBuffer(rel,buf,BT_NONE);
+        left_cart = _bt_split_write(rel, buf, "left");
+
+        /* write children; keep write locks for _bt_newroot / parent insert */
+	if (BufferIsValid(sbuf))
+	{
+		sib_cart = _bt_split_write(rel, sbuf, "sibling");
+		_bt_relbuf(rel, sbuf);
+	}
+        EndCriticalIO();
+
+	torn_cart = (left_cart != right_cart)
+		|| (sibblk != P_NONE && sib_cart != left_cart);
+	TraceIndexOp("split-unit persist %s left=%lu right=%lu sibling=%lu "
+				 "stub_cart=%ld left_cart=%ld right_cart=%ld sib_cart=%ld pin=%ld xid=%lu%s",
+				 RelationGetRelationName(rel),
+				 (unsigned long) leftblk,
+				 (unsigned long) rightblk,
+				 (unsigned long) sibblk,
+				 stub_cart,
+				 left_cart,
+				 right_cart,
+				 sib_cart,
+				 pin_gen,
+				 (unsigned long) GetCurrentTransactionId(),
+				 torn_cart ? " TORN_CART" : "");
+	TraceIndexOp("split-unit end %s left=%lu right=%lu sibling=%lu xid=%lu",
+				 RelationGetRelationName(rel),
+				 (unsigned long) leftblk,
+				 (unsigned long) rightblk,
+				 (unsigned long) sibblk,
+				 (unsigned long) GetCurrentTransactionId());
 	/* split's done */
 	return rbuf;
 }
@@ -2052,6 +2151,11 @@ _bt_validate_node(Relation rel, BlockNumber block) {
 
             if (deleteit) {
                 PageIndexTupleDelete(page, current);
+                TraceIndexOp("validate-node drop %s parent=%lu off=%u child=(%lu,%u)",
+                             RelationGetRelationName(rel), (unsigned long) block,
+                             (unsigned) current,
+                             (unsigned long) ItemPointerGetBlockNumber(pointer),
+                             (unsigned) ItemPointerGetOffsetNumber(pointer));
                 elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
                 current = OffsetNumberPrev(current);
                 changed = true;
@@ -2123,6 +2227,11 @@ _bt_validate_leaf(Relation rel, BlockNumber block) {
 
             if (deleteit) {
                 PageIndexTupleDelete(page, current);
+                TraceIndexOp("validate-leaf drop %s idxblk=%lu off=%u heap=(%lu,%u)",
+                             RelationGetRelationName(rel), (unsigned long) block,
+                             (unsigned) current,
+                             (unsigned long) ItemPointerGetBlockNumber(pointer),
+                             (unsigned) ItemPointerGetOffsetNumber(pointer));
                 elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
                 current = OffsetNumberPrev(current);
                 changed = true;
@@ -2174,6 +2283,11 @@ _bt_reap(Relation rel, BlockNumber block) {
 
     if (!empty)
         return false;
+
+    TraceIndexOp("reap %s blk=%lu parent=%lu left=%lu right=%lu",
+                 RelationGetRelationName(rel), (unsigned long) block,
+                 (unsigned long) parent, (unsigned long) left,
+                 (unsigned long) right);
 
     /*
      * If the parent still has a downlink to this page, leave the page in

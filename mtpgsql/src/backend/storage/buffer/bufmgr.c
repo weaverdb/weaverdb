@@ -47,6 +47,8 @@
 #include <unistd.h>
 #include <math.h>
 #include <signal.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "postgres.h"
 
@@ -93,7 +95,7 @@ static void ShowBufferIO(int id, int io);
 static bool DirtyBufferIO(BufferDesc* header, long generation);
 static bool WaitBufferIO(bool write_mode, BufferDesc *buf);
 
-static bool ShadowBufferIfNeeded(BufferDesc* buf, bool forflush);
+static bool ShadowBufferIfNeeded(BufferDesc* buf);
 
 static SectionId   buffer_section_id = SECTIONID("BMGR");
 
@@ -564,31 +566,43 @@ retry:
  * WriteNoReleaseBuffer -- like WriteBuffer, but do not unpin the buffer
  *						   when the operation is complete.
  */
-int
-WriteNoReleaseBuffer(Relation rel, Buffer buffer) {
+long
+WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
     BufferDesc *bufHdr;
+    long generation;
 
-    if (BufferIsLocal(buffer))
-        return WriteLocalBuffer(rel, buffer, FALSE);
-    
+    if (BufferIsLocal(buffer)) {
+        WriteLocalBuffer(rel, buffer, FALSE);
+        return -1;
+    }
+
     if (BAD_BUFFER_ID(buffer))
-        return STATUS_ERROR;
-    
+        return -1;
+
     bufHdr = &BufferDescriptors[buffer - 1];
-    
+
     RelationGetBufferCxt(rel)->DidWrite = true;
     GetTransactionInfo()->SharedBufferChanged = true;
-    
-    /*   See WriterBuffer for why we did this   */
-    /*  mark this dirty in the RegisterBufferWrite code so we only have to grab the
-        mutex once  */    
-    /*
-        unlock the io guard before registering the write
-        b/c the Register command locks the buffer on its own
-     */
-    
-    DirtyBufferIO(bufHdr, RegisterBufferWrite(bufHdr, false));
 
+    /*
+     * See WriteBuffer for why we did this. Mark dirty in RegisterBufferWrite
+     * so we only grab the mutex once. Unlock the IO guard before registering
+     * the write; Register locks the buffer on its own.
+     */
+    generation = RegisterBufferWrite(bufHdr, false);
+    DirtyBufferIO(bufHdr, generation);
+    return generation;
+}
+
+int
+WriteNoReleaseBuffer(Relation rel, Buffer buffer) {
+    if (BufferIsLocal(buffer))
+        return WriteLocalBuffer(rel, buffer, FALSE);
+
+    if (BAD_BUFFER_ID(buffer))
+        return STATUS_ERROR;
+
+    WriteNoReleaseBufferGen(rel, buffer);
     return STATUS_OK;
 }
 
@@ -1397,7 +1411,9 @@ Block BufferGetBlock(Buffer buffer) {
         return (Block) (GetLocalBufferDescriptor((-buffer) - 1)->data);
     } else {
         BufferDesc* bufHdr = &BufferDescriptors[buffer - 1];
-        ShadowBufferIfNeeded(bufHdr, false);
+        if (bufHdr->kind != RELKIND_SPECIAL) {
+            ShadowBufferIfNeeded(bufHdr, false);
+        }
         return bufHdr->data;
     }
 }
@@ -1587,33 +1603,41 @@ ResumeCriticalIO(int depth) {
     }
 }
 
-bool ShadowBufferIfNeeded(BufferDesc* bufHdr, bool forflush) {
+bool
+TraceBufferFlushEnabled(void)
+{
+    static int cached = -1;
+
+    if (cached < 0)
+        cached = (PropertyIsValid("trace_index") && GetBoolProperty("trace_index"))
+            ? 1 : 0;
+    return cached != 0;
+}
+
+bool ShadowBufferIfNeeded(BufferDesc* bufHdr) {
     bool shadowed = false;
-    BufferEnv *env = GetBufferCxt();
-    long gen = (env->critical_io_depth > 0)
-        ? env->pinned_generation
-        : buffer_generation;
 
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-    if (
-        (bufHdr->generation < gen) || 
-        (forflush && bufHdr->generation == gen)
-    ) {
+    if (bufHdr->generation < buffer_generation) {
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
-        bufHdr->generation = gen;
+        bufHdr->generation = buffer_generation;
         shadowed = true;
     }
     pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
+
     return shadowed;
 }
 
 
 Block AdvanceBufferIO(BufferDesc* bufHdr, bool forflush) {
-    if (bufHdr->kind != RELKIND_SPECIAL) {
-        ShadowBufferIfNeeded(bufHdr, forflush);
+    if (bufHdr->kind != RELKIND_SPECIAL && !forflush) {
+        ShadowBufferIfNeeded(bufHdr);
         PageInsertChecksum((Page)bufHdr->shadow);
         return (Block)bufHdr->shadow;
     } else {
+        if (bufHdr->kind != RELKIND_SPECIAL) {
+            PageInsertChecksum((Page)bufHdr->data);
+        }
         return (Block)bufHdr->data;
     }
 }
@@ -1623,4 +1647,25 @@ SetBufferGeneration(long generation) {
     pthread_rwlock_wrlock(&buffer_generation_lock);
     buffer_generation = generation;
     pthread_rwlock_unlock(&buffer_generation_lock);
+}
+
+long
+BufferGetIOGeneration(Buffer buffer) {
+    if (BufferIsLocal(buffer) || BAD_BUFFER_ID(buffer))
+        return -1;
+    return BufferDescriptors[buffer - 1].generation;
+}
+
+long
+GetPinnedBufferGeneration(void) {
+    BufferEnv *env = GetBufferCxt();
+
+    if (env->critical_io_depth > 0)
+        return env->pinned_generation;
+    return buffer_generation;
+}
+
+int
+GetCriticalIODepth(void) {
+    return GetBufferCxt()->critical_io_depth;
 }

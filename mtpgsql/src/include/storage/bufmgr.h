@@ -126,7 +126,9 @@ typedef enum writemode {
 
 PG_EXTERN Buffer ReadBuffer(Relation reln, BlockNumber blockNum);
 PG_EXTERN int	WriteBuffer(Relation reln, Buffer buffer);
-PG_EXTERN int	WriteNoReleaseBuffer(Relation reln, Buffer buffer);     
+PG_EXTERN int	WriteNoReleaseBuffer(Relation reln, Buffer buffer);
+/* Same dirty+register as WriteNoReleaseBuffer; returns write-group generation, or -1. */
+PG_EXTERN long	WriteNoReleaseBufferGen(Relation reln, Buffer buffer);
 PG_EXTERN Buffer ReleaseAndReadBuffer(Buffer buffer, Relation relation,
 					 BlockNumber blockNum);
 PG_EXTERN int	ReleaseBuffer(Relation reln, Buffer buffer);
@@ -174,6 +176,7 @@ PG_EXTERN IOStatus WriteBufferIO(BufferDesc *buf, WriteMode mode);
 PG_EXTERN IOStatus LogBufferIO(BufferDesc *buf);
 PG_EXTERN void TerminateBufferIO(IOStatus locks, BufferDesc *buf);
 PG_EXTERN Block AdvanceBufferIO(BufferDesc *buf, bool forflush);
+PG_EXTERN bool TraceBufferFlushEnabled(void);
 
 PG_EXTERN void BeginCriticalIO(void);
 PG_EXTERN void EndCriticalIO(void);
@@ -181,6 +184,9 @@ PG_EXTERN void AbortCriticalIO(void);
 PG_EXTERN int SuspendCriticalIO(void);
 PG_EXTERN void ResumeCriticalIO(int depth);
 PG_EXTERN void SetBufferGeneration(long generation);
+PG_EXTERN long BufferGetIOGeneration(Buffer buffer);
+PG_EXTERN long GetPinnedBufferGeneration(void);
+PG_EXTERN int GetCriticalIODepth(void);
 PG_EXTERN Block BufferGetBlock(Buffer buffer);
 
 PG_EXTERN void IncrBufferRefCount(Relation rel, Buffer buffer);

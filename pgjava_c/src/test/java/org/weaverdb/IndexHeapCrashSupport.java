@@ -129,6 +129,7 @@ final class IndexHeapCrashSupport {
         p.setProperty("disable_crc", "TRUE");
         p.setProperty("transcareful", "false");
         p.setProperty("stdlog", System.getProperty("weaver.crash.stdlog", "FALSE"));
+        p.setProperty("trace_index", System.getProperty("weaver.crash.trace_index", "TRUE"));
         p.setProperty("sortmem", System.getProperty("weaver.sortmem", "131072"));
         WeaverInitializer.initialize(p);
     }
@@ -201,15 +202,15 @@ final class IndexHeapCrashSupport {
     static void setupSchema(Scenario scenario, int startN) throws ExecutionException {
         try (DBReference conn = DBReferenceManager.connect(DB)) {
             String base = scenario.base();
-            conn.execute("create table " + TABLE + " (id int4, val varchar(64), emb vector)");
+            execLogged(conn, "create table " + TABLE + " (id int4, val varchar(64), emb vector)");
             if (!"build_btree".equals(base)) {
-                conn.execute("create unique index " + BTREE + " on " + TABLE + " (id)");
+                execLogged(conn, "create unique index " + BTREE + " on " + TABLE + " (id)");
             }
             insertRange(conn, 1, startN);
             if ("vacuum".equals(base) || "mixed".equals(base)) {
-                conn.execute("create index " + HNSW + " on " + TABLE
+                execLogged(conn, "create index " + HNSW + " on " + TABLE
                         + " using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32)");
-                conn.execute("create index " + IVF + " on " + TABLE
+                execLogged(conn, "create index " + IVF + " on " + TABLE
                         + " using ivfflat (emb vector_l2_ops) with (lists = 2)");
             }
         }
@@ -225,7 +226,7 @@ final class IndexHeapCrashSupport {
 
     static void insertRange(DBReference conn, int from, int to) throws ExecutionException {
         for (int i = from; i <= to; i++) {
-            conn.execute("insert into " + TABLE + " values (" + i + ", 'v" + i + "', '" + vec(i) + "')");
+            execLogged(conn, "insert into " + TABLE + " values (" + i + ", 'v" + i + "', '" + vec(i) + "')");
         }
     }
 
@@ -238,13 +239,13 @@ final class IndexHeapCrashSupport {
         try (DBReference conn = DBReferenceManager.connect(DB)) {
             switch (scenario.base()) {
                 case "build_btree" -> {
-                    conn.execute("create unique index " + BTREE + " on " + TABLE + " (id)");
+                    execLogged(conn, "create unique index " + BTREE + " on " + TABLE + " (id)");
                     insertRangeIgnoreDup(conn, startN + 1, maxId);
                 }
                 case "build_hnsw" -> {
-                    conn.execute("create index " + HNSW + " on " + TABLE
+                    execLogged(conn, "create index " + HNSW + " on " + TABLE
                             + " using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32)");
-                    conn.execute("create index " + IVF + " on " + TABLE
+                    execLogged(conn, "create index " + IVF + " on " + TABLE
                             + " using ivfflat (emb vector_l2_ops) with (lists = 2)");
                 }
                 case "vacuum" -> {
@@ -292,7 +293,7 @@ final class IndexHeapCrashSupport {
             try {
                 System.out.println("IHC: recover vacuum");
                 System.out.flush();
-                conn.execute("vacuum " + TABLE);
+                execLogged(conn, "vacuum " + TABLE);
                 System.out.println("IHC: recover vacuum done");
                 System.out.flush();
             } catch (ExecutionException e) {
@@ -357,7 +358,7 @@ final class IndexHeapCrashSupport {
                     }
                 }
 
-                conn.execute("vacuum " + TABLE);
+                execLogged(conn, "vacuum " + TABLE);
                 log.append("  OK second vacuum\n");
             } catch (ExecutionException e) {
                 if (isBootstrapXid(e)) {
@@ -665,11 +666,21 @@ final class IndexHeapCrashSupport {
         }
     }
 
+    private static void execLogged(DBReference conn, String sql) throws ExecutionException {
+        System.out.println("IHC: SQL " + sql);
+        System.out.flush();
+        conn.execute(sql);
+    }
+
     private static boolean execIgnore(DBReference conn, String sql) {
+        System.out.println("IHC: SQL " + sql);
+        System.out.flush();
         try {
             conn.execute(sql);
             return true;
         } catch (ExecutionException e) {
+            System.out.println("IHC: SQL_FAIL " + message(e));
+            System.out.flush();
             return false;
         }
     }

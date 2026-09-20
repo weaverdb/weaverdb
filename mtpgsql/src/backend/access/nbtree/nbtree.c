@@ -25,6 +25,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/nbtree.h"
+#include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/pg_index.h"
 #include "executor/executor.h"
@@ -678,6 +679,35 @@ btdelete(Relation rel, ItemPointer tid) {
     return PointerGetDatum(NULL);
 }
 
+/*
+ * Log a torn split from pointers already on the page we hold. Do not pin
+ * next/prev: btree splits lock left then the old right sibling, and a
+ * diagnostic walk that then locks prev deadlocks with a concurrent split.
+ */
+static void
+_bt_trace_split_pointers(Relation rel, BlockNumber blk,
+                         BlockNumber next, BlockNumber prev)
+{
+    BlockNumber nblocks;
+
+    if (!TraceIndexEnabled())
+        return;
+
+    nblocks = RelationGetNumberOfBlocks(rel);
+    if (next != P_NONE && next != P_NEW && next >= nblocks) {
+        TraceIndexOp("split-torn %s left=%lu next=%lu missing (not in file) xid=%lu",
+                     RelationGetRelationName(rel),
+                     (unsigned long) blk, (unsigned long) next,
+                     (unsigned long) GetCurrentTransactionId());
+    }
+    if (prev != P_NONE && prev != P_NEW && prev >= nblocks) {
+        TraceIndexOp("split-torn %s right=%lu prev=%lu missing (not in file) xid=%lu",
+                     RelationGetRelationName(rel),
+                     (unsigned long) blk, (unsigned long) prev,
+                     (unsigned long) GetCurrentTransactionId());
+    }
+}
+
 Datum
 btrecoverpage(Relation rel, BlockNumber block) {
     Buffer buffer;
@@ -686,22 +716,30 @@ btrecoverpage(Relation rel, BlockNumber block) {
     bool changed = false;
     bool empty = false;
     OffsetNumber offset;
+    BlockNumber next = P_NONE;
+    BlockNumber prev = P_NONE;
 
 
     bool dryrun = IsReadOnlyProcessingMode();
     /*  notthing to check on meta */
     if (block == BTREE_METAPAGE) {
 	return LongGetDatum(InvalidBlockNumber);
-    } else {
-        buffer = _bt_getbuf(rel, block, BT_WRITE);
-        page = BufferGetPage(buffer);
-        opaque = (BTPageOpaque) PageGetSpecialPointer(page);
     }
 
+    buffer = _bt_getbuf(rel, block, BT_WRITE);
+    page = BufferGetPage(buffer);
+
     if ( PageIsNew(page) ) {
+        TraceIndexOp("recover %s blk=%lu new-page (possible missing split right) xid=%lu",
+                     RelationGetRelationName(rel), (unsigned long) block,
+                     (unsigned long) GetCurrentTransactionId());
         _bt_relbuf(rel,buffer);
 	return LongGetDatum(block);
     }
+
+    opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+    next = opaque->btpo_next;
+    prev = opaque->btpo_prev;
     
     if (P_ISROOT(opaque)) {
         _bt_relbuf(rel,buffer);
@@ -709,12 +747,18 @@ btrecoverpage(Relation rel, BlockNumber block) {
     }
 
     if (P_ISSPLIT(opaque)) {
+        TraceIndexOp("recover %s blk=%lu skip-split-in-progress next=%lu prev=%lu xid=%lu",
+                     RelationGetRelationName(rel), (unsigned long) block,
+                     (unsigned long) next, (unsigned long) prev,
+                     (unsigned long) GetCurrentTransactionId());
         _bt_relbuf(rel,buffer);
+        _bt_trace_split_pointers(rel, block, next, prev);
         return LongGetDatum(InvalidBlockNumber);
     }
 
     empty = P_ISREAPED(opaque) && P_ISFREE(opaque);
     _bt_relbuf(rel,buffer);
+    _bt_trace_split_pointers(rel, block, next, prev);
 
     if (!empty) {
         if (!P_ISLEAF(opaque)) {

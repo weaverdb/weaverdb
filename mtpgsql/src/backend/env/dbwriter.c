@@ -36,6 +36,8 @@
 #include <time.h>
 #include <errno.h>
 #include <math.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "c.h"
 #include "postgres.h"
@@ -112,14 +114,12 @@ struct writegroups {
     
     pthread_mutex_t			checkpoint;
     pthread_cond_t			broadcaster;
-    bool				dotransaction;
     
     bool                                loggable;
+    bool                                log_started;
     
     bool				isTransFriendly;
     bool				locked;
-    /* When set, FlushWriteGroup fsyncs path-cache files after SyncBuffers */
-    bool                                durable_sync;
     /*  for convenience, cache these here  */
     Oid                                 LogId;
     Oid                                 VarId;
@@ -476,9 +476,7 @@ int FlushWriteGroup(WriteGroup cart) {
     int release = 0;
     struct timeval t1,t2;
     long elapsed;
-    bool durable = cart->durable_sync;
     
-    cart->durable_sync = false;
     pthread_mutex_unlock(&cart->checkpoint);
     
     gettimeofday(&t1,NULL);
@@ -486,25 +484,14 @@ int FlushWriteGroup(WriteGroup cart) {
     if ( logging ) {
         release = LogBuffers(cart);
     }
-    
+
     WriteGroup sync = GetSyncGroup();
-    sync_buffers += MergeWriteGroups(sync,cart);
+    sync_buffers += MergeWriteGroups(sync, cart);
     sync->currstate = FLUSHING;
-    release += SyncBuffers(sync,true);
+    release += SyncBuffers(sync, false);
     sync->currstate = NOT_READY;
-    /*
-     * Always fsync path-cache relations for a durable vacuum barrier.
-     * Otherwise CommitPackage (smgrsync) only runs when the sync buffer
-     * count crosses max_logcount — too weak for index-before-heap safety.
-     */
-    if ( durable || sync_buffers > max_logcount ) { 
-        CommitPackage(sync);
-        ClearLogs(sync);
-        if ( durable )
-            sync_buffers = 0;
-    }
-    elog(DEBUG, "flushed out %d buffers%s", release,
-         durable ? " (durable)" : "");
+
+    elog(DEBUG, "flushed out %d buffers", release);
      
     gettimeofday(&t2,NULL);
     
@@ -744,7 +731,7 @@ int LogWriteGroup(WriteGroup cart) {
         releasecount = LogBuffers(cart);
     }
 
-    if ( cart->dotransaction ) {
+    if (TransactionSystemInitialized) {
         LogTransactions(cart);
         for (x=0;x<cart->numberOfTrans;x++) {
             if ( cart->WaitingThreads[x] && !cart->wait_for_sync[x] ) {
@@ -756,7 +743,6 @@ int LogWriteGroup(WriteGroup cart) {
 
     pthread_mutex_lock(&cart->checkpoint);
     cart->currstate = LOGGED;
-    cart->dotransaction = false;
     pthread_cond_broadcast(&cart->broadcaster);
     pthread_mutex_unlock(&cart->checkpoint);
     
@@ -772,11 +758,6 @@ int SyncWriteGroup(WriteGroup cart) {
     CommitPackage(cart);
     
     ClearLogs(cart);
-    
-    if (cart->dotransaction && TransactionSystemInitialized) {
-        trans_logged = LogTransactions(cart);
-        elog(DEBUG, "logged %d transactions", trans_logged);
-    }
     
     for (x=0;x<cart->numberOfTrans;x++) {
         if ( cart->WaitingThreads[x] ) {
@@ -824,12 +805,10 @@ void ResetWriteGroup(WriteGroup cart) {
     memset(cart->wait_for_sync, 0, sizeof(bool) * maxtrans);
     
     cart->numberOfTrans = 0;
-    cart->dotransaction = true;
 
     cart->isTransFriendly = true;
-    cart->loggable = logging;
-    cart->durable_sync = false;
-    
+    cart->loggable = logging;    
+    cart->log_started = false;
     cart->snapshot = NULL;
 }
 
@@ -1073,6 +1052,10 @@ int LogBuffers(WriteGroup list) {
 
     smgrbeginlog();
     SetBufferGeneration(list->generation);
+    if (TraceBufferFlushEnabled()) {
+        fprintf(stderr, "FLUSH: LogBuffers start gen=%ld\n", list->generation);
+        fflush(stderr);
+    }
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         
         /* Ignore buffers that were not dirtied by me */
@@ -1097,6 +1080,16 @@ int LogBuffers(WriteGroup list) {
             if ( iostatus == IO_SUCCESS ) {
                 Block blk = AdvanceBufferIO(bufHdr, false);
                 buffer_hits++;
+                if (TraceBufferFlushEnabled()
+                    && strstr(bufHdr->blind.relname, "id_idx") != NULL) {
+                    fprintf(stderr,
+                            "FLUSH: log-write %s blk=%lu cart_gen=%ld shadow_gen=%ld\n",
+                            bufHdr->blind.relname,
+                            (unsigned long) bufHdr->tag.blockNum,
+                            list->generation,
+                            bufHdr->generation);
+                    fflush(stderr);
+                }
                 if ( SM_FAIL == smgrlog(
                                         DEFAULT_SMGR,
                                         bufHdr->blind.dbname,
@@ -1165,6 +1158,11 @@ int LogBuffers(WriteGroup list) {
         }
     }
 
+    if (TraceBufferFlushEnabled()) {
+        fprintf(stderr, "FLUSH: LogBuffers end gen=%ld pages=%d\n",
+                list->generation, buffer_hits);
+        fflush(stderr);
+    }
     smgrcommitlog();
     
     DTRACE_PROBE3(mtpg, dbwriter__loggedbuffers, buffer_hits, releasecount, freecount);
@@ -1192,7 +1190,11 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
     int iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_COMMIT;
 
 
-    SetBufferGeneration(list->generation);
+    if (TraceBufferFlushEnabled()) {
+        fprintf(stderr, "FLUSH: SyncBuffers start gen=%ld forcommit=%d\n",
+                list->generation, forcommit ? 1 : 0);
+        fflush(stderr);
+    }
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         bool written = false;
       /* Ignore buffers that were not dirtied by me */
@@ -1373,56 +1375,6 @@ bool FlushAllDirtyBuffers(bool wait) {
     return iflushed;
 }
 
-bool FlushAllDirtyBuffersDurable(bool wait) {
-    if (!db_inited) {
-        return false;
-    }
-
-    WriteGroup cart = GetCurrentWriteGroup(false);
-    int releasecount = 0;
-    bool iflushed = false;
-    int ciosuspend = 0;
-
-    /*
-     * Wait out any in-progress flush before requesting durable_sync so we
-     * do not attach the flag to a FlushWriteGroup that already sampled it
-     * as false.
-     */
-    while (wait && cart->currstate == FLUSHING) {
-        if (ciosuspend == 0)
-            ciosuspend = SuspendCriticalIO();
-        pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
-    }
-
-    cart->durable_sync = true;
-
-    if (IsDBWriter()) {
-        while (FlushWriteGroup(cart) == 0) {
-            UnlockWriteGroup(cart);
-            cart = GetNextTarget(cart);
-            cart->durable_sync = true;
-        }
-        DTRACE_PROBE2(mtpg, dbwriter__circularflush, sync_buffers, releasecount);
-        elog(DEBUG, "durable flush released %d", releasecount);
-    } else {
-        SignalDBWriter(cart);
-        cart->currstate = FLUSHING;
-        iflushed = true;
-        while (wait && cart->currstate == FLUSHING) {
-            if (ciosuspend == 0)
-                ciosuspend = SuspendCriticalIO();
-            pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
-        }
-    }
-
-    UnlockWriteGroup(cart);
-
-    if (ciosuspend != 0)
-        ResumeCriticalIO(ciosuspend);
-
-    return iflushed;
-}
-
 static PathCache* GetPathCache(HASHACTION  mode, char *relname, char *dbname, Oid bufrel, Oid bufdb) {
     PathCache*       target = NULL;
     DBKey           key;
@@ -1580,7 +1532,7 @@ WriteGroup GetCurrentWriteGroup(bool forcommit) {
             cart != log_group || 
             (
                 cart->currstate == RUNNING ||
-                cart->currstate == FLUSHING ||
+                /*cart->currstate == FLUSHING ||  FLUSHING should be fine because it is not a completed state */
                 cart->currstate == LOGGED ||
                 cart->currstate == SYNCED ||
                 cart->currstate == COMPLETED ||
@@ -1591,7 +1543,7 @@ WriteGroup GetCurrentWriteGroup(bool forcommit) {
         UnlockWriteGroup(cart);
         cart = GetNextTarget(cart);
     }
-    
+
     return cart;
 }
 

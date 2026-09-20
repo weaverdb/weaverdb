@@ -44,6 +44,14 @@ IndexGlobals* GetIndexGlobals( void );
 void index_recoverpages(List* pages);
 BlockNumber index_recoverpage(Relation rel,BlockNumber page);
 
+/* stderr index-op trace; enabled by property trace_index */
+bool TraceIndexEnabled(void);
+void TraceIndexOp(const char *fmt, ...)
+#ifdef __GNUC__
+__attribute__((format(printf, 1, 2)))
+#endif
+;
+
 /* extern */  Relation index_open(Oid relationId);
 /* extern */  Relation index_openr(char *relationName);
 /* extern */  void index_close(Relation relation);
