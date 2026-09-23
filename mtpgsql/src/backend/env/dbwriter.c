@@ -1170,8 +1170,8 @@ int LogBuffers(WriteGroup list) {
 }
 
 int ClearLogs(WriteGroup list) {
-  /*  in init processing mode, don't clear the logs
-   *  just add to it 
+  /* After a durable sync, rotate to a new uniquely named shadow log
+   * and delete all but the last two files.
    */
     if ( logging ) {
         smgrexpirelogs();

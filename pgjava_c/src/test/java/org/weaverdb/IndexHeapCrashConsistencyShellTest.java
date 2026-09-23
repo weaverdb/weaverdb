@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * Gradle wrapper for the C embed index/heap crash-consistency harness.
- * The script SIGKILLs a weaver_embed_sql process (multiuser + pg_shadowlog);
+ * The script SIGKILLs a weaver_embed_sql process (multiuser + pg_shadowlog/);
  * it does not load crashers into production code or into this JVM.
  *
  * Java-API equivalent (child JVM + WeaverInitializer):

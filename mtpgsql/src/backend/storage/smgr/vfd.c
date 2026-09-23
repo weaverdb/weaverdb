@@ -10,6 +10,10 @@
  *  Logging code is NOT THREAD SAFE.  Make sure that only one thread is logging
  *  on the system
  *
+ *  Shadow logs live in DataDir/pg_shadowlog (or vfdlogfile) as uniquely
+ *  named files log_000...N. Expire rotates to a new file and deletes all
+ *  but the newest two. Recovery replays the remaining files in sequence.
+ *
  * IDENTIFICATION
  *
  *
@@ -18,7 +22,11 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <execinfo.h>
 #include <sys/file.h>
+#include <sys/stat.h>
+#include <dirent.h>
 
 
 #include "postgres.h"
@@ -34,7 +42,7 @@
 
 #undef DIAGNOSTIC
 
-static File     log_file;
+static File     log_file = -1;
 
 static long     log_count;
 static long     log_pos;
@@ -42,6 +50,19 @@ static long     log_pos;
 #define HEADER_MAGIC  0xCAFE08072006BABE
 #define SEGMENT_MAGIC  0xABCDEF0123456789
 #define INDEX_MAGIC  0x9876543210FEDCBA
+
+#define DEFAULT_SHADOWLOG_DIR	"pg_shadowlog"
+#define SHADOWLOG_PREFIX	"log_"
+#define SHADOWLOG_DIGITS	18
+#define SHADOWLOG_KEEP		2
+
+typedef struct shadowlogfile {
+    long        seq;
+    char        path[MAXPGPATH];
+} ShadowLogFile;
+
+static char     log_directory[MAXPGPATH];
+static long     log_file_seq = 0;
 
 #ifdef MACOSX
 #define O_LARGEFILE 0x0
@@ -89,31 +110,247 @@ static bool _vfdreplaylogfile(File logfile, bool indexonly);
 static long _vfdreplaysegment(File logfile,bool indexingonly, bool compressed);
 
 static File _openlogfile(char* path, bool replay);
+static void _resolvelogdir(void);
+static int _ensurelogdir(void);
+static void _importlegacyfile(const char *srcpath);
+static void _importleftovers(void);
+static bool _parselogfilename(const char *name, long *seq);
+static int _cmp_shadowlog(const void *a, const void *b);
+static int _listlogfiles(ShadowLogFile **out_files, int *out_count);
+static void _buildlogpath(char *dst, size_t dstlen, long seq);
+static File _opennewlogfile(void);
+static int _prunelogfiles(int keep);
+static void _freeloglist(ShadowLogFile *files);
 
 static void  vfd_log(char* pattern, ...);
 
 
+static void
+_resolvelogdir(void)
+{
+    char *prop = GetProperty("vfdlogfile");
 
+    if (prop == NULL) {
+        prop = DEFAULT_SHADOWLOG_DIR;
+    }
 
-File
+    if (prop[0] == SEP_CHAR) {
+        snprintf(log_directory, sizeof(log_directory), "%s", prop);
+    } else {
+        snprintf(log_directory, sizeof(log_directory), "%s%c%s",
+                 DataDir ? DataDir : ".", SEP_CHAR, prop);
+    }
+}
+
+static void
+_buildlogpath(char *dst, size_t dstlen, long seq)
+{
+    snprintf(dst, dstlen, "%s%c%s%0*ld",
+             log_directory, SEP_CHAR, SHADOWLOG_PREFIX, SHADOWLOG_DIGITS, seq);
+}
+
+static bool
+_parselogfilename(const char *name, long *seq)
+{
+    const char *p;
+    long value = 0;
+    int digits = 0;
+
+    if (strncmp(name, SHADOWLOG_PREFIX, strlen(SHADOWLOG_PREFIX)) != 0) {
+        return false;
+    }
+
+    p = name + strlen(SHADOWLOG_PREFIX);
+    if (*p == '\0') {
+        return false;
+    }
+    while (*p != '\0') {
+        if (*p < '0' || *p > '9') {
+            return false;
+        }
+        value = value * 10 + (*p - '0');
+        digits++;
+        p++;
+    }
+    if (digits != SHADOWLOG_DIGITS) {
+        return false;
+    }
+    *seq = value;
+    return true;
+}
+
+static int
+_cmp_shadowlog(const void *a, const void *b)
+{
+    const ShadowLogFile *fa = (const ShadowLogFile *) a;
+    const ShadowLogFile *fb = (const ShadowLogFile *) b;
+
+    if (fa->seq < fb->seq) {
+        return -1;
+    }
+    if (fa->seq > fb->seq) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+_listlogfiles(ShadowLogFile **out_files, int *out_count)
+{
+    DIR *dir;
+    struct dirent *de;
+    ShadowLogFile *files = NULL;
+    int count = 0;
+    int cap = 0;
+
+    *out_files = NULL;
+    *out_count = 0;
+
+    dir = opendir(log_directory);
+    if (dir == NULL) {
+        return -1;
+    }
+
+    while ((de = readdir(dir)) != NULL) {
+        long seq;
+        ShadowLogFile *grown;
+
+        if (!_parselogfilename(de->d_name, &seq)) {
+            continue;
+        }
+        if (count >= cap) {
+            cap = (cap == 0) ? 16 : cap * 2;
+            grown = (ShadowLogFile *) os_realloc(files, cap * sizeof(ShadowLogFile));
+            if (grown == NULL) {
+                _freeloglist(files);
+                closedir(dir);
+                return -1;
+            }
+            files = grown;
+        }
+        files[count].seq = seq;
+        snprintf(files[count].path, sizeof(files[count].path), "%s%c%s",
+                 log_directory, SEP_CHAR, de->d_name);
+        count++;
+    }
+    closedir(dir);
+
+    if (count > 1) {
+        qsort(files, count, sizeof(ShadowLogFile), _cmp_shadowlog);
+    }
+
+    *out_files = files;
+    *out_count = count;
+    return 0;
+}
+
+static void
+_importlegacyfile(const char *srcpath)
+{
+    struct stat st;
+    char dest[MAXPGPATH];
+    int tries;
+
+    if (stat(srcpath, &st) != 0 || !S_ISREG(st.st_mode)) {
+        return;
+    }
+
+    for (tries = 0; tries < 1000; tries++) {
+        log_file_seq++;
+        _buildlogpath(dest, sizeof(dest), log_file_seq);
+        if (rename(srcpath, dest) == 0) {
+            vfd_log("migrated legacy shadow log %s -> %s", srcpath, dest);
+            return;
+        }
+        if (errno != EEXIST) {
+            vfd_log("could not migrate legacy shadow log %s", srcpath);
+            log_file_seq--;
+            return;
+        }
+    }
+
+    vfd_log("could not migrate legacy shadow log %s", srcpath);
+}
+
+static void
+_importleftovers(void)
+{
+    char leftover[MAXPGPATH];
+
+    snprintf(leftover, sizeof(leftover), "%s.old", log_directory);
+    _importlegacyfile(leftover);
+    snprintf(leftover, sizeof(leftover), "%s.legacy", log_directory);
+    _importlegacyfile(leftover);
+}
+
+static int
+_ensurelogdir(void)
+{
+    struct stat st;
+    char aside[MAXPGPATH];
+    ShadowLogFile *files = NULL;
+    int count = 0;
+
+    if (stat(log_directory, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            log_file_seq = 0;
+            if (_listlogfiles(&files, &count) == 0 && count > 0) {
+                log_file_seq = files[count - 1].seq;
+            }
+            _freeloglist(files);
+            _importleftovers();
+            return 0;
+        }
+        if (!S_ISREG(st.st_mode)) {
+            vfd_log("shadow log path %s exists and is not a file or directory", log_directory);
+            return -1;
+        }
+
+        /*
+         * Pre-directory layout: pg_shadowlog plus optional pg_shadowlog.old.
+         * Move the live file aside, create the directory, then import .old
+         * first so it sorts before the newer current log.
+         */
+        snprintf(aside, sizeof(aside), "%s.legacy", log_directory);
+        if (rename(log_directory, aside) != 0) {
+            vfd_log("could not move legacy shadow log %s", log_directory);
+            return -1;
+        }
+        if (mkdir(log_directory, S_IRWXU) != 0) {
+            vfd_log("could not create shadow log directory %s", log_directory);
+            return -1;
+        }
+        log_file_seq = 0;
+        _importleftovers();
+        return 0;
+    }
+
+    if (errno != ENOENT) {
+        vfd_log("could not stat shadow log path %s", log_directory);
+        return -1;
+    }
+
+    if (mkdir(log_directory, S_IRWXU) != 0 && errno != EEXIST) {
+        vfd_log("could not create shadow log directory %s", log_directory);
+        return -1;
+    }
+
+    log_file_seq = 0;
+    _importleftovers();
+    return 0;
+}
+
+static File
 _openlogfile(char* logfile_path, bool replay) {
       File  file;
-      char path[256];
-      int fileflags = (replay) ? (O_RDONLY) : (O_WRONLY | O_CREAT);
-      char* datadir = DataDir;
-      
-        if ( *logfile_path == SEP_CHAR ) {
-            sprintf(path,"%s",logfile_path);
-        } else {
-            sprintf(path,"%s%c%s",datadir,SEP_CHAR,logfile_path);
-        }
+      int fileflags = (replay) ? (O_RDONLY) : (O_WRONLY | O_CREAT | O_EXCL);
 
 #ifdef LINUX        
     if ( !replay && GetBoolProperty("vfdoptimize_log") ) {
         fileflags |= O_DIRECT;
     }
 #endif      
-    file = PathNameOpenFile(path, fileflags , 0600);
+    file = PathNameOpenFile(logfile_path, fileflags , 0600);
      if ( file < 0 ) {
         return file;
     }
@@ -128,32 +365,106 @@ _openlogfile(char* logfile_path, bool replay) {
     return file;
 }
 
+static File
+_opennewlogfile(void)
+{
+    char path[MAXPGPATH];
+    File file;
+    int tries;
+
+    for (tries = 0; tries < 1000; tries++) {
+        log_file_seq++;
+        _buildlogpath(path, sizeof(path), log_file_seq);
+        file = _openlogfile(path, false);
+        if (file >= 0) {
+            return file;
+        }
+        if (errno != EEXIST) {
+            vfd_log("could not open new shadow log %s", path);
+            return file;
+        }
+    }
+
+    vfd_log("could not allocate a unique shadow log name in %s", log_directory);
+    return -1;
+}
+
+static int
+_prunelogfiles(int keep)
+{
+    ShadowLogFile *files = NULL;
+    int count = 0;
+    int i;
+    const char *current = NULL;
+    int limit;
+
+    if (_listlogfiles(&files, &count) < 0) {
+        return -1;
+    }
+    if (log_file > 0) {
+        current = FileGetName(log_file);
+    }
+
+    limit = count - keep;
+    for (i = 0; i < limit; i++) {
+        if (current != NULL && strcmp(current, files[i].path) == 0) {
+            continue;
+        }
+        if (unlink(files[i].path) != 0) {
+            vfd_log("could not remove expired shadow log %s", files[i].path);
+        }
+    }
+
+    _freeloglist(files);
+    return 0;
+}
+
+static void
+_freeloglist(ShadowLogFile *files)
+{
+    if (files != NULL) {
+        os_free(files);
+    }
+}
+
 int
 vfdinit()
-{    
-      char* logfile_path = GetProperty("vfdlogfile");
+{
+    ShadowLogFile *files = NULL;
+    int count = 0;
 
-      if ( logfile_path == NULL ) {
-          logfile_path = "pg_shadowlog";
-      }
-      
-      if ( PropertyIsValid("vfdlogindex") ) {
-          log_index = GetBoolProperty("vfdlogindex");
-      }
-     
-      if ( PropertyIsValid("vfdcompress_log") ) {
-          compress_log = GetBoolProperty("vfdcompress_log");
-      }  
-      
-    log_file = _openlogfile(logfile_path, false);
+    _resolvelogdir();
+
+    if (PropertyIsValid("vfdlogindex")) {
+        log_index = GetBoolProperty("vfdlogindex");
+    }
+
+    if (PropertyIsValid("vfdcompress_log")) {
+        compress_log = GetBoolProperty("vfdcompress_log");
+    }
+
+    if (_ensurelogdir() < 0) {
+        return SM_FAIL;
+    }
+
+    log_file_seq = 0;
+    if (_listlogfiles(&files, &count) == 0 && count > 0) {
+        log_file_seq = files[count - 1].seq;
+    }
+    _freeloglist(files);
+
+    log_file = _opennewlogfile();
+    if (log_file < 0) {
+        return SM_FAIL;
+    }
 
     max_blocks = ((sizeof(SegmentStore) - MAXALIGN((char*)&SegmentStore - (char*)&SegmentStore.header.blocks)) / sizeof(SmgrData));
     log_count = 0;
-        
+
     scratch_space = os_malloc((BLCKSZ + 4) * (max_blocks + 1));
-    
+
     log_pos = 0;
-    
+
     return SM_SUCCESS;
 }
 
@@ -738,56 +1049,73 @@ vfdcommitlog() {
 }
 
 int
-vfdexpirelogs() {    
+vfdexpirelogs() {
+    File next;
 
-    char newname[1024];
-    memset(newname,0x00,1024);
-    int len = strlen(FileGetName(log_file));
-    
-    strncpy(newname,FileGetName(log_file),len);
-    strncpy(newname + len,".old",4);
-    
-    FileRename(log_file,newname);
-    newname[len] = 0x00;
-    log_file = _openlogfile(newname,false);
+    /*
+     * Rotate to a new uniquely named log in the shadow log directory,
+     * then drop everything but the newest two files. The previous log
+     * is kept because SyncBuffers may not have made those pages durable.
+     */
+    next = _opennewlogfile();
+    if (next < 0) {
+        return SM_FAIL;
+    }
+    if (log_file > 0) {
+        FileClose(log_file);
+    }
+    log_file = next;
+
+    if (_prunelogfiles(SHADOWLOG_KEEP) < 0) {
+        vfd_log("could not prune shadow logs in %s", log_directory);
+    }
 
     return SM_SUCCESS;
 }
 
 int
 vfdreplaylogs() {
+    ShadowLogFile *files = NULL;
+    int count = 0;
+    int i;
+    const char *current = NULL;
     File logfile;
-    char* logfile_path = GetProperty("vfdlogfile");
-    char oldname[1024];
-    int len;
 
-    if ( logfile_path == NULL ) {
-        logfile_path = "pg_shadowlog";
+    if (log_directory[0] == '\0') {
+        _resolvelogdir();
+        if (_ensurelogdir() < 0) {
+            return SM_FAIL;
+        }
     }
 
     /*
-     * Replay pg_shadowlog.old first, then the current log. ClearLogs
-     * renames a completed log to .old after SyncBuffers; a crash can
-     * leave those pages not durable. The current file is newer and
-     * must overlay the expired snapshot. Both are full page replays.
+     * Replay every remaining shadow log in sequence order. Newer files
+     * overlay older full-page images. Skip the log opened for writing
+     * at init; it is empty until the first post-recovery dump.
      */
-    memset(oldname, 0x00, sizeof(oldname));
-    len = strlen(logfile_path);
-    strncpy(oldname, logfile_path, len);
-    strncpy(oldname + len, ".old", 4);
+    if (_listlogfiles(&files, &count) < 0) {
+        vfd_log("could not list shadow logs in %s", log_directory);
+        return SM_FAIL;
+    }
 
-    logfile = _openlogfile(oldname, true);
-    if (logfile >= 0) {
+    if (log_file > 0) {
+        current = FileGetName(log_file);
+    }
+
+    for (i = 0; i < count; i++) {
+        if (current != NULL && strcmp(current, files[i].path) == 0) {
+            continue;
+        }
+        logfile = _openlogfile(files[i].path, true);
+        if (logfile < 0) {
+            vfd_log("could not open shadow log %s for replay", files[i].path);
+            continue;
+        }
         _vfdreplaylogfile(logfile, false);
         FileClose(logfile);
     }
 
-    logfile = _openlogfile(logfile_path, true);
-    if (logfile >= 0) {
-        _vfdreplaylogfile(logfile, false);
-        FileClose(logfile);
-    }
-
+    _freeloglist(files);
     log_count = LogBuffer.LogHeader.log_id + 1;
     return SM_SUCCESS;
 }

@@ -18,6 +18,7 @@
 #include "storage/itemid.h"
 #include "utils/datum.h"
 #include "utils/rel.h"
+#include "utils/varbit.h"
 #include "vector.h"
 
 #include "varatt.h"
@@ -371,11 +372,12 @@ HnswAddHeapTid(HnswElement element, ItemPointer heaptid)
 HnswElement
 HnswInitElementFromBlock(BlockNumber blkno, OffsetNumber offno)
 {
-	HnswElement element = palloc(sizeof(HnswElementData));
+	HnswElement element = palloc0(sizeof(HnswElementData));
 	char	   *base = NULL;
 
 	element->blkno = blkno;
 	element->offno = offno;
+	element->heaptidsLength = 0;
 	HnswPtrStore(base, element->neighbors, (HnswNeighborArrayPtr *) NULL);
 	HnswPtrStore(base, element->value, (char *) NULL);
 	return element;
@@ -580,28 +582,54 @@ HnswSetNeighborTuple(char *base, HnswNeighborTuple ntup, HnswElement e, int m)
 }
 
 /*
- * Stored index value must fit in avail bytes and claim a plausible dim.
- * Torn VARSIZE/dim would otherwise make datumCopy or CheckDims SIGSEGV
- * during vacuum graph repair.
+ * Stored index value must fit in avail bytes and match a known payload
+ * layout. HNSW stores vector, halfvec, sparsevec, *or varbit* in
+ * HnswElementTupleData.data. Treating every payload as Vector rejected
+ * bit indexes: LoadElement bailed out, and uninitialized heaptids were
+ * returned as heap TIDs (pointers decoded as block 8e6 on a 4-page heap).
  */
 static bool
 HnswVarlenaIsSane(Pointer p, Size avail)
 {
 	Size		size;
-	int16		dim;
 
-	if (p == NULL || avail < offsetof(Vector, x))
+	if (p == NULL || avail < VARHDRSZ)
 		return false;
 	size = VARSIZE_ANY(p);
-	if (size < offsetof(Vector, x) || size > avail || size > BLCKSZ)
+	if (size < VARHDRSZ || size > avail || size > BLCKSZ)
 		return false;
-	dim = ((Vector *) p)->dim;
-	if (dim < 1 || dim > VECTOR_MAX_DIM)
-		return false;
-	if (VECTOR_SIZE(dim) <= size)
-		return true;
-	if (HALFVEC_SIZE(dim) <= size)
-		return true;
+
+	if (size >= offsetof(Vector, x))
+	{
+		int16		dim = ((Vector *) p)->dim;
+
+		if (dim >= 1 && dim <= VECTOR_MAX_DIM)
+		{
+			if (VECTOR_SIZE(dim) <= size)
+				return true;
+			if (HALFVEC_SIZE(dim) <= size)
+				return true;
+		}
+	}
+
+	if (size >= VARHDRSZ + VARBITHDRSZ)
+	{
+		int32		bitlen = VARBITLEN(p);
+
+		if (bitlen >= 1 && bitlen <= HNSW_MAX_DIM * 32 &&
+			VARBITDATALEN(bitlen) <= size)
+			return true;
+	}
+
+	if (size >= offsetof(SparseVector, indices))
+	{
+		SparseVector *sv = (SparseVector *) p;
+
+		if (sv->dim >= 1 && sv->nnz >= 0 && sv->nnz <= SPARSEVEC_MAX_NNZ &&
+			SPARSEVEC_SIZE(sv->nnz) <= size)
+			return true;
+	}
+
 	return false;
 }
 
@@ -670,22 +698,17 @@ HnswGetDistance(Datum a, Datum b, HnswSupport * support)
 {
 	Pointer		pa = DatumGetPointer(a);
 	Pointer		pb = DatumGetPointer(b);
-	Vector	   *va;
-	Vector	   *vb;
 
 	/*
-	 * Torn neighbor TIDs can produce an element whose vector was never
-	 * loaded, or a loaded header whose dim/VARSIZE does not match. Distance
-	 * functions then SIGSEGV in CheckDims or walk past the allocation.
+	 * Torn neighbor TIDs can produce an element whose value was never
+	 * loaded. Distance functions then SIGSEGV in CheckDims. Do not compare
+	 * Vector.dim: varbit uses VARBITLEN (int32); Hamming/Jaccard CheckDims
+	 * still reject a real length mismatch.
 	 */
 	if (pa == NULL || pb == NULL)
 		return DBL_MAX;
 	if (!HnswVarlenaIsSane(pa, VARSIZE_ANY(pa)) ||
 		!HnswVarlenaIsSane(pb, VARSIZE_ANY(pb)))
-		return DBL_MAX;
-	va = (Vector *) pa;
-	vb = (Vector *) pb;
-	if (va->dim != vb->dim)
 		return DBL_MAX;
 
 	return DatumGetFloat8(FunctionCall2Coll(support->procinfo, support->collation, a, b));

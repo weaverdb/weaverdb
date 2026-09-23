@@ -1412,7 +1412,7 @@ Block BufferGetBlock(Buffer buffer) {
     } else {
         BufferDesc* bufHdr = &BufferDescriptors[buffer - 1];
         if (bufHdr->kind != RELKIND_SPECIAL) {
-            ShadowBufferIfNeeded(bufHdr, false);
+            ShadowBufferIfNeeded(bufHdr);
         }
         return bufHdr->data;
     }

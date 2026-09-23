@@ -11,8 +11,10 @@
 #include "access/amapi.h"
 #include "access/funcindex.h"
 #include "access/genam.h"
+#include "access/heapam.h"
 #include "access/istrat.h"
 #include "access/skey.h"
+#include "env/env.h"
 #include "catalog/index.h"
 #include "catalog/pg_index.h"
 #include "fmgr.h"
@@ -32,6 +34,21 @@
 
 extern Datum ExecEvalExpr(Node *expression, ExprContext *econtext, Oid *returnType,
 						  bool *isNull, bool *isDone);
+
+/*
+ * btree/gist/rtree close the build relations in ambuild (NoLock — the
+ * ShareLock is held until end of transaction). HNSW/IVFFlat omitted that,
+ * so CREATE INDEX left rd_refcnt==1 and RelationCacheCommitChecker logged
+ * "refcount of 1 at commit".
+ */
+static void
+pgvector_close_build_rels(Relation heap, Relation index)
+{
+	if (!IsNormalProcessingMode())
+		return;
+	heap_close(heap, NoLock);
+	index_close(index);
+}
 
 PgvectorIndexInfo *
 BuildIndexInfo(Relation index)
@@ -127,6 +144,7 @@ ivfflatbuild(Relation heap,
 	}
 	if (result != NULL)
 		pfree(result);
+	pgvector_close_build_rels(heap, index);
 }
 
 InsertIndexResult
@@ -303,6 +321,7 @@ hnswbuild(Relation heap,
 	}
 	if (result != NULL)
 		pfree(result);
+	pgvector_close_build_rels(heap, index);
 }
 
 InsertIndexResult

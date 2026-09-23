@@ -4,7 +4,7 @@
  *	  Test-only SQL driver for the crash-consistency harness.
  *
  * Starts the engine through initweaverbackend() / GoMultiuser() so the
- * shadow log (pg_shadowlog) is on, then runs stdin SQL via the public
+ * shadow log directory (pg_shadowlog/) is on, then runs stdin SQL via the public
  * embed API. This binary is not production; it is the SIGKILL target
  * for index_heap_crash_consistency.sh. Initdb still uses CLI postgres.
  *
@@ -330,7 +330,7 @@ main(int argc, char **argv)
 
 	/*
 	 * transcareful=false -> SOFT_COMMIT, the production multiuser path:
-	 * pages go through pg_shadowlog, then xid COMMIT.
+	 * pages go through pg_shadowlog/, then xid COMMIT.
 	 */
 	if (snprintf(vars, sizeof(vars),
 				 "datadir=%s;allow_anonymous=true;disable_crc=TRUE;"

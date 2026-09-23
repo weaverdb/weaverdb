@@ -8,7 +8,7 @@
 #
 # Every SQL process after initdb — setup, crash target, and recover —
 # is weaver_embed_sql, which starts through initweaverbackend() /
-# GoMultiuser() so pg_shadowlog is on. Do not use single-user postgres
+# GoMultiuser() so pg_shadowlog/ is on. Do not use single-user postgres
 # here: that path sets logging=false and never writes shadow pages.
 #
 # The crash target is killed from the outside (SIGKILL and/or a test-only

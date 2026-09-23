@@ -919,7 +919,7 @@ FileRename(File file, char* newname) {
 
 int
 FileRead(File file, char *buffer, int amount) {
-    ssize_t blit;
+    off_t blit;
     int request = amount;
     Vfd* target = GetVirtualFD(file);
     Assert(FileIsValid(file));
@@ -942,7 +942,7 @@ FileRead(File file, char *buffer, int amount) {
                 target->seekPos += blit;
                 return (request - amount);
             } else {
-                lseek(target->fd,target->seekPos + request - amount,SEEK_SET);
+                off_t pos = lseek(target->fd,target->seekPos + request - amount,SEEK_SET);
                 blit = 0;
             }
         }
@@ -990,7 +990,7 @@ FileSeek(File file, long offset, int whence) {
     Vfd* target = GetVirtualFD(file);
     off_t blit = 0;
     int fails = 0;
-
+                    
     if (target->fd == VFD_CLOSED) {
         switch (whence) {
             case SEEK_SET:
