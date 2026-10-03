@@ -324,6 +324,7 @@ PG_EXTERN crc64 PageInsertInvalidChecksum(Page page);
 PG_EXTERN bool PageChecksumIsInvalid(Page page);
 PG_EXTERN bool PageChecksumIsInit(Page page);
 PG_EXTERN bool PageConfirmChecksum(Page page);
+PG_EXTERN bool PageIsEmptyInit(Page page);
 PG_EXTERN bool DisableCRC(bool enable);
 
 #endif	 /* BUFPAGE_H */

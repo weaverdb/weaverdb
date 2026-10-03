@@ -39,8 +39,6 @@ bool FlushAllDirtyBuffers(bool wait);
 
 long RegisterBufferWrite(BufferDesc * bufHdr,bool release);
 
-long GetBufferGeneration(void);
-
 void ClearAllDBWrites(BufferDesc* bufHdr);
 void ShutdownDBWriter(void);
 void PanicStopDBWriter(void);

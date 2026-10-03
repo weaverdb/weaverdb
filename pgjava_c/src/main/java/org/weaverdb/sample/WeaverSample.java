@@ -69,6 +69,8 @@ public class WeaverSample {
         prop.setProperty("allow_anonymous", "true"); // allow connection to the database without username/password
         prop.setProperty("stdlog", "TRUE"); // print debug logging to stdout
         prop.setProperty("disable_crc", "TRUE"); // disable crc checking on buffer pages for now
+        prop.setProperty("index_corruption", "IGNORE");
+        prop.setProperty("heap_corruption", "IGNORE");
         WeaverInitializer.initialize(prop); // start connect to the database
         Runtime.getRuntime().addShutdownHook(new Thread(()->WeaverInitializer.forceShutdown())); // call close when the JVM is shutdown
     }

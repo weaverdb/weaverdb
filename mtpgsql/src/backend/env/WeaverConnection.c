@@ -404,7 +404,7 @@ WPrepareStatement(OpaqueWConn conn, const char *smt) {
     
     if ( connection->stage == TRAN_ABORTONLY ) {
         err = 456;
-        SetError(connection, err, "CONTEXT", "context not valid, an error has already occured");
+        SetError(connection, err, "CONTEXT", "context not valid, an error has already occurred");
     }
 
     if (CheckThreadContext(conn)) {
@@ -625,7 +625,7 @@ WExec(OpaquePreparedStatement plan) {
 
     if ( connection->stage == TRAN_ABORTONLY ) {
         err = 456;
-        SetError(connection, err, "CONTEXT", "context not valid, an error has already occured");
+        SetError(connection, err, "CONTEXT", "context not valid, an error has already occurred");
         return err;
     }
 

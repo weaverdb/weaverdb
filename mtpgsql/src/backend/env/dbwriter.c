@@ -368,7 +368,8 @@ WriteGroup CreateWriteGroup(int trans, int buffers) {
     cart->numberOfTrans = 0;
     cart->currstate = NOT_READY;
     cart->snapshot = NULL;
-    
+    cart->next = cart;
+
     ResetWriteGroup(cart);
     
     cart->LogId = RelOid_pg_log;
@@ -376,7 +377,7 @@ WriteGroup CreateWriteGroup(int trans, int buffers) {
     
     cart->LastSoftXid = InvalidTransactionId;
     
-    cart->generation = 0;
+    cart->generation = 1;
     
     return cart;
 }
@@ -394,9 +395,22 @@ WriteGroup DestroyWriteGroup(WriteGroup w) {
     os_free(w->buffers);
     os_free(w->release);
     os_free(w->descriptions);
+
+    WriteGroup next = w->next;
+
+    while (next->next != w->next) {
+        if (next->next == w) {
+            next->next = w->next;
+        } else {
+            next = next->next;
+        }
+    }
     
-    w->currstate = DEAD;
-    return w->next;
+    next = w->next == w ? NULL : w->next;
+
+    os_free(w);
+
+    return next;
 }
 
 
@@ -534,7 +548,7 @@ void* DBWriter(void *jones) {
     
     MemoryContextSwitchTo(MemoryContextGetTopContext());
     
-    cart = log_group;
+    cart = GetNextTarget(NULL);
     
     while (!stopped) {
         int     releasecount = 0;
@@ -818,8 +832,6 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
     int moved = 0;
     
     pthread_mutex_lock(&target->checkpoint);
-    if (src->generation > target->generation)
-        target->generation = src->generation;
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         
         if ( !src->buffers[i] ) {
@@ -1080,8 +1092,7 @@ int LogBuffers(WriteGroup list) {
             if ( iostatus == IO_SUCCESS ) {
                 Block blk = AdvanceBufferIO(bufHdr, false);
                 buffer_hits++;
-                if (TraceBufferFlushEnabled()
-                    && strstr(bufHdr->blind.relname, "id_idx") != NULL) {
+                if (TraceBufferFlushEnabled()) {
                     fprintf(stderr,
                             "FLUSH: log-write %s blk=%lu cart_gen=%ld shadow_gen=%ld\n",
                             bufHdr->blind.relname,
@@ -1159,14 +1170,14 @@ int LogBuffers(WriteGroup list) {
     }
 
     if (TraceBufferFlushEnabled()) {
-        fprintf(stderr, "FLUSH: LogBuffers end gen=%ld pages=%d\n",
-                list->generation, buffer_hits);
+        fprintf(stderr, "FLUSH: LogBuffers end gen=%ld pages=%d release=%d free=%d\n",
+                list->generation, buffer_hits, releasecount,freecount);
         fflush(stderr);
     }
     smgrcommitlog();
     
     DTRACE_PROBE3(mtpg, dbwriter__loggedbuffers, buffer_hits, releasecount, freecount);
-    return releasecount;
+    return freecount;
 }
 
 int ClearLogs(WriteGroup list) {
@@ -1271,7 +1282,11 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 }
 
                 iostatus = WriteBufferIO(bufHdr, iomode);
-                if ( iostatus == IO_SUCCESS) {                    
+                if (iostatus == IO_CLEAN) {
+                    /* Not logged on the commit path, or neither dirty nor
+                     * logged on the deferred path. Do not publish a page
+                     * the shadow log does not have. */
+                } else if ( iostatus == IO_SUCCESS) {                    
                     buffer_hits++;
                     cache->commit = true;
                     Block blk = AdvanceBufferIO(bufHdr, true);
@@ -1282,7 +1297,16 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                     if ( cache == NULL ) {
                         elog(FATAL, "NULL PathCache");
                     }
-                    
+
+                    if (TraceBufferFlushEnabled()) {
+                        fprintf(stderr,
+                                "FLUSH: sync-write %s blk=%lu cart_gen=%ld shadow_gen=%ld\n",
+                                bufHdr->blind.relname,
+                                (unsigned long) bufHdr->tag.blockNum,
+                                list->generation,
+                                bufHdr->generation);
+                        fflush(stderr);
+                    }
                     status = smgrwrite(cache->smgrinfo, bufHdr->tag.blockNum,
                             blk);
                     written = true;
@@ -1347,6 +1371,13 @@ bool FlushAllDirtyBuffers(bool wait) {
     bool iflushed = false;
     int                 ciosuspend = 0;
         
+    if (TraceBufferFlushEnabled()) {
+        fprintf(stderr,
+                "FLUSH: FlushAllDirtyBuffers called cart_gen=%ld\n",
+                cart->generation);
+        fflush(stderr);
+    }
+
     if (IsDBWriter()) {
         while ( FlushWriteGroup(cart) == 0 ) {
             UnlockWriteGroup(cart);
@@ -1466,15 +1497,14 @@ void ShutdownDBWriter(void) {
     }
     /* now destroy all the write groups  */
     {
-        WriteGroup     target = log_group;
+        WriteGroup     target = GetNextTarget(NULL);
         
         while (target != NULL) {
-            WriteGroup next = DestroyWriteGroup(target);
-            os_free(target);
-            if ( next == log_group ) target = sync_group;
-            else if ( next == sync_group ) break;
-            else target = next;
+            target = DestroyWriteGroup(target);
         }
+
+        DestroyWriteGroup(sync_group);
+        
     }
     /* free id memory */
     os_free(writerid);
@@ -1684,15 +1714,4 @@ char* RequestSnapshot(char* cmd) {
 long
 GetFlushTime() {
     return flush_time;
-}
-
-long GetBufferGeneration() {
-    if (db_inited) {
-        WriteGroup w = GetCurrentWriteGroup(false);
-        long gen = w->generation;
-        UnlockWriteGroup(w);
-        return gen;
-    } else {
-        return 0;
-    }
 }

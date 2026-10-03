@@ -1246,7 +1246,7 @@ lazy_vacuum_index(Relation indrel, LVRelStats * vacrelstats)
 	 */
 	if (nitupsremoved < expected_heap_deletes) {
 		vacuum_log(indrel,
-			"Index/heap delete count mismatch (incomplete vacuum resume): "
+			"Index/heap delete count mismatch: "
 			"index deleted %ld, expected at least %ld "
 			"(dead %ld unused-LP %ld aborted %ld segments %ld). "
 			"Continuing heap cleanup; indexes were likely already cleaned.",

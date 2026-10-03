@@ -92,9 +92,10 @@ static bool InboundBufferIO(BufferDesc* header);
 static bool CancelInboundBufferIO(BufferDesc* header);
 static bool ClearBufferIO(BufferDesc* header);
 static void ShowBufferIO(int id, int io);
-static bool DirtyBufferIO(BufferDesc* header, long generation);
+static bool DirtyBufferIO(BufferDesc* header);
 static bool WaitBufferIO(bool write_mode, BufferDesc *buf);
 
+static long GetBufferGeneration();
 static bool ShadowBufferIfNeeded(BufferDesc* buf);
 
 static SectionId   buffer_section_id = SECTIONID("BMGR");
@@ -284,6 +285,9 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     
     /* copy read in data to shadow page */
     if ( !isLocalBuf ) {
+        pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
+        memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
+        pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
     /* If anyone was waiting for IO to complete, wake them up now */
         TerminateBufferIO(iostatus,bufHdr);
     }
@@ -474,8 +478,19 @@ WriteBuffer(Relation rel, Buffer buffer) {
         unlock the io guard before registering the write
         b/c the Register command locks the buffer on its own
      */
+    DirtyBufferIO(bufHdr);
+ 
+    long generation = RegisterBufferWrite(bufHdr, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
+    if (TraceBufferFlushEnabled()) {
+        fprintf(stderr,
+                            "FLUSH: register-write %s blk=%lu cart_gen=%ld shadow_gen=%ld\n",
+                            bufHdr->blind.relname,
+                            (unsigned long) bufHdr->tag.blockNum,
+                            generation,
+                            bufHdr->generation);
+        fflush(stderr);
+    }
 
-    DirtyBufferIO(bufHdr, RegisterBufferWrite(bufHdr, bufenv->PrivateRefCount[bufHdr->buf_id] == 1));
     bufenv->PrivateRefCount[bufHdr->buf_id]--;
     bufenv->total_pins--;
     
@@ -589,8 +604,17 @@ WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
      * so we only grab the mutex once. Unlock the IO guard before registering
      * the write; Register locks the buffer on its own.
      */
+    DirtyBufferIO(bufHdr);
     generation = RegisterBufferWrite(bufHdr, false);
-    DirtyBufferIO(bufHdr, generation);
+    if (TraceBufferFlushEnabled()) {
+        fprintf(stderr,
+                            "FLUSH: register-write %s blk=%lu cart_gen=%ld shadow_gen=%ld\n",
+                            bufHdr->blind.relname,
+                            (unsigned long) bufHdr->tag.blockNum,
+                            generation,
+                            bufHdr->generation);
+        fflush(stderr);
+    }
     return generation;
 }
 
@@ -955,7 +979,7 @@ SetBufferCommitInfoNeedsSave(Buffer buffer) {
     
     bufHdr = &BufferDescriptors[buffer - 1];
     
-    DirtyBufferIO(bufHdr, 0);
+    DirtyBufferIO(bufHdr);
 }
 
 
@@ -1257,14 +1281,17 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
             default:
                 /* a write is warranted logged or dirty but only remove the logged flag 
                  * as we still need to log it if we are not in commit mode*/
-                dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));  
-                buf->ioflags &= ~(BM_LOGGED);
+                dirty = (buf->ioflags & ( BM_DIRTY | BM_LOGGED ));
+                if (dirty)
+                    buf->ioflags &= ~(BM_LOGGED);
             }
 
         DTRACE_PROBE4(mtpg,buffer__writebufferio,buf->tag.relId.dbId,buf->tag.relId.relId,buf->tag.blockNum,dirty);
         if ( dirty ) {
      /*  logging is skipped in single user mode  */
             buf->ioflags |= BM_WRITE_IN_PROGRESS;
+        } else {
+            iostatus = IO_CLEAN;
         }
     }
     pthread_mutex_unlock(&buf->io_in_progress_lock.guard);
@@ -1273,7 +1300,7 @@ WriteBufferIO(BufferDesc *buf, WriteMode mode) {  /*  clears the inbound flag  *
 }
 
 bool
-DirtyBufferIO(BufferDesc *buf, long generation) {  /*  clears the inbound flag  */
+DirtyBufferIO(BufferDesc *buf) {  /*  clears the inbound flag  */
     bool dirty = false;
     pthread_mutex_lock(&buf->io_in_progress_lock.guard);
     
@@ -1353,6 +1380,7 @@ TerminateBufferIO(IOStatus iostatus, BufferDesc *buf) {
     if ( buf->ioflags & (BM_IOOP_MASK) ) {
 /*  if IO is happening alert waiters they need to check state  */
         if ( buf->ioflags & BM_LOG_IN_PROGRESS ) {
+            buf->generation = 0;
             buf->ioflags |= BM_LOGGED;
         } else if ( buf->ioflags & BM_WRITE_IN_PROGRESS ) {
 
@@ -1616,11 +1644,11 @@ TraceBufferFlushEnabled(void)
 
 bool ShadowBufferIfNeeded(BufferDesc* bufHdr) {
     bool shadowed = false;
-
+    long generation = GetBufferGeneration();
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-    if (bufHdr->generation < buffer_generation) {
+    if (bufHdr->generation < generation) {
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
-        bufHdr->generation = buffer_generation;
+        bufHdr->generation = generation;
         shadowed = true;
     }
     pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
@@ -1647,6 +1675,21 @@ SetBufferGeneration(long generation) {
     pthread_rwlock_wrlock(&buffer_generation_lock);
     buffer_generation = generation;
     pthread_rwlock_unlock(&buffer_generation_lock);
+}
+
+long
+GetBufferGeneration() {
+    long generation;
+    BufferEnv *env = GetBufferCxt();
+
+    if (!env->generation_lock_held) {
+        pthread_rwlock_rdlock(&buffer_generation_lock);
+    }
+    generation = buffer_generation;
+    if (!env->generation_lock_held) {
+        pthread_rwlock_unlock(&buffer_generation_lock);
+    }
+    return generation;
 }
 
 long

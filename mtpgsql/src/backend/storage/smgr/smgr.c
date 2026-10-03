@@ -303,12 +303,12 @@ smgrread(SmgrInfo info, BlockNumber blocknum, char *buffer) {
             if (info->nblocks == (long) blocknum) {
                 status = SM_SUCCESS;
             } else {
-                elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
-                        blocknum, NameStr(info->relname), NameStr(info->dbname), status);
+                elog(DEBUG, "cannot read block %ld of %s-%s code: %d.  The requested block is beyond the end %ld",
+                        blocknum, NameStr(info->relname), NameStr(info->dbname), status, info->nblocks);
                 status = SM_FAIL;
             }
         } else {
-            elog(NOTICE, "cannot read block %ld of %s-%s code: %d",
+            elog(DEBUG, "cannot read block %ld of %s-%s code: %d",
                     blocknum, NameStr(info->relname), NameStr(info->dbname), status);
             status = SM_FAIL;
         }

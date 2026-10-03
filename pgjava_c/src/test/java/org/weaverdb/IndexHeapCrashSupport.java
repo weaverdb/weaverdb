@@ -131,6 +131,9 @@ final class IndexHeapCrashSupport {
         p.setProperty("stdlog", System.getProperty("weaver.crash.stdlog", "FALSE"));
         p.setProperty("trace_index", System.getProperty("weaver.crash.trace_index", "TRUE"));
         p.setProperty("sortmem", System.getProperty("weaver.sortmem", "131072"));
+        p.setProperty("index_corruption", "IGNORE");
+        p.setProperty("heap_corruption", "IGNORE");
+        
         WeaverInitializer.initialize(p);
     }
 

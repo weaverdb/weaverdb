@@ -584,3 +584,26 @@ bool PageChecksumIsInit(Page page) {
     PageHeader ph = (PageHeader)page;
     return ph->checksum == InitCRC64;
 }
+
+/*
+ * PageInit(page, BLCKSZ, 0) with no line pointers. smgrextend writes
+ * this shape before the shadow log has the block. A torn write of it
+ * has pd_upper != 0, so PageIsNew is false, but it is still an empty
+ * page and must not fail checksum.
+ */
+bool
+PageIsEmptyInit(Page page)
+{
+	PageHeader	ph = (PageHeader) page;
+	unsigned long linp;
+
+	if (page == NULL)
+		return false;
+	if (PageIsNew(page) || PageChecksumIsInit(page))
+		return true;
+
+	linp = (unsigned long) &ph->pd_linp - (unsigned long) ph;
+	return ph->pd_lower == linp
+		&& ph->pd_upper == BLCKSZ
+		&& ph->pd_special == BLCKSZ;
+}
