@@ -12,7 +12,7 @@
  *
  *  Shadow logs live in DataDir/pg_shadowlog (or vfdlogfile) as uniquely
  *  named files log_000...N. Expire rotates to a new file and deletes all
- *  but the newest two. Recovery replays the remaining files in sequence.
+ *  but the newest three. Recovery replays the remaining files in sequence.
  *
  * IDENTIFICATION
  *
@@ -54,7 +54,7 @@ static long     log_pos;
 #define DEFAULT_SHADOWLOG_DIR	"pg_shadowlog"
 #define SHADOWLOG_PREFIX	"log_"
 #define SHADOWLOG_DIGITS	18
-#define SHADOWLOG_KEEP		2
+#define SHADOWLOG_KEEP		3
 
 typedef struct shadowlogfile {
     long        seq;
@@ -1054,7 +1054,7 @@ vfdexpirelogs() {
 
     /*
      * Rotate to a new uniquely named log in the shadow log directory,
-     * then drop everything but the newest two files. The previous log
+     * then drop everything but the newest three files. The previous log
      * is kept because SyncBuffers may not have made those pages durable.
      */
     next = _opennewlogfile();

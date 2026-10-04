@@ -980,7 +980,6 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
         
     int             position;
     bool            setxid = true;
-    int             ciosuspend = 0;
     
     cart = GetCurrentWriteGroup(true);
     
@@ -1009,12 +1008,8 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
             cart->wait_for_sync[position] = !IsLoggable();
             Assert(GetMyThread()->state == TRANS_COMMIT);
             while ( GetMyThread()->state != TRANS_DEFAULT ) {
-                if (ciosuspend == 0)
-                    ciosuspend = SuspendCriticalIO();
                 if (pthread_cond_wait(&cart->broadcaster, &cart->checkpoint)) {
                     UnlockWriteGroup(cart);
-                    if (ciosuspend != 0)
-                        ResumeCriticalIO(ciosuspend);
                     elog(FATAL, "[DBWriter]cannot attach to db write thread");
                 }
             }
@@ -1025,9 +1020,6 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
     }
     
     UnlockWriteGroup(cart);
-
-    if (ciosuspend != 0)
-        ResumeCriticalIO(ciosuspend);
     
     if ( setxid ) {
         Relation        LogRelation = RelationIdGetRelation(cart->LogId, DEFAULTDBOID);
@@ -1182,7 +1174,7 @@ int LogBuffers(WriteGroup list) {
 
 int ClearLogs(WriteGroup list) {
   /* After a durable sync, rotate to a new uniquely named shadow log
-   * and delete all but the last two files.
+   * and delete all but the last three files.
    */
     if ( logging ) {
         smgrexpirelogs();
@@ -1369,7 +1361,6 @@ bool FlushAllDirtyBuffers(bool wait) {
     WriteGroup          cart =  GetCurrentWriteGroup(false);
     int                 releasecount = 0;
     bool iflushed = false;
-    int                 ciosuspend = 0;
         
     if (TraceBufferFlushEnabled()) {
         fprintf(stderr,
@@ -1392,16 +1383,11 @@ bool FlushAllDirtyBuffers(bool wait) {
             iflushed = true;
         }
         while ( wait && cart->currstate == FLUSHING ) {
-            if (ciosuspend == 0)
-                ciosuspend = SuspendCriticalIO();
             pthread_cond_wait(&cart->broadcaster, &cart->checkpoint);
         }
     }
     
     UnlockWriteGroup(cart);
-
-    if (ciosuspend != 0)
-        ResumeCriticalIO(ciosuspend);
     
     return iflushed;
 }

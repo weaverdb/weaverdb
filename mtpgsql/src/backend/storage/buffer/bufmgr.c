@@ -1705,7 +1705,7 @@ GetPinnedBufferGeneration(void) {
 
     if (env->critical_io_depth > 0)
         return env->pinned_generation;
-    return buffer_generation;
+    return GetBufferGeneration();
 }
 
 int
