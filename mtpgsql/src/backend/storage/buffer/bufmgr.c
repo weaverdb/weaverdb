@@ -110,6 +110,7 @@ typedef struct bufenv {
     /*  buffer_init.c   */
     long                       guard;
     long	   *		PrivateRefCount;	/* also used in freelist.c */
+    long	   *		CriticalCount;	/* buffers this CriticalIO unit has marked */
     bits8	   *		BufferLocks;		/* flag bits showing locks I have set */
     BufferTag  *		BufferTagLastDirtied;		/* tag buffer had when last
      * dirtied by me */
@@ -143,6 +144,11 @@ typedef struct bufenv {
  * DBWriter must SuspendCriticalIO so the writer can take the wrlock.
  * Suspend drops the rdlock only — depth and pinned_generation stay set
  * so the unit does not span generations across freelist flush waits.
+ *
+ * Each buffer marked while a unit is open takes one shared cio_hold.
+ * CriticalCount remembers which buffers this backend holds so End and
+ * Abort can drop them. The DBWriter skips a buffer while cio_hold > 0
+ * and keeps that write-group mark until the hold is gone.
  */
 static volatile long buffer_generation = 0;
 static pthread_rwlock_t buffer_generation_lock = PTHREAD_RWLOCK_INITIALIZER;
@@ -479,7 +485,6 @@ WriteBuffer(Relation rel, Buffer buffer) {
         b/c the Register command locks the buffer on its own
      */
     DirtyBufferIO(bufHdr);
- 
     long generation = RegisterBufferWrite(bufHdr, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
     if (TraceBufferFlushEnabled()) {
         fprintf(stderr,
@@ -1523,6 +1528,8 @@ GetBufferCxt() {
 #endif
         env->PrivateRefCount = (long *)palloc(MaxBuffers*sizeof(long));
         memset(env->PrivateRefCount, 0, MaxBuffers*sizeof(long));
+        env->CriticalCount = (long *)palloc(MaxBuffers*sizeof(long));
+        memset(env->CriticalCount, 0, MaxBuffers*sizeof(long));
         env->total_pins = 0;
         
         env->BufferLocks = (bits8 *) palloc(MaxBuffers*sizeof(bits8));
@@ -1562,6 +1569,53 @@ GetBufferCxt() {
  * deadlocks with backends that hold CriticalIO while waiting for the
  * writer to free buffers.
  */
+static void
+ReleaseCriticalIOHolds(BufferEnv *env)
+{
+    int i;
+
+    for (i = 0; i < MaxBuffers; i++) {
+        BufferDesc *buf;
+
+        if (env->CriticalCount[i] == 0)
+            continue;
+        env->CriticalCount[i] = 0;
+        buf = &BufferDescriptors[i];
+        pthread_mutex_lock(&buf->cntx_lock.guard);
+        Assert(buf->cio_hold > 0);
+        if (buf->cio_hold > 0)
+            buf->cio_hold--;
+        pthread_mutex_unlock(&buf->cntx_lock.guard);
+    }
+}
+
+void
+HoldCriticalIOBuffer(BufferDesc *bufHdr)
+{
+    BufferEnv *env = GetBufferCxt();
+
+    if (env->critical_io_depth <= 0)
+        return;
+    if (env->CriticalCount[bufHdr->buf_id] > 0)
+        return;
+
+    env->CriticalCount[bufHdr->buf_id] = 1;
+    pthread_mutex_lock(&bufHdr->cntx_lock.guard);
+    bufHdr->cio_hold++;
+    pthread_mutex_unlock(&bufHdr->cntx_lock.guard);
+}
+
+bool
+BufferHasCriticalIOHold(BufferDesc *bufHdr)
+{
+    bool held;
+
+    pthread_mutex_lock(&bufHdr->cntx_lock.guard);
+    held = bufHdr->cio_hold > 0;
+    pthread_mutex_unlock(&bufHdr->cntx_lock.guard);
+    return held;
+}
+
 void
 BeginCriticalIO(void) {
     BufferEnv *env = GetBufferCxt();
@@ -1578,7 +1632,9 @@ EndCriticalIO(void) {
     BufferEnv *env = GetBufferCxt();
 
     Assert(env->critical_io_depth > 0);
+
     if (--env->critical_io_depth == 0) {
+        ReleaseCriticalIOHolds(env);
         if (env->generation_lock_held) {
             pthread_rwlock_unlock(&buffer_generation_lock);
             env->generation_lock_held = false;
@@ -1592,6 +1648,7 @@ AbortCriticalIO(void) {
     BufferEnv *env = GetBufferCxt();
 
     if (env->critical_io_depth > 0) {
+        ReleaseCriticalIOHolds(env);
         if (env->generation_lock_held) {
             pthread_rwlock_unlock(&buffer_generation_lock);
             env->generation_lock_held = false;

@@ -13,7 +13,13 @@
  */
 Env *pgvector_worker_create_env(Env *parent);
 
+/*
+ * utils/tuplesort.h may already have been included (see pgvector_tuplesort.h).
+ * Repeating the typedef is a C11 feature and warns under -std=gnu99.
+ */
+#ifndef TUPLESORT_H
 typedef struct Tuplesortstate Tuplesortstate;
+#endif
 
 #define Int4LessOperator		97
 #define Float8LessOperator	672

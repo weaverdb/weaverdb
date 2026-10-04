@@ -187,6 +187,8 @@ PG_EXTERN void SetBufferGeneration(long generation);
 PG_EXTERN long BufferGetIOGeneration(Buffer buffer);
 PG_EXTERN long GetPinnedBufferGeneration(void);
 PG_EXTERN int GetCriticalIODepth(void);
+PG_EXTERN void HoldCriticalIOBuffer(BufferDesc *bufHdr);
+PG_EXTERN bool BufferHasCriticalIOHold(BufferDesc *bufHdr);
 PG_EXTERN Block BufferGetBlock(Buffer buffer);
 
 PG_EXTERN void IncrBufferRefCount(Relation rel, Buffer buffer);

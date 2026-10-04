@@ -99,6 +99,7 @@ typedef struct writegroups* WriteGroup;
 struct writegroups {
     WriterState                         currstate;
     bool*				buffers;
+    bool*				defer;		/* keep mark until CriticalIO hold drops */
     bool*				wait_for_sync;
     int*				release;
     BufferTag*                          descriptions;
@@ -185,6 +186,9 @@ static int ClearLogs(WriteGroup list);
 static int LogBuffers(WriteGroup list);
 static int SyncBuffers(WriteGroup list, bool forcommit);
 static void ResetWriteGroup(WriteGroup cart);
+static bool CriticalIOMarkPending(WriteGroup list, int i, bool forlog);
+static void TransferWriteMark(WriteGroup dest, WriteGroup src, int i);
+static void RetainDeferredMarks(WriteGroup list);
 static int ForgetPathCache(Oid relid, Oid dbid);
 
 static int MergeWriteGroups(WriteGroup target, WriteGroup src);
@@ -362,6 +366,7 @@ WriteGroup CreateWriteGroup(int trans, int buffers) {
     cart->transactions = os_malloc(sizeof(TransactionId) * trans);
     cart->transactionState = os_malloc(sizeof(int) * trans);
     cart->buffers = os_malloc(sizeof(bool) * buffers);
+    cart->defer = os_malloc(sizeof(bool) * buffers);
     cart->release = os_malloc(sizeof(int) * buffers);
     cart->descriptions = os_malloc(sizeof(BufferTag) * buffers);
     
@@ -393,6 +398,7 @@ WriteGroup DestroyWriteGroup(WriteGroup w) {
     os_free(w->transactions);
     os_free(w->transactionState);
     os_free(w->buffers);
+    os_free(w->defer);
     os_free(w->release);
     os_free(w->descriptions);
 
@@ -806,10 +812,93 @@ void CommitPackage(WriteGroup cart) {
     HashTableWalk(db_table, (HashtFunc)PathCacheCompleteWalker, 0);
 }
 
+/*
+ * A sealed cart is about to forget its marks. Move any mark that an open
+ * CriticalIO still owns onto the live log cart, pin and all.
+ */
+static void
+RetainDeferredMarks(WriteGroup list)
+{
+    int i;
+
+    if (!db_inited || log_group == NULL || list == log_group)
+        return;
+
+    for (i = 0; i < MaxBuffers; i++) {
+        if (!list->defer[i] || !list->buffers[i])
+            continue;
+        TransferWriteMark(log_group, list, i);
+    }
+}
+
+static void
+TransferWriteMark(WriteGroup dest, WriteGroup src, int i)
+{
+    if (dest == src || !src->buffers[i])
+        return;
+
+    pthread_mutex_lock(&dest->checkpoint);
+    if (!src->buffers[i]) {
+        pthread_mutex_unlock(&dest->checkpoint);
+        return;
+    }
+
+    if (!dest->buffers[i]) {
+        memmove(&dest->descriptions[i], &src->descriptions[i], sizeof(BufferTag));
+        dest->buffers[i] = true;
+    } else if (dest->descriptions[i].relId.dbId != src->descriptions[i].relId.dbId ||
+               dest->descriptions[i].relId.relId != src->descriptions[i].relId.relId ||
+               dest->descriptions[i].blockNum != src->descriptions[i].blockNum) {
+        pthread_mutex_unlock(&dest->checkpoint);
+        elog(FATAL, "CriticalIO write mark tag mismatch buf %d", i);
+    }
+
+    dest->release[i] += src->release[i];
+    dest->defer[i] = true;
+    src->release[i] = 0;
+    memset(&src->descriptions[i], 0, sizeof(BufferTag));
+    src->buffers[i] = false;
+    src->defer[i] = false;
+    pthread_mutex_unlock(&dest->checkpoint);
+}
+
+/*
+ * forlog: this pass can log the page once the hold is gone.
+ * Otherwise the mark stays put until a later log pass clears defer.
+ */
+static bool
+CriticalIOMarkPending(WriteGroup list, int i, bool forlog)
+{
+    BufferDesc *bufHdr = &BufferDescriptors[i];
+
+    if (BufferHasCriticalIOHold(bufHdr)) {
+        list->defer[i] = true;
+        if (TraceBufferFlushEnabled()) {
+            fprintf(stderr,
+                    "FLUSH: defer-critical buf=%d %s blk=%lu\n",
+                    i,
+                    bufHdr->blind.relname,
+                    (unsigned long) bufHdr->tag.blockNum);
+            fflush(stderr);
+        }
+        return true;
+    }
+
+    if (forlog) {
+        list->defer[i] = false;
+        return false;
+    }
+
+    return list->defer[i];
+}
+
 void ResetWriteGroup(WriteGroup cart) {
     Assert(cart->currstate == COMPLETED || cart->currstate == NOT_READY);
-    
+
+    RetainDeferredMarks(cart);
+
     memset(cart->buffers, 0, sizeof(bool) * MaxBuffers);
+    memset(cart->defer, 0, sizeof(bool) * MaxBuffers);
     memset(cart->release, 0, sizeof(int) * MaxBuffers);
     memset(cart->descriptions, 0, sizeof(BufferTag) * MaxBuffers);
     
@@ -837,9 +926,12 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
         if ( !src->buffers[i] ) {
             Assert(src->release[i] == 0);
             continue;
-        } else {
-            moved++;
         }
+
+        if (CriticalIOMarkPending(src, i, false))
+            continue;
+
+        moved++;
         
         if ( !target->buffers[i] ) {
             memmove(&target->descriptions[i], &src->descriptions[i], sizeof(BufferTag));
@@ -926,6 +1018,8 @@ int LogTransactions(WriteGroup cart) {
 long RegisterBufferWrite(BufferDesc * bufHdr, bool release) {
     WriteGroup     cart = GetCurrentWriteGroup(false);
     long generation = cart->generation;
+
+    HoldCriticalIOBuffer(bufHdr);
     /*
      * if this is the first time we write to this buffer we have to self
      * pin so someone else doesn't free the buffer before we have had a
@@ -1064,6 +1158,9 @@ int LogBuffers(WriteGroup list) {
         
         /* Ignore buffers that were not dirtied by me */
         if (!list->buffers[i])
+            continue;
+
+        if (CriticalIOMarkPending(list, i, true))
             continue;
         
         
@@ -1212,6 +1309,9 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
             pthread_mutex_unlock(&list->checkpoint);
             if ( exit ) break;
         }
+
+        if (CriticalIOMarkPending(list, i, false))
+            continue;
         
         /* no need to lock mutex, buffer is referenced by sync grp */
         if ( CheckBufferId(bufHdr, 

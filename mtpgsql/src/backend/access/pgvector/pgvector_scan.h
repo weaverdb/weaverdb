@@ -101,9 +101,7 @@ pgvector_hnsw_snapshot(IndexScanDesc scan)
 	return SnapshotNow;
 }
 
-#include "nodes/primnodes.h"
-
-typedef struct ExprContext ExprContext;
+#include "nodes/execnodes.h"
 
 void pgvector_bind_index_orderby(IndexScanDesc scan, Oid relam, Expr *orderExpr,
 								 ExprContext *econtext, Snapshot snapshot);

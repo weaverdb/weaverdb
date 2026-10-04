@@ -285,8 +285,6 @@ SH_SCOPE void SH_STAT(SH_TYPE * tb);
 #define UINT64_FORMAT "%llu"
 #endif
 
-#define sh_log(...) ((void) 0)
-
 /* max data array size,we allow up to PG_UINT32_MAX buckets, including 0 */
 #define SH_MAX_SIZE (((uint64) PG_UINT32_MAX) + 1)
 

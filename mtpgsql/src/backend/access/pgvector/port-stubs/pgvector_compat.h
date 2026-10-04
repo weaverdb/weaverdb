@@ -85,8 +85,10 @@
 #define INFO NOTICE
 #endif
 
-/* Forward declare so VarBit name can be used before utils/varbit.h. */
+/* Forward declare so VarBit name can be used before utils/varbit.h.
+ * bitvec.h checks this macro; #ifndef VarBit cannot see a typedef. */
 struct varbita;
+#define PGVECTOR_HAVE_VARBIT_TYPEDEF
 typedef struct varbita VarBit;
 
 /* Index AM vacuum types — full defs after postgres.h.
@@ -106,10 +108,9 @@ typedef unsigned int ForkNumber;
 #define PROGRESS_CREATEIDX_TUPLES_TOTAL 0
 #define PROGRESS_CREATEIDX_TUPLES_DONE 0
 
-/* RelOptInfo: nodes/relation.h. PlannerInfo is modern-only; IndexPath needed
- * early for ivfflat.c costestimate signatures (also in relation.h). */
+/* PlannerInfo is modern-only. IndexPath comes from nodes/relation.h,
+ * included after postgres.h so this header does not typedef it twice. */
 typedef struct PlannerInfo PlannerInfo;
-typedef struct IndexPath IndexPath;
 
 /* Current allocation context — Weaver's real API (not TopContext). */
 #ifndef CurrentMemoryContext
@@ -134,6 +135,7 @@ typedef bool (*IndexBulkDeleteCallback) (void *itemptr, void *callback_state);
 
 /* Make sure basic varlena access from fork is visible */
 #include "postgres.h"
+#include "nodes/relation.h"
 #include "fmgr.h"
 #include "utils/array.h"
 #include "catalog/pg_type.h"
