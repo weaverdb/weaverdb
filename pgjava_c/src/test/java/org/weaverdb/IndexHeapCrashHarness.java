@@ -278,8 +278,18 @@ public final class IndexHeapCrashHarness {
                 crash.waitFor(5, TimeUnit.SECONDS);
             }
             System.out.println("  child exited rc=" + crash.exitValue());
+            String crashOut = read(workdir.resolve("crash.out"));
             if (engineStdlog()) {
-                System.out.print(read(workdir.resolve("crash.out")));
+                System.out.print(crashOut);
+            }
+            if (isCrashWorkloadFailure(crashOut)) {
+                if (!engineStdlog()) {
+                    System.err.print(crashOut);
+                }
+                dump(workdir, "crash");
+                System.err.println("FAIL: crash workload hit a duplicate key and stopped");
+                keep = cfg.keepOnFail;
+                return 1;
             }
             Thread.sleep(150);
             syncFilesystem();
@@ -529,6 +539,20 @@ public final class IndexHeapCrashHarness {
         String ext = isDarwin() ? "dylib" : "so";
         Path p = mtpg.resolve("lib/libweaver_crash_injector." + ext);
         return Files.isRegularFile(p) ? p : null;
+    }
+
+    /**
+     * The crash child is supposed to run until SIGKILL. A unique-index
+     * error aborts that connection; treating the exit as a crash hides
+     * the failure behind a recover attempt.
+     */
+    private static boolean isCrashWorkloadFailure(String out) {
+        if (out == null || out.isBlank()) {
+            return false;
+        }
+        return out.contains("IHC: FAIL")
+                || IndexHeapCrashSupport.containsIgnoreCase(out, "Cannot insert a duplicate key")
+                || IndexHeapCrashSupport.containsIgnoreCase(out, "duplicate key during crash workload");
     }
 
     private static boolean engineStdlog() {

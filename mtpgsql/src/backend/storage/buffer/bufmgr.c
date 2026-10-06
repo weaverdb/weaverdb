@@ -56,6 +56,7 @@
 #include "env/dbwriter.h"
 #include "env/poolsweep.h"
 #include "env/properties.h"
+#include "env/freespace.h"
 
 #include "executor/execdebug.h"
 #include "miscadmin.h"
@@ -120,6 +121,7 @@ typedef struct bufenv {
     int                         critical_io_depth;
     long                        pinned_generation;	/* gen at CriticalIO unit start */
     bool                        generation_lock_held;	/* rdlock currently held */
+    int                         exclusive_generation_depth; /* wrlock nest count */
 } BufferEnv;
 
 /*
@@ -139,9 +141,12 @@ typedef struct bufenv {
  * CriticalIO holders to drain, then publishes a new generation.
  *
  * Lock order when both are needed: buffer_generation_lock first, then
- * per-buffer io_in_progress_lock. SetBufferGeneration must not be held
- * across AdvanceBufferIO on the same thread. Backends waiting on the
- * DBWriter must SuspendCriticalIO so the writer can take the wrlock.
+ * per-buffer io_in_progress_lock. The DBWriter holds the wrlock across a
+ * whole log pass (and the inline sync that follows) so a CriticalIO unit
+ * cannot begin, mark one page, and end before a sibling page is scanned.
+ * Backends waiting on the DBWriter must SuspendCriticalIO so the writer
+ * can take the wrlock. GetBufferGeneration on that thread does not take
+ * the rdlock again while the exclusive hold is set.
  * Suspend drops the rdlock only — depth and pinned_generation stay set
  * so the unit does not span generations across freelist flush waits.
  *
@@ -202,6 +207,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
         reln->rd_nblocks = smgrextend(reln->rd_smgr, buffer.data, 1);
         if ( reln->rd_nblocks <= 0 ) return InvalidBuffer;
         blockNum = reln->rd_nblocks - 1;
+        NoteFreespaceRelationSize(reln, (BlockNumber) reln->rd_nblocks);
     }
     
     if (isLocalBuf) {
@@ -1338,7 +1344,7 @@ ErrorBufferIO(IOStatus iostatus, BufferDesc *buf) {
 
     buf->ioflags = BM_IO_ERROR;
             
-    elog(NOTICE, "IOError: %lu of the relation %s",
+    elog(DEBUG, "IOError: %lu of the relation %s",
                 buf->tag.blockNum, buf->blind.relname);
 
     pthread_cond_broadcast(&buf->io_in_progress_lock.gate);
@@ -1428,7 +1434,15 @@ CheckBufferId(BufferDesc* buf, BlockNumber block, Oid relid, Oid dbid) {
     if ( !(buf->locflags & BM_VALID) ) valid = false;
     
     pthread_mutex_unlock(&(buf->cntx_lock.guard));
-    
+/*    
+    if (!valid) {
+        elog(DEBUG, "buffer mis-match dbid:%ld relid:%ld blk:%ld != dbid:%ld relid:%ld blk:%ld",
+                dbid,
+                relid,
+                block, 
+                buf->tag.relId.dbId, buf->tag.relId.relId, buf->tag.blockNum);
+    }
+*/
     return valid;
 }
 /*
@@ -1545,6 +1559,7 @@ GetBufferCxt() {
         env->critical_io_depth = 0;
         env->pinned_generation = 0;
         env->generation_lock_held = false;
+        env->exclusive_generation_depth = 0;
         
         MemoryContextSwitchTo(oldcxt);
         
@@ -1728,10 +1743,33 @@ Block AdvanceBufferIO(BufferDesc* bufHdr, bool forflush) {
 }
 
 void
+LockBufferGenerationExclusive(void) {
+    BufferEnv *env = GetBufferCxt();
+
+    if (env->exclusive_generation_depth++ == 0) {
+        pthread_rwlock_wrlock(&buffer_generation_lock);
+    }
+}
+
+void
+UnlockBufferGenerationExclusive(void) {
+    BufferEnv *env = GetBufferCxt();
+
+    Assert(env->exclusive_generation_depth > 0);
+    if (--env->exclusive_generation_depth == 0)
+        pthread_rwlock_unlock(&buffer_generation_lock);
+}
+
+void
 SetBufferGeneration(long generation) {
-    pthread_rwlock_wrlock(&buffer_generation_lock);
+    BufferEnv *env = GetBufferCxt();
+    bool held = env->exclusive_generation_depth > 0;
+
+    if (!held)
+        pthread_rwlock_wrlock(&buffer_generation_lock);
     buffer_generation = generation;
-    pthread_rwlock_unlock(&buffer_generation_lock);
+    if (!held)
+        pthread_rwlock_unlock(&buffer_generation_lock);
 }
 
 long
@@ -1739,13 +1777,15 @@ GetBufferGeneration() {
     long generation;
     BufferEnv *env = GetBufferCxt();
 
-    if (!env->generation_lock_held) {
+    /*
+     * The writer already holds the wrlock for this pass. Taking the rdlock
+     * here would deadlock that thread inside ShadowBufferIfNeeded.
+     */
+    if (env->exclusive_generation_depth == 0 && !env->generation_lock_held)
         pthread_rwlock_rdlock(&buffer_generation_lock);
-    }
     generation = buffer_generation;
-    if (!env->generation_lock_held) {
+    if (env->exclusive_generation_depth == 0 && !env->generation_lock_held)
         pthread_rwlock_unlock(&buffer_generation_lock);
-    }
     return generation;
 }
 

@@ -684,8 +684,23 @@ final class IndexHeapCrashSupport {
         } catch (ExecutionException e) {
             System.out.println("IHC: SQL_FAIL " + message(e));
             System.out.flush();
+            /*
+             * A unique violation aborts the connection. The churn loop
+             * used to keep going and spin on "context not valid".
+             * That is a workload bug, not a crash point.
+             */
+            if (isDuplicateKey(e) || isAbortedContext(e)) {
+                throw new IllegalStateException(
+                        "duplicate key during crash workload: " + message(e), e);
+            }
             return false;
         }
+    }
+
+    static boolean isAbortedContext(Throwable t) {
+        String m = message(t);
+        return containsIgnoreCase(m, "context not valid")
+                || containsIgnoreCase(m, "abortonly");
     }
 
     private static int pick(Set<Integer> ids, Random rng) {

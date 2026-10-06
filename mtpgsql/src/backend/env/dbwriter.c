@@ -498,14 +498,19 @@ int FlushWriteGroup(WriteGroup cart) {
     long elapsed;
     
     pthread_mutex_unlock(&cart->checkpoint);
-    
+
+    /*
+     * Idle the background syncer before taking the generation wrlock.
+     * SyncBuffers can read catalog pages, and those reads take the rdlock.
+     */
+    WriteGroup sync = GetSyncGroup();
+
     gettimeofday(&t1,NULL);
 
     if ( logging ) {
         release = LogBuffers(cart);
     }
 
-    WriteGroup sync = GetSyncGroup();
     sync_buffers += MergeWriteGroups(sync, cart);
     sync->currstate = FLUSHING;
     release += SyncBuffers(sync, false);
@@ -582,8 +587,8 @@ void* DBWriter(void *jones) {
         
         UnlockWriteGroup(cart);
 
-        releasecount = LogWriteGroup(cart);
-                                    
+            releasecount = LogWriteGroup(cart);
+
         if ( GetProcessingMode() == NormalProcessing && cart->loggable && (sync_buffers < max_logcount) && !primed ) {
             /*  move buffer syncs to the sync cart */
             sync_buffers += MergeWriteGroups(GetSyncGroup(), cart);
@@ -941,12 +946,12 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
         if ( target->descriptions[i].relId.dbId != src->descriptions[i].relId.dbId ||
                 target->descriptions[i].relId.relId != src->descriptions[i].relId.relId ||
                 target->descriptions[i].blockNum != src->descriptions[i].blockNum ) {
-            elog(NOTICE, "investigate buffer write group merge");
-            elog(NOTICE, "dbid:%ld relid:%ld blk:%ld\n",
+            elog(DEBUG, "investigate buffer write group merge");
+            elog(DEBUG, "dbid:%ld relid:%ld blk:%ld\n",
                     target->descriptions[i].relId.dbId,
                     target->descriptions[i].relId.relId,
                     target->descriptions[i].blockNum);
-            elog(NOTICE, "dbid:%ld relid:%ld blk:%ld\n",
+            elog(DEBUG, "dbid:%ld relid:%ld blk:%ld\n",
                     src->descriptions[i].relId.dbId,
                     src->descriptions[i].relId.relId,
                     src->descriptions[i].blockNum);
@@ -1141,6 +1146,17 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
     LocalBufferSync();
 }
 
+static void
+DeferRemainingMarks(WriteGroup list, int from)
+{
+    int j;
+
+    for (j = from; j < MaxBuffers; j++) {
+        if (list->buffers[j])
+            list->defer[j] = true;
+    }
+}
+
 int LogBuffers(WriteGroup list) {
     int             i;
     BufferDesc     *bufHdr;
@@ -1160,8 +1176,10 @@ int LogBuffers(WriteGroup list) {
         if (!list->buffers[i])
             continue;
 
-        if (CriticalIOMarkPending(list, i, true))
-            continue;
+        if (CriticalIOMarkPending(list, i, true)) {
+            DeferRemainingMarks(list, i);
+            break;
+        }
         
         
         if ( CheckBufferId(bufHdr,
@@ -1287,7 +1305,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
     int buffer_hits = 0;
     IOStatus        iostatus;
     int status = STATUS_OK;
-    int iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_COMMIT;
+    int iomode = WRITE_NORMAL;
 
 
     if (TraceBufferFlushEnabled()) {
@@ -1305,14 +1323,11 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
             bool   exit = false;
             pthread_mutex_lock(&list->checkpoint);
             exit = (list->currstate == COMPLETED);
-            iomode = ( list->currstate == FLUSHING ) ?  WRITE_NORMAL : WRITE_NORMAL; /* just in case, piggyback on this mutex */
+            iomode = WRITE_NORMAL; /* just in case, piggyback on this mutex */
             pthread_mutex_unlock(&list->checkpoint);
             if ( exit ) break;
         }
 
-        if (CriticalIOMarkPending(list, i, false))
-            continue;
-        
         /* no need to lock mutex, buffer is referenced by sync grp */
         if ( CheckBufferId(bufHdr, 
                 list->descriptions[i].blockNum, 
@@ -1375,9 +1390,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
 
                 iostatus = WriteBufferIO(bufHdr, iomode);
                 if (iostatus == IO_CLEAN) {
-                    /* Not logged on the commit path, or neither dirty nor
-                     * logged on the deferred path. Do not publish a page
-                     * the shadow log does not have. */
+                    /* Not logged. The shadow log has no image of this page. */
                 } else if ( iostatus == IO_SUCCESS) {                    
                     buffer_hits++;
                     cache->commit = true;
@@ -1438,7 +1451,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                 ErrorBufferIO(iostatus, bufHdr);
             }
         }
-        
+
         list->buffers[i] = false;
         while(list->release[i] > 0) {
             if ( ManualUnpin(bufHdr, false) ) {
@@ -1448,7 +1461,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
             releasecount++;
         }
     }
-    
+
     DTRACE_PROBE4(mtpg, dbwriter__syncedbuffers, buffer_hits, releasecount, freecount, forcommit);
     return freecount;
 }

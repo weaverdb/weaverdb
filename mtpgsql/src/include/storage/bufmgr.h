@@ -183,6 +183,8 @@ PG_EXTERN void EndCriticalIO(void);
 PG_EXTERN void AbortCriticalIO(void);
 PG_EXTERN int SuspendCriticalIO(void);
 PG_EXTERN void ResumeCriticalIO(int depth);
+PG_EXTERN void LockBufferGenerationExclusive(void);
+PG_EXTERN void UnlockBufferGenerationExclusive(void);
 PG_EXTERN void SetBufferGeneration(long generation);
 PG_EXTERN long BufferGetIOGeneration(Buffer buffer);
 PG_EXTERN long GetPinnedBufferGeneration(void);

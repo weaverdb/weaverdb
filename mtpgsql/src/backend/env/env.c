@@ -875,7 +875,15 @@ MemoryContext GetEnvMemoryContext( void ) {
 
 void SetProcessingMode(ProcessingMode mode) {
     if ( CurrentMode == InitProcessing && mode == NormalProcessing ) {
+        /*
+         * Publish Normal for the process, and for this thread. The
+         * backend and the DBWriter both make this transition. If this
+         * thread wins it, leaving env->Mode at Init makes
+         * GetProcessingMode keep returning Init after CurrentMode
+         * has moved on.
+         */
         CurrentMode = NormalProcessing;
+        GetEnv()->Mode = NormalProcessing;
     } else if ( mode == BootstrapProcessing || mode == ShutdownProcessing ) {
         CurrentMode = mode;
     } else {

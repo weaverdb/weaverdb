@@ -51,6 +51,7 @@ long    GetNextExtentFactor(Relation rel);
 long    GetTotalAvailable(Relation rel);
 
 BlockNumber RelationGetNumberOfBlocks(Relation relation);
+void NoteFreespaceRelationSize(Relation relation, BlockNumber nblocks);
 #ifdef __cplusplus
 }
 #endif

@@ -860,6 +860,38 @@ long GetNextExtentFactor(Relation rel) {
  *		XXX should be elsewhere.
  *		XXX maybe should be hidden
  */
+/*
+ * ReadBuffer(P_NEW) grows the file one block at a time and stores the
+ * new length on the Relation. Scans do not keep that value: initscan
+ * copies freespace->relsize back over rd_nblocks. PerformAllocation
+ * publishes relsize; the single-page extend path did not, so the next
+ * seqscan stopped before the block just appended.
+ *
+ * Only raise relsize. The new page is not empty free space — the caller
+ * is about to place a tuple on it — so it is not added to the free run.
+ */
+void
+NoteFreespaceRelationSize(Relation relation, BlockNumber nblocks)
+{
+	FreeSpace *freespace;
+
+	if (!inited || relation == NULL || relation->rd_myxactonly || relation->rd_rel == NULL)
+		return;
+	if (relation->rd_rel->relkind != RELKIND_RELATION
+		&& relation->rd_rel->relkind != RELKIND_INDEX
+		&& relation->rd_rel->relkind != RELKIND_UNCATALOGED)
+		return;
+
+	freespace = FindFreespace(relation, NULL, false);
+	if (freespace == NULL)
+		return;
+
+	pthread_mutex_lock(&freespace->accessor);
+	if (nblocks > freespace->relsize)
+		freespace->relsize = nblocks;
+	pthread_mutex_unlock(&freespace->accessor);
+}
+
 BlockNumber
 RelationGetNumberOfBlocks(Relation relation)
 {

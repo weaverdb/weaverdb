@@ -41,3 +41,7 @@ endif()
 
 add_subdirectory(mtpgsql)
 add_subdirectory(pgjava_c)
+
+# Tests load this tree with --target postgres. These are not link
+# dependencies of the server binary, but they have to land in mtpg/.
+add_dependencies(postgres weaver_jni initdb pg_id pg_version)
