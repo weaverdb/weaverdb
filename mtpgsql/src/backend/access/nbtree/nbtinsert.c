@@ -744,6 +744,8 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	bool		torn_cart;
 //	BTItem		lhikey;
 
+        BeginCriticalIO();
+
 	rbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
 
 	orig_leftpage = BufferGetPage(buf);
@@ -957,7 +959,6 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 				 (unsigned long) rightblk,
 				 (unsigned long) GetCurrentTransactionId());
 
-        BeginCriticalIO();
 	pin_gen = GetPinnedBufferGeneration();
         LockBuffer(rel,rbuf,BT_WRITE);
 	PageRestoreTempPage(rightpage, BufferGetPage(rbuf));

@@ -775,6 +775,114 @@ btrecoverpage(Relation rel, BlockNumber block) {
     }
 }
 
+static bool
+btree_item_int4(BTItem item, int32 *key)
+{
+	IndexTuple itup = &item->bti_itup;
+	Size sz = IndexTupleSize(itup);
+	Size off;
+
+	if (!IndexTupleNoNulls(itup) || !IndexTupleAllFixed(itup))
+		return false;
+	off = IndexInfoFindDataOffset(itup->t_info);
+	if (sz != off + sizeof(int32) && sz != MAXALIGN(off + sizeof(int32)))
+		return false;
+	memcpy(key, (char *) itup + off, sizeof(int32));
+	return true;
+}
+
+static void
+trace_btree_items(Page page, BTPageOpaque opaque)
+{
+	OffsetNumber off;
+	OffsetNumber maxoff = PageGetMaxOffsetNumber(page);
+
+	for (off = P_FIRSTDATAKEY(opaque); off <= maxoff; off = OffsetNumberNext(off)) {
+		BTItem item = (BTItem) PageGetItem(page, PageGetItemId(page, off));
+		IndexTuple itup = &item->bti_itup;
+		int32 key;
+		bool have = btree_item_int4(item, &key);
+
+		if (off != P_FIRSTDATAKEY(opaque))
+			fputc(',', stderr);
+		if (P_ISLEAF(opaque)) {
+			if (have)
+				fprintf(stderr, "%u:%d->(%lu,%u)",
+						(unsigned) off, key,
+						(unsigned long) ItemPointerGetBlockNumber(&itup->t_tid),
+						(unsigned) ItemPointerGetOffsetNumber(&itup->t_tid));
+			else
+				fprintf(stderr, "%u:?->(%lu,%u)",
+						(unsigned) off,
+						(unsigned long) ItemPointerGetBlockNumber(&itup->t_tid),
+						(unsigned) ItemPointerGetOffsetNumber(&itup->t_tid));
+		} else if (have) {
+			fprintf(stderr, "%u:%d->%lu",
+					(unsigned) off, key,
+					(unsigned long) ItemPointerGetBlockNumber(&itup->t_tid));
+		} else {
+			fprintf(stderr, "%u:?->%lu",
+					(unsigned) off,
+					(unsigned long) ItemPointerGetBlockNumber(&itup->t_tid));
+		}
+	}
+}
+
+void
+TraceLoggedBtreePage(const char *relname, BlockNumber blk, void *rawpage,
+					 int copied, long cart_gen, long shadow_gen)
+{
+	Page page = (Page) rawpage;
+	BTPageOpaque opaque;
+	int32 hikey = 0;
+	bool have_hikey = false;
+
+	if (!TraceIndexEnabled() || page == NULL || PageIsNew(page))
+		return;
+	/* Catalog indexes make this trace unreadable. The crash harness cares about user indexes. */
+	if (relname != NULL && strncmp(relname, "pg_", 3) == 0)
+		return;
+	if (PageGetSpecialSize(page) != sizeof(BTPageOpaqueData) &&
+		PageGetSpecialSize(page) != (uint32) MAXALIGN(sizeof(BTPageOpaqueData)))
+		return;
+
+	opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+	if (opaque->btpo_flags & BTP_FREE)
+		return;
+
+	if (opaque->btpo_flags & BTP_META) {
+		BTMetaPageData *meta = BTPageGetMeta(page);
+
+		fprintf(stderr,
+				"INDEX: log-meta %s blk=%lu copied=%d cart=%ld shadow=%ld root=%lu level=%d\n",
+				relname, (unsigned long) blk, copied, cart_gen, shadow_gen,
+				(unsigned long) meta->btm_root, meta->btm_level);
+		fflush(stderr);
+		return;
+	}
+
+	if (!P_RIGHTMOST(opaque)) {
+		BTItem hi = (BTItem) PageGetItem(page, PageGetItemId(page, P_HIKEY));
+
+		have_hikey = btree_item_int4(hi, &hikey);
+	}
+
+	fprintf(stderr,
+			"INDEX: log-%s %s blk=%lu copied=%d cart=%ld shadow=%ld prev=%lu next=%lu parent=%lu n=%u",
+			P_ISLEAF(opaque) ? "leaf" : "internal",
+			relname, (unsigned long) blk, copied, cart_gen, shadow_gen,
+			(unsigned long) opaque->btpo_prev,
+			(unsigned long) opaque->btpo_next,
+			(unsigned long) opaque->btpo_parent,
+			(unsigned) PageGetMaxOffsetNumber(page));
+	if (have_hikey)
+		fprintf(stderr, " hikey=%d", hikey);
+	fputs(" keys=", stderr);
+	trace_btree_items(page, opaque);
+	fputc('\n', stderr);
+	fflush(stderr);
+}
+
 /*
  * Bulk deletion of all index entries pointing to a set of heap tuples.
  * The set of target tuples is specified via a callback routine that tells
@@ -884,7 +992,25 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
             htup = &(itup->t_tid);
             /*  if the heap tuple item pointer is found in the list, delete it  */
             if (bsearch(htup, tuple_deletes, delcount, sizeof (ItemPointerData), cmp_itemptr) != NULL) {
+                int32 key;
+                bool have_key = btree_item_int4(btitem, &key);
+
                 /* Okay to delete the item from the page */
+                if (have_key)
+                    TraceIndexOp("bulkdelete-drop %s idx=(%lu,%u) heap=(%lu,%u) key=%d",
+                                 RelationGetRelationName(rel),
+                                 (unsigned long) BufferGetBlockNumber(lockedbuf),
+                                 (unsigned) offnum,
+                                 (unsigned long) ItemPointerGetBlockNumber(htup),
+                                 (unsigned) ItemPointerGetOffsetNumber(htup),
+                                 key);
+                else
+                    TraceIndexOp("bulkdelete-drop %s idx=(%lu,%u) heap=(%lu,%u)",
+                                 RelationGetRelationName(rel),
+                                 (unsigned long) BufferGetBlockNumber(lockedbuf),
+                                 (unsigned) offnum,
+                                 (unsigned long) ItemPointerGetBlockNumber(htup),
+                                 (unsigned) ItemPointerGetOffsetNumber(htup));
                 _bt_itemdel(rel, buf, current);
                 dirtied = true;
                 tuples_removed += 1;

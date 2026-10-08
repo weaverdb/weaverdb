@@ -38,6 +38,7 @@ void CommitDBBufferWrites(TransactionId xid,int state);
 bool FlushAllDirtyBuffers(bool wait);
 
 long RegisterBufferWrite(BufferDesc * bufHdr,bool release);
+long MarkDeferredWrites(long* ciriticals);
 
 void ClearAllDBWrites(BufferDesc* bufHdr);
 void ShutdownDBWriter(void);

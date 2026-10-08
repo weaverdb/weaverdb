@@ -124,8 +124,7 @@ typedef struct sbufdesc
 	char*           data;			/* pointer to data in buf pool */
 	char*           shadow;			/* pointer to data in buf pool */
         long            generation;
-        unsigned        cio_hold;		/* open CriticalIO units that marked this buffer */
-	/* tag and id must be together for table lookup to work */
+
 	BufferTag	tag;			/* file/block identifier */
         char            kind;
 	int		buf_id;			/* maps global desc to local desc */

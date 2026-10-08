@@ -97,7 +97,7 @@ static bool DirtyBufferIO(BufferDesc* header);
 static bool WaitBufferIO(bool write_mode, BufferDesc *buf);
 
 static long GetBufferGeneration();
-static bool ShadowBufferIfNeeded(BufferDesc* buf);
+static bool ShadowBufferIfNeeded(long gen, BufferDesc* buf);
 
 static SectionId   buffer_section_id = SECTIONID("BMGR");
 
@@ -121,7 +121,6 @@ typedef struct bufenv {
     int                         critical_io_depth;
     long                        pinned_generation;	/* gen at CriticalIO unit start */
     bool                        generation_lock_held;	/* rdlock currently held */
-    int                         exclusive_generation_depth; /* wrlock nest count */
 } BufferEnv;
 
 /*
@@ -150,10 +149,6 @@ typedef struct bufenv {
  * Suspend drops the rdlock only — depth and pinned_generation stay set
  * so the unit does not span generations across freelist flush waits.
  *
- * Each buffer marked while a unit is open takes one shared cio_hold.
- * CriticalCount remembers which buffers this backend holds so End and
- * Abort can drop them. The DBWriter skips a buffer while cio_hold > 0
- * and keeps that write-group mark until the hold is gone.
  */
 static volatile long buffer_generation = 0;
 static pthread_rwlock_t buffer_generation_lock = PTHREAD_RWLOCK_INITIALIZER;
@@ -492,16 +487,9 @@ WriteBuffer(Relation rel, Buffer buffer) {
      */
     DirtyBufferIO(bufHdr);
     long generation = RegisterBufferWrite(bufHdr, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
-    if (TraceBufferFlushEnabled()) {
-        fprintf(stderr,
-                            "FLUSH: register-write %s blk=%lu cart_gen=%ld shadow_gen=%ld\n",
-                            bufHdr->blind.relname,
-                            (unsigned long) bufHdr->tag.blockNum,
-                            generation,
-                            bufHdr->generation);
-        fflush(stderr);
+    if (bufenv->critical_io_depth > 0) {
+        bufenv->CriticalCount[bufHdr->buf_id] += 1;
     }
-
     bufenv->PrivateRefCount[bufHdr->buf_id]--;
     bufenv->total_pins--;
     
@@ -559,7 +547,7 @@ we don't have to lock  */
 retry:
         iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus == IO_SUCCESS) {
-            Block data = AdvanceBufferIO(bufHdr, true);
+            Block data = AdvanceBufferIO(GetBufferGeneration(), bufHdr, true);
 
             status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, data);
             if (status == SM_FAIL) {
@@ -573,7 +561,7 @@ retry:
                 TerminateBufferIO(iostatus,bufHdr);
             }
         } else {
-            elog(NOTICE, "write buffer failed in io start bufid:%d dbid:%ld relid:%ld blk:%ld\n",
+            elog(DEBUG, "write buffer failed in io start bufid:%d dbid:%ld relid:%ld blk:%ld\n",
                 bufHdr->buf_id,
                 bufHdr->tag.relId.dbId,
                 bufHdr->tag.relId.relId,
@@ -594,6 +582,8 @@ retry:
  */
 long
 WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
+    BufferEnv* env = GetBufferCxt();
+
     BufferDesc *bufHdr;
     long generation;
 
@@ -617,14 +607,8 @@ WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
      */
     DirtyBufferIO(bufHdr);
     generation = RegisterBufferWrite(bufHdr, false);
-    if (TraceBufferFlushEnabled()) {
-        fprintf(stderr,
-                            "FLUSH: register-write %s blk=%lu cart_gen=%ld shadow_gen=%ld\n",
-                            bufHdr->blind.relname,
-                            (unsigned long) bufHdr->tag.blockNum,
-                            generation,
-                            bufHdr->generation);
-        fflush(stderr);
+    if (env->critical_io_depth > 0) {
+        env->CriticalCount[bufHdr->buf_id] += 1;
     }
     return generation;
 }
@@ -1391,7 +1375,6 @@ TerminateBufferIO(IOStatus iostatus, BufferDesc *buf) {
     if ( buf->ioflags & (BM_IOOP_MASK) ) {
 /*  if IO is happening alert waiters they need to check state  */
         if ( buf->ioflags & BM_LOG_IN_PROGRESS ) {
-            buf->generation = 0;
             buf->ioflags |= BM_LOGGED;
         } else if ( buf->ioflags & BM_WRITE_IN_PROGRESS ) {
 
@@ -1459,7 +1442,7 @@ Block BufferGetBlock(Buffer buffer) {
     } else {
         BufferDesc* bufHdr = &BufferDescriptors[buffer - 1];
         if (bufHdr->kind != RELKIND_SPECIAL) {
-            ShadowBufferIfNeeded(bufHdr);
+            ShadowBufferIfNeeded(GetBufferGeneration(), bufHdr);
         }
         return bufHdr->data;
     }
@@ -1559,7 +1542,6 @@ GetBufferCxt() {
         env->critical_io_depth = 0;
         env->pinned_generation = 0;
         env->generation_lock_held = false;
-        env->exclusive_generation_depth = 0;
         
         MemoryContextSwitchTo(oldcxt);
         
@@ -1587,48 +1569,7 @@ GetBufferCxt() {
 static void
 ReleaseCriticalIOHolds(BufferEnv *env)
 {
-    int i;
-
-    for (i = 0; i < MaxBuffers; i++) {
-        BufferDesc *buf;
-
-        if (env->CriticalCount[i] == 0)
-            continue;
-        env->CriticalCount[i] = 0;
-        buf = &BufferDescriptors[i];
-        pthread_mutex_lock(&buf->cntx_lock.guard);
-        Assert(buf->cio_hold > 0);
-        if (buf->cio_hold > 0)
-            buf->cio_hold--;
-        pthread_mutex_unlock(&buf->cntx_lock.guard);
-    }
-}
-
-void
-HoldCriticalIOBuffer(BufferDesc *bufHdr)
-{
-    BufferEnv *env = GetBufferCxt();
-
-    if (env->critical_io_depth <= 0)
-        return;
-    if (env->CriticalCount[bufHdr->buf_id] > 0)
-        return;
-
-    env->CriticalCount[bufHdr->buf_id] = 1;
-    pthread_mutex_lock(&bufHdr->cntx_lock.guard);
-    bufHdr->cio_hold++;
-    pthread_mutex_unlock(&bufHdr->cntx_lock.guard);
-}
-
-bool
-BufferHasCriticalIOHold(BufferDesc *bufHdr)
-{
-    bool held;
-
-    pthread_mutex_lock(&bufHdr->cntx_lock.guard);
-    held = bufHdr->cio_hold > 0;
-    pthread_mutex_unlock(&bufHdr->cntx_lock.guard);
-    return held;
+    memset(env->CriticalCount, 0, MaxBuffers*sizeof(long));
 }
 
 void
@@ -1676,6 +1617,8 @@ AbortCriticalIO(void) {
 int
 SuspendCriticalIO(void) {
     BufferEnv *env = GetBufferCxt();
+    int i;
+    BufferDesc*  bufHdr;
     int depth = env->critical_io_depth;
 
     /*
@@ -1683,6 +1626,7 @@ SuspendCriticalIO(void) {
      * and pinned_generation so ShadowBufferIfNeeded still uses the pin.
      */
     if (depth > 0 && env->generation_lock_held) {
+        MarkDeferredWrites(env->CriticalCount);
         pthread_rwlock_unlock(&buffer_generation_lock);
         env->generation_lock_held = false;
     }
@@ -1714,11 +1658,17 @@ TraceBufferFlushEnabled(void)
     return cached != 0;
 }
 
-bool ShadowBufferIfNeeded(BufferDesc* bufHdr) {
+bool ShadowBufferIfNeeded(long generation, BufferDesc* bufHdr) {
     bool shadowed = false;
-    long generation = GetBufferGeneration();
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
     if (bufHdr->generation < generation) {
+        if (TraceBufferFlushEnabled()) {
+            fprintf(stderr, "FLUSH: Shadowing gen=%ld bufid:%d %s blk:%ld\n", generation, 
+                        bufHdr->buf_id,
+                        bufHdr->blind.relname,
+                        bufHdr->tag.blockNum);
+            fflush(stderr);
+        }
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
         bufHdr->generation = generation;
         shadowed = true;
@@ -1729,10 +1679,11 @@ bool ShadowBufferIfNeeded(BufferDesc* bufHdr) {
 }
 
 
-Block AdvanceBufferIO(BufferDesc* bufHdr, bool forflush) {
+Block AdvanceBufferIO(long gen, BufferDesc* bufHdr, bool forflush) {
     if (bufHdr->kind != RELKIND_SPECIAL && !forflush) {
-        ShadowBufferIfNeeded(bufHdr);
-        PageInsertChecksum((Page)bufHdr->shadow);
+        if (ShadowBufferIfNeeded(gen, bufHdr)) {
+            PageInsertChecksum((Page)bufHdr->shadow);
+        }
         return (Block)bufHdr->shadow;
     } else {
         if (bufHdr->kind != RELKIND_SPECIAL) {
@@ -1743,33 +1694,16 @@ Block AdvanceBufferIO(BufferDesc* bufHdr, bool forflush) {
 }
 
 void
-LockBufferGenerationExclusive(void) {
-    BufferEnv *env = GetBufferCxt();
-
-    if (env->exclusive_generation_depth++ == 0) {
-        pthread_rwlock_wrlock(&buffer_generation_lock);
-    }
-}
-
-void
-UnlockBufferGenerationExclusive(void) {
-    BufferEnv *env = GetBufferCxt();
-
-    Assert(env->exclusive_generation_depth > 0);
-    if (--env->exclusive_generation_depth == 0)
-        pthread_rwlock_unlock(&buffer_generation_lock);
-}
-
-void
 SetBufferGeneration(long generation) {
     BufferEnv *env = GetBufferCxt();
-    bool held = env->exclusive_generation_depth > 0;
 
-    if (!held)
-        pthread_rwlock_wrlock(&buffer_generation_lock);
+    pthread_rwlock_wrlock(&buffer_generation_lock);
     buffer_generation = generation;
-    if (!held)
-        pthread_rwlock_unlock(&buffer_generation_lock);
+    if (TraceBufferFlushEnabled()) {
+        fprintf(stderr, "FLUSH: Setting gen=%ld\n", generation);
+        fflush(stderr);
+    }
+    pthread_rwlock_unlock(&buffer_generation_lock);
 }
 
 long
@@ -1781,10 +1715,11 @@ GetBufferGeneration() {
      * The writer already holds the wrlock for this pass. Taking the rdlock
      * here would deadlock that thread inside ShadowBufferIfNeeded.
      */
-    if (env->exclusive_generation_depth == 0 && !env->generation_lock_held)
+    if (!env->generation_lock_held)
         pthread_rwlock_rdlock(&buffer_generation_lock);
+
     generation = buffer_generation;
-    if (env->exclusive_generation_depth == 0 && !env->generation_lock_held)
+    if (!env->generation_lock_held)
         pthread_rwlock_unlock(&buffer_generation_lock);
     return generation;
 }

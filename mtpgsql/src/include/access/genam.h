@@ -52,6 +52,14 @@ __attribute__((format(printf, 1, 2)))
 #endif
 ;
 
+/*
+ * Dump the btree page image that is about to be written to the shadow log.
+ * copied is 1 when this call refreshed the shadow from the live page.
+ * No-op for pages that are not btree leaves, internal pages, or the meta page.
+ */
+void TraceLoggedBtreePage(const char *relname, BlockNumber blk, void *page,
+						  int copied, long cart_gen, long shadow_gen);
+
 /* extern */  Relation index_open(Oid relationId);
 /* extern */  Relation index_openr(char *relationName);
 /* extern */  void index_close(Relation relation);

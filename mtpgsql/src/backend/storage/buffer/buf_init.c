@@ -288,7 +288,6 @@ InitializeBuffers(int start, int count, char* block) {
             }
 
             buf->ioflags = 0;
-            buf->cio_hold = 0;
             buf->refCount = 0;
             buf->pageaccess = 0;
             buf->freeNext = i+1;
