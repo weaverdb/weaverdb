@@ -63,6 +63,7 @@ typedef struct shadowlogfile {
 
 static char     log_directory[MAXPGPATH];
 static long     log_file_seq = 0;
+static long     pid;
 
 #ifdef MACOSX
 #define O_LARGEFILE 0x0
@@ -71,6 +72,7 @@ static long     log_file_seq = 0;
 static union  logbuffer {
     struct {
         int64    header_magic;
+        int64    process;
         int64    log_id;
         int64    segments;
         bool    completed;
@@ -106,7 +108,7 @@ static bool         log_index = TRUE;
 static BlockNumber _vfdnblocks(File file, Size blcksz);
 static int _vfddumplogtodisk(void);
 
-static bool _vfdreplaylogfile(File logfile, bool indexonly);
+static long _vfdreplaylogfile(File logfile, bool indexonly);
 static long _vfdreplaysegment(File logfile,bool indexingonly, bool compressed);
 
 static File _openlogfile(char* path, bool replay);
@@ -474,6 +476,7 @@ vfdshutdown()
     if ( log_file > 0 ) {
         FilePin(log_file,0);
         LogBuffer.LogHeader.header_magic = HEADER_MAGIC;
+        LogBuffer.LogHeader.process = MyProcPid;
         LogBuffer.LogHeader.log_id = log_count;
         LogBuffer.LogHeader.completed = false;
         LogBuffer.LogHeader.compressed = compress_log;
@@ -971,6 +974,7 @@ _vfdnblocks(File file, Size blcksz)
 int
 vfdbeginlog() {        
     LogBuffer.LogHeader.header_magic = HEADER_MAGIC;
+    LogBuffer.LogHeader.process = MyProcPid;
     LogBuffer.LogHeader.log_id = log_count++;
     LogBuffer.LogHeader.completed = false;
     LogBuffer.LogHeader.compressed = compress_log;
@@ -1073,11 +1077,22 @@ vfdexpirelogs() {
     return SM_SUCCESS;
 }
 
+
+int
+vfdremovelogs(int keep) {
+    if (_prunelogfiles(keep) < 0) {
+        vfd_log("could not prune shadow logs in %s", log_directory);
+    }
+
+    return SM_SUCCESS;
+}
+
 int
 vfdreplaylogs() {
     ShadowLogFile *files = NULL;
     int count = 0;
     int i;
+    long pid = 0;
     const char *current = NULL;
     File logfile;
 
@@ -1111,8 +1126,12 @@ vfdreplaylogs() {
             vfd_log("could not open shadow log %s for replay", files[i].path);
             continue;
         }
-        _vfdreplaylogfile(logfile, false);
-        FileClose(logfile);
+        long fpid = _vfdreplaylogfile(logfile, false);
+        if (fpid > 0) {
+            Assert(pid == 0 || fpid == pid);
+            pid = fpid;
+        }
+        FileUnlink(logfile);
     }
 
     _freeloglist(files);
@@ -1120,18 +1139,18 @@ vfdreplaylogs() {
     return SM_SUCCESS;
 }
 
-static bool
+static long
 _vfdreplaylogfile(File logfile, bool indexonly) {
     int      count;
     long read = 0;
     long total = 0;
     long end = 0;
     long id = 0;
-    bool logged = false;
+    long pid = 0;
     
     if ( logfile < 0 ) {
         vfd_log("Log File not valid. exiting.");
-        return false;
+        return 0;
     }
     vfd_log("--- Replaying VFD storage manager log %s ---", FileGetName(logfile));
     FilePin(logfile,0);
@@ -1148,20 +1167,22 @@ _vfdreplaylogfile(File logfile, bool indexonly) {
         }
         total += read;
         if ( LogBuffer.LogHeader.header_magic != HEADER_MAGIC ) {
-            vfd_log("VFD Log ID: %d invalid log file. exiting.",LogBuffer.LogHeader.log_id);
+            vfd_log("VFD Log ID: %ld-%d invalid log file. exiting.",LogBuffer.LogHeader.process,LogBuffer.LogHeader.log_id);
             break;
         }
         if ( !LogBuffer.LogHeader.completed ) {
-            vfd_log("VFD Log ID: %d not completed. exiting.",LogBuffer.LogHeader.log_id);
+            vfd_log("VFD Log ID: %ld-%d not completed. exiting.",LogBuffer.LogHeader.process,LogBuffer.LogHeader.log_id);
             break;
         }
         if ( id != 0 && id+1 != LogBuffer.LogHeader.log_id ) {
-            vfd_log("VFD Log ID: %d out of sequence. exiting.",LogBuffer.LogHeader.log_id);
+            vfd_log("VFD Log ID: %ld-%d out of sequence. exiting.",LogBuffer.LogHeader.process,LogBuffer.LogHeader.log_id);
             break;
         } else {
             id =  LogBuffer.LogHeader.log_id;
         }
-        vfd_log("VFD Log ID: %d, complete: %s, segments: %d",LogBuffer.LogHeader.log_id,
+        pid = LogBuffer.LogHeader.process;
+        vfd_log("VFD Log ID: %ld-%d, complete: %s, segments: %d",LogBuffer.LogHeader.process, 
+            LogBuffer.LogHeader.log_id,
             (LogBuffer.LogHeader.completed) ? "true":"false",LogBuffer.LogHeader.segments);   
         
         for ( count=0;count<LogBuffer.LogHeader.segments;count++) {
@@ -1172,13 +1193,11 @@ _vfdreplaylogfile(File logfile, bool indexonly) {
             }
             total += add;
         }        
-/* there are valid logs, no need to replay index  */
-        logged = true; 
     }
     log_count = LogBuffer.LogHeader.log_id + 1;
     FileUnpin(logfile,0);
     
-    return logged;    
+    return pid;    
 }
 
 static long

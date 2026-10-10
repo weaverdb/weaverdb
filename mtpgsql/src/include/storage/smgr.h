@@ -65,6 +65,7 @@ PG_EXTERN int   smgrlog(int which, char *dbname, char *relname,
 PG_EXTERN int   smgrcommitlog(void);
 
 PG_EXTERN int   smgrexpirelogs(void);
+PG_EXTERN int   smgrremovelogs(int keep);
 PG_EXTERN int   smgrreplaylogs(void);
 
 PG_EXTERN void smgrcompleterecovery(void);
@@ -113,6 +114,7 @@ PG_EXTERN int	vfdbeginlog(void);
 PG_EXTERN int	vfdlog(SmgrInfo info, BlockNumber, char* buffer);
 PG_EXTERN int	vfdcommitlog(void);
 PG_EXTERN int	vfdexpirelogs(void);
+PG_EXTERN int	vfdremovelogs(int keep);
 PG_EXTERN int	vfdreplaylogs(void);
 
 #ifdef ZFS

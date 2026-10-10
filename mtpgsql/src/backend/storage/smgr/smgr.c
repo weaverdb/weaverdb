@@ -51,6 +51,7 @@ typedef struct f_smgr {
     int (*smgr_log) (SmgrInfo info, BlockNumber block, char* buffer);
     int (*smgr_commitlog) (void);
     int (*smgr_expirelogs) (void);
+    int (*smgr_removelogs) (int keep);
     int (*smgr_replaylogs) (void);
 } f_smgr;
 
@@ -64,24 +65,24 @@ static f_smgr smgrsw[] = {
     /* magnetic disk */
     {mmdinit, mmdshutdown, mmdcreate, mmdunlink, mmdextend, mmdopen, mmdclose,
         mmdread, mmdwrite, mmdflush, mmdmarkdirty,
-        mmdnblocks, mmdtruncate, mmdsync, mmdcommit, mmdabort},
+        mmdnblocks, mmdtruncate, mmdsync, mmdcommit, mmdabort, NULL, NULL, NULL, NULL, NULL, NULL},
 #endif
     /* direct magnetic disk */
     {vfdinit, vfdshutdown, vfdcreate, vfdunlink, vfdextend, vfdopen, vfdclose,
         vfdread, vfdwrite, vfdflush, vfdmarkdirty,
         vfdnblocks, vfdtruncate, vfdsync, vfdcommit, vfdabort, vfdbeginlog, vfdlog, vfdcommitlog,
-        vfdexpirelogs, vfdreplaylogs},
+        vfdexpirelogs, vfdremovelogs, vfdreplaylogs},
 #ifdef ZFS
     /* zfs dmu layer */
     {zfsinit, zfsshutdown, zfscreate, zfsunlink, zfsextend, zfsopen, zfsclose,
         zfsread, zfswrite, zfsflush, zfsmarkdirty,
-        zfsnblocks, zfstruncate, zfssync, zfscommit, zfsabort},
+        zfsnblocks, zfstruncate, zfssync, zfscommit, zfsabort, NULL, NULL, NULL, NULL, NULL, NULL},
 #endif
 #ifdef STABLE_MEMORY_STORAGE
     /* main memory */
     {mminit, mmshutdown, mmcreate. mmunlink, mmextend, mmopen, mmclose,
         mmread, mmwrite, mmflush, mmmarkdirty,
-        mmnblocks, NULL, mmsync, mmcommit, mmabort},
+        mmnblocks, NULL, mmsync, mmcommit, mmabort, NULL, NULL, NULL, NULL, NULL, NULL},
 
 #endif
 };
@@ -544,6 +545,20 @@ smgrexpirelogs() {
         if (smgrsw[i].smgr_expirelogs) {
             if ((*(smgrsw[i].smgr_expirelogs)) () != SM_SUCCESS)
                 elog(FATAL, "expire logs failed on %s", smgrout(i));
+        }
+    }
+
+    return SM_SUCCESS;
+}
+
+int
+smgrremovelogs(int keep) {
+    int i;
+
+    for (i = 0; i < NSmgr; i++) {
+        if (smgrsw[i].smgr_removelogs) {
+            if ((*(smgrsw[i].smgr_removelogs)) (keep) != SM_SUCCESS)
+                elog(FATAL, "remove logs failed on %s", smgrout(i));
         }
     }
 

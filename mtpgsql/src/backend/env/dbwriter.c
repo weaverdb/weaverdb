@@ -100,8 +100,8 @@ typedef struct writegroups* WriteGroup;
 struct writegroups {
     WriterState                         currstate;
     bool*				buffers;
-    bool*				defer;		/* keep mark until CriticalIO hold drops */
     bool*				wait_for_sync;
+    int*				defers;		/* keep mark until CriticalIO hold drops */
     int*				release;
     BufferTag*                          descriptions;
     THREAD**				WaitingThreads;
@@ -109,6 +109,8 @@ struct writegroups {
     TransactionId*                      transactions;
     int*				transactionState;
     int 				numberOfTrans;
+    int 				cioHolds;
+    int                                 flushCount;
     
     pthread_t                           owner;
     
@@ -281,16 +283,6 @@ void DBWriterInit() {
     pthread_attr_setschedparam(&writerprops, &sched);
     #endif
 
-    log_group = CreateWriteGroup(maxtrans, MaxBuffers);
-    log_group->next = CreateWriteGroup(maxtrans, MaxBuffers);
-    /* link in a circle  */
-    log_group->next->next = log_group;
-
-    sync_group = CreateWriteGroup(maxtrans, MaxBuffers);
-    sync_group->next = sync_group;
-
-    DBTableInit();
-
     if (!IsMultiuser()) {
         logging = false;
         /* no logging so make sure everyone waits for sync */
@@ -307,6 +299,16 @@ void DBWriterInit() {
             max_logcount = mlog;
         }
     }
+
+    log_group = CreateWriteGroup(maxtrans, MaxBuffers);
+    log_group->next = CreateWriteGroup(maxtrans, MaxBuffers);
+    /* link in a circle  */
+    log_group->next->next = log_group;
+
+    sync_group = CreateWriteGroup(maxtrans, MaxBuffers);
+    sync_group->next = sync_group;
+
+    DBTableInit();
 }
 
 static void DBTableInit() {
@@ -362,11 +364,13 @@ WriteGroup CreateWriteGroup(int trans, int buffers) {
     cart->transactions = os_malloc(sizeof(TransactionId) * trans);
     cart->transactionState = os_malloc(sizeof(int) * trans);
     cart->buffers = os_malloc(sizeof(bool) * buffers);
-    cart->defer = os_malloc(sizeof(bool) * buffers);
+    cart->defers = os_malloc(sizeof(int) * buffers);
     cart->release = os_malloc(sizeof(int) * buffers);
     cart->descriptions = os_malloc(sizeof(BufferTag) * buffers);
     
     cart->numberOfTrans = 0;
+    cart->cioHolds = 0;
+    cart->flushCount = 0;
     cart->currstate = NOT_READY;
     cart->snapshot = NULL;
     cart->next = cart;
@@ -394,7 +398,7 @@ WriteGroup DestroyWriteGroup(WriteGroup w) {
     os_free(w->transactions);
     os_free(w->transactionState);
     os_free(w->buffers);
-    os_free(w->defer);
+    os_free(w->defers);
     os_free(w->release);
     os_free(w->descriptions);
 
@@ -503,14 +507,15 @@ int FlushWriteGroup(WriteGroup cart) {
 
     gettimeofday(&t1,NULL);
 
+    elog(DEBUG,"Flushing cart gen=%ld loggable: %d", cart->generation, cart->loggable);
+
     if ( cart->loggable ) {
+        cart->flushCount += 1;
         release = LogBuffers(cart);
     }
 
-    sync_buffers += MergeWriteGroups(sync, cart);
-    sync->currstate = FLUSHING;
-    release += SyncBuffers(sync, false);
-    sync->currstate = NOT_READY;
+    sync_buffers += MergeWriteGroups(cart, sync);
+    release += SyncBuffers(cart, false);
 
     elog(DEBUG, "flushed out %d buffers", release);
      
@@ -572,7 +577,7 @@ void* DBWriter(void *jones) {
             fflush(stderr);
         }
         
-        while ( CheckWriteGroupState(cart, (sync_buffers > 0)) ) {
+        while (CheckWriteGroupState(cart, (sync_buffers > 0) || cart->cioHolds > 0)) {
             if ( cart->currstate == FLUSHING ) {
                 FlushWriteGroup(cart);
             }
@@ -588,12 +593,12 @@ void* DBWriter(void *jones) {
         cart->currstate = RUNNING;
         
         UnlockWriteGroup(cart);
-        SetBufferGeneration(cart->generation);
 
         releasecount = LogWriteGroup(cart);
 
         if ( GetProcessingMode() == NormalProcessing && cart->loggable && (sync_buffers < max_logcount) && !primed ) {
             /*  move buffer syncs to the sync cart */
+            Assert(cart->cioHolds == 0);
             sync_buffers += MergeWriteGroups(GetSyncGroup(), cart);
             ActivateSyncGroup();
         } else {
@@ -701,25 +706,26 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
         case READY:
             timerr = 0;
             if (wait_timeout > 0 &&
-                    cart->isTransFriendly &&
-                    !(stopped) &&
-                    cart->numberOfTrans < maxtrans) {
-                struct timespec waittime;
+                cart->isTransFriendly &&
+                !(stopped) &&
+                cart->numberOfTrans < maxtrans) {
 
-                cart->currstate = WAITING;
-                ptimeout(&waittime,wait_timeout);
-                timerr = pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
-                if (timerr == ETIMEDOUT) {
-                    if ( cart->currstate == FLUSHING ) {
+                    struct timespec waittime;
+
+                    cart->currstate = WAITING;
+                    ptimeout(&waittime,wait_timeout);
+                    timerr = pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
+                    if (timerr == ETIMEDOUT) {
+                        if ( cart->currstate == FLUSHING ) {
+                            return true;
+                        }
+                        if ( wait_timeout > sync_timeout ) cart->currstate = PRIMED;
+                        else cart->currstate = READY;
+                        return false;
+                    } else {
+                        Assert(cart->currstate != WAITING);
                         return true;
                     }
-                    if ( wait_timeout > sync_timeout ) cart->currstate = PRIMED;
-                    else cart->currstate = READY;
-                    return false;
-                } else {
-                    Assert(cart->currstate != WAITING);
-                    return true;
-                }
             }
             return false;
         case PRIMED:
@@ -756,7 +762,6 @@ int LogWriteGroup(WriteGroup cart) {
     
     if ( cart->loggable ) {
         releasecount = LogBuffers(cart);
-        TransferDeferredWriteMarks(cart);
         LogTransactions(cart);
         WakeWaitingThreads(cart, false);
     }
@@ -826,50 +831,11 @@ void CommitPackage(WriteGroup cart) {
     HashTableWalk(db_table, (HashtFunc)PathCacheCompleteWalker, 0);
 }
 
-/*
- * A sealed cart is about to forget its marks. Move any mark that an open
- * CriticalIO still owns onto the live log cart, pin and all.
- */
-
-static void
-TransferDeferredWriteMarks(WriteGroup src)
-{
-    WriteGroup dest = GetNextTarget(src);
-
-    if (dest == src) {
-        return;
-    }
-
-    for (int i = 0; i < MaxBuffers; i++) {
-        if (!src->buffers[i] || !src->defer[i]) {
-            continue;
-        }
-
-        if (!dest->buffers[i]) {
-            memmove(&dest->descriptions[i], &src->descriptions[i], sizeof(BufferTag));
-            dest->buffers[i] = true;
-        } else if (dest->descriptions[i].relId.dbId != src->descriptions[i].relId.dbId ||
-                   dest->descriptions[i].relId.relId != src->descriptions[i].relId.relId ||
-                   dest->descriptions[i].blockNum != src->descriptions[i].blockNum) {
-            pthread_mutex_unlock(&dest->checkpoint);
-            elog(FATAL, "CriticalIO write mark tag mismatch buf %d", i);
-        }
-
-        dest->release[i] += src->release[i];
-        src->release[i] = 0;
-        memset(&src->descriptions[i], 0, sizeof(BufferTag));
-        src->buffers[i] = false;
-        src->defer[i] = false;
-    }
-
-    UnlockWriteGroup(dest);
-}
-
 void ResetWriteGroup(WriteGroup cart) {
     Assert(cart->currstate == COMPLETED || cart->currstate == NOT_READY);
 
     memset(cart->buffers, 0, sizeof(bool) * MaxBuffers);
-    memset(cart->defer, 0, sizeof(bool) * MaxBuffers);
+    memset(cart->defers, 0, sizeof(int) * MaxBuffers);
     memset(cart->release, 0, sizeof(int) * MaxBuffers);
     memset(cart->descriptions, 0, sizeof(BufferTag) * MaxBuffers);
     
@@ -879,9 +845,11 @@ void ResetWriteGroup(WriteGroup cart) {
     memset(cart->wait_for_sync, 0, sizeof(bool) * maxtrans);
     
     cart->numberOfTrans = 0;
+    cart->cioHolds = 0;
+    cart->flushCount = 0;
 
     cart->isTransFriendly = true;
-    cart->loggable = logging;    
+    cart->loggable = logging;
     cart->log_started = false;
     cart->snapshot = NULL;
 }
@@ -894,7 +862,7 @@ int MergeWriteGroups(WriteGroup target, WriteGroup src) {
     pthread_mutex_lock(&target->checkpoint);
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         
-        if ( !src->buffers[i] || src->defer[i] ) {
+        if ( !src->buffers[i] ) {
             continue;
         }
 
@@ -982,23 +950,50 @@ int LogTransactions(WriteGroup cart) {
     
     DTRACE_PROBE1(mtpg, dbwriter__logged, i);
     
+    elog(DEBUG, "[DBWriter] logged %d transactions\n", i);
     return i;
 }
-long MarkDeferredWrites(long * criticals) {
+
+long UnmarkDeferredWrites(int * criticals) {
     WriteGroup     cart = GetCurrentWriteGroup(false);
     long generation = cart->generation;
     for (int x=0;x<MaxBuffers;x++) {
         if (criticals[x] > 0) {
-            if (cart->buffers[x]) {
-                cart->defer[x] = true;
-            }
+            Assert(cart->buffers[x]);
+            cart->defers[x] -= criticals[x];
         }
+    }
+    UnlockWriteGroup(cart);
+    
+    return generation;
+}
+
+long CriticalIOHold() {
+    WriteGroup     cart = GetCurrentWriteGroup(false);
+    long generation = cart->generation - 1;
+
+    if (cart->loggable) {
+        cart->cioHolds += 1;
+    } else {
+        generation = 0;
     }
     UnlockWriteGroup(cart);
     return generation;
 }
 
-long RegisterBufferWrite(BufferDesc * bufHdr, bool release) {
+long CriticalIORelease() {
+    WriteGroup     cart = GetCurrentWriteGroup(false);
+    long generation = cart->generation - 1;
+    if (cart->loggable) {
+        cart->cioHolds -= 1;
+    } else {
+        generation = 0;
+    }
+    UnlockWriteGroup(cart);
+    return generation;
+}
+
+long RegisterBufferWrite(BufferDesc * bufHdr, bool defer, bool release) {
     WriteGroup     cart = GetCurrentWriteGroup(false);
     long generation = cart->generation;
     /*
@@ -1038,6 +1033,10 @@ long RegisterBufferWrite(BufferDesc * bufHdr, bool release) {
                     bufHdr->tag.blockNum);
         }
     }
+    if (defer) {
+        cart->defers[bufHdr->buf_id] += 1;
+    }
+
     UnlockWriteGroup(cart);
     /*
      * it's now safe to give up the shared pin of the caller because we
@@ -1067,9 +1066,6 @@ void CommitDBBufferWrites(TransactionId xid, int setstate) {
         
         if ( !IsTransactionFriendly() ) {
             cart->isTransFriendly = false;
-        }
-        if ( !IsLoggable() ) {
-            cart->loggable = false;
         }
         
         cart->transactions[position] = xid;
@@ -1127,6 +1123,7 @@ int LogBuffers(WriteGroup list) {
     BufferDesc     *bufHdr;
     int             releasecount = 0, freecount = 0;
     int             buffer_hits = 0;
+    int defer_count = 0;
     IOStatus        iostatus;
 
     smgrbeginlog();
@@ -1136,9 +1133,13 @@ int LogBuffers(WriteGroup list) {
         fflush(stderr);
     }
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
-        
+        if (list->defers[i] > 0) {
+            Assert(list->currstate == FLUSHING);
+            defer_count++;
+            continue;
+        }
         /* Ignore buffers that were not dirtied by me */
-        if (!list->buffers[i] || list->defer[i])
+        if (!list->buffers[i])
             continue;
         
         if ( CheckBufferId(bufHdr,
@@ -1254,8 +1255,8 @@ int LogBuffers(WriteGroup list) {
     }
 
     if (TraceBufferFlushEnabled()) {
-        fprintf(stderr, "FLUSH: LogBuffers end gen=%ld pages=%d release=%d free=%d\n",
-                list->generation, buffer_hits, releasecount,freecount);
+        fprintf(stderr, "FLUSH: LogBuffers end gen=%ld pages=%d release=%d free=%d defer=%d\n",
+                list->generation, buffer_hits, releasecount,freecount,defer_count);
         fflush(stderr);
     }
     smgrcommitlog();
@@ -1269,7 +1270,8 @@ int ClearLogs(WriteGroup list) {
    * and delete all but the last three files.
    */
     if ( list->loggable ) {
-        smgrexpirelogs();
+//        smgrexpirelogs();
+        smgrremovelogs(list->flushCount + 1);
     }
 
     return 0;
@@ -1293,7 +1295,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
     for (i = 0, bufHdr = BufferDescriptors; i < MaxBuffers; i++, bufHdr++) {
         bool written = false;
       /* Ignore buffers that were not dirtied by me */
-        if (!list->buffers[i] || list->defer[i])
+        if (!list->buffers[i] || list->defers[i] > 0)
             continue;
 
         if ( !forcommit ) {

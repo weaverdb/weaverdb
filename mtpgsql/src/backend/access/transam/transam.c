@@ -534,6 +534,7 @@ of the pg_log for commits
 		SpinAcquire(OidGenLockId);
 	} else {
 		SpinRelease(OidGenLockId);
+                smgrremovelogs(0);
 		SetTransactionRecoveryCheckpoint(GetNewTransactionId());
 		SpinAcquire(OidGenLockId);
 	}
