@@ -12,6 +12,9 @@
  *   ./gradlew :pgjava_c:indexHeapCrashLong -Dweaver.crash.duration.sec=3600
  *   ./gradlew :pgjava_c:indexHeapCrashLong -Dweaver.crash.clients=4
  *
+ * The long-run pool also includes split_churn (wide-key btree splits),
+ * rotate (shadow-log fsync kills), and recover_kill (SIGKILL during replay).
+ *
  *-------------------------------------------------------------------------
  */
 
@@ -43,6 +46,10 @@ public class IndexHeapCrashConsistencyJavaTest {
         }
         if (System.getProperty("weaver.crash.scenario") != null) {
             cfg.scenarioFilter = System.getProperty("weaver.crash.scenario");
+        }
+        String keep = System.getProperty("weaver.crash.keep");
+        if (keep != null && (keep.equals("1") || Boolean.parseBoolean(keep))) {
+            cfg.keepOnFail = true;
         }
         int rc = IndexHeapCrashHarness.run(cfg);
         Assertions.assertEquals(0, rc, "Java index/heap crash smoke failed (see stdout)");

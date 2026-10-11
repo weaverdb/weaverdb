@@ -1316,8 +1316,9 @@ ExecPut(TupleTableSlot *slot,
 		ExecConstraints("ExecPut", resultRelationDesc, tuple, estate);
 
 	/*
-	 * Heap insert + index inserts are one CriticalIO unit so a generation
-	 * bump cannot interleave mid-write. AbortCriticalIO covers elog(ERROR).
+	 * Heap insert, index inserts, and the xmax update of the tuple being
+	 * replaced are one CriticalIO unit so a generation bump cannot
+	 * interleave mid-write. AbortCriticalIO covers elog(ERROR).
 	 */
 	BeginCriticalIO();
 
@@ -1338,8 +1339,6 @@ ExecPut(TupleTableSlot *slot,
 	if (numIndices > 0)
 		ExecInsertIndexTuples(slot, tupleid, estate, true);
 
-	EndCriticalIO();
-        
         if ( ItemPointerIsValid(tupleid) ) {
             ctid=tuple->t_self;
      lput:;
@@ -1374,6 +1373,8 @@ ExecPut(TupleTableSlot *slot,
         } else {
 			result = 0;
 		}
+
+	EndCriticalIO();
         
 	(estate->es_processed)++;
 	estate->es_lastoid = newId;
@@ -1518,16 +1519,20 @@ ExecDelete(TupleTableSlot *slot,
 	}
 
 	/*
-	 * delete the tuple
+	 * Heap xmax update is one CriticalIO unit, same as ExecReplace.
+	 * AbortCriticalIO covers elog(ERROR); End on non-error early exits.
 	 */
+	BeginCriticalIO();
 ldelete:;
 	result = heap_delete(resultRelationDesc, tupleid, &ctid,estate->es_snapshot);
 	switch (result)
 	{
                 case HeapTupleBeingUpdated:
                     /* heap tuple is being updated and we started after them so just forget about the update */
+			EndCriticalIO();
                     return;
                 case HeapTupleSelfUpdated:
+			EndCriticalIO();
 			return;
 
 		case HeapTupleMayBeUpdated:
@@ -1547,15 +1552,18 @@ ldelete:;
 					goto ldelete;
 				}
 			}
+			EndCriticalIO();
 			return;
 
 		default:
+			EndCriticalIO();
 			elog(ERROR, "Unknown status %u from heap_delete", result);
 			return;
 	}
 
 	IncrDeleted();
 	(estate->es_processed)++;
+	EndCriticalIO();
 
 	/*
 	 * Note: Normally one would think that we have to delete index tuples

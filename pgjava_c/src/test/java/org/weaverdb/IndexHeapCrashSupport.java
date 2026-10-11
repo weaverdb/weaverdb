@@ -12,6 +12,9 @@
 
 package org.weaverdb;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -33,8 +36,16 @@ final class IndexHeapCrashSupport {
     static final String DB = "persistcrash";
     static final String TABLE = "ihc_t";
     static final String BTREE = "ihc_id_idx";
+    static final String WIDE_IDX = "ihc_wide_idx";
     static final String HNSW = "ihc_hnsw";
     static final String IVF = "ihc_ivf";
+    /** Relation page size used by the non-Android engine build. */
+    static final int BLCKSZ = 8192;
+    /** vfd.c HEADER_MAGIC. First shadow-log block starts with this. */
+    static final long SHADOW_HEADER_MAGIC = 0xCAFE08072006BABEL;
+    /** Ids inserted by split_churn after the setup seed, shared by client threads. */
+    private static final java.util.concurrent.atomic.AtomicInteger SPLIT_IDS =
+            new java.util.concurrent.atomic.AtomicInteger(100_000);
 
     enum Scenario {
         DML_TIMED,
@@ -42,9 +53,14 @@ final class IndexHeapCrashSupport {
         MIXED_TIMED,
         BUILD_HNSW_TIMED,
         BUILD_BTREE_TIMED,
+        SPLIT_CHURN_TIMED,
+        ROTATE_TIMED,
+        RECOVER_KILL,
         DML_WRITES,
         VACUUM_WRITES,
-        MIXED_WRITES;
+        MIXED_WRITES,
+        SPLIT_CHURN_WRITES,
+        ROTATE_WRITES;
 
         boolean usesWrites() {
             return name().endsWith("_WRITES");
@@ -223,9 +239,41 @@ final class IndexHeapCrashSupport {
         }
     }
 
+    /**
+     * Indexed value wide enough that a btree leaf holds only a handful of
+     * keys, so _bt_split runs inside a short kill window.
+     */
+    static String wide(int id) {
+        StringBuilder sb = new StringBuilder(960);
+        sb.append('w').append(id).append('w');
+        while (sb.length() < 900) {
+            sb.append('W');
+        }
+        return sb.toString();
+    }
+
+    static String rowInsert(Scenario scenario, int id, String val) {
+        if ("split_churn".equals(scenario.base())) {
+            return "insert into " + TABLE + " values (" + id + ", '" + val + "', '"
+                    + wide(id) + "', '" + vec(id) + "')";
+        }
+        return "insert into " + TABLE + " values (" + id + ", '" + val + "', '" + vec(id) + "')";
+    }
+
     static void setupSchema(Scenario scenario, int startN) throws ExecutionException {
         try (DBReference conn = DBReferenceManager.connect(DB)) {
             String base = scenario.base();
+            if ("split_churn".equals(base)) {
+                execLogged(conn, "create table " + TABLE
+                        + " (id int4, val varchar(64), wide varchar(1500), emb vector)");
+                execLogged(conn, "create unique index " + BTREE + " on " + TABLE + " (id)");
+                execLogged(conn, "create unique index " + WIDE_IDX + " on " + TABLE + " (wide)");
+                int n = Math.max(startN, 30);
+                for (int i = 1; i <= n; i++) {
+                    execLogged(conn, rowInsert(scenario, i, "v" + i));
+                }
+                return;
+            }
             execLogged(conn, "create table " + TABLE + " (id int4, val varchar(64), emb vector)");
             if (!"build_btree".equals(base)) {
                 execLogged(conn, "create unique index " + BTREE + " on " + TABLE + " (id)");
@@ -263,7 +311,7 @@ final class IndexHeapCrashSupport {
         try (DBReference conn = DBReferenceManager.connect(DB)) {
             runScenarioPrefix(conn, scenario, rng, startN, maxId, burst);
             while (true) {
-                churnOnce(conn, rng, maxId);
+                churnOnce(conn, scenario, rng, maxId);
             }
         }
     }
@@ -288,7 +336,7 @@ final class IndexHeapCrashSupport {
             int client = c;
             Random crng = new Random(rng.nextLong());
             Thread t = new Thread(
-                    () -> extraClient(client, crng, maxId, connected, fatal),
+                    () -> extraClient(scenario, client, crng, maxId, connected, fatal),
                     "ihc-client-" + client);
             t.setDaemon(true);
             t.start();
@@ -314,7 +362,7 @@ final class IndexHeapCrashSupport {
                         runScenarioPrefix(conn, scenario, rng, startN, maxId, burst);
                         prefix = true;
                     }
-                    churnOnce(conn, rng, maxId);
+                    churnOnce(conn, scenario, rng, maxId);
                 } catch (IllegalStateException e) {
                     if (isUniqueViolation(e)) {
                         throw e;
@@ -350,8 +398,8 @@ final class IndexHeapCrashSupport {
         throw wrapFatal(fatal.get());
     }
 
-    private static void extraClient(int client, Random rng, int maxId, CountDownLatch connected,
-            AtomicReference<Throwable> fatal) {
+    private static void extraClient(Scenario scenario, int client, Random rng, int maxId,
+            CountDownLatch connected, AtomicReference<Throwable> fatal) {
         int lo = client * maxId + 1;
         int hi = (client + 1) * maxId;
         DBReference conn = null;
@@ -362,6 +410,30 @@ final class IndexHeapCrashSupport {
             counted = true;
             System.out.println("IHC: client " + client + " ids " + lo + ".." + hi);
             System.out.flush();
+            if ("split_churn".equals(scenario.base())) {
+                while (fatal.get() == null) {
+                    int id = SPLIT_IDS.getAndIncrement();
+                    if (!execClient(conn, client, rowInsert(scenario, id, "c" + client))) {
+                        conn = reopenQuiet(conn);
+                    }
+                }
+                return;
+            }
+            if ("rotate".equals(scenario.base())) {
+                int id = 800_000 + client;
+                System.out.println("IHC: client " + client + " rotate id " + id);
+                System.out.flush();
+                while (fatal.get() == null) {
+                    if (!execClient(conn, client, "delete from " + TABLE + " where id = " + id)) {
+                        conn = reopenQuiet(conn);
+                        continue;
+                    }
+                    if (!execClient(conn, client, rowInsert(scenario, id, "r" + client))) {
+                        conn = reopenQuiet(conn);
+                    }
+                }
+                return;
+            }
             while (fatal.get() == null) {
                 int id = lo + rng.nextInt(hi - lo + 1);
                 if (rng.nextBoolean()) {
@@ -397,7 +469,7 @@ final class IndexHeapCrashSupport {
      * @return false when the statement failed and the connection was closed
      */
     private static boolean execClient(DBReference conn, int client, String sql) throws ExecutionException {
-        System.out.println("IHC: SQL c" + client + " " + sql);
+        System.out.println("IHC: SQL c" + client + " " + sqlForLog(sql));
         System.out.flush();
         try {
             conn.execute(sql);
@@ -460,17 +532,34 @@ final class IndexHeapCrashSupport {
                 execIgnore(conn, "vacuum " + TABLE);
             }
             case "mixed" -> runMixed(conn, rng, maxId, burst);
-            default -> {
-                insertRangeIgnoreDup(conn, startN + 1, maxId);
-                for (int i = 1; i <= startN; i += 3) {
-                    execIgnore(conn, "update " + TABLE + " set emb = '[0," + i + ",0]' where id = " + i);
+            case "split_churn" -> {
+                for (int n = 0; n < 40; n++) {
+                    int id = SPLIT_IDS.getAndIncrement();
+                    execIgnore(conn, rowInsert(scenario, id, "s"));
                 }
-                for (int i = 2; i <= startN; i += 4) {
-                    execIgnore(conn, "delete from " + TABLE + " where id = " + i);
-                }
-                execIgnore(conn, "insert into " + TABLE + " values (2, 'v2', '" + vec(2) + "')");
             }
+            case "rotate" -> {
+                int span = Math.max(1, maxId);
+                for (int n = 0; n < 48; n++) {
+                    int id = 1 + (n % span);
+                    execIgnore(conn, "delete from " + TABLE + " where id = " + id);
+                    execIgnore(conn, rowInsert(scenario, id, "r" + n));
+                }
+            }
+            case "recover_kill" -> runDmlPrefix(conn, startN, maxId);
+            default -> runDmlPrefix(conn, startN, maxId);
         }
+    }
+
+    private static void runDmlPrefix(DBReference conn, int startN, int maxId) {
+        insertRangeIgnoreDup(conn, startN + 1, maxId);
+        for (int i = 1; i <= startN; i += 3) {
+            execIgnore(conn, "update " + TABLE + " set emb = '[0," + i + ",0]' where id = " + i);
+        }
+        for (int i = 2; i <= startN; i += 4) {
+            execIgnore(conn, "delete from " + TABLE + " where id = " + i);
+        }
+        execIgnore(conn, "insert into " + TABLE + " values (2, 'v2', '" + vec(2) + "')");
     }
 
     static CheckResult recoverAndCheck(int maxId, Random rng) {
@@ -549,6 +638,13 @@ final class IndexHeapCrashSupport {
                     }
                 } else {
                     log.append("  unique index absent after crash (ok if crash was mid-build)\n");
+                }
+
+                if (relationExists(conn, WIDE_IDX)) {
+                    CheckResult wide = checkWideIndex(conn, heap, log);
+                    if (wide != null) {
+                        return wide;
+                    }
                 }
 
                 if (relationExists(conn, HNSW) || relationExists(conn, IVF)) {
@@ -853,7 +949,41 @@ final class IndexHeapCrashSupport {
         }
     }
 
-    private static void churnOnce(DBReference conn, Random rng, int maxId) {
+    private static CheckResult checkWideIndex(DBReference conn, List<Integer> heap, StringBuilder log)
+            throws ExecutionException {
+        if (heap.isEmpty()) {
+            log.append("  wide index present, heap empty; skipping lookup\n");
+            return null;
+        }
+        int id = heap.get(heap.size() / 2);
+        conn.execute("set enable_seqscan = off");
+        conn.execute("set enable_indexscan = on");
+        try (Statement s = conn.statement(
+                "select id from " + TABLE + " where wide = '" + wide(id) + "'")) {
+            Output<Integer> out = s.linkOutput(1, Integer.class);
+            s.execute();
+            if (!s.fetch()) {
+                return fail(log, null, "wide index lookup missed live heap id=" + id);
+            }
+            int got = out.get();
+            if (got != id) {
+                return fail(log, null, "wide index pointer for id=" + id
+                        + " resolved to a different heap item id=" + got);
+            }
+            if (s.fetch()) {
+                return fail(log, null, "duplicate wide index entries for id=" + id);
+            }
+        }
+        log.append("  OK wide index lookup id=").append(id).append('\n');
+        return null;
+    }
+
+    private static void churnOnce(DBReference conn, Scenario scenario, Random rng, int maxId) {
+        if ("split_churn".equals(scenario.base())) {
+            int id = SPLIT_IDS.getAndIncrement();
+            execIgnore(conn, rowInsert(scenario, id, "c"));
+            return;
+        }
         int id = 1 + rng.nextInt(maxId);
         /* Do not VACUUM in the generic churn loop. A mid-VACUUM SIGKILL
          * plus recover vacuum can remove wrapup-durable seed rows; vacuum
@@ -866,14 +996,21 @@ final class IndexHeapCrashSupport {
         }
     }
 
+    private static String sqlForLog(String sql) {
+        if (sql == null || sql.length() <= 180) {
+            return sql;
+        }
+        return sql.substring(0, 160) + "...(" + sql.length() + " chars)";
+    }
+
     private static void execLogged(DBReference conn, String sql) throws ExecutionException {
-        System.out.println("IHC: SQL " + sql);
+        System.out.println("IHC: SQL " + sqlForLog(sql));
         System.out.flush();
         conn.execute(sql);
     }
 
     private static boolean execIgnore(DBReference conn, String sql) {
-        System.out.println("IHC: SQL " + sql);
+        System.out.println("IHC: SQL " + sqlForLog(sql));
         System.out.flush();
         try {
             conn.execute(sql);
@@ -926,5 +1063,131 @@ final class IndexHeapCrashSupport {
         }
         log.append('\n');
         return new CheckResult(RecoverCode.FAIL, log.toString());
+    }
+
+    /**
+     * Filesystem invariants that VACUUM cannot paper over: relation files stay
+     * block-aligned, and only the highest {@code pg_shadowlog/log_*} file may
+     * still have an incomplete header.
+     *
+     * @return a failure line, or null when the datadir looks structurally sound
+     */
+    static String checkDatadirStructure(Path datadir) throws IOException {
+        String relations = checkRelationSizes(datadir);
+        if (relations != null) {
+            return relations;
+        }
+        return checkShadowLogs(datadir.resolve("pg_shadowlog"));
+    }
+
+    private static String checkRelationSizes(Path datadir) throws IOException {
+        Path base = datadir.resolve("base");
+        if (Files.isDirectory(base)) {
+            try (var walk = Files.walk(base)) {
+                for (Path p : walk.filter(Files::isRegularFile).toList()) {
+                    if ("PG_VERSION".equals(p.getFileName().toString())) {
+                        continue;
+                    }
+                    String bad = blockAligned(p);
+                    if (bad != null) {
+                        return bad;
+                    }
+                }
+            }
+        }
+        try (var root = Files.list(datadir)) {
+            for (Path p : root.filter(Files::isRegularFile).toList()) {
+                String name = p.getFileName().toString();
+                if (name.indexOf('.') >= 0 || !name.startsWith("pg_")) {
+                    continue;
+                }
+                String bad = blockAligned(p);
+                if (bad != null) {
+                    return bad;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String blockAligned(Path p) throws IOException {
+        long sz = Files.size(p);
+        if (sz % BLCKSZ != 0) {
+            return "FAIL: relation file not block-aligned: " + p + " size=" + sz;
+        }
+        return null;
+    }
+
+    private static String checkShadowLogs(Path dir) throws IOException {
+        if (!Files.isDirectory(dir)) {
+            return "FAIL: pg_shadowlog missing after crash";
+        }
+        List<Path> logs = new ArrayList<>();
+        try (var listing = Files.list(dir)) {
+            for (Path p : listing.filter(Files::isRegularFile).toList()) {
+                if (p.getFileName().toString().startsWith("log_")) {
+                    logs.add(p);
+                }
+            }
+        }
+        logs.sort(Comparator.comparing(p -> p.getFileName().toString()));
+        if (logs.isEmpty()) {
+            return "FAIL: pg_shadowlog has no log files after crash";
+        }
+        for (int i = 0; i < logs.size(); i++) {
+            boolean tail = i == logs.size() - 1;
+            String bad = checkOneShadowLog(logs.get(i), tail);
+            if (bad != null) {
+                return bad;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Header layout matches vfd.c LogHeader: four int64s, then {@code completed}.
+     * A non-tail file must be a whole number of blocks and start with a
+     * completed header. The file still open for append may be short or incomplete.
+     */
+    private static String checkOneShadowLog(Path log, boolean tail) throws IOException {
+        long sz = Files.size(log);
+        if (!tail && sz % BLCKSZ != 0) {
+            return "FAIL: non-tail shadow log not block-aligned: " + log.getFileName() + " size=" + sz;
+        }
+        if (sz < 33) {
+            return tail ? null : "FAIL: non-tail shadow log truncated: " + log.getFileName();
+        }
+        byte[] buf = new byte[40];
+        try (var in = Files.newInputStream(log)) {
+            int n = 0;
+            while (n < buf.length) {
+                int r = in.read(buf, n, buf.length - n);
+                if (r < 0) {
+                    break;
+                }
+                n += r;
+            }
+            if (n < 33) {
+                return tail ? null : "FAIL: non-tail shadow log truncated: " + log.getFileName();
+            }
+        }
+        boolean magic = shadowMagic(buf);
+        boolean completed = buf[32] != 0;
+        if (!magic) {
+            return tail ? null : "FAIL: non-tail shadow log bad magic: " + log.getFileName();
+        }
+        if (!completed && !tail) {
+            return "FAIL: non-tail shadow log not completed: " + log.getFileName();
+        }
+        return null;
+    }
+
+    private static boolean shadowMagic(byte[] buf) {
+        ByteBuffer le = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
+        if (le.getLong(0) == SHADOW_HEADER_MAGIC) {
+            return true;
+        }
+        ByteBuffer be = ByteBuffer.wrap(buf).order(ByteOrder.BIG_ENDIAN);
+        return be.getLong(0) == SHADOW_HEADER_MAGIC;
     }
 }

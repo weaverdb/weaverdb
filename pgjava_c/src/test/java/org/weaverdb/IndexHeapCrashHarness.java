@@ -130,6 +130,21 @@ public final class IndexHeapCrashHarness {
         }
     }
 
+    /** How the write-interceptor should kill a child, or null for a timed SIGKILL. */
+    private static final class Inject {
+        final String on;
+        final String path;
+        final int after;
+        final int minBytes;
+
+        Inject(String on, String path, int after, int minBytes) {
+            this.on = on;
+            this.path = path;
+            this.after = after;
+            this.minBytes = minBytes;
+        }
+    }
+
     private IndexHeapCrashHarness() {
     }
 
@@ -259,8 +274,9 @@ public final class IndexHeapCrashHarness {
             Path gate = workdir.resolve("crash.gate");
             Files.deleteIfExists(gate);
             long crashSeed = cfg.seed + round * 17L + retry * 1009L;
+            Inject crashInject = scenario.usesWrites() ? injectFor(scenario, crashSeed) : null;
             Process crash = startWorker(cfg, datadir, workdir, "crash", scenario,
-                    crashSeed, gate, scenario.usesWrites(), injector);
+                    crashSeed, gate, crashInject, injector);
             boolean ready = waitReady(crash, gate, Duration.ofSeconds(Math.min(cfg.timeoutSec, 20)));
             if (!ready) {
                 if (crash.isAlive()) {
@@ -308,6 +324,15 @@ public final class IndexHeapCrashHarness {
             Thread.sleep(150);
             syncFilesystem();
 
+            if ("recover_kill".equals(scenario.base())) {
+                int nested = killDuringRecover(cfg, rng, datadir, workdir, scenario, injector);
+                if (nested != 0) {
+                    keep = cfg.keepOnFail;
+                    return nested;
+                }
+                syncFilesystem();
+            }
+
             int recoverJvms = Math.max(1, cfg.recoverJvmAttempts);
             String lastRecoverOut = "";
             int lastRecoverRc = 1;
@@ -323,6 +348,18 @@ public final class IndexHeapCrashHarness {
                 if (lastRecoverOut.contains("IHC: CONSISTENT")
                         && (lastRecoverRc == 0
                         || completedThenHotspotAbort(lastRecoverRc, lastRecoverOut, "IHC: CONSISTENT"))) {
+                    if (unrepairedSplit(lastRecoverOut)) {
+                        highlightTornSplit(workdir, lastRecoverOut);
+                        System.err.println("FAIL: unrepaired btree split after recovery");
+                        keep = cfg.keepOnFail;
+                        return 1;
+                    }
+                    String structure = structureFailure(datadir);
+                    if (structure != null) {
+                        System.err.println(structure);
+                        keep = cfg.keepOnFail;
+                        return 1;
+                    }
                     if (lastRecoverRc != 0) {
                         System.out.println("  note: recover JVM aborted after CONSISTENT (HotSpot compiler); treating as ok");
                     }
@@ -450,7 +487,7 @@ public final class IndexHeapCrashHarness {
     private static int spawnWorker(Config cfg, Path datadir, Path workdir, String role,
             IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, boolean injectWrites,
             Path injector, String outStem) throws Exception {
-        Process p = startWorker(cfg, datadir, workdir, role, scenario, seed, gate, injectWrites, injector, outStem);
+        Process p = startWorker(cfg, datadir, workdir, role, scenario, seed, gate, null, injector, outStem);
         if (!p.waitFor(cfg.timeoutSec, TimeUnit.SECONDS)) {
             p.destroyForcibly();
             p.waitFor(5, TimeUnit.SECONDS);
@@ -462,13 +499,13 @@ public final class IndexHeapCrashHarness {
     }
 
     private static Process startWorker(Config cfg, Path datadir, Path workdir, String role,
-            IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, boolean injectWrites,
+            IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, Inject inject,
             Path injector) throws IOException {
-        return startWorker(cfg, datadir, workdir, role, scenario, seed, gate, injectWrites, injector, role);
+        return startWorker(cfg, datadir, workdir, role, scenario, seed, gate, inject, injector, role);
     }
 
     private static Process startWorker(Config cfg, Path datadir, Path workdir, String role,
-            IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, boolean injectWrites,
+            IndexHeapCrashSupport.Scenario scenario, long seed, Path gate, Inject inject,
             Path injector, String outStem) throws IOException {
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
         List<String> cmd = new ArrayList<>();
@@ -516,15 +553,24 @@ public final class IndexHeapCrashHarness {
         pb.environment().remove("WEAVER_CRASH_AFTER_WRITES");
         pb.environment().remove("WEAVER_CRASH_MIN_BYTES");
         pb.environment().remove("WEAVER_CRASH_GATE");
+        pb.environment().remove("WEAVER_CRASH_ON");
+        pb.environment().remove("WEAVER_CRASH_PATH");
         String lib = cfg.mtpg.resolve("lib").toString();
         prependEnv(pb, "DYLD_LIBRARY_PATH", lib);
         prependEnv(pb, "LD_LIBRARY_PATH", lib);
-        if (injectWrites && injector != null && gate != null) {
-            int writes = 40 + new Random(seed).nextInt(80);
-            System.out.println("  crash mode=writes after_writes=" + writes + " injector=" + injector);
-            pb.environment().put("WEAVER_CRASH_AFTER_WRITES", Integer.toString(writes));
-            pb.environment().put("WEAVER_CRASH_MIN_BYTES", "8192");
+        if (inject != null && injector != null && gate != null) {
+            System.out.println("  crash mode=" + inject.on
+                    + " after=" + inject.after
+                    + " min_bytes=" + inject.minBytes
+                    + (inject.path != null ? " path=" + inject.path : "")
+                    + " injector=" + injector);
+            pb.environment().put("WEAVER_CRASH_AFTER_WRITES", Integer.toString(inject.after));
+            pb.environment().put("WEAVER_CRASH_MIN_BYTES", Integer.toString(inject.minBytes));
+            pb.environment().put("WEAVER_CRASH_ON", inject.on);
             pb.environment().put("WEAVER_CRASH_GATE", gate.toAbsolutePath().toString());
+            if (inject.path != null) {
+                pb.environment().put("WEAVER_CRASH_PATH", inject.path);
+            }
             if (isDarwin()) {
                 pb.environment().put("DYLD_INSERT_LIBRARIES", injector.toString());
             } else {
@@ -534,6 +580,78 @@ public final class IndexHeapCrashHarness {
             pb.environment().put("WEAVER_CRASH_GATE", gate.toAbsolutePath().toString());
         }
         return pb.start();
+    }
+
+    /**
+     * Rotate kills on shadow-log fsync. Other write scenarios keep the
+     * large-write SIGKILL the older harness used.
+     */
+    private static Inject injectFor(IndexHeapCrashSupport.Scenario scenario, long seed) {
+        Random r = new Random(seed);
+        if ("rotate".equals(scenario.base())) {
+            return new Inject("fsync", "pg_shadowlog", 8 + r.nextInt(40), 1);
+        }
+        return new Inject("write", null, 40 + r.nextInt(80), 8192);
+    }
+
+    /**
+     * One SIGKILL of a recover JVM while it is replaying the crashed datadir.
+     * The following recover JVM is the one that must reach the invariants.
+     * The final recover JVM decides whether Ami xid 512 survived. A kill
+     * during replay can itself observe a torn read; that is not a suite stop.
+     */
+    private static int killDuringRecover(Config cfg, Random rng, Path datadir, Path workdir,
+            IndexHeapCrashSupport.Scenario scenario, Path injector) throws Exception {
+        Path gate = workdir.resolve("recover.kill.gate");
+        Files.writeString(gate, "ready\n");
+        Inject inject = injector == null ? null : new Inject("write", null, 2 + rng.nextInt(6), 4096);
+        System.out.println("  nested recover kill");
+        Process rec = startWorker(cfg, datadir, workdir, "recover", scenario,
+                cfg.seed + rng.nextInt(10000), gate, inject, injector, "recover.kill");
+        if (inject == null) {
+            Thread.sleep(200 + rng.nextInt(800));
+            if (rec.isAlive()) {
+                rec.destroyForcibly();
+            }
+        }
+        if (!rec.waitFor(cfg.timeoutSec, TimeUnit.SECONDS)) {
+            rec.destroyForcibly();
+            rec.waitFor(5, TimeUnit.SECONDS);
+        }
+        String out = read(workdir.resolve("recover.kill.out"));
+        System.out.println("  nested recover kill rc=" + crashExit(rec));
+        if (engineStdlog()) {
+            System.out.print(out);
+        }
+        return 0;
+    }
+
+    private static String structureFailure(Path datadir) {
+        try {
+            return IndexHeapCrashSupport.checkDatadirStructure(datadir);
+        } catch (IOException e) {
+            return "FAIL: datadir structure check: " + e.getMessage();
+        }
+    }
+
+    /**
+     * split-torn is a sibling pointer past EOF. "possible missing split right"
+     * is logged for every new page during recover and is not, by itself, a
+     * failed round. TORN_CART in the crash JVM log stays diagnostic.
+     */
+    private static boolean unrepairedSplit(String recoverOut) {
+        if (recoverOut == null) {
+            return false;
+        }
+        if (recoverOut.contains("split-torn")) {
+            return true;
+        }
+        for (String line : recoverOut.split("\\R")) {
+            if (line.contains("missing split right") && !line.contains("possible")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean waitReady(Process p, Path gate, Duration limit) throws InterruptedException {
@@ -638,9 +756,7 @@ public final class IndexHeapCrashHarness {
             for (String line : hits) {
                 System.err.println(line);
             }
-            if (crashOut.contains("TORN_CART")
-                    || (recoverOut != null && (recoverOut.contains("split-torn")
-                    || recoverOut.contains("missing split right")))) {
+            if (recoverOut != null && recoverOut.contains("split-torn")) {
                 System.err.println("FAIL: btree split did not persist left/right/sibling as one CriticalIO write");
             }
         } catch (IOException ignored) {
