@@ -1199,22 +1199,30 @@ int LogBuffers(WriteGroup list) {
                 } else {
                     TerminateBufferIO(iostatus,bufHdr);
                 }
+            } else if (IsDirtyBufferIO(bufHdr)) {
+                /*
+                 * LogBufferIO only fails when the page is not dirty or already
+                 * in BM_IO_ERROR. A page that is dirty again lost the race and
+                 * still needs an error so the writer does not forget it.
+                 */
+                elog(DEBUG, "DBWriter: dirty bufid:%d dbid:%ld relid:%ld blk:%ld",
+                    bufHdr->buf_id,
+                    bufHdr->tag.relId.dbId,
+                    bufHdr->tag.relId.relId,
+                    bufHdr->tag.blockNum);
+                ErrorBufferIO(iostatus,bufHdr);
             } else {
-                if (IsDirtyBufferIO(bufHdr)) {
-                    elog(DEBUG, "DBWriter: dirty bufid:%d dbid:%ld relid:%ld blk:%ld",
-                        bufHdr->buf_id,
-                        bufHdr->tag.relId.dbId,
-                        bufHdr->tag.relId.relId,
-                        bufHdr->tag.blockNum);
-                    ErrorBufferIO(iostatus,bufHdr);
-                } else {
-                    elog(DEBUG, "DBWriter: not dirty bufid:%d dbid:%ld relid:%ld blk:%ld",
-                        bufHdr->buf_id,
-                        bufHdr->tag.relId.dbId,
-                        bufHdr->tag.relId.relId,
-                        bufHdr->tag.blockNum);
-                    ErrorBufferIO(iostatus,bufHdr);
-                }
+                /*
+                 * Write-group membership with no dirty image. The page was
+                 * already logged (BM_LOGGED) or never needed a log. Marking
+                 * BM_IO_ERROR here poisons a good buffer: BufferAlloc then
+                 * retries the same descriptor forever.
+                 */
+                elog(DEBUG, "DBWriter: not dirty bufid:%d dbid:%ld relid:%ld blk:%ld",
+                    bufHdr->buf_id,
+                    bufHdr->tag.relId.dbId,
+                    bufHdr->tag.relId.relId,
+                    bufHdr->tag.blockNum);
             }
         } else {
             iostatus = LogBufferIO(bufHdr);

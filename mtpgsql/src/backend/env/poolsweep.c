@@ -524,6 +524,9 @@ AddJobToSweep(Sweeps* sweep, JobType type, char *relname, char *dbname, Oid reli
     
     item->next = *setter;
     *setter = item;
+
+    /* Caller holds list_guard. Wake a sweep blocked in the idle wait. */
+    pthread_cond_broadcast(&sweep->gate);
     
     MemoryContextSwitchTo(old);
     return depth;
