@@ -4,6 +4,8 @@
  *
  * Each child JVM starts Weaver once. Recover processes never wrapup
  * or initialize() a second time; the parent starts a new JVM instead.
+ * The crash JVM can run several client threads, each with its own
+ * connection, so concurrent backends share the lock and buffer state.
  *
  *-------------------------------------------------------------------------
  */
@@ -22,6 +24,9 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 final class IndexHeapCrashSupport {
 
@@ -170,6 +175,22 @@ final class IndexHeapCrashSupport {
                 || containsIgnoreCase(m, "already exists");
     }
 
+    /** Unique-index insert conflict. "already exists" is a DDL collision, not this. */
+    private static boolean isUniqueViolation(Throwable t) {
+        return containsIgnoreCase(message(t), "cannot insert a duplicate");
+    }
+
+    private static boolean isRecoverableClientError(Throwable t) {
+        return isAbortedContext(t) || isLockFailure(t);
+    }
+
+    private static boolean isLockFailure(Throwable t) {
+        String m = message(t);
+        return containsIgnoreCase(m, "lock failed")
+                || containsIgnoreCase(m, "deadlock")
+                || containsIgnoreCase(m, "cancelled");
+    }
+
     static String message(Throwable t) {
         if (t == null) {
             return "";
@@ -240,38 +261,214 @@ final class IndexHeapCrashSupport {
     static void runCrashWorkload(Scenario scenario, Random rng, int startN, int maxId, int burst)
             throws ExecutionException {
         try (DBReference conn = DBReferenceManager.connect(DB)) {
-            switch (scenario.base()) {
-                case "build_btree" -> {
-                    execLogged(conn, "create unique index " + BTREE + " on " + TABLE + " (id)");
-                    insertRangeIgnoreDup(conn, startN + 1, maxId);
-                }
-                case "build_hnsw" -> {
-                    execLogged(conn, "create index " + HNSW + " on " + TABLE
-                            + " using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32)");
-                    execLogged(conn, "create index " + IVF + " on " + TABLE
-                            + " using ivfflat (emb vector_l2_ops) with (lists = 2)");
-                }
-                case "vacuum" -> {
-                    for (int i = 1; i <= startN; i += 2) {
-                        execIgnore(conn, "delete from " + TABLE + " where id = " + i);
-                    }
-                    execIgnore(conn, "vacuum " + TABLE);
-                    execIgnore(conn, "vacuum " + TABLE);
-                }
-                case "mixed" -> runMixed(conn, rng, maxId, burst);
-                default -> {
-                    insertRangeIgnoreDup(conn, startN + 1, maxId);
-                    for (int i = 1; i <= startN; i += 3) {
-                        execIgnore(conn, "update " + TABLE + " set emb = '[0," + i + ",0]' where id = " + i);
-                    }
-                    for (int i = 2; i <= startN; i += 4) {
-                        execIgnore(conn, "delete from " + TABLE + " where id = " + i);
-                    }
-                    execIgnore(conn, "insert into " + TABLE + " values (2, 'v2', '" + vec(2) + "')");
-                }
-            }
+            runScenarioPrefix(conn, scenario, rng, startN, maxId, burst);
             while (true) {
                 churnOnce(conn, rng, maxId);
+            }
+        }
+    }
+
+    /**
+     * Several backends in this process, one thread and connection each.
+     * Client 0 keeps the scenario prefix (index build / vacuum / mixed).
+     * Every client then churns a private id band so concurrent DML does not
+     * collide on the unique key. Ready is signaled only after every client
+     * has connected, so the parent's kill window overlaps real concurrency.
+     * Lock aborts reopen that connection; a unique violation still fails
+     * the workload.
+     */
+    static void runMultiClientCrashWorkload(Scenario scenario, Random rng, int startN, int maxId,
+            int burst, int clients, Path gate) throws Exception {
+        int n = Math.max(2, clients);
+        CountDownLatch connected = new CountDownLatch(n);
+        AtomicReference<Throwable> fatal = new AtomicReference<>();
+        System.out.println("IHC: clients=" + n + " maxId=" + maxId);
+        System.out.flush();
+        for (int c = 1; c < n; c++) {
+            int client = c;
+            Random crng = new Random(rng.nextLong());
+            Thread t = new Thread(
+                    () -> extraClient(client, crng, maxId, connected, fatal),
+                    "ihc-client-" + client);
+            t.setDaemon(true);
+            t.start();
+        }
+
+        DBReference conn = DBReferenceManager.connect(DB);
+        connected.countDown();
+        if (!connected.await(15, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("timed out waiting for " + n + " clients to connect");
+        }
+        Throwable early = fatal.get();
+        if (early != null) {
+            throw wrapFatal(early);
+        }
+        markReady(gate);
+
+        boolean prefix = false;
+        int prefixTries = 0;
+        try {
+            while (fatal.get() == null) {
+                try {
+                    if (!prefix) {
+                        runScenarioPrefix(conn, scenario, rng, startN, maxId, burst);
+                        prefix = true;
+                    }
+                    churnOnce(conn, rng, maxId);
+                } catch (IllegalStateException e) {
+                    if (isUniqueViolation(e)) {
+                        throw e;
+                    }
+                    conn = reopenAfter(conn, 0, e);
+                    if (++prefixTries >= 3) {
+                        prefix = true;
+                    }
+                } catch (ExecutionException e) {
+                    if (isUniqueViolation(e)) {
+                        throw new IllegalStateException(
+                                "duplicate key during crash workload: " + message(e), e);
+                    }
+                    if (containsIgnoreCase(message(e), "already exists")) {
+                        prefix = true;
+                        continue;
+                    }
+                    if (!isRecoverableClientError(e)) {
+                        throw e;
+                    }
+                    conn = reopenAfter(conn, 0, e);
+                    if (++prefixTries >= 3) {
+                        prefix = true;
+                    }
+                }
+            }
+        } finally {
+            try {
+                conn.close();
+            } catch (Exception ignored) {
+            }
+        }
+        throw wrapFatal(fatal.get());
+    }
+
+    private static void extraClient(int client, Random rng, int maxId, CountDownLatch connected,
+            AtomicReference<Throwable> fatal) {
+        int lo = client * maxId + 1;
+        int hi = (client + 1) * maxId;
+        DBReference conn = null;
+        boolean counted = false;
+        try {
+            conn = DBReferenceManager.connect(DB);
+            connected.countDown();
+            counted = true;
+            System.out.println("IHC: client " + client + " ids " + lo + ".." + hi);
+            System.out.flush();
+            while (fatal.get() == null) {
+                int id = lo + rng.nextInt(hi - lo + 1);
+                if (rng.nextBoolean()) {
+                    if (!execClient(conn, client, "delete from " + TABLE + " where id = " + id)) {
+                        conn = reopenQuiet(conn);
+                        continue;
+                    }
+                    if (!execClient(conn, client, "insert into " + TABLE + " values (" + id
+                            + ", 'c" + client + "', '" + vec(id) + "')")) {
+                        conn = reopenQuiet(conn);
+                    }
+                } else if (!execClient(conn, client, "update " + TABLE + " set val = 'c" + client
+                        + "' where id = " + id)) {
+                    conn = reopenQuiet(conn);
+                }
+            }
+        } catch (Throwable t) {
+            fatal.compareAndSet(null, t);
+        } finally {
+            if (!counted) {
+                connected.countDown();
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    /**
+     * @return false when the statement failed and the connection was closed
+     */
+    private static boolean execClient(DBReference conn, int client, String sql) throws ExecutionException {
+        System.out.println("IHC: SQL c" + client + " " + sql);
+        System.out.flush();
+        try {
+            conn.execute(sql);
+            return true;
+        } catch (ExecutionException e) {
+            System.out.println("IHC: SQL_FAIL c" + client + " " + message(e));
+            System.out.flush();
+            if (isUniqueViolation(e)) {
+                throw new IllegalStateException(
+                        "duplicate key during crash workload: " + message(e), e);
+            }
+            try {
+                conn.close();
+            } catch (Exception ignored) {
+            }
+            return false;
+        }
+    }
+
+    private static DBReference reopenQuiet(DBReference conn) throws ExecutionException {
+        try {
+            conn.close();
+        } catch (Exception ignored) {
+        }
+        return DBReferenceManager.connect(DB);
+    }
+
+    private static DBReference reopenAfter(DBReference conn, int client, Throwable cause)
+            throws ExecutionException {
+        System.out.println("IHC: client " + client + " reopening after " + message(cause));
+        System.out.flush();
+        return reopenQuiet(conn);
+    }
+
+    private static Exception wrapFatal(Throwable t) {
+        if (t instanceof Exception e) {
+            return e;
+        }
+        return new IllegalStateException(message(t), t);
+    }
+
+    private static void runScenarioPrefix(DBReference conn, Scenario scenario, Random rng,
+            int startN, int maxId, int burst) throws ExecutionException {
+        switch (scenario.base()) {
+            case "build_btree" -> {
+                execLogged(conn, "create unique index " + BTREE + " on " + TABLE + " (id)");
+                insertRangeIgnoreDup(conn, startN + 1, maxId);
+            }
+            case "build_hnsw" -> {
+                execLogged(conn, "create index " + HNSW + " on " + TABLE
+                        + " using hnsw (emb vector_l2_ops) with (m = 8, ef_construction = 32)");
+                execLogged(conn, "create index " + IVF + " on " + TABLE
+                        + " using ivfflat (emb vector_l2_ops) with (lists = 2)");
+            }
+            case "vacuum" -> {
+                for (int i = 1; i <= startN; i += 2) {
+                    execIgnore(conn, "delete from " + TABLE + " where id = " + i);
+                }
+                execIgnore(conn, "vacuum " + TABLE);
+                execIgnore(conn, "vacuum " + TABLE);
+            }
+            case "mixed" -> runMixed(conn, rng, maxId, burst);
+            default -> {
+                insertRangeIgnoreDup(conn, startN + 1, maxId);
+                for (int i = 1; i <= startN; i += 3) {
+                    execIgnore(conn, "update " + TABLE + " set emb = '[0," + i + ",0]' where id = " + i);
+                }
+                for (int i = 2; i <= startN; i += 4) {
+                    execIgnore(conn, "delete from " + TABLE + " where id = " + i);
+                }
+                execIgnore(conn, "insert into " + TABLE + " values (2, 'v2', '" + vec(2) + "')");
             }
         }
     }
@@ -690,8 +887,16 @@ final class IndexHeapCrashSupport {
              * That is a workload bug, not a crash point.
              */
             if (isDuplicateKey(e) || isAbortedContext(e)) {
-                throw new IllegalStateException(
-                        "duplicate key during crash workload: " + message(e), e);
+                /*
+                 * Single-client: both end the workload (the harness treats
+                 * IHC: FAIL as a failed round). Multi-client reopens on an
+                 * abort that is not a unique violation, so the abort text
+                 * must not look like a duplicate-key failure.
+                 */
+                String why = isUniqueViolation(e)
+                        ? "duplicate key during crash workload: "
+                        : "aborted connection during crash workload: ";
+                throw new IllegalStateException(why + message(e), e);
             }
             return false;
         }

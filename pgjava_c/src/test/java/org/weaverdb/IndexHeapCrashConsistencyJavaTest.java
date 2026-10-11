@@ -5,10 +5,12 @@
  * Orchestrates child JVMs. Recover is always a new process against the
  * crashed datadir (no wrapup+re-init). The JUnit JVM does not load the engine.
  *
- * Smoke (default Gradle test): a few timed-kill rounds.
- * Overnight:
+ * Smoke (default Gradle test): a few timed-kill rounds, 2 client threads.
+ * Overnight uses 4 client threads (override with -Dweaver.crash.clients=N).
+ * Each client is its own connection on its own thread inside the crash JVM.
  *   ./gradlew :pgjava_c:indexHeapCrashLong
  *   ./gradlew :pgjava_c:indexHeapCrashLong -Dweaver.crash.duration.sec=3600
+ *   ./gradlew :pgjava_c:indexHeapCrashLong -Dweaver.crash.clients=4
  *
  *-------------------------------------------------------------------------
  */

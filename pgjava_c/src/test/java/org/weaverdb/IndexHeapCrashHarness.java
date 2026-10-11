@@ -47,6 +47,8 @@ public final class IndexHeapCrashHarness {
         public int startN = 24;
         public int maxId = 48;
         public int burst = 400;
+        /** Concurrent backends in the crash JVM. Each connection is its own thread. */
+        public int clients = 4;
         public int timeoutSec = 90;
         public boolean includeWrites = true;
         public boolean keepOnFail;
@@ -62,8 +64,13 @@ public final class IndexHeapCrashHarness {
             c.startN = 12;
             c.maxId = 24;
             c.burst = 80;
+            c.clients = 2;
             c.includeWrites = false;
             c.scenarioPool = IndexHeapCrashSupport.Scenario.timedOnly();
+            String clients = System.getProperty("weaver.crash.clients");
+            if (clients != null && !clients.isBlank()) {
+                c.clients = Math.max(1, Integer.parseInt(clients));
+            }
             return c;
         }
 
@@ -98,6 +105,9 @@ public final class IndexHeapCrashHarness {
             if ((v = System.getProperty("weaver.crash.recover.jvms")) != null) {
                 c.recoverJvmAttempts = Integer.parseInt(v);
             }
+            if ((v = System.getProperty("weaver.crash.clients")) != null && !v.isBlank()) {
+                c.clients = Math.max(1, Integer.parseInt(v));
+            }
             if ("1".equals(System.getProperty("weaver.crash.smoke"))) {
                 c.smoke = true;
                 if (System.getProperty("weaver.crash.rounds") == null) {
@@ -106,6 +116,9 @@ public final class IndexHeapCrashHarness {
                 c.startN = 12;
                 c.maxId = 24;
                 c.burst = 80;
+                if (System.getProperty("weaver.crash.clients") == null) {
+                    c.clients = 2;
+                }
                 if (System.getProperty("weaver.crash.include.writes") == null) {
                     c.includeWrites = false;
                 }
@@ -151,6 +164,7 @@ public final class IndexHeapCrashHarness {
                 + " mtpg=" + cfg.mtpg
                 + " injector=" + (hasInjector ? 1 : 0)
                 + " mode=multiuser shadowlog=on recover_jvms=" + cfg.recoverJvmAttempts
+                + " clients=" + cfg.clients
                 + (cfg.smoke ? " smoke=1" : ""));
 
         int completed = 0;
@@ -486,6 +500,7 @@ public final class IndexHeapCrashHarness {
         cmd.add("--startN=" + cfg.startN);
         cmd.add("--maxId=" + cfg.maxId);
         cmd.add("--burst=" + cfg.burst);
+        cmd.add("--clients=" + cfg.clients);
         if (gate != null) {
             cmd.add("--gate=" + gate.toAbsolutePath());
         }

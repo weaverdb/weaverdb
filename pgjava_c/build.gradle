@@ -67,7 +67,7 @@ tasks.named('test', Test) {
     // build_test directly so AM OIDs match and the dylib exists before BeforeAll.
     systemProperty 'java.library.path', rootProject.file('build_test/mtpg/lib').absolutePath
     ['weaver.crash.rounds', 'weaver.crash.scenario', 'weaver.crash.seed',
-     'weaver.crash.keep', 'weaver.crash.stdlog'].each { key ->
+     'weaver.crash.keep', 'weaver.crash.stdlog', 'weaver.crash.clients'].each { key ->
         def value = System.getProperty(key)
         if (value != null) {
             systemProperty key, value
@@ -103,7 +103,7 @@ tasks.register('indexHeapCrashLong', Test) {
     ['weaver.crash.rounds', 'weaver.crash.duration.sec', 'weaver.crash.seed',
      'weaver.crash.scenario', 'weaver.crash.include.writes', 'weaver.crash.keep',
      'weaver.crash.timeout.sec', 'weaver.crash.recover.jvms', 'weaver.sortmem',
-     'weaver.crash.stdlog'].each { key ->
+     'weaver.crash.stdlog', 'weaver.crash.clients'].each { key ->
         def value = System.getProperty(key)
         if (value != null) {
             systemProperty key, value

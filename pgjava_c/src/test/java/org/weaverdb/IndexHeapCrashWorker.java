@@ -70,6 +70,7 @@ public final class IndexHeapCrashWorker {
         int startN = 12;
         int maxId = 24;
         int burst = 80;
+        int clients = 1;
         Path gate = null;
         Path trace = null;
         for (int i = 2; i < args.length; i++) {
@@ -86,6 +87,7 @@ public final class IndexHeapCrashWorker {
                 case "startN" -> startN = Integer.parseInt(val);
                 case "maxId" -> maxId = Integer.parseInt(val);
                 case "burst" -> burst = Integer.parseInt(val);
+                case "clients" -> clients = Math.max(1, Integer.parseInt(val));
                 case "gate" -> gate = Path.of(val);
                 case "trace" -> trace = Path.of(val);
                 default -> {
@@ -140,8 +142,13 @@ public final class IndexHeapCrashWorker {
                     System.out.flush();
                     return 1;
                 }
-                IndexHeapCrashSupport.markReady(gate);
-                IndexHeapCrashSupport.runCrashWorkload(scenario, rng, startN, maxId, burst);
+                if (clients > 1) {
+                    IndexHeapCrashSupport.runMultiClientCrashWorkload(
+                            scenario, rng, startN, maxId, burst, clients, gate);
+                } else {
+                    IndexHeapCrashSupport.markReady(gate);
+                    IndexHeapCrashSupport.runCrashWorkload(scenario, rng, startN, maxId, burst);
+                }
                 return 0;
             }
             case "recover" -> {
