@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Process-isolated JNI cases: engine restart, lock waits, and sharing one
- * connection across threads. A crash here does not kill the in-process suite.
+ * Process-isolated JNI cases: engine restart, lock waits, and a second
+ * thread that uses {@code helper()}. A crash here does not kill the in-process suite.
  */
 public class JniBattleIsolatedTest {
 
@@ -25,8 +25,9 @@ public class JniBattleIsolatedTest {
     @Test
     public void sharedConnectionDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "shared", 40);
-        Assertions.assertTrue(result.code == 0 || result.code == 2,
-                "shared connection crashed or hung\n" + result.output);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code,
+                "helper() from a second thread failed\n" + result.output);
     }
 
     @Test
@@ -47,7 +48,7 @@ public class JniBattleIsolatedTest {
     public void helperDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "helper", 60);
         System.out.println(result.output);
-        Assertions.assertTrue(result.code == 0 || result.code == 2,
+        Assertions.assertEquals(0, result.code,
                 "helper() crashed the process\n" + result.output);
     }
 
@@ -55,8 +56,15 @@ public class JniBattleIsolatedTest {
     public void constraintsDoNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "constraints", 60);
         System.out.println(result.output);
-        Assertions.assertTrue(result.code == 0 || result.code == 3,
-                "constraints crashed the process\n" + result.output);
+        Assertions.assertEquals(0, result.code,
+                "constraints crashed or failed\n" + result.output);
+    }
+
+    @Test
+    public void autocommitErrorLeavesConnectionUsable() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "autocommit-error", 60);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code, result.output);
     }
 
     @Test

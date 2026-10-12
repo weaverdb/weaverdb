@@ -211,8 +211,12 @@ extern bool SetEnv(void* envp)
         } else {
             if ( current == NULL ) return FALSE;
            if ( current->parent != NULL ) {
-/* sub-connections cannot jump threads b/c we need to be able to join */
-                
+/* sub-connections cannot jump threads b/c we need to be able to join.
+ * Leave owner set so another thread cannot attach, but drop this thread's
+ * env pointer so the caller can return to its own connection. */
+                pthread_mutex_lock(current->env_guard);
+                pthread_setspecific(envkey,NULL);
+                pthread_mutex_unlock(current->env_guard);
             } else {
                 pthread_mutex_lock(current->env_guard);
                 current->owner = 0;
@@ -874,6 +878,14 @@ MemoryContext GetEnvMemoryContext( void ) {
 }
 
 void SetProcessingMode(ProcessingMode mode) {
+    if ( CurrentMode == ShutdownProcessing && mode == InitProcessing ) {
+        /*
+         * initweaverbackend calls this before InitSystem on a second boot.
+         * GetEnv() is not current yet, so only the process mode changes.
+         */
+        CurrentMode = InitProcessing;
+        return;
+    }
     if ( CurrentMode == InitProcessing && mode == NormalProcessing ) {
         /*
          * Publish Normal for the process, and for this thread. The

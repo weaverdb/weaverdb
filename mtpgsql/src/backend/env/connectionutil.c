@@ -235,6 +235,9 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         
 	gettimeofday(&timer,NULL);	
 
+        if (IsShutdownProcessingMode())
+            SetProcessingMode(InitProcessing);
+
 	env = InitSystem(isPrivate);	
         
 	if ( output != NULL && strlen(output) == 0 ) {

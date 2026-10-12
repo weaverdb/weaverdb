@@ -99,17 +99,16 @@ enum TransferType {
         
         @Override
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
-            switch (type) {
-                case DirectWeaverConnection.CHAR:
-                    return val.get(ValueLayout.JAVA_CHAR, 0);
-                default:
-                    throw new ExecutionException("unable to convert");
+            if (varLen < 1) {
+                throw new ExecutionException("unable to convert");
             }
+            // SQL char is one byte. JAVA_CHAR is two and overruns that slot.
+            return (char) (val.get(ValueLayout.JAVA_BYTE, 0) & 0xff);
         }
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            val.set(ValueLayout.JAVA_CHAR, 0, (Character)value);
-            return Character.BYTES;
+            val.set(ValueLayout.JAVA_BYTE, 0, (byte) ((Character) value).charValue());
+            return 1;
         }
     },
     INTEGER {

@@ -88,9 +88,11 @@ class DirectInput<T> {
                 return this.type.write(value, type, var, varSize);
             }
         } catch (ExecutionException ee) {
-
+            return 0;
+        } catch (Throwable ex) {
+            // An exception escaping this upcall kills the JVM.
+            return DirectWeaverConnection.NULL_VALUE;
         }
-        return 0;
     }
     
     MemorySegment createUpcallStub() {

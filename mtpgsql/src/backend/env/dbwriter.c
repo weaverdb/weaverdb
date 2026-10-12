@@ -1596,8 +1596,17 @@ void ShutdownDBWriter(void) {
         DestroyWriteGroup(sync_group);
         
     }
-    /* free id memory */
-    os_free(writerid);
+    /* free id memory. The join loop leaves writercount at -1; a later
+     * DBCreateWriterThread would otherwise realloc the freed pointer. */
+    if (writerid != NULL)
+        os_free(writerid);
+    writerid = NULL;
+    writercount = 0;
+    db_inited = false;
+    sync_group = NULL;
+    log_group = NULL;
+    db_table = NULL;
+    db_cxt = NULL;
 }
 
 bool IsDBWriter() {

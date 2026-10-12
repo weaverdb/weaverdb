@@ -84,24 +84,33 @@ static SectionId   connection_section_id = SECTIONID("CONN");
 #define SETUP(target) (WConn)target
 
 #define READY(target, err, usingTransaction)  \
-    SetEnv(target->env);\
-    target->env->canJump = true;\
+    if (!SetEnv((target)->env)) { \
+        SetError((target), 454, "CONTEXT", "connection is in use on another thread; use helper()"); \
+        err = 454; \
+    } else { \
+    (target)->env->canJump = true; \
     \
-    err = setjmp(target->env->errorContext);\
-    if (err != 0) {\
-        target->env->canJump = false;\
-        strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);\
-        target->stage = TRAN_ABORTONLY;\
-        SetAbortOnly();\
-        if (usingTransaction && !WeaverIsPanicked()) { \
+    err = setjmp((target)->env->errorContext); \
+    if (err != 0) { \
+        bool autocommit; \
+        (target)->env->canJump = false; \
+        strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39); \
+        autocommit = !IsTransactionBlock(); \
+        SetAbortOnly(); \
+        if (!WeaverIsPanicked() && ((usingTransaction) || (autocommit && CurrentXactInProgress()))) { \
             CommitTransactionCommand(); \
+        } \
+        if (!WeaverIsPanicked() && autocommit) { \
+            (target)->stage = TRAN_INVALID; \
+        } else { \
+            (target)->stage = TRAN_ABORTONLY; \
         } \
         WHandleError(target,err); \
         if (!WeaverIsPanicked()) { \
             WResetQuery(connection,true); \
         } \
-    } else {\
-        target->CDA.rc = 0;\
+    } else { \
+        (target)->CDA.rc = 0; \
         if (usingTransaction) { \
             StartTransactionCommand(); \
         } \
@@ -112,7 +121,8 @@ static SectionId   connection_section_id = SECTIONID("CONN");
         } \
     } \
     if ((target)->env) (target)->env->canJump = false; \
-    SetEnv(NULL);  \
+    SetEnv(NULL); \
+    } \
 
 
 OpaqueWConn
@@ -259,19 +269,35 @@ WCreateSubConnection(OpaqueWConn parent) {
         WHandleError(parent, sqlError);
         return connection;
     }
-    
+
+    /*
+     * CreateEnv(parent) switches into the parent memory context, so this
+     * thread has to enter the parent env first. SetEnv cannot move from
+     * the parent env to the child in one call.
+     */
+    if (!SetEnv(parent->env)) {
+        SetError(parent, 454, "CONTEXT", "connection is in use on another thread; use helper()");
+        return NULL;
+    }
+
     env = CreateEnv(parent->env);
-    
+
     if (env == NULL) {
         sqlError = 99;
         strncpy(parent->env->errortext, "unsuccessful connection -- too many connections", 255);
         strncpy(parent->env->state, "DISCONNECTED", 39);
         WHandleError(parent, sqlError);
+        SetEnv(NULL);
         return connection;
-    } else {
-        SetEnv(env);
-        MemoryContextInit();
     }
+
+    SetEnv(NULL);
+    if (!SetEnv(env)) {
+        DestroyEnv(env);
+        SetError(parent, 99, "DISCONNECTED", "could not attach sub-connection");
+        return NULL;
+    }
+    MemoryContextInit();
     
     connection = AllocateEnvSpace(connection_section_id,sizeof (struct Connection));
     memmove(connection, parent, sizeof (struct Connection));
@@ -671,9 +697,15 @@ WExec(OpaquePreparedStatement plan) {
             CommitTransactionCommand();
             needsCommit = false;
             /*
-             * increment after any utility if there are
-             * more subqueries to execute
+             * A statement such as CREATE TABLE ... PRIMARY KEY is more than
+             * one utility. The commit above drops TopTransactionContext, so
+             * the next command needs its own transaction.
              */
+            if (trackquery != NULL) {
+                StartTransactionCommand();
+                SetQuerySnapshot();
+                needsCommit = true;
+            }
         } else {
             plan->state = CreateExecutorState();
             plan->stage = STMT_EXEC;

@@ -50,6 +50,7 @@ public final class BattleChildMain {
                 case "hash-index" -> hashIndex(mode, datadir);
                 case "null-int" -> nullInt(mode, datadir);
                 case "char-bind" -> charBind(mode, datadir);
+                case "autocommit-error" -> autocommitError(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -158,6 +159,10 @@ public final class BattleChildMain {
         }
     }
 
+    /**
+     * Two threads. The second thread must call {@code helper()} itself;
+     * sharing one connection without a helper is not supported.
+     */
     private static void shared(String mode, String datadir) throws Exception {
         boot(mode, datadir);
         ensureDatabase();
@@ -165,10 +170,35 @@ public final class BattleChildMain {
             conn.execute("create table bt_shared (id int4, note varchar(32))");
             AtomicInteger failures = new AtomicInteger();
             AtomicReference<Throwable> first = new AtomicReference<>();
-            Thread t1 = new Thread(() -> hammer(conn, 0, failures, first), "bt-sh-1");
-            Thread t2 = new Thread(() -> hammer(conn, 1000, failures, first), "bt-sh-2");
-            t1.start();
+            CountDownLatch helperReady = new CountDownLatch(1);
+            Thread t2 = new Thread(() -> {
+                DBReference helper = null;
+                try {
+                    helper = conn.helper();
+                    helperReady.countDown();
+                    hammer(helper, 1000, failures, first);
+                } catch (Throwable t) {
+                    failures.incrementAndGet();
+                    first.compareAndSet(null, t);
+                } finally {
+                    helperReady.countDown();
+                    if (helper != null) {
+                        try {
+                            helper.close();
+                        } catch (Throwable t) {
+                            failures.incrementAndGet();
+                            first.compareAndSet(null, t);
+                        }
+                    }
+                }
+            }, "bt-sh-2");
             t2.start();
+            if (!helperReady.await(20, TimeUnit.SECONDS)) {
+                System.out.println("BATTLE CHILD shared helper timed out");
+                System.exit(4);
+            }
+            Thread t1 = new Thread(() -> hammer(conn, 0, failures, first), "bt-sh-1");
+            t1.start();
             t1.join(20_000);
             t2.join(20_000);
             if (t1.isAlive() || t2.isAlive()) {
@@ -332,6 +362,32 @@ public final class BattleChildMain {
                 if (out.get() == null || out.get() != 'Q') {
                     System.exit(3);
                 }
+            }
+        }
+    }
+
+    /**
+     * A failed autocommit statement must leave the same connection usable.
+     */
+    private static void autocommitError(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            try {
+                conn.execute("select * from bt_no_such_table");
+                System.out.println("BATTLE CHILD autocommit-error accepted bad sql");
+                System.exit(3);
+            } catch (ExecutionException ex) {
+                System.out.println("BATTLE CHILD autocommit-error: " + ex.getMessage());
+            }
+            try (Statement s = conn.statement("select 1")) {
+                Output<Integer> out = s.linkOutput(1, Integer.class);
+                s.execute();
+                if (!s.fetch() || out.get() == null || out.get() != 1) {
+                    System.out.println("BATTLE CHILD autocommit-error followup=" + out.get());
+                    System.exit(3);
+                }
+                System.out.println("BATTLE CHILD autocommit-error followup=" + out.get());
             }
         }
     }

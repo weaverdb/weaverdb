@@ -26,8 +26,9 @@ public class FfmBattleIsolatedTest {
     @Test
     public void sharedConnectionDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "shared", 40);
-        Assertions.assertTrue(result.code == 0 || result.code == 2,
-                "shared connection crashed or hung\n" + result.output);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code,
+                "helper() from a second thread failed\n" + result.output);
     }
 
     @Test
@@ -48,7 +49,7 @@ public class FfmBattleIsolatedTest {
     public void helperDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "helper", 60);
         System.out.println(result.output);
-        Assertions.assertTrue(result.code == 0 || result.code == 2,
+        Assertions.assertEquals(0, result.code,
                 "helper() crashed the process\n" + result.output);
     }
 
@@ -56,8 +57,15 @@ public class FfmBattleIsolatedTest {
     public void constraintsDoNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "constraints", 60);
         System.out.println(result.output);
-        Assertions.assertTrue(result.code == 0 || result.code == 3,
-                "constraints crashed the process\n" + result.output);
+        Assertions.assertEquals(0, result.code,
+                "constraints crashed or failed\n" + result.output);
+    }
+
+    @Test
+    public void autocommitErrorLeavesConnectionUsable() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "autocommit-error", 60);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code, result.output);
     }
 
     @Test

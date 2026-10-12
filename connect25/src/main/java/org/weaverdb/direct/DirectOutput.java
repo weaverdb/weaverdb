@@ -74,6 +74,9 @@ class DirectOutput<T> {
             }
         } catch (ExecutionException ee) {
             value = null;
+        } catch (Throwable ex) {
+            // An exception escaping this upcall kills the JVM.
+            value = null;
         }
         return varSize;
     }
