@@ -86,28 +86,34 @@ class DirectOutputChannel<T> extends DirectOutput<WritableByteChannel> {
     }
     
     private int transferOut(MemorySegment user, int type, MemorySegment var, int varSize) {
-        WritableByteChannel w = super.get();
-        
-        if (var == MemorySegment.NULL) {  // EOD
-            try {
-                w.close();
-            } catch (IOException io) {
-                
+        try {
+            WritableByteChannel w = super.get();
+            /* CLOSE_OP arrives as a negative size on a null pointer. */
+            if (varSize < 0 || var == null || var.equals(MemorySegment.NULL)) {
+                if (w != null) {
+                    try {
+                        w.close();
+                    } catch (IOException io) {
+                    }
+                }
+                return -1;
             }
-            return -1;
-        } else {
             try (Arena arena = Arena.ofConfined()) {
                 var = var.reinterpret(varSize, arena, null);
                 ByteBuffer bb = var.asByteBuffer();
                 int size = 0;
                 while (size < varSize) {
-                    size += w.write(bb);
+                    int wrote = w.write(bb);
+                    if (wrote <= 0) {
+                        return size > 0 ? size : -1;
+                    }
+                    size += wrote;
                 }
                 return size;
-            } catch (IOException io) {
-               return -1;     
             }
-        }        
+        } catch (Throwable ex) {
+            return -1;
+        }
     }
     
     @Override

@@ -36,6 +36,7 @@ enum TransferType {
         @Override
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
+                case DirectWeaverConnection.BOOLEAN:
                 case DirectWeaverConnection.BYTE:
                     return val.get(ValueLayout.JAVA_BYTE, 0) != 0;
                 case DirectWeaverConnection.SHORT:

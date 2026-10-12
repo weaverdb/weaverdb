@@ -125,6 +125,13 @@ DirectCharCopyValue(InputOutput* output, Datum value) {
     char val = DatumGetChar(value);
     return output->transfer(output->userargs, CHAROID, &val, 1);
 }
+
+static int
+DirectBoolCopyValue(InputOutput* output, Datum value) {
+    /* bool is its own oid. Sending CHAROID makes JNI box a Character. */
+    char val = DatumGetChar(value) ? 1 : 0;
+    return output->transfer(output->userargs, BOOLOID, &val, 1);
+}
   
 static int
 IndirectDateCopyValue(InputOutput* output, Datum value) {
@@ -175,6 +182,8 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
     } else if (output->varType == 0 || desc->atttypid == output->varType) {
         switch (desc->atttypid) {
             case BOOLOID:
+                result = DirectBoolCopyValue(output, value);
+                break;
             case CHAROID:
                 result = DirectCharCopyValue(output,value);
                 break;
@@ -258,7 +267,8 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                 else return false;
                 break;
             case BOOLOID:
-                if (desc->atttypid == INT4OID) result = DirectCharCopyValue(output,CharGetDatum((value == 0) ? FALSE : TRUE));
+                if (desc->atttypid == INT4OID)
+                    result = DirectBoolCopyValue(output, CharGetDatum((value == 0) ? FALSE : TRUE));
                 else return false;
                 break;
             case INT8OID:

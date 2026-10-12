@@ -595,7 +595,9 @@ public final class BattleScenarios {
             conn.execute("create table bt_parent (id int4)");
             conn.execute("create table bt_child (extra varchar(8)) inherits (bt_parent)");
             conn.execute("insert into bt_child (id, extra) values (7, 'kid')");
-            Assertions.assertEquals(7, scalarNumber(conn, "select id from bt_parent where id = 7"));
+            // This server is PostgreSQL 7.0: a plain parent name scans only
+            // that table. Children are included by the trailing '*' form.
+            Assertions.assertEquals(7, scalarNumber(conn, "select id from bt_parent* where id = 7"));
             Assertions.assertEquals("kid", scalarString(conn, "select extra from bt_child where id = 7"));
         }
     }
