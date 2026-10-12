@@ -1598,12 +1598,48 @@ AbortCriticalIO(void) {
     if (env->critical_io_depth > 0) {
         UnmarkDeferredWrites(env->CriticalMark);
         long generation = CriticalIORelease();
-        Assert(env->pinned_generation == generation);
+        /*
+         * A lock wait can outlive the write-group generation. The success
+         * path still requires a match. On abort the transaction is rolling
+         * back, and asserting here kills the process instead of surfacing
+         * the error (deadlock, cancel) that started the abort.
+         */
+        if (env->pinned_generation != generation)
+            elog(DEBUG, "AbortCriticalIO generation %ld != pinned %ld",
+                 generation, env->pinned_generation);
         memset(env->CriticalMark, 0, MaxBuffers*sizeof(int));
 
         env->critical_io_depth = 0;
         env->pinned_generation = -1;
     }
+}
+
+/*
+ * Drop a CriticalIO section for the length of a blocking lock wait.
+ * The write-group generation must not move while the section is open,
+ * and a row lock wait can sit there for seconds. End it first, then
+ * the caller starts a new section when the wait returns.
+ */
+int
+SuspendCriticalIO(void)
+{
+    BufferEnv *env = GetBufferCxt();
+    int depth = env->critical_io_depth;
+
+    if (depth <= 0)
+        return 0;
+    env->critical_io_depth = 1;
+    EndCriticalIO();
+    return depth;
+}
+
+void
+ResumeCriticalIO(int depth)
+{
+    int i;
+
+    for (i = 0; i < depth; i++)
+        BeginCriticalIO();
 }
 
 bool

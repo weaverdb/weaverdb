@@ -364,7 +364,27 @@ SetUserId()
                 GetEnv()->UserId =  ((Form_pg_shadow) GETSTRUCT(userTup))->usesysid;
             }
         } else {
-            GetEnv()->UserId = 0;
+            /*
+             * Anonymous sessions have no login name. Own new objects as the
+             * bootstrap superuser (the OS user initdb wrote into pg_shadow)
+             * so later cache lookups do not search for userid 0.
+             */
+            char un[256];
+            memset(un, 0, sizeof(un));
+            if (cuserid(un) != NULL && un[0] != '\0') {
+                userTup = SearchSysCacheTuple(SHADOWNAME,
+                                              PointerGetDatum(un),
+                                              0, 0, 0);
+                if (HeapTupleIsValid(userTup)) {
+                    Form_pg_shadow shadow = (Form_pg_shadow) GETSTRUCT(userTup);
+                    GetEnv()->UserId = shadow->usesysid;
+                    GetEnv()->UserName = pstrdup(NameStr(shadow->usename));
+                } else {
+                    GetEnv()->UserId = 0;
+                }
+            } else {
+                GetEnv()->UserId = 0;
+            }
         }
 }
 

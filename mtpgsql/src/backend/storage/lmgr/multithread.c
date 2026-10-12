@@ -38,6 +38,8 @@
 
 
 void		HandleDeadLock(SIGNAL_ARGS);
+
+static pthread_mutex_t deadlock_call_guard = PTHREAD_MUTEX_INITIALIZER;
 static bool GetOffWaitqueue(THREAD *);
 
 
@@ -468,7 +470,23 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
                     err =  pthread_cond_timedwait(&self->sem,&lock->protection,&t);
 
                     while ( err != 0 ) {
-                        if ( err == ETIMEDOUT && !CheckForCancel() ) break;
+                        bool cancel = false;
+                        bool deadlock = false;
+
+                        if (err == ETIMEDOUT)
+                            cancel = CheckForCancel();
+                        /*
+                         * The waiter already holds this lock's mutex. DeadLockCheck
+                         * walks holder queues under their own mutexes and uses static
+                         * state, so only one check runs at a time.
+                         */
+                        if (err == ETIMEDOUT && !cancel) {
+                            pthread_mutex_lock(&deadlock_call_guard);
+                            deadlock = DeadLockCheck(self, lock);
+                            pthread_mutex_unlock(&deadlock_call_guard);
+                        }
+                        if (err == ETIMEDOUT && !cancel && !deadlock)
+                            break;
 
                         ThreadDequeue(self);
                         self->locked = 0;

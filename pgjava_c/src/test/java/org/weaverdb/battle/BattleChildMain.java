@@ -315,23 +315,29 @@ public final class BattleChildMain {
         boot(mode, datadir);
         ensureDatabase();
         try (DBReference conn = open()) {
-            conn.execute("create table bt_nullint (id int4, qty int4)");
+            conn.execute("create table bt_nullint (id int4, qty int4, r float4, bi int8)");
             try (Statement s = conn.statement(
-                    "insert into bt_nullint (id, qty) values ($id, $qty)")) {
+                    "insert into bt_nullint (id, qty, r, bi) values ($id, $qty, $r, $bi)")) {
                 s.linkInput("id", Integer.class).set(1);
                 s.linkInput("qty", Integer.class).set(null);
+                s.linkInput("r", Float.class).set(null);
+                s.linkInput("bi", Long.class).set(null);
                 long n = s.execute();
                 System.out.println("BATTLE CHILD null-int insert count=" + n);
             }
-            try (Statement s = conn.statement("select qty from bt_nullint where id = 1")) {
+            try (Statement s = conn.statement("select qty, r, bi from bt_nullint where id = 1")) {
                 Output<Integer> qty = s.linkOutput(1, Integer.class);
+                Output<Float> r = s.linkOutput(2, Float.class);
+                Output<Long> bi = s.linkOutput(3, Long.class);
                 s.execute();
                 if (!s.fetch()) {
                     throw new IllegalStateException("null-int select returned no row");
                 }
                 Integer value = qty.get();
-                System.out.println("BATTLE CHILD null-int qty=" + value);
-                if (value != null) {
+                Float real = r.get();
+                Long wide = bi.get();
+                System.out.println("BATTLE CHILD null-int qty=" + value + " r=" + real + " bi=" + wide);
+                if (value != null || real != null || wide != null) {
                     System.exit(3);
                 }
             }

@@ -936,15 +936,25 @@ FileRead(File file, char *buffer, int amount) {
             elog(WARN, "bad read file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             return -1;
         } else if (blit == 0) {
-            /* EOF  */
-            blit = lseek(target->fd,0,SEEK_END);
-            if ( blit == target->seekPos ) {
-                target->seekPos += blit;
+            /*
+             * EOF. If the file grew past this offset, resume. If the
+             * read started at or past the end, return the short count.
+             * Seeking back and retrying when end < seekPos never consumes
+             * a byte, which is how hash metapage init spun on block 3.
+             */
+            off_t end = lseek(target->fd, 0, SEEK_END);
+
+            if (end < 0)
+                return -1;
+            if (end == target->seekPos) {
+                target->seekPos += end;
                 return (request - amount);
-            } else {
-                off_t pos = lseek(target->fd,target->seekPos + request - amount,SEEK_SET);
-                blit = 0;
             }
+            if (end < target->seekPos)
+                return (request - amount);
+            if (lseek(target->fd, target->seekPos + request - amount, SEEK_SET) < 0)
+                return -1;
+            continue;
         }
         amount -= blit;
         buffer += blit;

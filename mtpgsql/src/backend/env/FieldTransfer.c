@@ -35,6 +35,8 @@
 #include "parser/gramparse.h"
 #include "parser/parse_coerce.h"
 #include "parser/parserinfo.h"
+#include "catalog/pg_type.h"
+#include "utils/date.h"
 
 static int
 StreamOutValue(InputOutput* dest, Datum val, Oid type) {
@@ -220,6 +222,18 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                 result = StreamOutValue(output,value,desc->atttypid);
                 break;
             case CHAROID:
+                if (desc->atttypid == CHAROID) {
+                    result = DirectCharCopyValue(output, value);
+                } else if (desc->atttypid == BPCHAROID || desc->atttypid == VARCHAROID
+                        || desc->atttypid == TEXTOID) {
+                    char *payload = VARDATA(DatumGetPointer(value));
+                    int32 size = VARSIZE(DatumGetPointer(value)) - VARHDRSZ;
+                    char ch = (size > 0 && payload != NULL) ? payload[0] : '\0';
+                    result = DirectCharCopyValue(output, CharGetDatum(ch));
+                } else {
+                    result = ConvertValueToText(output, desc->atttypid, desc->atttypmod, value);
+                }
+                break;
             case VARCHAROID:
                 result = ConvertValueToText(output,desc->atttypid,desc->atttypmod,value);
                 break;
@@ -232,6 +246,8 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
             case INT4OID:
                 if (desc->atttypid == CONNECTOROID ) result = DirectIntCopyValue(output,value);
                 else if (desc->atttypid == BOOLOID) result = DirectIntCopyValue(output,Int32GetDatum((value) ? 1 : 0));
+                else if (desc->atttypid == INT2OID)
+                    result = DirectIntCopyValue(output, Int32GetDatum((int32) DatumGetInt16(value)));
                 else if ( desc->atttypid == INT8OID ) {
                     int64 var = desc->attbyval ? DatumGetLong(value) : *(int64*)DatumGetPointer(value);
                     if (var  > 0x7fffffffL ) return false;
@@ -256,6 +272,14 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
                     result = desc->attbyval ? DirectDoubleCopyValue(output,(double)value) : IndirectDoubleCopyValue(output,value);
                 }
                 else return false;
+                break;
+            case TIMESTAMPOID:
+                if (desc->atttypid == DATEOID) {
+                    Timestamp *ts = date_timestamp((DateADT) DatumGetInt32(value));
+                    result = output->transfer(output->userargs, TIMESTAMPOID, ts, sizeof(Timestamp));
+                } else {
+                    return false;
+                }
                 break;
             default:
                 return false;

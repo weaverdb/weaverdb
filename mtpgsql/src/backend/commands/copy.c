@@ -347,7 +347,12 @@ DoCopy(char *relname, bool binary, bool oids, bool from, bool pipe,
 	{							/* copy from database to file */
 		if (pipe)
 		{
-			fp = stdout;
+			/*
+			 * NULL selects pq_putbytes, which is the stdio pipe Java
+			 * connected with WConnectStdIO. stdout itself is the process
+			 * file and never reaches setStandardOutput.
+			 */
+			fp = NULL;
 		}
 		else
 		{

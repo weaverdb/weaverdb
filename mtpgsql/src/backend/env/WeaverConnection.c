@@ -38,6 +38,7 @@
 #include "catalog/pg_type.h"
 #include "executor/executor.h"
 #include "tcop/pquery.h"
+#include "utils/java.h"
 #include "tcop/utility.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
@@ -1080,6 +1081,7 @@ WCancel(OpaqueWConn conn) {
     int sqlError = 0;
 
     connection->env->cancelled = true;
+    InterruptEnvJavaCaller(connection->env);
 
     return sqlError;
 }
@@ -1598,33 +1600,44 @@ TransferExecArgs(PreparedPlan* plan) {
                 case CHAROID:
                 case BOOLOID: {
                     char value;
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
+                    /*
+                     * length is an unsigned Size. A null transfer returns
+                     * NULL_VALUE (-1); assigning that first makes the
+                     * comparison look like a huge positive length.
+                     */
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
                     paramLI->byval = true;
-                    if (paramLI->length > 0) {
+                    if (len > 0) {
+                        paramLI->length = (Size) len;
                         paramLI->value = CharGetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
                 }
                 case INT4OID: {
                     int32 value;
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
                     paramLI->byval = true;
-                    if (paramLI->length > 0) {
+                    if (len > 0) {
+                        paramLI->length = (Size) len;
                         paramLI->value = Int32GetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
                 }
                 case FLOAT4OID:{
                     int* value = palloc(4);
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,4);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,4);
                     paramLI->byval = false;
-                    if (paramLI->length > 0) {
+                    if (len > 0) {
+                        paramLI->length = (Size) len;
                         paramLI->value = PointerGetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
@@ -1633,11 +1646,13 @@ TransferExecArgs(PreparedPlan* plan) {
                 case FLOAT8OID:
                 case INT8OID: {
                     long* value = palloc(8);
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
                     paramLI->byval = false;
-                    if (paramLI->length > 0) {
+                    if (len > 0) {
+                        paramLI->length = (Size) len;
                         paramLI->value = PointerGetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;

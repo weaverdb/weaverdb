@@ -105,6 +105,8 @@ typedef struct Environment {
 	int                     holdLock;
 /*  error codes  */
         bool                    cancelled;
+        /* Java Thread running a LANGUAGE 'java' call, so cancel() can interrupt it. */
+        void                   *javaCaller;
 	bool			InError;
 	char			errortext[256];
 	char			state[40];

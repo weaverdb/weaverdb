@@ -22,6 +22,7 @@
 #include "catalog/catalog.h"
 #include "miscadmin.h"
 #include "storage/lmgr.h"
+#include "storage/bufmgr.h"
 #include "utils/inval.h"
 
 
@@ -355,9 +356,22 @@ XactLockTableWait(TransactionId xid)
 	tag.objId.xid = xid;
 
 	sid = GetCurrentTransactionId();
-	if (!LockAcquire(PartitionedTables[0], &tag, sid, ShareLock, false)) {
-		elog(ERROR, "XactLockTableWait: LockAcquire failed");
-	} else {
-		LockRelease(PartitionedTables[0], &tag, sid, ShareLock);
+	/*
+	 * The caller is often inside BeginCriticalIO. End that section before
+	 * blocking so a write-group rotation during the wait does not trip
+	 * EndCriticalIO, then open a new section for the rest of the statement.
+	 * elog(ERROR) from the wait longjmps with the section already closed;
+	 * AbortCriticalIO is then a no-op.
+	 */
+	{
+		int suspended = SuspendCriticalIO();
+
+		if (!LockAcquire(PartitionedTables[0], &tag, sid, ShareLock, false)) {
+			ResumeCriticalIO(suspended);
+			elog(ERROR, "XactLockTableWait: LockAcquire failed");
+		} else {
+			LockRelease(PartitionedTables[0], &tag, sid, ShareLock);
+			ResumeCriticalIO(suspended);
+		}
 	}
 }

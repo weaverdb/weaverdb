@@ -55,6 +55,7 @@ class DirectWeaverConnection implements DBReference {
     private static final Linker LINKER = Linker.nativeLinker();
 
     private static final MethodHandle WCreateConnection;
+    private static final MethodHandle WIsValidConnection;
     private static final MethodHandle WCreateSubConnection;
     private static final MethodHandle WDestroyConnection;
     private static final MethodHandle WDestroyPreparedStatement;
@@ -89,6 +90,8 @@ class DirectWeaverConnection implements DBReference {
 
         WCreateConnection = LINKER.downcallHandle(LOADER.find("WCreateConnection").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+        WIsValidConnection = LINKER.downcallHandle(LOADER.find("WIsValidConnection").orElseThrow(),
+                FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WCreateSubConnection = LINKER.downcallHandle(LOADER.find("WCreateSubConnection").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS));
         WDestroyConnection = LINKER.downcallHandle(LOADER.find("WDestroyConnection").orElseThrow(),
@@ -139,7 +142,7 @@ class DirectWeaverConnection implements DBReference {
     }
     
     public final static int  SHORT=	21;
-    public final static int  CHAR=	21;
+    public final static int  CHAR=	18;   // CHAROID, same as the JNI CHARTYPE bind
     public final static int  INT=	23;
     public final static int  STRING=	1043;
     public final static int  BOOLEAN=	16;
@@ -238,7 +241,14 @@ class DirectWeaverConnection implements DBReference {
     
     @Override
     public boolean isValid() {
-        return !nativePointer.equals(MemorySegment.NULL) && isOpen.get();
+        if (nativePointer == null || nativePointer.equals(MemorySegment.NULL) || !isOpen.get()) {
+            return false;
+        }
+        try {
+            return ((long) WIsValidConnection.invokeExact(nativePointer)) != 0L;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private MemorySegment connectToDatabaseAnonymously(String db) throws ExecutionException {
@@ -467,11 +477,18 @@ class DirectWeaverConnection implements DBReference {
 
     private long beginTransaction() throws ExecutionException {
         try {
-            long id = (long) WBegin.invokeExact(nativePointer, 0L);
+            // WBegin returns an error code. Zero means the transaction started.
+            long code = (long) WBegin.invokeExact(nativePointer, 0L);
+            if (code != 0) {
+                handleError(code);
+            }
+            long id = (long) WGetTransactionId.invokeExact(nativePointer);
             if (id == 0) {
-                handleError();
+                throw new ExecutionException("begin succeeded but transaction id is 0");
             }
             return id;
+        } catch (ExecutionException ee) {
+            throw ee;
         } catch (Throwable e) {
             throw new ExecutionException(e);
         }

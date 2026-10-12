@@ -48,6 +48,7 @@ static int	WaitOnLock(LOCKMETHOD lockmethod, LOCKMODE lockmode,
 static void LockCountMyLocks(SHMEM_OFFSET lockOffset, THREAD *proc,
 							 int *myHolders);
 static int LockGetMyHoldLocks(SHMEM_OFFSET lockOffset, THREAD *proc);
+static int LockHoldMaskLocked(SHMEM_OFFSET lockOffset, THREAD *proc);
 
 static LOCK* SearchLockTable(LOCKMETHOD tid,LOCKTAG* lid, HASHACTION action);
 static void ReleaseLockProtection(LOCK* lock);
@@ -814,6 +815,57 @@ LockGetMyHoldLocks(SHMEM_OFFSET lockOffset, THREAD *proc)
 }
 
 /*
+ * Same bitmask as LockGetMyHoldLocks, but the caller already holds
+ * proc->lockQueue. DeadLockCheck cannot call LockGetMyHoldLocks: that
+ * locks the queue again, and the mutex is not recursive, so the
+ * two-transaction case deadlocks the detector on its own gate.
+ */
+static int
+LockHoldMaskLocked(SHMEM_OFFSET lockOffset, THREAD *proc)
+{
+	HOLDER	   *holder = NULL;
+	HOLDER	   *nextHolder = NULL;
+	SHM_QUEUE  *lockQueue = &(proc->lockQueue);
+	SHMEM_OFFSET end = MAKE_OFFSET(lockQueue);
+	int			myHolders[MAX_LOCKMODES];
+	int			holdLock = 0;
+	int			i,
+				tmpMask;
+
+	MemSet(myHolders, 0, sizeof(myHolders));
+	if (SHMQueueEmpty(lockQueue))
+		return 0;
+
+	SHMQueueFirst(lockQueue, (Pointer *) &holder, &holder->queue);
+
+	do
+	{
+		if (holder->queue.next == end)
+			nextHolder = NULL;
+		else
+			SHMQueueFirst(&holder->queue,
+						  (Pointer *) &nextHolder, &nextHolder->queue);
+
+		if (lockOffset == holder->tag.lock)
+		{
+			for (i = 1; i < MAX_LOCKMODES; i++)
+				myHolders[i] += holder->holders[i];
+		}
+
+		holder = nextHolder;
+	} while (holder);
+
+	for (i = 1, tmpMask = 2;
+		 i < MAX_LOCKMODES;
+		 i++, tmpMask <<= 1)
+	{
+		if (myHolders[i] > 0)
+			holdLock |= tmpMask;
+	}
+	return holdLock;
+}
+
+/*
  * GrantLock -- update the lock and holder data structures to show
  *		the new lock has been granted.
  */
@@ -870,8 +922,8 @@ WaitOnLock(LOCKMETHOD lockmethod, LOCKMODE lockmode,
 		lock->nHolding--;
 		lock->holders[lockmode]--;
 		LOCK_PRINT("WaitOnLock: aborting on lock", lock, lockmode);
-		Assert((lock->nHolding >= 0) && (lock->holders[lockmode] >= 0));
-		if (lock->activeHolders[lockmode] == lock->holders[lockmode])
+		if (lock->nHolding >= 0 && lock->holders[lockmode] >= 0 &&
+			lock->activeHolders[lockmode] == lock->holders[lockmode])
 			lock->waitMask &= BITS_OFF[lockmode];
                 ReleaseLockProtection(lock);
 		elog(ERROR, "Lock Failed or Cancelled");
@@ -1429,7 +1481,8 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 		{
 			int			lm;
 
-			Assert(holder->nHolding > 0);
+			if (holder->nHolding <= 0)
+				goto nxtl;
 			for (lm = 1; lm <= lockctl->numLockModes; lm++)
 			{
 				if (holder->holders[lm] > 0 &&
@@ -1468,8 +1521,10 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 				if (lockctl->conflictTab[thread->waitLockMode] & waitProc->holdLock)
 				{
 					/* and he blocked by me -> deadlock */
-					if (lockctl->conflictTab[waitProc->waitLockMode] & thread->holdLock)
+					if (lockctl->conflictTab[waitProc->waitLockMode] & thread->holdLock) {
+						SHMQueueRelease(lockQueue);
 						return true;
+					}
 					/* we shouldn't look at lockQueue of our blockers */
 					goto nextWaitProc;
 				}
@@ -1500,7 +1555,11 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 			}
 
 			/* Recursively check this process's lockQueue. */
-			Assert(nprocs < GetMaxBackends());
+			if (nprocs >= GetMaxBackends())
+			{
+				SHMQueueRelease(lockQueue);
+				return false;
+			}
 			checked_procs[nprocs++] = waitProc;
 
 			if (DeadLockCheck(waitProc, findlock))
@@ -1512,72 +1571,32 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 				 */
 				if ((LOCK*)MAKE_PTR(thisProc->waitLock) == lock)
 				{
-					Assert(first_run);
 					holdLock = thisProc->holdLock;
 				}
 				else
 				{
-					/* should we cache holdLock to speed this up? */
-					holdLock = LockGetMyHoldLocks(holder->tag.lock, thisProc);
-					Assert(holdLock != 0);
+					/* queue is already locked; do not lock it again */
+					holdLock = LockHoldMaskLocked(holder->tag.lock, thisProc);
 				}
+				if (holdLock == 0)
+					goto nextWaitProc;
 				if (lockctl->conflictTab[waitProc->waitLockMode] & holdLock)
 				{
 					/*
-					 * Last attempt to avoid deadlock: try to wakeup myself.
+					 * Proven cycle. LockResolveConflicts would lock this
+					 * queue again (the mutex is not recursive) and the
+					 * checker would stick. Aborting the waiter releases
+					 * the locks.
 					 */
-					if (first_run)
-					{
-						if (LockResolveConflicts(DEFAULT_LOCKMETHOD,
-												 thread->waitLockMode,
-												 (LOCK*)MAKE_PTR(thread->waitLock),
-												 (HOLDER*)MAKE_PTR(thread->waitHolder),
-												 thread,
-												 NULL) == STATUS_OK)
-						{
-							GrantLock((LOCK*)MAKE_PTR(thread->waitLock),
-									  (HOLDER*)MAKE_PTR(thread->waitHolder),
-									  thread->waitLockMode);
-							ThreadWakeup(thread, NO_ERROR);
-							return false;
-						}
-					}
-                                        SHMQueueRelease(lockQueue);
+					SHMQueueRelease(lockQueue);
 					return true;
 				}
 
 				/*
-				 * Hell! Is he blocked by any (other) holder ?
+				 * Not a direct hold/wait conflict. The implicit-blocking
+				 * wakeup also re-locks this queue, so leave the waiter.
 				 */
-				if (LockResolveConflicts(DEFAULT_LOCKMETHOD,
-										 waitProc->waitLockMode,
-										 lock,
-										 (HOLDER*)MAKE_PTR(waitProc->waitHolder),
-										 waitProc,
-										 NULL) != STATUS_OK)
-				{
-					/*
-					 * Blocked by others - no deadlock...
-					 */
-					LOCK_PRINT("DeadLockCheck: blocked by others",
-							   lock, waitProc->waitLockMode);
-					goto nextWaitProc;
-				}
-
-				/*
-				 * Well - wakeup this guy! This is the case of
-				 * implicit blocking: thisProc blocked someone who
-				 * blocked waitProc by the fact that he/someone is
-				 * already waiting for lock.  We do this for
-				 * anti-starving.
-				 */
-				GrantLock(lock, (HOLDER*)MAKE_PTR(waitProc->waitHolder), waitProc->waitLockMode);
-				waitProc = ThreadWakeup(waitProc, NO_ERROR);
-				/*
-				 * Use next-proc link returned by ThreadWakeup, since this
-				 * proc's own links field is now cleared.
-				 */
-				continue;
+				goto nextWaitProc;
 			}
 
 nextWaitProc:

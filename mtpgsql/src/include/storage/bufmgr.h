@@ -181,6 +181,8 @@ PG_EXTERN bool TraceBufferFlushEnabled(void);
 PG_EXTERN void BeginCriticalIO(void);
 PG_EXTERN void EndCriticalIO(void);
 PG_EXTERN void AbortCriticalIO(void);
+PG_EXTERN int SuspendCriticalIO(void);
+PG_EXTERN void ResumeCriticalIO(int depth);
 
 PG_EXTERN void SetBufferGeneration(long generation);
 PG_EXTERN long BufferGetIOGeneration(Buffer buffer);

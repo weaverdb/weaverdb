@@ -37,6 +37,7 @@
 
 static void _hash_setpagelock(Relation rel, BlockNumber blkno, int access);
 static void _hash_unsetpagelock(Relation rel, BlockNumber blkno, int access);
+static void _hash_extend_through(Relation rel, BlockNumber blkno);
 static void _hash_splitpage(Relation rel, Buffer metabuf, Bucket obucket, Bucket nbucket);
 
 /*
@@ -183,6 +184,13 @@ _hash_getbuf(Relation rel, BlockNumber blkno, int access)
 
 	if (blkno == P_NEW)
 		elog(ERROR, "_hash_getbuf: internal error: hash AM does not use P_NEW");
+	/*
+	 * Bitmap and bucket pages are addressed by number, not P_NEW. The
+	 * file has to contain that block or ReadBuffer fails (and, before
+	 * FileRead stopped retrying past EOF, spun).
+	 */
+	if (rel->rd_nblocks <= blkno)
+		_hash_extend_through(rel, blkno);
 	switch (access)
 	{
 		case HASH_WRITE:
@@ -301,6 +309,42 @@ _hash_pageinit(Page page, Size size)
 	MemSet(page, 0, size);
 
 	PageInit(page, size, sizeof(HashPageOpaqueData));
+}
+
+/*
+ * Grow the hash relation with zero pages until blkno exists.
+ * ReadBuffer(P_NEW) page-inits the new block, which trips
+ * _hash_pageinit's "page is empty" asserts, so the bytes written
+ * here stay zero. A zero page is PageIsNew and skips the index
+ * checksum check until the caller initializes it.
+ */
+static void
+_hash_extend_through(Relation rel, BlockNumber blkno)
+{
+	union {
+		double align;
+		char data[BLCKSZ];
+	} buffer;
+	long nblocks;
+	int guard = 0;
+
+	MemSet(buffer.data, 0, BLCKSZ);
+	nblocks = smgrnblocks(rel->rd_smgr);
+	while (nblocks <= (long) blkno)
+	{
+		long nb;
+
+		if (++guard > 4096)
+			elog(ERROR, "hash extend of %s stopped at block %ld (have %ld)",
+				 RelationGetRelationName(rel), (long) blkno, nblocks);
+		nb = smgrextend(rel->rd_smgr, buffer.data, 1);
+		if (nb <= nblocks)
+			elog(ERROR, "hash extend of %s failed at block %ld",
+				 RelationGetRelationName(rel), nblocks);
+		nblocks = nb;
+	}
+	rel->rd_nblocks = nblocks;
+	NoteFreespaceRelationSize(rel, (BlockNumber) nblocks);
 }
 
 static void

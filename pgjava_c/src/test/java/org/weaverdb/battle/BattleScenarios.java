@@ -666,6 +666,7 @@ public final class BattleScenarios {
         }
         DBReference user = DBReference.connect("nosuch", "nosuch", DB);
         System.out.println("BATTLE bad user connect=" + (user == null ? "null" : user.getClass().getName() + " valid=" + user.isValid()));
+        Assertions.assertTrue(user == null || !user.isValid(), "bad user produced a live connection");
         if (user != null) {
             user.close();
         }

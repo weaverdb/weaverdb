@@ -14,7 +14,10 @@ package org.weaverdb.direct;
 import java.io.Serializable;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import org.weaverdb.WeaverObjectLoader;
 import java.util.Date;
 import java.util.Map;
@@ -235,8 +238,7 @@ enum TransferType {
             switch (type) {
                 case DirectWeaverConnection.TIMESTAMP:
                 case DirectWeaverConnection.LONG:
-                    long date = val.get(ValueLayout.JAVA_LONG, 0);
-                    return new Date(date);
+                    return new Date(epochMillis(val.get(ValueLayout.JAVA_DOUBLE, 0)));
                 default:
                     throw new ExecutionException("unable to convert");
             }
@@ -244,8 +246,34 @@ enum TransferType {
 
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            val.set(ValueLayout.JAVA_LONG, 0, ((Date)value).getTime());
-            return Long.BYTES;
+            long millis = value instanceof Instant instant
+                    ? instant.toEpochMilli()
+                    : ((Date) value).getTime();
+            val.set(ValueLayout.JAVA_DOUBLE, 0, secondsSincePostgresEpoch(millis));
+            return Double.BYTES;
+        }
+    },
+    INSTANT {
+        @Override
+        int getType() {
+            return DirectWeaverConnection.TIMESTAMP;
+        }
+
+        @Override
+        Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
+            switch (type) {
+                case DirectWeaverConnection.TIMESTAMP:
+                case DirectWeaverConnection.LONG:
+                    return Instant.ofEpochMilli(epochMillis(val.get(ValueLayout.JAVA_DOUBLE, 0)));
+                default:
+                    throw new ExecutionException("unable to convert");
+            }
+        }
+
+        @Override
+        int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
+            val.set(ValueLayout.JAVA_DOUBLE, 0, secondsSincePostgresEpoch(((Instant) value).toEpochMilli()));
+            return Double.BYTES;
         }
     },
     STREAM {
@@ -334,8 +362,7 @@ enum TransferType {
                     val.asByteBuffer().get(buf);
                     return buf;
                 case DirectWeaverConnection.TIMESTAMP:
-                    long date = val.get(ValueLayout.JAVA_LONG, 0);
-                    return new Date(date);
+                    return new Date(epochMillis(val.get(ValueLayout.JAVA_DOUBLE, 0)));
                 default:
                     throw new ExecutionException("unable to convert");
             }
@@ -374,6 +401,21 @@ enum TransferType {
         }
     };
     
+    /**
+     * Seconds between the Unix epoch and the PostgreSQL timestamp epoch
+     * (2000-01-01). JNI stores timestamps as this double; both bindings
+     * have to agree because the native value is the same 8 bytes.
+     */
+    static final double POSTGRES_EPOCH_SECONDS = 10957.0 * 86400.0;
+
+    static double secondsSincePostgresEpoch(long epochMillis) {
+        return (epochMillis / 1000.0) - POSTGRES_EPOCH_SECONDS;
+    }
+
+    static long epochMillis(double secondsSincePostgresEpoch) {
+        return (long) ((secondsSincePostgresEpoch + POSTGRES_EPOCH_SECONDS) * 1000.0);
+    }
+
     public static Map<Class<?>, TransferType> types = Map.ofEntries(
         Map.entry(Boolean.class, TransferType.BOOLEAN),
         Map.entry(Byte.class, TransferType.BYTE),
@@ -386,6 +428,7 @@ enum TransferType {
         Map.entry(String.class, TransferType.STRING),
         Map.entry(Object.class, TransferType.OBJECT),
         Map.entry(Date.class, TransferType.DATE),
+        Map.entry(Instant.class, TransferType.INSTANT),
         Map.entry(byte[].class, TransferType.BINARY),
         Map.entry(Serializable.class, TransferType.JAVA)
     );
@@ -400,6 +443,10 @@ enum TransferType {
         TransferType mapped = types.get(type);
         if (mapped != null) {
             return mapped;
+        }
+        if (type != null && (ReadableByteChannel.class.isAssignableFrom(type)
+                || WritableByteChannel.class.isAssignableFrom(type))) {
+            return TransferType.STREAM;
         }
         if (type != null && Serializable.class.isAssignableFrom(type)) {
             return TransferType.JAVA;
