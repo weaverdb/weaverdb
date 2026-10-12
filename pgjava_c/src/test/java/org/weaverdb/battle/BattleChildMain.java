@@ -52,6 +52,7 @@ public final class BattleChildMain {
                 case "char-bind" -> charBind(mode, datadir);
                 case "autocommit-error" -> autocommitError(mode, datadir);
                 case "multipage" -> multipage(mode, datadir);
+                case "vacuum-group" -> vacuumGroup(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -253,6 +254,75 @@ public final class BattleChildMain {
             }
             if (byValue != 1) {
                 throw new IllegalStateException("index lookup count " + byValue + " for v=" + value);
+            }
+        }
+    }
+
+    /**
+     * Dead tuples are vacuumed with a btree index present, then a row is
+     * widened so the heap tuple moves to another page. The heap page and
+     * its index entries are one write group; shutdown must preserve both.
+     */
+    private static void vacuumGroup(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        String filler = "p".repeat(180);
+        String wide = "w".repeat(3000);
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_vac (id int4, v int4, payload varchar(4000))");
+            conn.execute("create index bt_vac_id on bt_vac using btree (id)");
+            conn.execute("create index bt_vac_v on bt_vac using btree (v)");
+            for (int i = 1; i <= 80; i++) {
+                conn.execute("insert into bt_vac (id, v, payload) values ("
+                        + i + ", " + i + ", '" + filler + "')");
+            }
+            conn.execute("delete from bt_vac where id % 3 = 0");
+            conn.execute("vacuum bt_vac");
+            conn.execute("update bt_vac set v = 5000, payload = '" + wide + "' where id = 2");
+            conn.execute("update bt_vac set v = 6, payload = 's' where id = 4");
+        }
+        checkVacuumGroup(false);
+        System.out.println("BATTLE CHILD vacuum-group phase=shutdown");
+        shutdown(mode);
+        boot(mode, datadir);
+        checkVacuumGroup(true);
+        shutdown(mode);
+        System.out.println("BATTLE CHILD vacuum-group ok");
+    }
+
+    private static void checkVacuumGroup(boolean recovered) throws Exception {
+        try (DBReference conn = open()) {
+            int warnings = scalarInt(conn, "select cio_depth_warnings()");
+            int rows = count(conn, "select id from bt_vac");
+            int byValue = count(conn, "select id from bt_vac where v = 5000");
+            int shrunk = count(conn, "select id from bt_vac where id = 4 and v = 6");
+            String payload = scalarText(conn, "select payload from bt_vac where id = 2");
+            String shortPayload = scalarText(conn, "select payload from bt_vac where id = 4");
+            System.out.println("BATTLE CHILD vacuum-group recovered=" + recovered
+                    + " rows=" + rows
+                    + " byValue=" + byValue
+                    + " shrunk=" + shrunk
+                    + " payloadLen=" + (payload == null ? -1 : payload.length())
+                    + " shortLen=" + (shortPayload == null ? -1 : shortPayload.length())
+                    + " cioWarnings=" + warnings);
+            if (warnings != 0) {
+                throw new IllegalStateException("cio_depth_warnings=" + warnings);
+            }
+            if (rows != 54) {
+                throw new IllegalStateException("rows=" + rows);
+            }
+            if (byValue != 1) {
+                throw new IllegalStateException("index lookup count " + byValue);
+            }
+            if (shrunk != 1) {
+                throw new IllegalStateException("shrunk row missing");
+            }
+            if (payload == null || payload.length() != 3000) {
+                throw new IllegalStateException("payload length "
+                        + (payload == null ? -1 : payload.length()));
+            }
+            if (shortPayload == null || shortPayload.length() != 1) {
+                throw new IllegalStateException("short payload " + shortPayload);
             }
         }
     }

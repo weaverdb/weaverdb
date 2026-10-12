@@ -925,7 +925,25 @@ UpdateIndexPredicate(Oid indexoid, Node *oldPred, Node *predicate)
 
 	newtup = heap_modifytuple(tuple, pg_index, values, nulls, replace);
 
-	heap_update(pg_index, &newtup->t_self, newtup, NULL, NULL);
+	{
+		HeapTupleData ciotup;
+		Buffer		ciobuf;
+		Relation	idescs[Num_pg_index_indices];
+		int			ciores;
+
+		ciores = heap_lock_for_update(pg_index, &newtup->t_self, &ciobuf, &ciotup, NULL);
+		if (ciores != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock pg_index tuple for predicate update");
+		BeginCriticalIO();
+		heap_update_locked(pg_index, ciobuf, &ciotup, newtup, NULL);
+		if (!IsIgnoringSystemIndexes())
+		{
+			CatalogOpenIndices(Num_pg_index_indices, Name_pg_index_indices, idescs);
+			CatalogIndexInsert(idescs, Num_pg_index_indices, pg_index, newtup);
+			CatalogCloseIndices(Num_pg_index_indices, idescs);
+		}
+		EndCriticalIO();
+	}
 
 	heap_freetuple(newtup);
 	heap_close(pg_index, RowExclusiveLock);
@@ -1891,7 +1909,13 @@ DefaultBuild(Relation heapRelation,
 	 * ----------------
 	 */
 	Assert(OidIsValid(indexRelation->rd_rel->relam));	/* XXX */
-	
+
+	/*
+	 * These inserts index tuples already stored on the heap. They are not
+	 * the index entries for a heap write that is still open.
+	 */
+	if (GetCriticalIODepth() == 0)
+		ClearHeapIndexSection();
 
 	/* ----------------
 	 *	get the tuple descriptors from the relations so we know

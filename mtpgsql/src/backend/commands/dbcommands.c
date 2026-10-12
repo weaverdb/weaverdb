@@ -213,9 +213,11 @@ createschema(const char *schemaname,int encoding)
 
 	tuple = heap_formtuple(schema_dsc, new_schema, new_nulls);
 	/*
-	 * Update table
+	 * pg_schema has no indexes. One heap page.
 	 */
+	BeginCriticalIO();
 	heap_insert(schema_relation, tuple);
+	EndCriticalIO();
 		
         heap_close(schema_relation,NoLock);
 

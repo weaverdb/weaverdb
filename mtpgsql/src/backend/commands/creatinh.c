@@ -633,7 +633,10 @@ again:
 
 		tuple = heap_formtuple(desc, datum, nullarr);
 
+		/* pg_ipl has no indexes. One heap page per precedence row. */
+		BeginCriticalIO();
 		heap_insert(relation, tuple);
+		EndCriticalIO();
 		heap_freetuple(tuple);
 
 		seqNumber += 1;

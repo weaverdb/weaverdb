@@ -68,6 +68,7 @@
 #include "storage/s_lock.h"
 #endif
 #include "storage/smgr.h"
+#include "catalog/catalog.h"
 #include "utils/relcache.h"
 #include "storage/bufmgr.h"
 #include "storage/bufpage.h"
@@ -121,6 +122,16 @@ typedef struct bufenv {
     bool                        DidWrite;
     int                         critical_io_depth;
     long                        pinned_generation;	/* gen at CriticalIO unit start */
+    unsigned long               section_serial;		/* increments on each 0->1 Begin */
+    unsigned long               heap_section_serial;	/* section of the heap write that still expects index inserts */
+    Oid                         heap_index_relid;
+    long                        section_generation;	/* RegisterBufferWrite generation of this section */
+    long                        heap_write_generation;
+    bool                        section_generation_valid;
+    bool                        heap_write_generation_valid;
+    bool                        section_pins_group;	/* cioHolds is holding the writer */
+    bool                        heap_index_pending;
+    bool                        index_write_check;
 } BufferEnv;
 
 
@@ -469,6 +480,33 @@ NoteCriticalIODepth(Relation rel, BufferDesc *bufHdr)
 	noting = 0;
 }
 
+/*
+ * Every buffer registered while a loggable CriticalIO section is open must
+ * return the same write-group generation. The writer does not advance while
+ * cioHolds is held, so a mismatch means the pin was dropped between pages
+ * that belong together.
+ */
+static void
+NoteSectionWriteGeneration(BufferEnv *env, long generation)
+{
+	if (env->critical_io_depth < 1 || !env->section_pins_group)
+		return;
+	if (!env->section_generation_valid)
+	{
+		env->section_generation = generation;
+		env->section_generation_valid = true;
+		return;
+	}
+	if (env->section_generation != generation)
+	{
+		if (env->index_write_check && env->heap_write_generation_valid)
+			elog(ERROR, "index write generation %ld does not match heap write generation %ld",
+				 generation, env->heap_write_generation);
+		elog(ERROR, "CriticalIO write generation %ld does not match section generation %ld",
+			 generation, env->section_generation);
+	}
+}
+
 #undef WriteBuffer
 
 int
@@ -509,6 +547,7 @@ WriteBuffer(Relation rel, Buffer buffer) {
     NoteCriticalIODepth(rel, bufHdr);
     bool defer = bufenv->pinned_generation >= 0;
     long generation = RegisterBufferWrite(bufHdr, defer, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
+    NoteSectionWriteGeneration(bufenv, generation);
     if (defer) {
         bufenv->CriticalMark[bufHdr->buf_id] += 1;
     }
@@ -632,6 +671,7 @@ WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
     NoteCriticalIODepth(rel, bufHdr);
     bool defer = env->pinned_generation >= 0;
     generation = RegisterBufferWrite(bufHdr, defer, false);
+    NoteSectionWriteGeneration(env, generation);
     if (defer) {
         env->CriticalMark[bufHdr->buf_id] += 1;
     }
@@ -1566,6 +1606,16 @@ GetBufferCxt() {
         env->DidWrite    = false;
         env->critical_io_depth = 0;
         env->pinned_generation = -1;
+        env->section_serial = 0;
+        env->heap_section_serial = 0;
+        env->heap_index_relid = InvalidOid;
+        env->section_generation = 0;
+        env->heap_write_generation = 0;
+        env->section_generation_valid = false;
+        env->heap_write_generation_valid = false;
+        env->section_pins_group = false;
+        env->heap_index_pending = false;
+        env->index_write_check = false;
         
         MemoryContextSwitchTo(oldcxt);
         
@@ -1580,7 +1630,13 @@ BeginCriticalIO(void) {
     BufferEnv *env = GetBufferCxt();
 
     if (env->critical_io_depth++ == 0) {
-        env->pinned_generation = CriticalIOHold();
+        bool pinned = false;
+
+        env->pinned_generation = CriticalIOHold(&pinned);
+        env->section_pins_group = pinned;
+        env->section_serial += 1;
+        env->section_generation_valid = false;
+        env->index_write_check = false;
     }
 }
 
@@ -1597,7 +1653,20 @@ EndCriticalIO(void) {
         memset(env->CriticalMark, 0, MaxBuffers*sizeof(int));
 
         env->pinned_generation = -1;
+        env->section_pins_group = false;
+        env->section_generation_valid = false;
+        env->index_write_check = false;
     }
+}
+
+static void
+ClearHeapIndexSectionState(BufferEnv *env)
+{
+    env->heap_index_pending = false;
+    env->heap_section_serial = 0;
+    env->heap_index_relid = InvalidOid;
+    env->heap_write_generation_valid = false;
+    env->index_write_check = false;
 }
 
 void
@@ -1612,7 +1681,60 @@ AbortCriticalIO(void) {
 
         env->critical_io_depth = 0;
         env->pinned_generation = -1;
+        env->section_pins_group = false;
+        env->section_generation_valid = false;
     }
+    ClearHeapIndexSectionState(env);
+}
+
+void
+NoteHeapWriteForIndexes(Relation relation)
+{
+    BufferEnv *env = GetBufferCxt();
+
+    if (relation == NULL || relation->rd_rel == NULL)
+        return;
+    if (!relation->rd_rel->relhasindex)
+        return;
+    if (IsIgnoringSystemIndexes() &&
+        IsSystemRelationName(RelationGetRelationName(relation)))
+        return;
+    if (env->critical_io_depth < 1)
+        elog(ERROR, "indexed heap write on %s is outside CriticalIO",
+             RelationGetRelationName(relation));
+
+    env->heap_index_pending = true;
+    env->heap_section_serial = env->section_serial;
+    env->heap_index_relid = relation->rd_id;
+    env->heap_write_generation = env->section_generation;
+    env->heap_write_generation_valid = env->section_generation_valid && env->section_pins_group;
+}
+
+bool
+CheckIndexInsertInHeapSection(Relation heapRel)
+{
+    BufferEnv *env = GetBufferCxt();
+
+    if (!env->heap_index_pending || heapRel == NULL)
+        return false;
+    if (heapRel->rd_id != env->heap_index_relid)
+        return false;
+    if (env->critical_io_depth < 1 || env->heap_section_serial != env->section_serial)
+        elog(ERROR, "index insert for %s is outside the heap write CriticalIO section",
+             RelationGetRelationName(heapRel));
+    return true;
+}
+
+void
+SetIndexGenerationCheck(bool on)
+{
+    GetBufferCxt()->index_write_check = on;
+}
+
+void
+ClearHeapIndexSection(void)
+{
+    ClearHeapIndexSectionState(GetBufferCxt());
 }
 
 bool

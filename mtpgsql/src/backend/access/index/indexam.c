@@ -73,6 +73,7 @@
 #include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "fmgr.h"
+#include "storage/bufmgr.h"
 #include "utils/relcache.h"
 #include "utils/mcxt.h"
 #include "miscadmin.h"
@@ -196,6 +197,14 @@ index_insert(Relation relation,
 	RELATION_CHECKS;
 	GET_REL_PROCEDURE(insert, aminsert);
 
+	/*
+	 * A heap write that has indexes records its CriticalIO section.
+	 * This insert must run in that same section, and the index pages
+	 * must register in the heap write's generation.
+	 */
+	if (CheckIndexInsertInHeapSection(heapRel))
+		SetIndexGenerationCheck(true);
+
 	/* ----------------
 	 *	have the am's insert proc do all the work.
 	 * ----------------
@@ -204,6 +213,7 @@ index_insert(Relation relation,
 
 	specificResult = (InsertIndexResult)
 		DatumGetPointer(fmgr(procedure, relation, datum, nulls, heap_t_ctid, heapRel, is_put));
+	SetIndexGenerationCheck(false);
 
 	if (TraceIndexEnabled()) {
 		const char *res = "null";

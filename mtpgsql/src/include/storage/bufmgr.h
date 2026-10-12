@@ -181,6 +181,10 @@ PG_EXTERN bool TraceBufferFlushEnabled(void);
 PG_EXTERN void BeginCriticalIO(void);
 PG_EXTERN void EndCriticalIO(void);
 PG_EXTERN void AbortCriticalIO(void);
+PG_EXTERN void NoteHeapWriteForIndexes(Relation relation);
+PG_EXTERN bool CheckIndexInsertInHeapSection(Relation heapRel);
+PG_EXTERN void SetIndexGenerationCheck(bool on);
+PG_EXTERN void ClearHeapIndexSection(void);
 
 PG_EXTERN void SetBufferGeneration(long generation);
 PG_EXTERN long BufferGetIOGeneration(Buffer buffer);

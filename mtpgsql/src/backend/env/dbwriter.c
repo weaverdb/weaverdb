@@ -1007,14 +1007,18 @@ long UnmarkDeferredWrites(int * criticals) {
     return generation;
 }
 
-long CriticalIOHold() {
+long CriticalIOHold(bool *pinned) {
     WriteGroup     cart = GetCurrentWriteGroup(false);
     long generation = cart->generation - 1;
 
     if (cart->loggable) {
         cart->cioHolds += 1;
+        if (pinned != NULL)
+            *pinned = true;
     } else {
         generation = 0;
+        if (pinned != NULL)
+            *pinned = false;
     }
     UnlockWriteGroup(cart);
     return generation;

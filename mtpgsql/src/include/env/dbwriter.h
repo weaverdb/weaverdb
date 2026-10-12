@@ -38,7 +38,7 @@ void CommitDBBufferWrites(TransactionId xid,int state);
 bool FlushAllDirtyBuffers(bool wait);
 
 long RegisterBufferWrite(BufferDesc * bufHdr,bool defer, bool release);
-long CriticalIOHold();
+long CriticalIOHold(bool *pinned);
 long CriticalIORelease();
 long UnmarkDeferredWrites(int* criticals);
 

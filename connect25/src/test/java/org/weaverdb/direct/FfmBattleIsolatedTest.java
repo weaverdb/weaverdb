@@ -46,6 +46,15 @@ public class FfmBattleIsolatedTest {
     }
 
     @Test
+    public void vacuumKeepsHeapAndIndexInOneWriteGroup() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "vacuum-group", 90);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("vacuum-group ok"), result.output);
+        Assertions.assertTrue(result.output.contains("recovered=true"), result.output);
+        Assertions.assertTrue(result.output.contains("cioWarnings=0"), result.output);
+    }
+
+    @Test
     public void hashIndexDoesNotSpin() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "hash-index", 20);
         System.out.println(result.output);

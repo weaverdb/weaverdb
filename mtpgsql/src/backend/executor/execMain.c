@@ -36,6 +36,7 @@
 #include "env/env.h"
 #include "access/heapam.h"
 #include "access/hio.h"
+#include "access/blobstorage.h"
 #include "catalog/heap.h"
 #include "commands/trigger.h"
 #include "executor/execdebug.h"
@@ -1243,7 +1244,10 @@ ExecRetrieve(TupleTableSlot *slot,
 	 */
 	if (estate->es_into_relation_descriptor != NULL)
 	{
+		/* SELECT INTO has no indexes. One heap page per tuple. */
+		BeginCriticalIO();
 		heap_insert(estate->es_into_relation_descriptor, tuple);
+		EndCriticalIO();
 		IncrAppended();
 	}
 
@@ -1574,9 +1578,15 @@ ExecDelete(TupleTableSlot *slot,
 			return;
 		}
 
-		BeginCriticalIO();
-		heap_delete_locked(resultRelationDesc, buffer, &oldtup, &ctid);
-		EndCriticalIO();
+		{
+			BlobStoreLocks bloblocks;
+
+			LockTupleBlobStores(resultRelationDesc, &oldtup, &bloblocks);
+			BeginCriticalIO();
+			heap_delete_locked(resultRelationDesc, buffer, &oldtup, &ctid);
+			EndCriticalIO();
+			UnlockTupleBlobStores(&bloblocks);
+		}
 		break;
 	}
 
@@ -1758,12 +1768,23 @@ ExecReplace(TupleTableSlot *slot,
 			return;
 		}
 
-		BeginCriticalIO();
-		heap_update_locked(resultRelationDesc, buffer, &oldtup, tuple, &ctid);
-		numIndices = resultRelationInfo->ri_NumIndices;
-		if (numIndices > 0)
-			ExecInsertIndexTuples(slot, NULL, estate, false);
-		EndCriticalIO();
+		/*
+		 * Blob storage locks can wait on another transaction. Take
+		 * them before the section that writes the old heap page, the
+		 * new heap page, and the index entries.
+		 */
+		{
+			BlobStoreLocks bloblocks;
+
+			LockTupleBlobStores(resultRelationDesc, &oldtup, &bloblocks);
+			BeginCriticalIO();
+			heap_update_locked(resultRelationDesc, buffer, &oldtup, tuple, &ctid);
+			numIndices = resultRelationInfo->ri_NumIndices;
+			if (numIndices > 0)
+				ExecInsertIndexTuples(slot, NULL, estate, false);
+			EndCriticalIO();
+			UnlockTupleBlobStores(&bloblocks);
+		}
 		break;
 	}
 

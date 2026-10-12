@@ -1110,6 +1110,57 @@ prioritize_blobs(Relation rel, HeapTuple tuple, int16 attnum)
 	return header;
 }
 
+void
+LockTupleBlobStores(Relation rel, HeapTuple tuple, BlobStoreLocks *locks)
+{
+	TupleDesc	atts = rel->rd_att;
+	int			c;
+
+	locks->n = 0;
+	for (c = 0; c < atts->natts; c++) {
+		bool		isNull = false;
+		Datum		blob;
+		blob_header	header;
+		int			s;
+		bool		seen = false;
+		Relation	storerel;
+
+		if (atts->attrs[c]->attstorage != 'e')
+			continue;
+		blob = HeapGetAttr(tuple, atts->attrs[c]->attnum, atts, &isNull);
+		if (isNull || !ISINDIRECT(blob))
+			continue;
+		memmove(&header, DatumGetPointer(blob), sizeof(blob_header));
+		for (s = 0; s < locks->n; s++) {
+			if (locks->rels[s]->rd_id == header.relid) {
+				seen = true;
+				break;
+			}
+		}
+		if (seen)
+			continue;
+		if (locks->n >= MAX_BLOB_STORE_LOCKS)
+			elog(ERROR, "too many blob storage relations");
+		storerel = RelationIdGetRelation(header.relid, DEFAULTDBOID);
+		if (!RelationIsValid(storerel))
+			continue;
+		LockRelation(storerel, AccessShareLock);
+		locks->rels[locks->n++] = storerel;
+	}
+}
+
+void
+UnlockTupleBlobStores(BlobStoreLocks *locks)
+{
+	int			s;
+
+	for (s = 0; s < locks->n; s++) {
+		UnlockRelation(locks->rels[s], AccessShareLock);
+		RelationClose(locks->rels[s]);
+	}
+	locks->n = 0;
+}
+
 int
 delete_tuple_blob(Relation rel, HeapTuple tuple, HeapTuple newtup)
 {

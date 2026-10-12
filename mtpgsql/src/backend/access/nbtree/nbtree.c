@@ -1049,7 +1049,14 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
             if (buf != lockedbuf) {
                 Assert(BufferIsValid(lockedbuf));
                 if (dirtied) {
+                    /* One index leaf. Heap line-pointer cleanup is a later section. */
+                    bool own_section = (GetCriticalIODepth() == 0);
+
+                    if (own_section)
+                        BeginCriticalIO();
                     WriteBuffer(rel, lockedbuf);
+                    if (own_section)
+                        EndCriticalIO();
                     dirtied = false;
                 } else {
                     ReleaseBuffer(rel, lockedbuf);

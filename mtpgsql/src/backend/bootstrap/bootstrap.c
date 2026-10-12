@@ -30,6 +30,7 @@
 
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "storage/bufmgr.h"
 #include "bootstrap/bootstrap.h"
 #include "catalog/catname.h"
 #include "catalog/index.h"
@@ -629,7 +630,10 @@ InsertOneTuple(Oid objectid)
 
 	if (objectid != (Oid) 0)
 		tuple->t_data->t_oid = objectid;
+	/* Bootstrap inserts are heap pages. Index builds are separate. */
+	BeginCriticalIO();
 	heap_insert(reldesc, tuple);
+	EndCriticalIO();
 	heap_freetuple(tuple);
 
 	if (DebugMode)

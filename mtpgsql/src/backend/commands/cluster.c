@@ -32,6 +32,7 @@
 #include "commands/cluster.h"
 #include "commands/rename.h"
 #include "optimizer/internal.h"
+#include "storage/bufmgr.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
@@ -330,7 +331,10 @@ rebuildheap(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex)
 			HeapTuple	copiedTuple = heap_copytuple(&LocalHeapTuple);
 
 			ReleaseBuffer(LocalOldHeap, LocalBuffer);
+			/* New heap has no indexes yet. One heap page per copied tuple. */
+			BeginCriticalIO();
 			heap_insert(LocalNewHeap, copiedTuple);
+			EndCriticalIO();
 			heap_freetuple(copiedTuple);
 		}
 	}

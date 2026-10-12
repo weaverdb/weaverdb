@@ -717,20 +717,17 @@ heap_insert(Relation relation, HeapTuple tup)
 
 	/*
 	 * One heap page (and the freespace page, when the tuple starts a new
-	 * page). Callers that also write index pages already hold a section,
-	 * so those pages stay with this insert.
+	 * page), plus blob segment pages when the tuple is toasted. The caller
+	 * already holds the CriticalIO section and keeps it open through the
+	 * index inserts. A section opened here would release the write-group
+	 * pin before those index pages were registered.
 	 */
-	{
-		bool own_section = (GetCriticalIODepth() == 0);
-
-		if (own_section)
-			BeginCriticalIO();
-		RelationPutHeapTupleAtFreespace(relation, tup, 0);
-		if (IsSystemRelationName(RelationGetRelationName(relation)))
-			RelationMark4RollbackHeapTuple(relation, tup);
-		if (own_section)
-			EndCriticalIO();
-	}
+	if (GetCriticalIODepth() < 1)
+		elog(ERROR, "heap_insert outside CriticalIO");
+	RelationPutHeapTupleAtFreespace(relation, tup, 0);
+	if (IsSystemRelationName(RelationGetRelationName(relation)))
+		RelationMark4RollbackHeapTuple(relation, tup);
+	NoteHeapWriteForIndexes(relation);
 
 	return tup->t_data->t_oid;
 }
@@ -837,9 +834,16 @@ heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snaps
 		return updateable;
 	}
 
-	BeginCriticalIO();
-	result = heap_delete_apply(relation, buffer, &tp, ctid);
-	EndCriticalIO();
+	{
+		BlobStoreLocks bloblocks;
+
+		/* Storage-relation waits finish before the heap and segment writes. */
+		LockTupleBlobStores(relation, &tp, &bloblocks);
+		BeginCriticalIO();
+		result = heap_delete_apply(relation, buffer, &tp, ctid);
+		EndCriticalIO();
+		UnlockTupleBlobStores(&bloblocks);
+	}
 	return result;
 }
 
@@ -914,6 +918,7 @@ heap_update_apply(Relation relation, Buffer buffer, HeapTuple oldtup, HeapTuple 
 	RelationInvalidateHeapTuple(relation, oldtup);
 
 	WriteBuffer(relation, buffer);
+	NoteHeapWriteForIndexes(relation);
 
 	return HeapTupleMayBeUpdated;
 }
@@ -949,6 +954,16 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
             ReleaseBuffer(relation, buffer);
             return updateable;
 	}
+
+	/*
+	 * Indexed updates use heap_lock_for_update, then one caller section
+	 * around heap_update_locked and the index inserts. Ending a section
+	 * here would release the write-group pin before those index pages.
+	 */
+	if (relation->rd_rel != NULL && relation->rd_rel->relhasindex &&
+		!(IsIgnoringSystemIndexes() && IsSystemRelationName(RelationGetRelationName(relation))))
+		elog(ERROR, "heap_update on %s would end CriticalIO before its index inserts",
+			 RelationGetRelationName(relation));
 
 	BeginCriticalIO();
 	updateable = heap_update_apply(relation, buffer, &oldtup, newtup, ctid);
