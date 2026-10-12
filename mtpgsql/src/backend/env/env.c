@@ -242,6 +242,21 @@ pthread_t FindChildThread(Env* env) {
     return child;
 }
 
+pthread_t FindOwnedChild(Env* parent) {
+    pthread_t   child = 0;
+    int counter = 0;
+    pthread_mutex_lock(&envlock);
+    for (counter = 0; counter < GetMaxBackends(); counter++) {
+        Env* env = envmap[counter];
+        if (env != NULL && env->parent == parent && env->owner != 0) {
+            child = env->owner;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&envlock);
+    return child;
+}
+
 void
 CancelEnvAndJoin(Env* env) {
     pthread_t  id = 0;
@@ -709,7 +724,13 @@ bool CheckForCancel() {
         }
 
         if ( env->parent != NULL ) {
-            return (env->parent->cancelled || !env->parent->in_transaction);
+            /*
+             * in_transaction is only set while the parent holds the
+             * transaction lock, including between autocommit statements.
+             * Cancelling a helper for that made helper() unusable. Stop
+             * the helper when the parent env itself is cancelled.
+             */
+            return env->parent->cancelled ? TRUE : FALSE;
         }
         
         return FALSE;

@@ -247,6 +247,7 @@ bool CheckForCancel(void);
 void CancelEnvAndJoin(Env* env);
 void CancelAllEnvs(void);
 pthread_t FindChildThread(Env* env);
+pthread_t FindOwnedChild(Env* parent);
 
 bool WeaverIsPanicked(void);
 void WeaverPanicShutdown(const char *msg);

@@ -302,8 +302,19 @@ WCreateSubConnection(OpaqueWConn parent) {
     connection = AllocateEnvSpace(connection_section_id,sizeof (struct Connection));
     memmove(connection, parent, sizeof (struct Connection));
 
-    
     connection->env = env;
+    connection->plan = NULL;
+    connection->inselect = NULL;
+    connection->transaction_owner = 0;
+    connection->child_count = 0;
+    connection->child_trans = 0;
+    connection->stage = TRAN_INVALID;
+    connection->memory = AllocSetContextCreate(GetEnvMemoryContext(),
+            "SubConnection",
+            ALLOCSET_DEFAULT_MINSIZE,
+            ALLOCSET_DEFAULT_INITSIZE,
+            ALLOCSET_DEFAULT_MAXSIZE);
+    pthread_mutex_init(&connection->child_lock, NULL);
     SetProcessingMode(InitProcessing);
 
     connection->env->DatabaseId = parent->env->DatabaseId;
@@ -328,7 +339,7 @@ WCreateSubConnection(OpaqueWConn parent) {
 
     pthread_mutex_lock(&parent->child_lock);
     connection->parent = parent;
-    connection->child_count++;
+    parent->child_count++;
     pthread_mutex_unlock(&parent->child_lock);
 
     SetEnv(NULL);
@@ -351,10 +362,14 @@ WDestroyConnection(OpaqueWConn conn) {
         while (conn->child_count > 0) {
             pthread_t waitfor = 0;
             void* result;
+            int joined = 0;
             pthread_mutex_unlock(&conn->child_lock);
-            waitfor = FindChildThread(conn->env);
-            if (waitfor != 0) pthread_join(waitfor, &result);
+            waitfor = FindOwnedChild(conn->env);
+            if (waitfor != 0 && !pthread_equal(waitfor, pthread_self()))
+                joined = pthread_join(waitfor, &result) == 0;
             pthread_mutex_lock(&conn->child_lock);
+            if (!joined)
+                break;
         }
         pthread_mutex_unlock(&conn->child_lock);
     }
@@ -1255,7 +1270,7 @@ WAllocStatementMemory(OpaquePreparedStatement conn, size_t size) {
 void*
 AllocMemory(WConn conn, mem_type type, size_t size) {
     WConn connection = SETUP(conn);
-    void* pointer;
+    void* pointer = NULL;
     MemoryContext cxt;
     int err;
 

@@ -175,9 +175,9 @@ class DirectWeaverConnection implements DBReference {
     private final ReferenceQueue<Statement> statements = new ReferenceQueue<>();
     private static final ReferenceQueue<DirectWeaverConnection> connections = new ReferenceQueue<>();
         
-    private DirectWeaverConnection(MemorySegment nativePointer) {
+    private DirectWeaverConnection(MemorySegment nativePointer, StreamingTransformer version) {
         this.nativePointer = nativePointer;
-        this.transformer = null;
+        this.transformer = version;
     }
 
     private DirectWeaverConnection(String username, String password, String database, StreamingTransformer version) throws ExecutionException {
@@ -272,7 +272,13 @@ class DirectWeaverConnection implements DBReference {
     }
     
     public DBReference helper() throws ExecutionException {
-        return new DirectWeaverConnection(this.connectSubConnection());
+        closeDiscardedConnections();
+        MemorySegment pointer = this.connectSubConnection();
+        DirectWeaverConnection connect = new DirectWeaverConnection(pointer, this.transformer);
+        if (pointer != null && !pointer.equals(MemorySegment.NULL)) {
+            liveConnections.put(pointer, new ConnectionRef(connect, connections));
+        }
+        return connect;
     }
 
     public String idDatabaseRoots() {
