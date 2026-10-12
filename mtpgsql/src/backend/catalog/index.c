@@ -41,6 +41,7 @@
 #include "optimizer/prep.h"
 #include "parser/parse_func.h"
 #include "storage/bufmgr.h"
+#include "access/hio.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -1165,6 +1166,37 @@ index_create(char *heapRelationName,
  *
  * ----------------------------------------------------------------
  */
+static void
+catalog_drop_wait(Relation rel, ItemPointer tid)
+{
+	Buffer		buf;
+	HeapTupleData tup;
+	int			res;
+
+	res = heap_lock_for_update(rel, tid, &buf, &tup, NULL);
+	if (res != HeapTupleMayBeUpdated)
+		elog(ERROR, "could not lock catalog tuple for index drop");
+	UnlockHeapTuple(rel, buf, &tup);
+	ReleaseBuffer(rel, buf);
+}
+
+static void
+catalog_drop_delete(Relation rel, ItemPointer tid)
+{
+	Buffer		buf;
+	HeapTupleData tup;
+	int			res;
+
+	res = heap_lock_nowait(rel, tid, &buf, &tup);
+	if (res != HeapTupleMayBeUpdated)
+	{
+		UnlockHeapTuple(rel, buf, &tup);
+		ReleaseBuffer(rel, buf);
+		elog(ERROR, "could not relock catalog tuple for index drop");
+	}
+	heap_delete_locked(rel, buf, &tup, NULL);
+}
+
 void
 index_drop(Oid indexId)
 {
@@ -1238,15 +1270,8 @@ index_drop(Oid indexId)
 		ItemPointerData reltid;
 		ItemPointerData indtid;
 		ItemPointerData atttids[INDEX_MAX_KEYS];
-		Buffer		relbuf;
-		Buffer		indbuf;
-		Buffer		attbufs[INDEX_MAX_KEYS];
-		HeapTupleData reltup;
-		HeapTupleData indtup;
-		HeapTupleData atttups[INDEX_MAX_KEYS];
 		int			natt = 0;
 		int			i;
-		int			res;
 
 		reltid = tuple->t_self;
 		heap_freetuple(tuple);
@@ -1276,24 +1301,22 @@ index_drop(Oid indexId)
 		indtid = tuple->t_self;
 		heap_freetuple(tuple);
 
-		res = heap_lock_for_update(relationRelation, &reltid, &relbuf, &reltup, NULL);
-		if (res != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock pg_class tuple for index drop");
+		/*
+		 * Wait, then release each buffer. Attribute rows share pages,
+		 * so holding every lock at once cannot lock the next row.
+		 * The deletes below re-lock without waiting, one buffer at a
+		 * time, inside one section.
+		 */
+		catalog_drop_wait(relationRelation, &reltid);
 		for (i = 0; i < natt; i++)
-		{
-			res = heap_lock_for_update(attributeRelation, &atttids[i], &attbufs[i], &atttups[i], NULL);
-			if (res != HeapTupleMayBeUpdated)
-				elog(ERROR, "could not lock pg_attribute tuple for index drop");
-		}
-		res = heap_lock_for_update(indexRelation, &indtid, &indbuf, &indtup, NULL);
-		if (res != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock pg_index tuple for index drop");
+			catalog_drop_wait(attributeRelation, &atttids[i]);
+		catalog_drop_wait(indexRelation, &indtid);
 
 		BeginCriticalIO();
-		heap_delete_locked(relationRelation, relbuf, &reltup, NULL);
+		catalog_drop_delete(relationRelation, &reltid);
 		for (i = 0; i < natt; i++)
-			heap_delete_locked(attributeRelation, attbufs[i], &atttups[i], NULL);
-		heap_delete_locked(indexRelation, indbuf, &indtup, NULL);
+			catalog_drop_delete(attributeRelation, &atttids[i]);
+		catalog_drop_delete(indexRelation, &indtid);
 		EndCriticalIO();
 
 		heap_close(relationRelation, RowExclusiveLock);

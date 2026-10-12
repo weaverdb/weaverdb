@@ -788,6 +788,24 @@ heap_lock_for_update(Relation relation, ItemPointer tid, Buffer *buf, HeapTuple 
 }
 
 int
+heap_lock_nowait(Relation relation, ItemPointer tid, Buffer *buf, HeapTuple oldtup)
+{
+	SnapshotData snap;
+
+	/*
+	 * SnapshotNow is a null pointer, so it cannot carry nowait. This
+	 * snapshot is only read for that flag. HeapTupleSatisfiesUpdate does
+	 * not use it.
+	 */
+	MemSet(&snap, 0, sizeof(snap));
+	snap.nowait = true;
+	Assert(ItemPointerIsValid(tid));
+	MemSet(oldtup, 0, sizeof(HeapTupleData));
+	oldtup->t_self = *tid;
+	return LockHeapTupleForUpdate(relation, buf, oldtup, &snap);
+}
+
+int
 heap_delete_locked(Relation relation, Buffer buffer, HeapTuple oldtup, ItemPointer ctid)
 {
 	Assert(GetCriticalIODepth() > 0);

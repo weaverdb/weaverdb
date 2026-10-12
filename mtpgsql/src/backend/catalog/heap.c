@@ -1398,23 +1398,40 @@ DeleteAttributeTuples(Relation rel)
 
 		if (natt > 0)
 		{
-			Buffer	   *bufs = (Buffer *) palloc(natt * sizeof(Buffer));
-			HeapTupleData *tups = (HeapTupleData *) palloc(natt * sizeof(HeapTupleData));
-
+			/*
+			 * Attribute rows share pages. Wait and release each buffer
+			 * before locking the next, then delete them one buffer at
+			 * a time inside one section.
+			 */
 			for (i = 0; i < natt; i++)
 			{
+				Buffer buf;
+				HeapTupleData tup;
 				int res = heap_lock_for_update(pg_attribute_desc, &tids[i],
-								&bufs[i], &tups[i], NULL);
+								&buf, &tup, NULL);
 
 				if (res != HeapTupleMayBeUpdated)
 					elog(ERROR, "could not lock attribute tuple for drop");
+				UnlockHeapTuple(pg_attribute_desc, buf, &tup);
+				ReleaseBuffer(pg_attribute_desc, buf);
 			}
 			BeginCriticalIO();
 			for (i = 0; i < natt; i++)
-				heap_delete_locked(pg_attribute_desc, bufs[i], &tups[i], NULL);
+			{
+				Buffer buf;
+				HeapTupleData tup;
+				int res = heap_lock_nowait(pg_attribute_desc, &tids[i],
+								&buf, &tup);
+
+				if (res != HeapTupleMayBeUpdated)
+				{
+					UnlockHeapTuple(pg_attribute_desc, buf, &tup);
+					ReleaseBuffer(pg_attribute_desc, buf);
+					elog(ERROR, "could not relock attribute tuple for drop");
+				}
+				heap_delete_locked(pg_attribute_desc, buf, &tup, NULL);
+			}
 			EndCriticalIO();
-			pfree(bufs);
-			pfree(tups);
 		}
 		pfree(tids);
 	}

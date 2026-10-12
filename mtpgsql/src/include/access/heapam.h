@@ -282,6 +282,12 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
  */
 /* extern */ int heap_lock_for_update(Relation relation, ItemPointer tid,
 			Buffer *buf, HeapTuple oldtup, Snapshot snapshot);
+/* Re-lock inside an open CriticalIO section. Does not wait on another
+ * transaction. On any status other than HeapTupleMayBeUpdated the buffer
+ * is still locked and the caller must unlock and release it.
+ */
+/* extern */ int heap_lock_nowait(Relation relation, ItemPointer tid,
+			Buffer *buf, HeapTuple oldtup);
 /* Apply a delete/update whose lock was taken by heap_lock_for_update.
  * Caller holds the CriticalIO section so related pages stay together.
  */
