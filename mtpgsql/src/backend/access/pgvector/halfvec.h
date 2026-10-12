@@ -26,8 +26,11 @@
 #endif
 #endif
 
-/* Apple clang check needed for universal binaries on Mac */
-#if defined(USE_DISPATCH) && (defined(HAVE__GET_CPUID) || defined(__apple_build_version__))
+/* Apple clang check needed for universal binaries on Mac.
+ * GCC and Clang on Linux also provide <cpuid.h> / __get_cpuid. Upstream
+ * pgvector defines HAVE__GET_CPUID from configure; this fork's CMake does
+ * not, and the fallback <intrin.h> is an MSVC header that is not present. */
+#if defined(USE_DISPATCH) && (defined(HAVE__GET_CPUID) || defined(__apple_build_version__) || (defined(__GNUC__) && !defined(_MSC_VER)))
 #define USE__GET_CPUID
 #endif
 
