@@ -21,6 +21,8 @@
 #include "env/env.h"
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "access/nbtree.h"
+#include "catalog/pg_am.h"
 #include "catalog/catname.h"
 #include "catalog/index.h"
 #include "catalog/pg_index.h"
@@ -927,6 +929,38 @@ CopyFrom(StringInfo attribute_buf,Relation rel, bool binary, bool oids, FILE *fp
 
 			if (rel->rd_att->constr)
 				ExecConstraints("CopyFrom", rel, tuple, estate);
+
+			/*
+			 * Unique btree waits happen before the section. The heap
+			 * tuple and every index insert (including a page split or
+			 * a hash bucket/bitmap update) stay in the section below.
+			 */
+			if (has_index)
+			{
+				for (i = 0; i < n_indices; i++)
+				{
+					if (index_rels[i]->rd_rel->relam != BTREE_AM_OID)
+						continue;
+					if (!pgIndexP[i]->indisunique)
+						continue;
+					if (indexPred[i] != NULL)
+					{
+#ifndef OMIT_PARTIAL_INDEX
+						ExecStoreTuple(tuple, slot, false);
+						if (!ExecQual((List *) indexPred[i], econtext, false))
+							continue;
+#endif
+					}
+					FormIndexDatum(indexNatts[i],
+								(AttrNumber *) &(pgIndexP[i]->indkey[0]),
+								   tuple,
+								   tupDesc,
+								   idatum,
+								   index_nulls,
+								   finfoP[i]);
+					_bt_wait_unique(index_rels[i], idatum, index_nulls, rel, false);
+				}
+			}
 
 			BeginCriticalIO();
 			heap_insert(rel, tuple);

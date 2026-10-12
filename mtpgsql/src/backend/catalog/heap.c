@@ -1367,24 +1367,56 @@ DeleteAttributeTuples(Relation rel)
 	 */
 	pg_attribute_desc = heap_openr(AttributeRelationName, RowExclusiveLock);
 
-	for (attnum = FirstLowInvalidHeapAttributeNumber + 1;
-		 attnum <= rel->rd_att->natts;
-		 attnum++)
+	/*
+	 * Comments are separate catalog rows and are removed before the
+	 * attribute section. Every pg_attribute row of this relation is
+	 * then locked and deleted together.
+	 */
 	{
-		if (HeapTupleIsValid(tup = SearchSysCacheTupleCopy(ATTNUM,
-								 ObjectIdGetDatum(RelationGetRelid(rel)),
-												   Int16GetDatum(attnum),
-														   0, 0)))
+		int			maxatt;
+		int			natt = 0;
+		int			i;
+		ItemPointerData *tids;
+
+		maxatt = rel->rd_att->natts - FirstLowInvalidHeapAttributeNumber + 1;
+		tids = (ItemPointerData *) palloc(maxatt * sizeof(ItemPointerData));
+
+		for (attnum = FirstLowInvalidHeapAttributeNumber + 1;
+			 attnum <= rel->rd_att->natts;
+			 attnum++)
 		{
-
-			/*** Delete any comments associated with this attribute ***/
-
-			DeleteComments(tup->t_data->t_oid);
-
-			heap_delete(pg_attribute_desc, &tup->t_self, NULL, NULL);
-			heap_freetuple(tup);
-
+			if (HeapTupleIsValid(tup = SearchSysCacheTupleCopy(ATTNUM,
+									 ObjectIdGetDatum(RelationGetRelid(rel)),
+													   Int16GetDatum(attnum),
+															   0, 0)))
+			{
+				DeleteComments(tup->t_data->t_oid);
+				tids[natt++] = tup->t_self;
+				heap_freetuple(tup);
+			}
 		}
+
+		if (natt > 0)
+		{
+			Buffer	   *bufs = (Buffer *) palloc(natt * sizeof(Buffer));
+			HeapTupleData *tups = (HeapTupleData *) palloc(natt * sizeof(HeapTupleData));
+
+			for (i = 0; i < natt; i++)
+			{
+				int res = heap_lock_for_update(pg_attribute_desc, &tids[i],
+								&bufs[i], &tups[i], NULL);
+
+				if (res != HeapTupleMayBeUpdated)
+					elog(ERROR, "could not lock attribute tuple for drop");
+			}
+			BeginCriticalIO();
+			for (i = 0; i < natt; i++)
+				heap_delete_locked(pg_attribute_desc, bufs[i], &tups[i], NULL);
+			EndCriticalIO();
+			pfree(bufs);
+			pfree(tups);
+		}
+		pfree(tids);
 	}
 
 	heap_close(pg_attribute_desc, RowExclusiveLock);
@@ -1857,8 +1889,16 @@ StoreAttrDefault(Relation rel, AttrNumber attnum, char *adbin,
 	if (!attStruct->atthasdef)
 	{
 		attStruct->atthasdef = true;
-		BeginCriticalIO();
-		heap_update(attrrel, &atttup->t_self, atttup, NULL, NULL);
+		{
+			HeapTupleData ciotup;
+			Buffer ciobuf;
+			int ciores;
+			ciores = heap_lock_for_update(attrrel, &atttup->t_self, &ciobuf, &ciotup, NULL);
+			if (ciores != HeapTupleMayBeUpdated)
+				elog(ERROR, "could not lock tuple for update");
+			BeginCriticalIO();
+			heap_update_locked(attrrel, ciobuf, &ciotup, atttup, NULL);
+		}
 		/* keep catalog indices current */
 		CatalogOpenIndices(Num_pg_attr_indices, Name_pg_attr_indices,
 						   attridescs);
@@ -2210,8 +2250,16 @@ AddRelationRawConstraints(Relation rel,
 
 	relStruct->relchecks = numchecks;
 
-	BeginCriticalIO();
-	heap_update(relrel, &reltup->t_self, reltup, NULL,NULL);
+	{
+		HeapTupleData ciotup;
+		Buffer ciobuf;
+		int ciores;
+		ciores = heap_lock_for_update(relrel, &reltup->t_self, &ciobuf, &ciotup, NULL);
+		if (ciores != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock tuple for update");
+		BeginCriticalIO();
+		heap_update_locked(relrel, ciobuf, &ciotup, reltup, NULL);
+	}
 
 	/* keep catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices,

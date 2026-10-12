@@ -61,6 +61,7 @@
 #include "storage/sinval.h"
 #include "storage/lock.h"
 #include "storage/smgr.h"
+#include "storage/bufmgr.h"
 #include "catalog/catname.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
@@ -2327,7 +2328,16 @@ vac_update_relstats(Oid relid, BlockNumber num_pages, TupleCount num_tuples,
 	 * This info is not vital so let the poolsweep reset all caches at the
 	 * time of pause  */
 	RelationInvalidateHeapTuple(rd, &rtup);
-	WriteBuffer(rd, buffer);
+	/* One pg_class page (relpages, reltuples, relhasindex). */
+	{
+		bool own_section = (GetCriticalIODepth() == 0);
+
+		if (own_section)
+			BeginCriticalIO();
+		WriteBuffer(rd, buffer);
+		if (own_section)
+			EndCriticalIO();
+	}
 
 	heap_close(rd, RowExclusiveLock);
 }

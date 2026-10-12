@@ -276,6 +276,19 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 /* extern */ int	heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid,Snapshot snapshot);
 /* extern */ int heap_update(Relation relation, ItemPointer otid, HeapTuple tup,
 			ItemPointer ctid, Snapshot snapshot);
+/*
+ * Lock a tuple, waiting on another transaction if needed. Caller must not
+ * be inside CriticalIO. On HeapTupleMayBeUpdated the buffer stays write-locked.
+ */
+/* extern */ int heap_lock_for_update(Relation relation, ItemPointer tid,
+			Buffer *buf, HeapTuple oldtup, Snapshot snapshot);
+/* Apply a delete/update whose lock was taken by heap_lock_for_update.
+ * Caller holds the CriticalIO section so related pages stay together.
+ */
+/* extern */ int heap_delete_locked(Relation relation, Buffer buffer,
+			HeapTuple oldtup, ItemPointer ctid);
+/* extern */ int heap_update_locked(Relation relation, Buffer buffer,
+			HeapTuple oldtup, HeapTuple newtup, ItemPointer ctid);
 /* extern */ int	heap_mark4update(Relation relation, Buffer *userbuf, HeapTuple tup, Snapshot snapshot);
 /* extern */ void heap_markpos(HeapScanDesc scan);
 /* extern */ void heap_restrpos(HeapScanDesc scan);

@@ -585,6 +585,21 @@ void* DBWriter(void *jones) {
             /*  wait to see if we are ready to go  */
         }
 
+        /*
+         * A CriticalIO section pins this generation. Rotating now would
+         * tear the pages registered in that section. The holder is not
+         * waiting on another transaction; those waits finish before
+         * BeginCriticalIO. CriticalIORelease signals this gate.
+         */
+        if (cart->cioHolds > 0 && !stopped) {
+            struct timespec waittime;
+            int slice = wait_timeout > 0 ? wait_timeout : 400;
+
+            ptimeout(&waittime, slice);
+            pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
+            continue;
+        }
+
         AdvanceWriteGroupQueue(cart);
         Assert(cart->currstate == PRIMED || cart->currstate == READY);
         
@@ -687,6 +702,10 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
                 ptimeout(&waittime,sync_timeout);
                 timerr = pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &waittime);
                 if (timerr == ETIMEDOUT) {
+                    if (cart->cioHolds > 0) {
+                        cart->currstate = NOT_READY;
+                        return true;
+                    }
                     cart->currstate = PRIMED;
                     return false;
                 }
@@ -719,6 +738,10 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
                         if ( cart->currstate == FLUSHING ) {
                             return true;
                         }
+                        if (cart->cioHolds > 0) {
+                            cart->currstate = READY;
+                            return true;
+                        }
                         if ( wait_timeout > sync_timeout ) cart->currstate = PRIMED;
                         else cart->currstate = READY;
                         return false;
@@ -727,8 +750,24 @@ bool CheckWriteGroupState(WriteGroup cart, bool timed) {
                         return true;
                     }
             }
+            if (cart->cioHolds > 0) {
+                struct timespec holdwait;
+                int slice = wait_timeout > 0 ? wait_timeout : 400;
+
+                ptimeout(&holdwait, slice);
+                pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &holdwait);
+                return true;
+            }
             return false;
         case PRIMED:
+            if (cart->cioHolds > 0) {
+                struct timespec holdwait;
+                int slice = wait_timeout > 0 ? wait_timeout : 400;
+
+                ptimeout(&holdwait, slice);
+                pthread_cond_timedwait(&cart->gate, &cart->checkpoint, &holdwait);
+                return true;
+            }
             return false;
         case FLUSHING:
             return true;
@@ -986,6 +1025,15 @@ long CriticalIORelease() {
     long generation = cart->generation - 1;
     if (cart->loggable) {
         cart->cioHolds -= 1;
+        Assert(cart->cioHolds >= 0);
+        /*
+         * The writer asserts it is no longer WAITING when a gate signal
+         * wakes it. Match SignalDBWriter so ending a section cannot trip
+         * that assert, and so a group pinned by this section can proceed.
+         */
+        if (cart->currstate == WAITING)
+            cart->currstate = READY;
+        pthread_cond_signal(&cart->gate);
     } else {
         generation = 0;
     }
@@ -1577,6 +1625,7 @@ void ShutdownDBWriter(void) {
     cart->loggable = false;
     
     SignalDBWriter(cart);
+    pthread_cond_signal(&cart->gate);
     
     UnlockWriteGroup(cart);
     

@@ -13,6 +13,7 @@
 package org.weaverdb;
 
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -52,7 +53,16 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             b.inheritIO().start().waitFor();
 
             b = new ProcessBuilder(moduleDir.resolve("build/mtpg/bin/initdb").toString(), "-D", dbDir);
-            b.inheritIO().start().waitFor();
+            b.redirectErrorStream(true);
+            Process initdb = b.start();
+            String initOut = new String(initdb.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            int initRc = initdb.waitFor();
+            if (initOut.contains("CriticalIO depth")) {
+                throw new IllegalStateException("CriticalIO depth warning during initdb\n" + initOut);
+            }
+            if (initRc != 0) {
+                throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
+            }
 
             Properties prop = new Properties();
             prop.setProperty("datadir", dbDir);

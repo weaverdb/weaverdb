@@ -1726,8 +1726,16 @@ update_attstats(Oid relid, int natts, AnalyzeAttrStats ** vacattrstats)
 						nulls,
 						replaces);
 
-			BeginCriticalIO();
-			heap_update(sd, &oldtup->t_self, stup, &stup->t_self, NULL);
+			{
+				HeapTupleData ciotup;
+				Buffer ciobuf;
+				int ciores;
+				ciores = heap_lock_for_update(sd, &oldtup->t_self, &ciobuf, &ciotup, NULL);
+				if (ciores != HeapTupleMayBeUpdated)
+					elog(ERROR, "could not lock tuple for update");
+				BeginCriticalIO();
+				heap_update_locked(sd, ciobuf, &ciotup, stup, &stup->t_self);
+			}
 		} else {
 			/* No, insert new tuple */
 			stup = heap_formtuple(sd->rd_att, values, nulls);

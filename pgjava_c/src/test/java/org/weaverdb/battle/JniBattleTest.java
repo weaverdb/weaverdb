@@ -2,6 +2,7 @@ package org.weaverdb.battle;
 
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DynamicTest;
@@ -33,6 +34,14 @@ public class JniBattleTest {
     @TestFactory
     Stream<DynamicTest> stress() {
         return tests(BattleScenarios.stress());
+    }
+
+    @AfterAll
+    public static void noCriticalIoDepthWarnings() throws Exception {
+        try (DBReference conn = BattleScenarios.open()) {
+            Assertions.assertEquals(0, BattleScenarios.scalarLong(conn, "select cio_depth_warnings()"),
+                    "CriticalIO depth warning during the in-process suite");
+        }
     }
 
     private static Stream<DynamicTest> tests(List<BattleScenarios.Scenario> scenarios) {

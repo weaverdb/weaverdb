@@ -29,6 +29,7 @@
 #include "access/genam.h"
 #include "access/nbtree.h"
 #include "miscadmin.h"
+#include "storage/bufmgr.h"
 #include "storage/lmgr.h"
 #include "env/freespace.h"
 
@@ -86,7 +87,19 @@ _bt_metapinit(Relation rel)
 	op->btpo_flags = BTP_META;
         op->btpo_parent = 0;
 
-	_bt_wrtbuf(rel, buf);
+	/*
+	 * One metapage. Index build has no outer section; a caller that
+	 * already opened one keeps this write with that group.
+	 */
+	{
+		bool own_section = (GetCriticalIODepth() == 0);
+
+		if (own_section)
+			BeginCriticalIO();
+		_bt_wrtbuf(rel, buf);
+		if (own_section)
+			EndCriticalIO();
+	}
 
 	/* all done */
 	if (USELOCKING)
@@ -197,10 +210,20 @@ _bt_tryroot(Relation rel, bool create)
 			((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_flags |= (BTP_LEAF | BTP_ROOT);
                         ((BTPageOpaque) PageGetSpecialPointer(rootpage))->btpo_parent = BTREE_METAPAGE;
 
-			_bt_wrtbuf(rel, rootbuf);
+			/*
+			 * The new root and the metapage that names it are one
+			 * update. Do not write them in separate sections.
+			 */
+			{
+				bool own_section = (GetCriticalIODepth() == 0);
 
-			/* okay, metadata is correct, write and release it */
-			_bt_wrtbuf(rel, metabuf);
+				if (own_section)
+					BeginCriticalIO();
+				_bt_wrtbuf(rel, rootbuf);
+				_bt_wrtbuf(rel, metabuf);
+				if (own_section)
+					EndCriticalIO();
+			}
                         return _bt_getbuf(rel, root, BT_READ);
 		} else {
 			/*
@@ -410,7 +433,19 @@ _bt_metaproot(Relation rel, BlockNumber rootbknum, int level)
 		metad->btm_level += 1;
 	else
 		metad->btm_level = level;		/* called from btsort */
-	_bt_wrtbuf(rel, metabuf);
+	/*
+	 * One metapage. A root split or _bt_uppershutdown already holds the
+	 * section that also writes the new root and its children.
+	 */
+	{
+		bool own_section = (GetCriticalIODepth() == 0);
+
+		if (own_section)
+			BeginCriticalIO();
+		_bt_wrtbuf(rel, metabuf);
+		if (own_section)
+			EndCriticalIO();
+	}
 }
 
 /*

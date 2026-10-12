@@ -480,8 +480,16 @@ AlterUser(AlterUserStmt *stmt)
 	new_tuple = heap_formtuple(pg_shadow_dsc, new_record, new_record_nulls);
 	Assert(new_tuple);
 	/* XXX check return value of this? */
-	BeginCriticalIO();
-	heap_update(pg_shadow_rel, &tuple->t_self, new_tuple, NULL, NULL);
+	{
+		HeapTupleData ciotup;
+		Buffer ciobuf;
+		int ciores;
+		ciores = heap_lock_for_update(pg_shadow_rel, &tuple->t_self, &ciobuf, &ciotup, NULL);
+		if (ciores != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock tuple for update");
+		BeginCriticalIO();
+		heap_update_locked(pg_shadow_rel, ciobuf, &ciotup, new_tuple, NULL);
+	}
 
 
 	/* Update indexes */
@@ -967,8 +975,16 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 		new_record[Anum_pg_group_grolist - 1] = PointerGetDatum(newarray);
 
 		tuple = heap_formtuple(pg_group_dsc, new_record, new_record_nulls);
-		BeginCriticalIO();
-		heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL);
+		{
+			HeapTupleData ciotup;
+			Buffer ciobuf;
+			int ciores;
+			ciores = heap_lock_for_update(pg_group_rel, &group_tuple->t_self, &ciobuf, &ciotup, NULL);
+			if (ciores != HeapTupleMayBeUpdated)
+				elog(ERROR, "could not lock tuple for update");
+			BeginCriticalIO();
+			heap_update_locked(pg_group_rel, ciobuf, &ciotup, tuple, NULL);
+		}
 
 		/* Update indexes */
 		if (RelationGetForm(pg_group_rel)->relhasindex)
@@ -1077,8 +1093,16 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 			new_record[Anum_pg_group_grolist - 1] = PointerGetDatum(newarray);
 
 			tuple = heap_formtuple(pg_group_dsc, new_record, new_record_nulls);
-			BeginCriticalIO();
-			heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL);
+			{
+				HeapTupleData ciotup;
+				Buffer ciobuf;
+				int ciores;
+				ciores = heap_lock_for_update(pg_group_rel, &group_tuple->t_self, &ciobuf, &ciotup, NULL);
+				if (ciores != HeapTupleMayBeUpdated)
+					elog(ERROR, "could not lock tuple for update");
+				BeginCriticalIO();
+				heap_update_locked(pg_group_rel, ciobuf, &ciotup, tuple, NULL);
+			}
 
 			/* Update indexes */
 			if (RelationGetForm(pg_group_rel)->relhasindex)

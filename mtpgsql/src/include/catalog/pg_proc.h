@@ -2879,6 +2879,7 @@ DATA(insert OID = 2213 ( xidint4_gt	PGUID 11 f t f 2 f 16 "28 20" 100 0 0 100	xi
 DATA(insert OID = 2214 ( xidint4_lteq	PGUID 11 f t f 2 f 16 "28 20" 100 0 0 100	xidint4_lteq - ));
 DATA(insert OID = 2215 ( xidint4_gteq	PGUID 11 f t f 2 f 16 "28 20" 100 0 0 100	xidint4_gteq - ));
 DATA(insert OID = 2218 ( xidint4_noteq	PGUID 11 f t f 2 f 16 "28 20" 100 0 0 100	xidint4_noteq - ));
+DATA(insert OID = 2220 ( cio_depth_warnings PGUID 11 f t f 0 f 23 "" 100 0 0 100 cio_depth_warnings - ));
 
 
 /*

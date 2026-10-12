@@ -180,8 +180,16 @@ CreateComments(Oid oid, char *comment)
 		{
 			desctuple = heap_modifytuple(searchtuple, description, values,
 										 nulls, replaces);
-			BeginCriticalIO();
-			heap_update(description, &searchtuple->t_self, desctuple, NULL, NULL);
+			{
+				HeapTupleData ciotup;
+				Buffer ciobuf;
+				int ciores;
+				ciores = heap_lock_for_update(description, &searchtuple->t_self, &ciobuf, &ciotup, NULL);
+				if (ciores != HeapTupleMayBeUpdated)
+					elog(ERROR, "could not lock tuple for update");
+				BeginCriticalIO();
+				heap_update_locked(description, ciobuf, &ciotup, desctuple, NULL);
+			}
 			modified = TRUE;
 		}
 

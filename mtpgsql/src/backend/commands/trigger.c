@@ -300,8 +300,16 @@ CreateTrigger(CreateTrigStmt *stmt)
 
 	((Form_pg_class) GETSTRUCT(tuple))->reltriggers = found + 1;
 	RelationInvalidateHeapTuple(pgrel, tuple);
-	BeginCriticalIO();
-	heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL);
+	{
+		HeapTupleData ciotup;
+		Buffer ciobuf;
+		int ciores;
+		ciores = heap_lock_for_update(pgrel, &tuple->t_self, &ciobuf, &ciotup, NULL);
+		if (ciores != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock tuple for update");
+		BeginCriticalIO();
+		heap_update_locked(pgrel, ciobuf, &ciotup, tuple, NULL);
+	}
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 	CatalogIndexInsert(ridescs, Num_pg_class_indices, pgrel, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, ridescs);
@@ -379,8 +387,16 @@ DropTrigger(DropTrigStmt *stmt)
 
 	((Form_pg_class) GETSTRUCT(tuple))->reltriggers = found;
 	RelationInvalidateHeapTuple(pgrel, tuple);
-	BeginCriticalIO();
-	heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL);
+	{
+		HeapTupleData ciotup;
+		Buffer ciobuf;
+		int ciores;
+		ciores = heap_lock_for_update(pgrel, &tuple->t_self, &ciobuf, &ciotup, NULL);
+		if (ciores != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock tuple for update");
+		BeginCriticalIO();
+		heap_update_locked(pgrel, ciobuf, &ciotup, tuple, NULL);
+	}
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 	CatalogIndexInsert(ridescs, Num_pg_class_indices, pgrel, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, ridescs);

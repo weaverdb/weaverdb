@@ -7,6 +7,7 @@
 
 package org.weaverdb.direct;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Properties;
 import org.weaverdb.DBReference;
@@ -47,7 +48,16 @@ final class PgvectorWeaverTestSupport {
 
                 b = new ProcessBuilder(
                         connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", DB_DIR);
-                b.inheritIO().start().waitFor();
+                b.redirectErrorStream(true);
+                Process initdb = b.start();
+                String initOut = new String(initdb.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                int initRc = initdb.waitFor();
+                if (initOut.contains("CriticalIO depth")) {
+                    throw new IllegalStateException("CriticalIO depth warning during initdb\n" + initOut);
+                }
+                if (initRc != 0) {
+                    throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
+                }
 
                 Properties prop = new Properties();
                 prop.setProperty("datadir", DB_DIR);

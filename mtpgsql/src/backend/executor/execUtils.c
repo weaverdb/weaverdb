@@ -50,6 +50,8 @@
 #include "catalog/index.h"
 #include "catalog/pg_index.h"
 #include "catalog/catalog.h"
+#include "catalog/pg_am.h"
+#include "access/nbtree.h"
 #include "executor/execdebug.h"
 #include "executor/executor.h"
 #include "miscadmin.h"
@@ -1020,6 +1022,86 @@ ExecCloseIndices(RelationInfo *resultRelationInfo)
 	/*
 	 * XXX should free indexInfo array here too.
 	 */
+}
+
+/* ----------------------------------------------------------------
+ *		ExecWaitUniqueIndexes
+ *
+ * Wait for in-progress unique btree conflicts before CriticalIO starts.
+ * The following heap insert/update and index inserts (including a btree
+ * split's left, right, and sibling pages, or a hash bucket and its bitmap)
+ * then share one section. ignore a committed primary-key duplicate when
+ * is_put is true; ExecPut turns that into a replace.
+ * ----------------------------------------------------------------
+ */
+void
+ExecWaitUniqueIndexes(TupleTableSlot *slot, EState *estate, bool is_put)
+{
+	HeapTuple	heapTuple;
+	RelationInfo *resultRelationInfo;
+	int			i;
+	int			numIndices;
+	RelationPtr relationDescs;
+	Relation	heapRelation;
+	IndexInfo **indexInfoArray;
+	IndexInfo  *indexInfo;
+	Node	   *predicate;
+	ExprContext *econtext;
+	int			numberOfAttributes;
+	AttrNumber *keyAttributeNumbers;
+	FuncIndexInfoPtr fInfoP;
+	TupleDesc	heapDescriptor;
+	Datum	   *datum;
+	char	   *nulls;
+
+	heapTuple = slot->val;
+	resultRelationInfo = estate->es_result_relation_info;
+	numIndices = resultRelationInfo->ri_NumIndices;
+	relationDescs = resultRelationInfo->ri_IndexRelationDescs;
+	indexInfoArray = resultRelationInfo->ri_IndexRelationInfo;
+	heapRelation = resultRelationInfo->ri_RelationDesc;
+	if (numIndices <= 0)
+		return;
+
+	econtext = NULL;
+	for (i = 0; i < numIndices; i++)
+	{
+		IndexProp	atts;
+
+		if (relationDescs[i] == NULL)
+			continue;
+		if (relationDescs[i]->rd_rel->relam != BTREE_AM_OID)
+			continue;
+		atts = IndexProperties(RelationGetRelid(relationDescs[i]));
+		if (!IndexPropIsUnique(atts))
+			continue;
+
+		indexInfo = indexInfoArray[i];
+		predicate = indexInfo->ii_Predicate;
+		if (predicate != NULL)
+		{
+			if (econtext == NULL)
+				econtext = makeNode(ExprContext);
+			econtext->ecxt_scantuple = slot;
+			if (!ExecQual((List *) predicate, econtext, false))
+				continue;
+		}
+
+		numberOfAttributes = indexInfo->ii_NumKeyAttributes;
+		keyAttributeNumbers = indexInfo->ii_KeyAttributeNumbers;
+		fInfoP = indexInfo->ii_FuncIndexInfo;
+		datum = (Datum *) palloc(numberOfAttributes * sizeof *datum);
+		nulls = (char *) palloc(numberOfAttributes * sizeof *nulls);
+		heapDescriptor = (TupleDesc) RelationGetDescr(heapRelation);
+		FormIndexDatum(numberOfAttributes, keyAttributeNumbers, heapTuple,
+					   heapDescriptor, datum, nulls, fInfoP);
+		_bt_wait_unique(relationDescs[i], datum, nulls, heapRelation,
+						is_put && IndexPropIsPrimary(atts));
+		pfree(datum);
+		pfree(nulls);
+	}
+	if (econtext != NULL)
+		pfree(econtext);
 }
 
 /* ----------------------------------------------------------------

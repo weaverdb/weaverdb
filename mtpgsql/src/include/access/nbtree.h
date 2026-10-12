@@ -283,6 +283,12 @@ PG_EXTERN Datum btbulkdelete(Relation rel,int delcount,ItemPointerData* del_heap
  */
 PG_EXTERN InsertIndexResult _bt_doinsert(Relation rel, BTItem btitem,
 			 bool index_is_unique, Relation heapRel);
+/*
+ * Wait for an in-progress unique conflict, then return. Does not insert.
+ * ignore_committed skips the hard duplicate error (PUT / primary key).
+ */
+PG_EXTERN void _bt_wait_unique(Relation rel, Datum *datum, char *nulls,
+			 Relation heapRel, bool ignore_committed);
 PG_EXTERN InsertIndexResult _bt_queueinsert(Relation rel, BTItem btitem,
 			 bool index_is_unique, Relation heapRel);
 PG_EXTERN Buffer _bt_fixroot(Relation rel, Buffer oldrootbuf, bool release);

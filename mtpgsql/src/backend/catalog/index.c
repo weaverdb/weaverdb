@@ -1228,43 +1228,78 @@ index_drop(Oid indexId)
 
 	Assert(HeapTupleIsValid(tuple));
 
-	heap_delete(relationRelation, &tuple->t_self, NULL,NULL);
-	heap_freetuple(tuple);
-	heap_close(relationRelation, RowExclusiveLock);
-
-	/* ----------------
-	 * fix ATTRIBUTE relation
-	 * ----------------
+	/*
+	 * pg_class, every pg_attribute row, and pg_index are one drop.
+	 * Wait for any tuple locks before the section, then delete them
+	 * together so recovery cannot keep the index row without the
+	 * relation row (or the reverse).
 	 */
-	attributeRelation = heap_openr(AttributeRelationName, RowExclusiveLock);
-
-	attnum = 1;					/* indexes start at 1 */
-
-	while (HeapTupleIsValid(tuple = SearchSysCacheTupleCopy(ATTNUM,
-											   ObjectIdGetDatum(indexId),
-												   Int16GetDatum(attnum),
-															0, 0)))
 	{
-		heap_delete(attributeRelation, &tuple->t_self, NULL,NULL);
+		ItemPointerData reltid;
+		ItemPointerData indtid;
+		ItemPointerData atttids[INDEX_MAX_KEYS];
+		Buffer		relbuf;
+		Buffer		indbuf;
+		Buffer		attbufs[INDEX_MAX_KEYS];
+		HeapTupleData reltup;
+		HeapTupleData indtup;
+		HeapTupleData atttups[INDEX_MAX_KEYS];
+		int			natt = 0;
+		int			i;
+		int			res;
+
+		reltid = tuple->t_self;
 		heap_freetuple(tuple);
-		attnum++;
+
+		attributeRelation = heap_openr(AttributeRelationName, RowExclusiveLock);
+
+		attnum = 1;				/* indexes start at 1 */
+
+		while (HeapTupleIsValid(tuple = SearchSysCacheTupleCopy(ATTNUM,
+												   ObjectIdGetDatum(indexId),
+													   Int16GetDatum(attnum),
+																0, 0)))
+		{
+			if (natt >= INDEX_MAX_KEYS)
+				elog(ERROR, "index_drop: too many attribute tuples");
+			atttids[natt++] = tuple->t_self;
+			heap_freetuple(tuple);
+			attnum++;
+		}
+
+		indexRelation = heap_openr(IndexRelationName, RowExclusiveLock);
+
+		tuple = SearchSysCacheTupleCopy(INDEXRELID,
+										ObjectIdGetDatum(indexId),
+										0, 0, 0);
+		Assert(HeapTupleIsValid(tuple));
+		indtid = tuple->t_self;
+		heap_freetuple(tuple);
+
+		res = heap_lock_for_update(relationRelation, &reltid, &relbuf, &reltup, NULL);
+		if (res != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock pg_class tuple for index drop");
+		for (i = 0; i < natt; i++)
+		{
+			res = heap_lock_for_update(attributeRelation, &atttids[i], &attbufs[i], &atttups[i], NULL);
+			if (res != HeapTupleMayBeUpdated)
+				elog(ERROR, "could not lock pg_attribute tuple for index drop");
+		}
+		res = heap_lock_for_update(indexRelation, &indtid, &indbuf, &indtup, NULL);
+		if (res != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock pg_index tuple for index drop");
+
+		BeginCriticalIO();
+		heap_delete_locked(relationRelation, relbuf, &reltup, NULL);
+		for (i = 0; i < natt; i++)
+			heap_delete_locked(attributeRelation, attbufs[i], &atttups[i], NULL);
+		heap_delete_locked(indexRelation, indbuf, &indtup, NULL);
+		EndCriticalIO();
+
+		heap_close(relationRelation, RowExclusiveLock);
+		heap_close(attributeRelation, RowExclusiveLock);
+		heap_close(indexRelation, RowExclusiveLock);
 	}
-	heap_close(attributeRelation, RowExclusiveLock);
-
-	/* ----------------
-	 * fix INDEX relation
-	 * ----------------
-	 */
-	indexRelation = heap_openr(IndexRelationName, RowExclusiveLock);
-
-	tuple = SearchSysCacheTupleCopy(INDEXRELID,
-									ObjectIdGetDatum(indexId),
-									0, 0, 0);
-	Assert(HeapTupleIsValid(tuple));
-
-	heap_delete(indexRelation, &tuple->t_self, NULL,NULL);
-	heap_freetuple(tuple);
-	heap_close(indexRelation, RowExclusiveLock);
 
 	/*
 	 * flush buffer cache and physically remove the file
@@ -1527,19 +1562,37 @@ setRelhasindexInplace(Oid relid, bool hasindex, bool immediate)
 			ImmediateInvalidateSharedHeapTuple(pg_class, tuple);
 		rd_rel = (Form_pg_class) GETSTRUCT(tuple);
 		rd_rel->relhasindex = hasindex;
-		WriteNoReleaseBuffer(pg_class_scan->rs_rd,pg_class_scan->rs_cbuf);
+		/*
+		 * One pg_class page. The index build that happened after
+		 * LockClassinfoForUpdate is not part of this write.
+		 */
+		{
+			bool own_section = (GetCriticalIODepth() == 0);
+
+			if (own_section)
+				BeginCriticalIO();
+			WriteNoReleaseBuffer(pg_class_scan->rs_rd,pg_class_scan->rs_cbuf);
+			if (own_section)
+				EndCriticalIO();
+		}
 	}
 	else
 	{
 		HeapTupleData htup;
 		Buffer		buffer;
+		bool own_section;
 
 		htup.t_self = tuple->t_self;
 		heap_fetch(pg_class, SnapshotNow, &htup, &buffer);
 		ImmediateInvalidateSharedHeapTuple(pg_class, tuple);
 		rd_rel = (Form_pg_class) GETSTRUCT(&htup);
 		rd_rel->relhasindex = hasindex;
+		own_section = (GetCriticalIODepth() == 0);
+		if (own_section)
+			BeginCriticalIO();
 		WriteBuffer(pg_class, buffer);
+		if (own_section)
+			EndCriticalIO();
 	}
 
 	if (!pg_class_scan)
@@ -1691,7 +1744,16 @@ UpdateStats(Oid relid, long reltuples)
 		rd_rel = (Form_pg_class) GETSTRUCT(tuple);
 		rd_rel->relpages = relpages;
 		rd_rel->reltuples = reltuples;
-		WriteNoReleaseBuffer(pg_class_scan->rs_rd, pg_class_scan->rs_cbuf);
+		/* One pg_class page. Bootstrap and reindex update in place. */
+		{
+			bool own_section = (GetCriticalIODepth() == 0);
+
+			if (own_section)
+				BeginCriticalIO();
+			WriteNoReleaseBuffer(pg_class_scan->rs_rd, pg_class_scan->rs_cbuf);
+			if (own_section)
+				EndCriticalIO();
+		}
 	}
 	else
 	{
@@ -1709,8 +1771,16 @@ UpdateStats(Oid relid, long reltuples)
 		replace[Anum_pg_class_reltuples - 1] = 'r';
 		values[Anum_pg_class_reltuples - 1] = LongGetDatum(reltuples);
 		newtup = heap_modifytuple(tuple, pg_class, values, nulls, replace);
-		BeginCriticalIO();
-		heap_update(pg_class, &tuple->t_self, newtup, NULL, NULL);
+		{
+			HeapTupleData ciotup;
+			Buffer ciobuf;
+			int ciores;
+			ciores = heap_lock_for_update(pg_class, &tuple->t_self, &ciobuf, &ciotup, NULL);
+			if (ciores != HeapTupleMayBeUpdated)
+				elog(ERROR, "could not lock tuple for update");
+			BeginCriticalIO();
+			heap_update_locked(pg_class, ciobuf, &ciotup, newtup, NULL);
+		}
 		if (!IsIgnoringSystemIndexes())
 		{
 			CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, idescs);

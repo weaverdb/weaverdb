@@ -35,6 +35,7 @@
 #include "postgres.h"
 #include "env/env.h"
 #include "access/heapam.h"
+#include "access/hio.h"
 #include "catalog/heap.h"
 #include "commands/trigger.h"
 #include "executor/execdebug.h"
@@ -1316,10 +1317,12 @@ ExecPut(TupleTableSlot *slot,
 		ExecConstraints("ExecPut", resultRelationDesc, tuple, estate);
 
 	/*
-	 * Heap insert, index inserts, and the xmax update of the tuple being
-	 * replaced are one CriticalIO unit so a generation bump cannot
-	 * interleave mid-write. AbortCriticalIO covers elog(ERROR).
+	 * Unique-index waits finish before the section. Heap insert, index
+	 * inserts (btree split pages or hash bucket and bitmap pages), and
+	 * the xmax update of a replaced tuple are one CriticalIO unit.
+	 * AbortCriticalIO covers elog(ERROR).
 	 */
+	ExecWaitUniqueIndexes(slot, estate, true);
 	BeginCriticalIO();
 
 	/*
@@ -1450,9 +1453,11 @@ ExecAppend(TupleTableSlot *slot,
 		ExecConstraints("ExecAppend", resultRelationDesc, tuple, estate);
 
 	/*
-	 * Heap insert + index inserts are one CriticalIO unit.
-	 * AbortCriticalIO covers elog(ERROR) longjmp.
+	 * Unique-index waits finish before the section. The new heap tuple
+	 * and its index entries (including a btree split or a hash bucket
+	 * split) are one CriticalIO unit.
 	 */
+	ExecWaitUniqueIndexes(slot, estate, false);
 	BeginCriticalIO();
 
 	/*
@@ -1519,26 +1524,33 @@ ExecDelete(TupleTableSlot *slot,
 	}
 
 	/*
-	 * Heap xmax update is one CriticalIO unit, same as ExecReplace.
-	 * AbortCriticalIO covers elog(ERROR); End on non-error early exits.
+	 * Wait for the other updater before CriticalIO. The delete writes
+	 * one heap page (and blob segment pages, if any) in that section.
+	 * EvalPlanQual's transaction wait stays outside the section.
 	 */
-	BeginCriticalIO();
-ldelete:;
-	result = heap_delete(resultRelationDesc, tupleid, &ctid,estate->es_snapshot);
-	switch (result)
+	for (;;)
 	{
-                case HeapTupleBeingUpdated:
-                    /* heap tuple is being updated and we started after them so just forget about the update */
-			EndCriticalIO();
-                    return;
-                case HeapTupleSelfUpdated:
-			EndCriticalIO();
-			return;
+		HeapTupleData oldtup;
+		Buffer		buffer;
 
-		case HeapTupleMayBeUpdated:
-			break;
-                
-		case HeapTupleUpdated:
+		result = heap_lock_for_update(resultRelationDesc, tupleid, &buffer, &oldtup, estate->es_snapshot);
+		if (result == HeapTupleBeingUpdated)
+		{
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
+			return;
+		}
+		if (result == HeapTupleSelfUpdated)
+		{
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
+			return;
+		}
+		if (result == HeapTupleUpdated)
+		{
+			ctid = oldtup.t_data->t_ctid;
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
 			if (t_info->XactIsoLevel == XACT_SERIALIZABLE)
 				elog(ERROR, "Can't serialize access due to concurrent update");
 			else if (!(ItemPointerEquals(tupleid, &ctid)))
@@ -1549,21 +1561,27 @@ ldelete:;
 				if (!TupIsNull(epqslot))
 				{
 					*tupleid = ctid;
-					goto ldelete;
+					continue;
 				}
 			}
-			EndCriticalIO();
 			return;
-
-		default:
-			EndCriticalIO();
+		}
+		if (result != HeapTupleMayBeUpdated)
+		{
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
 			elog(ERROR, "Unknown status %u from heap_delete", result);
 			return;
+		}
+
+		BeginCriticalIO();
+		heap_delete_locked(resultRelationDesc, buffer, &oldtup, &ctid);
+		EndCriticalIO();
+		break;
 	}
 
 	IncrDeleted();
 	(estate->es_processed)++;
-	EndCriticalIO();
 
 	/*
 	 * Note: Normally one would think that we have to delete index tuples
@@ -1657,26 +1675,29 @@ ExecReplace(TupleTableSlot *slot,
 		ExecConstraints("ExecReplace", resultRelationDesc, tuple, estate);
 
 	/*
-	 * Heap update + new index inserts are one CriticalIO unit.
-	 * AbortCriticalIO covers elog(ERROR); End on non-error early exits.
+	 * Row-lock and unique-index waits finish before CriticalIO. The
+	 * re-lock is the recheck: if the tuple changed, wait again and do
+	 * not write. One section then covers the old heap page, the new
+	 * heap page when the tuple does not fit, and every index insert
+	 * (btree left/right/sibling split pages, or hash bucket and bitmap).
 	 */
-	BeginCriticalIO();
-
-	/*
-	 * replace the heap tuple
-	 */
-lreplace:;
-	result = heap_update(resultRelationDesc, tupleid, tuple, &ctid, estate->es_snapshot);
-	switch (result)
+	for (;;)
 	{
-		case HeapTupleSelfUpdated:
-			EndCriticalIO();
+		HeapTupleData oldtup;
+		Buffer		buffer;
+
+		result = heap_lock_for_update(resultRelationDesc, tupleid, &buffer, &oldtup, estate->es_snapshot);
+		if (result == HeapTupleSelfUpdated || result == HeapTupleBeingUpdated)
+		{
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
 			return;
-
-		case HeapTupleMayBeUpdated:
-			break;
-
-		case HeapTupleUpdated:
+		}
+		if (result == HeapTupleUpdated)
+		{
+			ctid = oldtup.t_data->t_ctid;
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
 			if (t_info->XactIsoLevel == XACT_SERIALIZABLE)
 				elog(ERROR, "Can't serialize access due to concurrent update");
 			else if (!(ItemPointerEquals(tupleid, &ctid)))
@@ -1688,49 +1709,72 @@ lreplace:;
 				{
 					*tupleid = ctid;
 					tuple = ExecRemoveJunk(estate->es_junkFilter, epqslot);
-					slot = ExecStoreTuple(tuple, slot,false);
-//                                        loops++;
-					goto lreplace;
+					slot = ExecStoreTuple(tuple, slot, false);
+					continue;
 				}
 			}
-			EndCriticalIO();
 			return;
-                case HeapTupleBeingUpdated:
-                    /* heap tuple is being updated and we started after them so just forget about the update */
-			EndCriticalIO();
-                    return;
-                default:
-			EndCriticalIO();
+		}
+		if (result != HeapTupleMayBeUpdated)
+		{
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
 			elog(ERROR, "Unknown status %u from heap_update", result);
 			return;
+		}
+
+		/*
+		 * Drop the heap lock before the unique wait so that wait can
+		 * fetch heap tuples. Lock again and repeat if the row changed.
+		 */
+		UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+		ReleaseBuffer(resultRelationDesc, buffer);
+		ExecWaitUniqueIndexes(slot, estate, false);
+		result = heap_lock_for_update(resultRelationDesc, tupleid, &buffer, &oldtup, estate->es_snapshot);
+		if (result != HeapTupleMayBeUpdated)
+		{
+			if (result == HeapTupleUpdated)
+				ctid = oldtup.t_data->t_ctid;
+			UnlockHeapTuple(resultRelationDesc, buffer, &oldtup);
+			ReleaseBuffer(resultRelationDesc, buffer);
+			if (result == HeapTupleUpdated &&
+				t_info->XactIsoLevel != XACT_SERIALIZABLE &&
+				!(ItemPointerEquals(tupleid, &ctid)))
+			{
+				TupleTableSlot *epqslot = EvalPlanQual(estate,
+						  resultRelationInfo->ri_RangeTableIndex, &ctid);
+
+				if (!TupIsNull(epqslot))
+				{
+					*tupleid = ctid;
+					tuple = ExecRemoveJunk(estate->es_junkFilter, epqslot);
+					slot = ExecStoreTuple(tuple, slot, false);
+					continue;
+				}
+			}
+			if (result == HeapTupleUpdated &&
+				t_info->XactIsoLevel == XACT_SERIALIZABLE)
+				elog(ERROR, "Can't serialize access due to concurrent update");
+			return;
+		}
+
+		BeginCriticalIO();
+		heap_update_locked(resultRelationDesc, buffer, &oldtup, tuple, &ctid);
+		numIndices = resultRelationInfo->ri_NumIndices;
+		if (numIndices > 0)
+			ExecInsertIndexTuples(slot, NULL, estate, false);
+		EndCriticalIO();
+		break;
 	}
 
 	IncrReplaced();
 	(estate->es_processed)++;
 
 	/*
-	 * Note: instead of having to update the old index tuples associated
-	 * with the heap tuple, all we do is form and insert new index
-	 * tuples..  This is because replaces are actually deletes and inserts
-	 * and index tuple deletion is done automagically by the vaccuum
-	 * deamon.. All we do is insert new index tuples.  -cim 9/27/89
+	 * Index tuples for the new heap tid were inserted in the same
+	 * CriticalIO section as the heap pages. Vacuum removes index entries
+	 * for the old heap tid.
 	 */
-
-	/*
-	 * process indices
-	 *
-	 * heap_update updates a tuple in the base relation by invalidating it
-	 * and then appending a new tuple to the relation.	As a side effect,
-	 * the tupleid of the new tuple is placed in the new tuple's t_ctid
-	 * field.  So we now insert index tuples using the new tupleid stored
-	 * there.
-	 */
-
-	numIndices = resultRelationInfo->ri_NumIndices;
-	if (numIndices > 0)
-		ExecInsertIndexTuples(slot, NULL, estate, false);
-
-	EndCriticalIO();
 
 	/* AFTER ROW UPDATE Triggers */
 	if (resultRelationDesc->trigdesc)

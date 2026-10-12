@@ -25,6 +25,7 @@
 #include "utils/bit.h"
 #include "access/transam.h"
 #include "storage/smgr.h"
+#include "storage/bufmgr.h"
 #include "catalog/catname.h"
 #include "utils/relcache.h"
 #include "storage/m_lock.h"
@@ -359,6 +360,13 @@ TransBlockNumberSetXidStatus(Relation relation,TransactionId xid,XidStatus xstat
 	block = BufferGetBlock(buffer);
 
 
+	/*
+	 * One pg_log page. Commit and abort record the xid status here with
+	 * no earlier BeginCriticalIO. The write-group wait in
+	 * CommitDBBufferWrites has already finished, so this section does not
+	 * cover that wait.
+	 */
+	BeginCriticalIO();
 	TransBlockSetXidStatus(block, xid, xstatus);
 
         if ( !IsMultiuser() ) {
@@ -366,5 +374,6 @@ TransBlockNumberSetXidStatus(Relation relation,TransactionId xid,XidStatus xstat
         } else {
             WriteBuffer(relation,buffer);	
         }
+	EndCriticalIO();
 }
 

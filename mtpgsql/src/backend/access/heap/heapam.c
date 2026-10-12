@@ -90,6 +90,7 @@
 #include "utils/inval.h"
 #include "utils/relcache.h"
 #include "access/blobstorage.h"
+#include "storage/bufmgr.h"
 
 static Buffer
 NextGenGetTup(Relation relation,
@@ -714,33 +715,94 @@ heap_insert(Relation relation, HeapTuple tup)
 	tup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
 	tup->t_data->t_infomask |= HEAP_XMAX_INVALID;
 
-	RelationPutHeapTupleAtFreespace(relation, tup, 0);
+	/*
+	 * One heap page (and the freespace page, when the tuple starts a new
+	 * page). Callers that also write index pages already hold a section,
+	 * so those pages stay with this insert.
+	 */
+	{
+		bool own_section = (GetCriticalIODepth() == 0);
 
-	if (IsSystemRelationName(RelationGetRelationName(relation)))
-		RelationMark4RollbackHeapTuple(relation, tup);
+		if (own_section)
+			BeginCriticalIO();
+		RelationPutHeapTupleAtFreespace(relation, tup, 0);
+		if (IsSystemRelationName(RelationGetRelationName(relation)))
+			RelationMark4RollbackHeapTuple(relation, tup);
+		if (own_section)
+			EndCriticalIO();
+	}
 
 	return tup->t_data->t_oid;
 }
 
 /*
  *	heap_delete		- delete a tuple
+ *
+ * The row-lock wait is outside CriticalIO. The heap page and any blob
+ * segment pages are then written in one section.
  */
+static int
+heap_delete_apply(Relation relation, Buffer buffer, HeapTuple tp, ItemPointer ctid)
+{
+	TransactionId       xid;
+
+	xid = GetCurrentTransactionId();
+
+	/* store transaction information of xact deleting the tuple */
+	if ( tp->t_data->t_infomask & HEAP_MOVED_IN ) {
+		tp->t_data->t_xmin = tp->t_data->progress.t_vtran;
+		tp->t_data->progress.cmd.t_cmin = FirstCommandId;
+	}
+	tp->t_data->t_xmax = xid;
+	tp->t_data->progress.cmd.t_cmax = GetCurrentCommandId();
+	tp->t_data->t_infomask &= 
+                ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
+	if ( ctid != NULL ) {
+            tp->t_data->t_ctid = *ctid;
+        } else {
+            tp->t_data->t_ctid = tp->t_self;
+        }
+        UnlockHeapTuple(relation,buffer,tp);
+    
+	if ( HeapTupleHasBlob(tp) ) {
+		delete_tuple_blob(relation,tp,NULL);
+	}
+	/* invalidate caches */
+	RelationInvalidateHeapTuple(relation, tp);
+
+	WriteBuffer(relation, buffer);
+
+	return HeapTupleMayBeUpdated;
+}
+
+int
+heap_lock_for_update(Relation relation, ItemPointer tid, Buffer *buf, HeapTuple oldtup, Snapshot snapshot)
+{
+	if (GetCriticalIODepth() != 0)
+		elog(ERROR, "tuple lock wait inside CriticalIO");
+
+	Assert(ItemPointerIsValid(tid));
+	MemSet(oldtup, 0, sizeof(HeapTupleData));
+	oldtup->t_self = *tid;
+	return LockHeapTupleForUpdate(relation, buf, oldtup, snapshot);
+}
+
+int
+heap_delete_locked(Relation relation, Buffer buffer, HeapTuple oldtup, ItemPointer ctid)
+{
+	Assert(GetCriticalIODepth() > 0);
+	return heap_delete_apply(relation, buffer, oldtup, ctid);
+}
+
 int
 heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snapshot)
 {
 	HeapTupleData       tp;
 	Buffer              buffer;
 	int                 result = -1;
-	TransactionId       xid;
         int                updateable;
-        
-	Assert(ItemPointerIsValid(tid));
-        tp.t_datamcxt = NULL;
-        tp.t_datasrc = NULL;
-        tp.t_info = 0;
-        tp.t_self = *tid;
-            
-        updateable = LockHeapTupleForUpdate(relation, &buffer, &tp, snapshot);
+
+	updateable = heap_lock_for_update(relation, tid, &buffer, &tp, snapshot);
         if ( updateable == HeapTupleBeingUpdated ) {
             UnlockHeapTuple(relation,buffer,&tp);
             ReleaseBuffer(relation, buffer);
@@ -757,53 +819,103 @@ heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid, Snapshot snaps
 		return updateable;
 	}
 
+	BeginCriticalIO();
+	result = heap_delete_apply(relation, buffer, &tp, ctid);
+	EndCriticalIO();
+	return result;
+}
+
+/*
+ *	heap_update - replace a tuple
+ *
+ * The row-lock wait finishes before any page is dirtied. When the new
+ * tuple does not fit, the old page and the new page are written in the
+ * same section. Callers that also insert index entries use
+ * heap_lock_for_update and heap_update_locked so those index pages,
+ * including a btree split, stay in that section.
+ */
+static int
+heap_update_apply(Relation relation, Buffer buffer, HeapTuple oldtup, HeapTuple newtup, ItemPointer ctid)
+{
+	TransactionId       xid;
+        Size                pageSize;
+
+	/* XXX order problems if not atomic assignment ??? */
+	newtup->t_data->t_oid = oldtup->t_data->t_oid;
 	xid = GetCurrentTransactionId();
 
-	/* store transaction information of xact deleting the tuple */
-	if ( tp.t_data->t_infomask & HEAP_MOVED_IN ) {
-		tp.t_data->t_xmin = tp.t_data->progress.t_vtran;
-		tp.t_data->progress.cmd.t_cmin = FirstCommandId;
-	}
-	tp.t_data->t_xmax = xid;
-	tp.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
-	tp.t_data->t_infomask &= 
-                ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
-	if ( ctid != NULL ) {
-            tp.t_data->t_ctid = *ctid;
-        } else {
-            tp.t_data->t_ctid = tp.t_self;
+	newtup->t_data->t_xmin = xid;
+	newtup->t_data->progress.cmd.t_cmin = GetCurrentCommandId();	
+	newtup->t_data->progress.cmd.t_cmax = FirstCommandId;
+	newtup->t_data->t_xmax = InvalidTransactionId;
+	
+	newtup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
+	newtup->t_data->t_infomask |= (HEAP_XMAX_INVALID | HEAP_UPDATED);
+
+        if ( oldtup->t_data->t_infomask & HEAP_MOVED_IN ) {
+                oldtup->t_data->t_xmin = oldtup->t_data->progress.t_vtran;
+                oldtup->t_data->progress.cmd.t_cmin = FirstCommandId;
         }
-        UnlockHeapTuple(relation,buffer,&tp);
-    
-	if ( HeapTupleHasBlob(&tp) ) {
-		delete_tuple_blob(relation,&tp,NULL);
+/*
+        if (!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid)) {
+            elog(WARN,"make sure aborted in heap_update self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
+                    oldtup.t_self,oldtup.t_data->t_ctid,oldtup.t_data->t_xmax,xid,
+                    TransactionIdDidCommit(oldtup.t_data->t_xmax)?"yes":"no",
+                    TransactionIdDidCrash(oldtup.t_data->t_xmax)?"yes":"no",
+                    TransactionIdDidAbort(oldtup.t_data->t_xmax)?"yes":"no");
+        }
+*/
+        oldtup->t_data->t_xmax = xid;
+        oldtup->t_data->progress.cmd.t_cmax = GetCurrentCommandId();
+        oldtup->t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
+        
+/* insert new item */
+        pageSize = PageGetFreeSpace(BufferGetPage(buffer));
+	if (  !BufferHasError(buffer) && (unsigned) MAXALIGN(newtup->t_len) <= pageSize && !(newtup->t_info & TUPLE_HASBUFFERED) ) {
+        	RelationPutHeapTuple(relation, buffer, newtup);  
+    	} else {
+		/*
+		 * New item won't fit on same page as old item, have to look for a
+		 * new place to put it. Note that we have to unlock current buffer
+		 * context - not good but RelationPutHeapTupleAtEnd uses extend
+		 * lock.
+		 */
+                LockHeapTuple(relation,buffer,oldtup,TUPLE_LOCK_UNLOCK);
+		RelationPutHeapTupleAtFreespace(relation, newtup, 0);
+    		LockHeapTuple(relation,buffer,oldtup,TUPLE_LOCK_WRITE);
+	}
+        oldtup->t_data->t_ctid = newtup->t_self;
+    	LockHeapTuple(relation,buffer,oldtup,TUPLE_LOCK_UNLOCK);
+	/* mark for rollback caches */
+	RelationMark4RollbackHeapTuple(relation, newtup);
+    	
+	if ( HeapTupleHasBlob(oldtup) ) {
+            delete_tuple_blob(relation,oldtup,newtup);
 	}
 	/* invalidate caches */
-	RelationInvalidateHeapTuple(relation, &tp);
+	RelationInvalidateHeapTuple(relation, oldtup);
 
 	WriteBuffer(relation, buffer);
 
 	return HeapTupleMayBeUpdated;
 }
 
-/*
- *	heap_update - replace a tuple
- */
+int
+heap_update_locked(Relation relation, Buffer buffer, HeapTuple oldtup, HeapTuple newtup, ItemPointer ctid)
+{
+	Assert(GetCriticalIODepth() > 0);
+	return heap_update_apply(relation, buffer, oldtup, newtup, ctid);
+}
+
 int
 heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
 			ItemPointer ctid, Snapshot snapshot)
 {
 	HeapTupleData       oldtup;
 	Buffer              buffer;
-	TransactionId       xid;
-        Size                pageSize;
         int                updateable;
 
-	Assert(ItemPointerIsValid(otid));
-        oldtup.t_self = *otid;
-        oldtup.t_info = 0;
-
-        updateable = LockHeapTupleForUpdate(relation, &buffer, &oldtup, snapshot);
+        updateable = heap_lock_for_update(relation, otid, &buffer, &oldtup, snapshot);
         if ( updateable == HeapTupleBeingUpdated ) {
             UnlockHeapTuple(relation,buffer,&oldtup);
             ReleaseBuffer(relation, buffer);
@@ -818,78 +930,28 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
             UnlockHeapTuple(relation,buffer,&oldtup);
             ReleaseBuffer(relation, buffer);
             return updateable;
-	} 
-        
-	/* XXX order problems if not atomic assignment ??? */
-	newtup->t_data->t_oid = oldtup.t_data->t_oid;
-	xid = GetCurrentTransactionId();
-
-	newtup->t_data->t_xmin = xid;
-	newtup->t_data->progress.cmd.t_cmin = GetCurrentCommandId();	
-	newtup->t_data->progress.cmd.t_cmax = FirstCommandId;
-	newtup->t_data->t_xmax = InvalidTransactionId;
-	
-	newtup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
-	newtup->t_data->t_infomask |= (HEAP_XMAX_INVALID | HEAP_UPDATED);
-
-        if ( oldtup.t_data->t_infomask & HEAP_MOVED_IN ) {
-                oldtup.t_data->t_xmin = oldtup.t_data->progress.t_vtran;
-                oldtup.t_data->progress.cmd.t_cmin = FirstCommandId;
-        }
-/*
-        if (!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid)) {
-            elog(WARN,"make sure aborted in heap_update self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
-                    oldtup.t_self,oldtup.t_data->t_ctid,oldtup.t_data->t_xmax,xid,
-                    TransactionIdDidCommit(oldtup.t_data->t_xmax)?"yes":"no",
-                    TransactionIdDidCrash(oldtup.t_data->t_xmax)?"yes":"no",
-                    TransactionIdDidAbort(oldtup.t_data->t_xmax)?"yes":"no");
-        }
-*/
-        oldtup.t_data->t_xmax = xid;
-        oldtup.t_data->progress.cmd.t_cmax = GetCurrentCommandId();
-        oldtup.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID | HEAP_MARKED_FOR_UPDATE | HEAP_MOVED_IN);
-        
-/* insert new item */
-        pageSize = PageGetFreeSpace(BufferGetPage(buffer));
-	if (  !BufferHasError(buffer) && (unsigned) MAXALIGN(newtup->t_len) <= pageSize && !(newtup->t_info & TUPLE_HASBUFFERED) ) {
-        	RelationPutHeapTuple(relation, buffer, newtup);  
-    	} else {
-		/*
-		 * New item won't fit on same page as old item, have to look for a
-		 * new place to put it. Note that we have to unlock current buffer
-		 * context - not good but RelationPutHeapTupleAtEnd uses extend
-		 * lock.
-		 */
-                LockHeapTuple(relation,buffer,&oldtup,TUPLE_LOCK_UNLOCK);
-		RelationPutHeapTupleAtFreespace(relation, newtup, 0);
-    		LockHeapTuple(relation,buffer,&oldtup,TUPLE_LOCK_WRITE);
 	}
-        oldtup.t_data->t_ctid = newtup->t_self;
-    	LockHeapTuple(relation,buffer,&oldtup,TUPLE_LOCK_UNLOCK);
-	/* mark for rollback caches */
-	RelationMark4RollbackHeapTuple(relation, newtup);
-    	
-	if ( HeapTupleHasBlob(&oldtup) ) {
-            delete_tuple_blob(relation,&oldtup,newtup);
-	}
-	/* invalidate caches */
-	RelationInvalidateHeapTuple(relation, &oldtup);
 
-	WriteBuffer(relation, buffer);
-
-	return HeapTupleMayBeUpdated;
+	BeginCriticalIO();
+	updateable = heap_update_apply(relation, buffer, &oldtup, newtup, ctid);
+	EndCriticalIO();
+	return updateable;
 }
 
 /*
  *	heap_mark4update		- mark a tuple for update
+ *
+ * One heap page (the xmax mark). The row-lock wait is outside the section.
  */
 int
 heap_mark4update(Relation relation, Buffer *buffer, HeapTuple tuple,  Snapshot snapshot)
 {
 	int			result;
 	TransactionId		xid;
+	ItemPointerData		tid;
 
-        result = LockHeapTupleForUpdate(relation, buffer, tuple, snapshot);
+	tid = tuple->t_self;
+        result = heap_lock_for_update(relation, &tid, buffer, tuple, snapshot);
         if ( result == HeapTupleBeingUpdated ) {
             UnlockHeapTuple(relation,*buffer,tuple);
             ReleaseBuffer(relation, *buffer);
@@ -905,6 +967,7 @@ heap_mark4update(Relation relation, Buffer *buffer, HeapTuple tuple,  Snapshot s
 	}
 
 	/* store transaction information of xact marking the tuple */
+	BeginCriticalIO();
 	xid = GetCurrentTransactionId();
 	tuple->t_data->t_xmax = xid;
 	tuple->t_data->progress.cmd.t_cmax = GetCurrentCommandId();
@@ -913,6 +976,7 @@ heap_mark4update(Relation relation, Buffer *buffer, HeapTuple tuple,  Snapshot s
         UnlockHeapTuple(relation,*buffer,tuple);
 
 	WriteNoReleaseBuffer(relation, *buffer);
+	EndCriticalIO();
 
 	return HeapTupleMayBeUpdated;
 }

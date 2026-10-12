@@ -51,6 +51,7 @@ public final class BattleChildMain {
                 case "null-int" -> nullInt(mode, datadir);
                 case "char-bind" -> charBind(mode, datadir);
                 case "autocommit-error" -> autocommitError(mode, datadir);
+                case "multipage" -> multipage(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -134,6 +135,147 @@ public final class BattleChildMain {
         }
         if (aErr.get() == null && bErr.get() == null) {
             System.out.println("BATTLE CHILD deadlock both committed (lock wait resolved without an error)");
+        }
+    }
+
+    /**
+     * One row is updated while another transaction holds its lock. The waiter
+     * then writes the heap tuple (old page and new page) together with the
+     * btree and hash index entries. After shutdown the same values must be
+     * visible through the id index and the value indexes.
+     */
+    private static void multipage(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        String filler = "p".repeat(180);
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_mp (id int4, v int4, payload varchar(4000))");
+            conn.execute("create index bt_mp_id on bt_mp using btree (id)");
+            conn.execute("create index bt_mp_v on bt_mp using btree (v)");
+            conn.execute("create index bt_mp_hash on bt_mp using hash (v)");
+            for (int i = 1; i <= 400; i++) {
+                conn.execute("insert into bt_mp (id, v, payload) values ("
+                        + i + ", " + i + ", '" + filler + "')");
+            }
+        }
+
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch waiting = new CountDownLatch(1);
+        AtomicReference<Throwable> holderErr = new AtomicReference<>();
+        AtomicReference<Throwable> waiterErr = new AtomicReference<>();
+
+        Thread holder = new Thread(() -> {
+            try (DBReference conn = open()) {
+                conn.begin();
+                conn.execute("update bt_mp set v = v + 1 where id = 1");
+                held.countDown();
+                if (!waiting.await(15, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("waiter did not start");
+                }
+                Thread.sleep(500);
+                conn.commit();
+            } catch (Throwable t) {
+                holderErr.set(t);
+                held.countDown();
+            }
+        }, "bt-mp-holder");
+
+        Thread waiter = new Thread(() -> {
+            try (DBReference conn = open()) {
+                if (!held.await(15, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("holder did not lock");
+                }
+                waiting.countDown();
+                String wide = "w".repeat(3000);
+                conn.execute("update bt_mp set v = v + 10000, payload = '" + wide
+                        + "' where id = 1");
+            } catch (Throwable t) {
+                waiterErr.set(t);
+                waiting.countDown();
+            }
+        }, "bt-mp-waiter");
+
+        holder.start();
+        waiter.start();
+        holder.join(25_000);
+        waiter.join(25_000);
+        if (holder.isAlive() || waiter.isAlive()) {
+            System.out.println("BATTLE CHILD multipage hung holder=" + holder.isAlive()
+                    + " waiter=" + waiter.isAlive());
+            System.exit(4);
+        }
+        if (holderErr.get() != null || waiterErr.get() != null) {
+            System.out.println("BATTLE CHILD multipage holder=" + text(holderErr.get())
+                    + " waiter=" + text(waiterErr.get()));
+            if (holderErr.get() != null) {
+                holderErr.get().printStackTrace(System.out);
+            }
+            if (waiterErr.get() != null) {
+                waiterErr.get().printStackTrace(System.out);
+            }
+            System.exit(1);
+        }
+
+        checkMultipage(false);
+        System.out.println("BATTLE CHILD multipage phase=shutdown");
+        shutdown(mode);
+        boot(mode, datadir);
+        checkMultipage(true);
+        shutdown(mode);
+        System.out.println("BATTLE CHILD multipage ok");
+    }
+
+    private static void checkMultipage(boolean recovered) throws Exception {
+        try (DBReference conn = open()) {
+            int warnings = scalarInt(conn, "select cio_depth_warnings()");
+            int value = scalarInt(conn, "select v from bt_mp where id = 1");
+            String payload = scalarText(conn, "select payload from bt_mp where id = 1");
+            int byValue = count(conn, "select id from bt_mp where v = " + value);
+            int rows = count(conn, "select id from bt_mp");
+            System.out.println("BATTLE CHILD multipage recovered=" + recovered
+                    + " v=" + value
+                    + " payloadLen=" + (payload == null ? -1 : payload.length())
+                    + " byValue=" + byValue
+                    + " rows=" + rows
+                    + " cioWarnings=" + warnings);
+            if (warnings != 0) {
+                throw new IllegalStateException("cio_depth_warnings=" + warnings);
+            }
+            if (rows != 400) {
+                throw new IllegalStateException("rows=" + rows);
+            }
+            if (value != 10002) {
+                throw new IllegalStateException("v=" + value + " after contended update");
+            }
+            if (payload == null || payload.length() != 3000) {
+                throw new IllegalStateException("payload length "
+                        + (payload == null ? -1 : payload.length()));
+            }
+            if (byValue != 1) {
+                throw new IllegalStateException("index lookup count " + byValue + " for v=" + value);
+            }
+        }
+    }
+
+    private static int scalarInt(DBReference conn, String sql) throws Exception {
+        try (Statement s = conn.statement(sql)) {
+            Output<Integer> out = s.linkOutput(1, Integer.class);
+            s.execute();
+            if (!s.fetch() || out.get() == null) {
+                throw new IllegalStateException("no integer for " + sql);
+            }
+            return out.get();
+        }
+    }
+
+    private static String scalarText(DBReference conn, String sql) throws Exception {
+        try (Statement s = conn.statement(sql)) {
+            Output<String> out = s.linkOutput(1, String.class);
+            s.execute();
+            if (!s.fetch()) {
+                return null;
+            }
+            return out.get();
         }
     }
 

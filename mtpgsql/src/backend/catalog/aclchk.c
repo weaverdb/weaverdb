@@ -154,8 +154,16 @@ ChangeAcl(char *relname,
 	values[Anum_pg_class_relacl - 1] = (Datum) new_acl;
 	tuple = heap_modifytuple(tuple, relation, values, nulls, replaces);
 
-	BeginCriticalIO();
-	heap_update(relation, &tuple->t_self, tuple, NULL,NULL);
+	{
+		HeapTupleData ciotup;
+		Buffer ciobuf;
+		int ciores;
+		ciores = heap_lock_for_update(relation, &tuple->t_self, &ciobuf, &ciotup, NULL);
+		if (ciores != HeapTupleMayBeUpdated)
+			elog(ERROR, "could not lock tuple for update");
+		BeginCriticalIO();
+		heap_update_locked(relation, ciobuf, &ciotup, tuple, NULL);
+	}
 
 	/* keep the catalog indices up to date */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices,

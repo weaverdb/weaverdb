@@ -114,8 +114,16 @@ SetDefine(char *querystr, char *typename)
 									  replNull,
 									  repl);
 
-			BeginCriticalIO();
-			heap_update(procrel, &tup->t_self, newtup, NULL, NULL);
+			{
+				HeapTupleData ciotup;
+				Buffer ciobuf;
+				int ciores;
+				ciores = heap_lock_for_update(procrel, &tup->t_self, &ciobuf, &ciotup, NULL);
+				if (ciores != HeapTupleMayBeUpdated)
+					elog(ERROR, "could not lock tuple for update");
+				BeginCriticalIO();
+				heap_update_locked(procrel, ciobuf, &ciotup, newtup, NULL);
+			}
 
 			setoid = newtup->t_data->t_oid;
 		}

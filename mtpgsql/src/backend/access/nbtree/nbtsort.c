@@ -48,6 +48,7 @@
 #include "access/nbtree.h"
 #include "utils/tuplesort.h"
 #include "access/heapam.h"
+#include "storage/bufmgr.h"
 
 /*
  * Status record for spooling.
@@ -455,8 +456,20 @@ _bt_buildadd(Relation index, BTPageState * state, BTItem bti)
 		 * Write out the old page.	We never want to see it
 		 * again, so we can give up our lock (if we had one; most
 		 * likely BuildingBtree is set, so we aren't locking).
+		 *
+		 * One completed leaf. _bt_uppershutdown holds a section
+		 * around the final pages of every level, so this write
+		 * stays with that group when it is called from there.
 		 */
-		_bt_wrtbuf(index, obuf);
+		{
+			bool own_section = (GetCriticalIODepth() == 0);
+
+			if (own_section)
+				BeginCriticalIO();
+			_bt_wrtbuf(index, obuf);
+			if (own_section)
+				EndCriticalIO();
+		}
 
 		/*
 		 * Reset last_off to point to new page
@@ -491,6 +504,15 @@ static void
 _bt_uppershutdown(Relation index, BTPageState * state)
 {
 	BTPageState    *s;
+	bool		own_section = (GetCriticalIODepth() == 0);
+
+	/*
+	 * The last page of each level, the parent links those pages
+	 * create, and the metapage root pointer are one tree. Write
+	 * them in a single section.
+	 */
+	if (own_section)
+		BeginCriticalIO();
 
 	/*
 	 * Each iteration of this loop completes one more level of the tree.
@@ -532,6 +554,9 @@ _bt_uppershutdown(Relation index, BTPageState * state)
 		_bt_slideleft(index, s->btps_buf, s->btps_page);
 		_bt_wrtbuf(index, s->btps_buf);
 	}
+
+	if (own_section)
+		EndCriticalIO();
 }
 
 /*

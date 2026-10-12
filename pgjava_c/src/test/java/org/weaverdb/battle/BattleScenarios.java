@@ -1020,6 +1020,9 @@ public final class BattleScenarios {
         if (initRc != 0) {
             throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
         }
+        if (initOut.contains("CriticalIO depth")) {
+            throw new IllegalStateException("CriticalIO depth warning during initdb\n" + initOut);
+        }
         List<String> cmd = List.of(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--enable-native-access=ALL-UNNAMED",
@@ -1046,6 +1049,9 @@ public final class BattleScenarios {
         }
         System.out.println("BATTLE CHILD " + mode + " " + scenario + " exit=" + code);
         System.out.println(output);
+        if (output.contains("CriticalIO depth")) {
+            throw new IllegalStateException("CriticalIO depth warning\n" + output);
+        }
         return new ChildResult(code, output);
     }
 
@@ -1169,6 +1175,10 @@ public final class BattleScenarios {
             }
         }
         throw new ExecutionException("no numeric binding for " + sql, last);
+    }
+
+    public static long scalarLong(DBReference conn, String sql) throws Exception {
+        return scalarNumber(conn, sql);
     }
 
     private static String scalarString(DBReference conn, String sql) throws Exception {
