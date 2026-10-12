@@ -49,6 +49,7 @@ public final class BattleChildMain {
                 case "helper" -> helper(mode, datadir);
                 case "hash-index" -> hashIndex(mode, datadir);
                 case "null-int" -> nullInt(mode, datadir);
+                case "char-bind" -> charBind(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -301,6 +302,34 @@ public final class BattleChildMain {
                 Integer value = qty.get();
                 System.out.println("BATTLE CHILD null-int qty=" + value);
                 if (value != null) {
+                    System.exit(3);
+                }
+            }
+        }
+    }
+
+    /**
+     * Bind a {@code Character} into char(1). Isolated because the FFM upcall
+     * writes two bytes into a one-byte slot and the JVM exits.
+     */
+    private static void charBind(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_char (c char(1))");
+            try (Statement s = conn.statement("insert into bt_char (c) values ($c)")) {
+                s.linkInput("c", Character.class).set('Q');
+                long n = s.execute();
+                System.out.println("BATTLE CHILD char-bind insert count=" + n);
+            }
+            try (Statement s = conn.statement("select c from bt_char")) {
+                Output<Character> out = s.linkOutput(1, Character.class);
+                s.execute();
+                if (!s.fetch()) {
+                    throw new IllegalStateException("char-bind select returned no row");
+                }
+                System.out.println("BATTLE CHILD char-bind value=" + out.get());
+                if (out.get() == null || out.get() != 'Q') {
                     System.exit(3);
                 }
             }

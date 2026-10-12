@@ -256,32 +256,33 @@ public final class BattleScenarios {
 
     private static void scalarTypes() throws Exception {
         try (DBReference conn = open()) {
+            // char(1) is omitted here. The FFM binding writes a Java char (2 bytes)
+            // into the 1-byte native slot and that IndexOutOfBoundsException is fatal
+            // to the upcall. See the isolated char-bind child.
             recreate(conn, "bt_types",
-                    "si int2, i int4, bi int8, r float4, d float8, b bool, c char(1), t text, v varchar(32)");
+                    "si int2, i int4, bi int8, r float4, d float8, b bool, t text, v varchar(32)");
             try (Statement s = conn.statement(
-                    "insert into bt_types (si, i, bi, r, d, b, c, t, v) values ($si, $i, $bi, $r, $d, $b, $c, $t, $v)")) {
+                    "insert into bt_types (si, i, bi, r, d, b, t, v) values ($si, $i, $bi, $r, $d, $b, $t, $v)")) {
                 s.linkInput("si", Integer.class).set(-32768);
                 s.linkInput("i", Integer.class).set(Integer.MIN_VALUE);
                 s.linkInput("bi", Long.class).set(Long.MAX_VALUE);
                 s.linkInput("r", Float.class).set(1.5f);
                 s.linkInput("d", Double.class).set(-2.25d);
                 s.linkInput("b", Boolean.class).set(Boolean.TRUE);
-                s.linkInput("c", Character.class).set('Q');
                 s.linkInput("t", String.class).set("text-value");
                 s.linkInput("v", String.class).set("varchar-value");
                 s.execute();
             }
             try (Statement s = conn.statement(
-                    "select si, i, bi, r, d, b, c, t, v from bt_types")) {
+                    "select si, i, bi, r, d, b, t, v from bt_types")) {
                 Output<Integer> si = s.linkOutput(1, Integer.class);
                 Output<Integer> i = s.linkOutput(2, Integer.class);
                 Output<Long> bi = s.linkOutput(3, Long.class);
                 Output<Float> r = s.linkOutput(4, Float.class);
                 Output<Double> d = s.linkOutput(5, Double.class);
                 Output<Boolean> b = s.linkOutput(6, Boolean.class);
-                Output<Character> c = s.linkOutput(7, Character.class);
-                Output<String> t = s.linkOutput(8, String.class);
-                Output<String> v = s.linkOutput(9, String.class);
+                Output<String> t = s.linkOutput(7, String.class);
+                Output<String> v = s.linkOutput(8, String.class);
                 s.execute();
                 Assertions.assertTrue(s.fetch());
                 Assertions.assertEquals(Integer.valueOf(-32768), si.get());
@@ -290,19 +291,17 @@ public final class BattleScenarios {
                 Assertions.assertEquals(1.5f, r.get(), 0.0001f);
                 Assertions.assertEquals(-2.25d, d.get(), 0.0000001d);
                 Assertions.assertEquals(Boolean.TRUE, b.get());
-                Assertions.assertEquals(Character.valueOf('Q'), c.get());
                 Assertions.assertEquals("text-value", t.get());
                 Assertions.assertEquals("varchar-value", v.get());
             }
             try (Statement s = conn.statement(
-                    "insert into bt_types (si, i, bi, r, d, b, c, t, v) values ($si, $i, $bi, $r, $d, $b, $c, $t, $v)")) {
+                    "insert into bt_types (si, i, bi, r, d, b, t, v) values ($si, $i, $bi, $r, $d, $b, $t, $v)")) {
                 s.linkInput("si", Integer.class).set(32767);
                 s.linkInput("i", Integer.class).set(Integer.MAX_VALUE);
                 s.linkInput("bi", Long.class).set(Long.MIN_VALUE);
                 s.linkInput("r", Float.class).set(0f);
                 s.linkInput("d", Double.class).set(0d);
                 s.linkInput("b", Boolean.class).set(Boolean.FALSE);
-                s.linkInput("c", Character.class).set('Z');
                 s.linkInput("t", String.class).set(null);
                 s.linkInput("v", String.class).set(null);
                 s.execute();

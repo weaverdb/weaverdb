@@ -60,6 +60,13 @@ public class JniBattleIsolatedTest {
     }
 
     @Test
+    public void characterRoundTrips() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "char-bind", 60);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+    }
+
+    @Test
     public void nullIntegerRoundTrips() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "null-int", 60);
         System.out.println(result.output);
