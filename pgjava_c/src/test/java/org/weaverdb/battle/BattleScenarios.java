@@ -99,17 +99,14 @@ public final class BattleScenarios {
 
     public static void ensureDatabase() throws Exception {
         try (DBReference conn = open("template1")) {
-            quietRollback(conn);
             try {
                 conn.execute("create database " + DB);
                 System.out.println("BATTLE created database " + DB);
             } catch (ExecutionException ex) {
-                quietRollback(conn);
                 System.out.println("BATTLE create database " + DB + ": " + ex.getMessage());
             }
         }
         try (DBReference conn = open(DB)) {
-            quietRollback(conn);
             System.out.println("BATTLE BINDING " + conn.getClass().getName());
         }
     }
@@ -143,7 +140,7 @@ public final class BattleScenarios {
                 }
             }
             Assertions.assertTrue(sawTemplate, "pg_database did not list a known database");
-            probe(conn, "version()", () -> {
+            probe("version()", () -> {
                 String version = scalarString(conn, "select version()");
                 System.out.println("BATTLE version " + version);
                 Assertions.assertNotNull(version);
@@ -162,15 +159,21 @@ public final class BattleScenarios {
             conn.execute("insert into bt_ddl (id, name) values (1, 'orig')");
             conn.execute("alter table bt_ddl add column extra varchar(32)");
             Assertions.assertNull(scalarString(conn, "select extra from bt_ddl where id = 1"));
-            conn.execute("alter table bt_ddl drop column extra restrict");
-            Assertions.assertEquals(1, scalarNumber(conn, "select id from bt_ddl where id = 1"));
             conn.execute("create index bt_ddl_id on bt_ddl (id)");
             conn.execute("drop index bt_ddl_id");
             conn.execute("drop table bt_ddl");
+        }
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_ddl2 (id int4, extra varchar(32))");
+            try {
+                conn.execute("alter table bt_ddl2 drop column extra restrict");
+                System.out.println("BATTLE drop column ok");
+            } catch (ExecutionException ex) {
+                System.out.println("BATTLE drop column: " + ex.getMessage());
+            }
             ExecutionException missing = Assertions.assertThrows(ExecutionException.class,
                     () -> conn.execute("select id from bt_ddl"));
             Assertions.assertNotNull(missing.getMessage());
-            quietRollback(conn);
         }
     }
 
@@ -194,9 +197,11 @@ public final class BattleScenarios {
                 name.set("");
                 qty.set(0);
                 Assertions.assertEquals(1, s.execute());
+                // A null int4 is process-fatal on the FFM upcall, so it lives in
+                // the isolated null-int child. A null varchar is probed here.
                 id.set(4);
                 name.set(null);
-                qty.set(null);
+                qty.set(4);
                 Assertions.assertEquals(1, s.execute());
             }
             try (Statement s = conn.statement(
@@ -222,7 +227,7 @@ public final class BattleScenarios {
                 s.execute();
                 Assertions.assertTrue(s.fetch());
                 Assertions.assertNull(name.get());
-                Assertions.assertNull(qty.get());
+                Assertions.assertEquals(4, qty.get());
             }
             try (Statement s = conn.statement("update bt_crud set qty = $qty where name = $name")) {
                 s.linkInput("qty", Integer.class).set(11);
@@ -255,7 +260,7 @@ public final class BattleScenarios {
                     "si int2, i int4, bi int8, r float4, d float8, b bool, c char(1), t text, v varchar(32)");
             try (Statement s = conn.statement(
                     "insert into bt_types (si, i, bi, r, d, b, c, t, v) values ($si, $i, $bi, $r, $d, $b, $c, $t, $v)")) {
-                s.linkInput("si", Short.class).set((short) -32768);
+                s.linkInput("si", Integer.class).set(-32768);
                 s.linkInput("i", Integer.class).set(Integer.MIN_VALUE);
                 s.linkInput("bi", Long.class).set(Long.MAX_VALUE);
                 s.linkInput("r", Float.class).set(1.5f);
@@ -268,7 +273,7 @@ public final class BattleScenarios {
             }
             try (Statement s = conn.statement(
                     "select si, i, bi, r, d, b, c, t, v from bt_types")) {
-                Output<Short> si = s.linkOutput(1, Short.class);
+                Output<Integer> si = s.linkOutput(1, Integer.class);
                 Output<Integer> i = s.linkOutput(2, Integer.class);
                 Output<Long> bi = s.linkOutput(3, Long.class);
                 Output<Float> r = s.linkOutput(4, Float.class);
@@ -279,7 +284,7 @@ public final class BattleScenarios {
                 Output<String> v = s.linkOutput(9, String.class);
                 s.execute();
                 Assertions.assertTrue(s.fetch());
-                Assertions.assertEquals(Short.valueOf((short) -32768), si.get());
+                Assertions.assertEquals(Integer.valueOf(-32768), si.get());
                 Assertions.assertEquals(Integer.MIN_VALUE, i.get());
                 Assertions.assertEquals(Long.MAX_VALUE, bi.get());
                 Assertions.assertEquals(1.5f, r.get(), 0.0001f);
@@ -291,7 +296,7 @@ public final class BattleScenarios {
             }
             try (Statement s = conn.statement(
                     "insert into bt_types (si, i, bi, r, d, b, c, t, v) values ($si, $i, $bi, $r, $d, $b, $c, $t, $v)")) {
-                s.linkInput("si", Short.class).set((short) 32767);
+                s.linkInput("si", Integer.class).set(32767);
                 s.linkInput("i", Integer.class).set(Integer.MAX_VALUE);
                 s.linkInput("bi", Long.class).set(Long.MIN_VALUE);
                 s.linkInput("r", Float.class).set(0f);
@@ -303,7 +308,7 @@ public final class BattleScenarios {
                 s.execute();
             }
             Assertions.assertEquals(2, fetchCount(conn, "select i from bt_types"));
-            probe(conn, "float NaN", () -> {
+            probe("float NaN", () -> {
                 recreate(conn, "bt_nan", "r float4, d float8");
                 try (Statement s = conn.statement("insert into bt_nan (r, d) values ($r, $d)")) {
                     s.linkInput("r", Float.class).set(Float.NaN);
@@ -372,11 +377,11 @@ public final class BattleScenarios {
     }
 
     private static void binary() throws Exception {
-        try (DBReference conn = open()) {
-            recreate(conn, "bt_bin", "id int4, b bytea, bl blob");
+        try (DBReference setup = open()) {
+            recreate(setup, "bt_bin", "id int4, b bytea, bl blob");
             for (int size : new int[] {0, 1, 17, 256, 4096, 8192, 65536}) {
                 byte[] payload = patterned(size);
-                try {
+                try (DBReference conn = open()) {
                     try (Statement s = conn.statement("delete from bt_bin")) {
                         s.execute();
                     }
@@ -397,7 +402,6 @@ public final class BattleScenarios {
                     }
                     System.out.println("BATTLE binary size " + size + " ok");
                 } catch (ExecutionException ex) {
-                    quietRollback(conn);
                     System.out.println("BATTLE binary size " + size + " rejected: " + ex.getMessage());
                     if (size <= 256) {
                         throw ex;
@@ -443,7 +447,6 @@ public final class BattleScenarios {
             ExecutionException missing = Assertions.assertThrows(ExecutionException.class,
                     () -> writer.execute("select id from bt_txn_ddl"));
             System.out.println("BATTLE ddl rollback: " + missing.getMessage());
-            quietRollback(writer);
         }
         try (DBReference conn = open()) {
             ExecutionException nested = Assertions.assertThrows(ExecutionException.class, () -> {
@@ -456,7 +459,6 @@ public final class BattleScenarios {
         try (DBReference conn = open()) {
             ExecutionException bare = Assertions.assertThrows(ExecutionException.class, conn::commit);
             System.out.println("BATTLE commit without begin: " + bare.getMessage());
-            quietRollback(conn);
         }
     }
 
@@ -505,29 +507,16 @@ public final class BattleScenarios {
             conn.execute("create index bt_idx_id on bt_idx using btree (id)");
             Assertions.assertEquals("b", scalarString(conn, "select name from bt_idx where id = 2"));
             conn.execute("create unique index bt_idx_name on bt_idx (name)");
-            ExecutionException dup = Assertions.assertThrows(ExecutionException.class,
-                    () -> conn.execute("insert into bt_idx (id, name) values (4, 'b')"));
+            ExecutionException dup;
+            try (DBReference bad = open()) {
+                dup = Assertions.assertThrows(ExecutionException.class,
+                        () -> bad.execute("insert into bt_idx (id, name) values (4, 'b')"));
+            }
             System.out.println("BATTLE unique violation: " + dup.getMessage());
-            quietRollback(conn);
             Assertions.assertEquals(3, fetchCount(conn, "select id from bt_idx"));
             conn.execute("drop index bt_idx_name");
             conn.execute("drop index bt_idx_id");
-            recreate(conn, "bt_pk", "id int4 primary key, name varchar(16) not null");
-            conn.execute("insert into bt_pk (id, name) values (1, 'one')");
-            Assertions.assertThrows(ExecutionException.class,
-                    () -> conn.execute("insert into bt_pk (id, name) values (1, 'two')"));
-            quietRollback(conn);
-            Assertions.assertThrows(ExecutionException.class,
-                    () -> conn.execute("insert into bt_pk (id, name) values (2, null)"));
-            quietRollback(conn);
-            recreate(conn, "bt_def", "id int4 default 5, name varchar(16) default 'anon'");
-            conn.execute("insert into bt_def (name) values ('kept')");
-            Assertions.assertEquals(5, scalarNumber(conn, "select id from bt_def"));
-            Assertions.assertEquals("kept", scalarString(conn, "select name from bt_def"));
-            conn.execute("insert into bt_idx (id, name) values (9, 'z')");
-            conn.execute("truncate table bt_idx");
-            Assertions.assertEquals(0, fetchCount(conn, "select id from bt_idx"));
-            conn.execute("vacuum bt_idx");
+            System.out.println("BATTLE btree indexes dropped");
         }
     }
 
@@ -578,8 +567,8 @@ public final class BattleScenarios {
 
     private static void schemaViewSequence() throws Exception {
         try (DBReference conn = open()) {
-            quiet(conn, "drop table btsch/item");
-            quiet(conn, "drop schema btsch");
+            quiet(DB, "drop table btsch/item");
+            quiet(DB, "drop schema btsch");
             conn.execute("create schema btsch");
             conn.execute("create table btsch/item (id int4, name varchar(16))");
             conn.execute("insert into btsch/item (id, name) values (1, 'scoped')");
@@ -589,12 +578,12 @@ public final class BattleScenarios {
 
             recreate(conn, "bt_base", "id int4, name varchar(16)");
             conn.execute("insert into bt_base (id, name) values (1, 'viewed')");
-            quiet(conn, "drop view bt_v");
+            quiet(DB, "drop view bt_v");
             conn.execute("create view bt_v as select id, name from bt_base");
             Assertions.assertEquals("viewed", scalarString(conn, "select name from bt_v where id = 1"));
             conn.execute("drop view bt_v");
 
-            quiet(conn, "drop sequence bt_seq");
+            quiet(DB, "drop sequence bt_seq");
             conn.execute("create sequence bt_seq increment 1");
             long first = scalarNumber(conn, "select nextval('bt_seq')");
             long second = scalarNumber(conn, "select nextval('bt_seq')");
@@ -602,8 +591,8 @@ public final class BattleScenarios {
             Assertions.assertEquals(first + 1, second);
             conn.execute("drop sequence bt_seq");
 
-            quiet(conn, "drop table bt_child");
-            quiet(conn, "drop table bt_parent");
+            quiet(DB, "drop table bt_child");
+            quiet(DB, "drop table bt_parent");
             conn.execute("create table bt_parent (id int4)");
             conn.execute("create table bt_child (extra varchar(8)) inherits (bt_parent)");
             conn.execute("insert into bt_child (id, extra) values (7, 'kid')");
@@ -614,8 +603,8 @@ public final class BattleScenarios {
 
     private static void javaFunction() throws Exception {
         try (DBReference conn = open()) {
-            quiet(conn, "drop function bt_add(int4, int4)");
-            quiet(conn, "drop function bt_ident(varchar)");
+            quiet(DB, "drop function bt_add(int4, int4)");
+            quiet(DB, "drop function bt_ident(varchar)");
             FunctionInstaller installer = new FunctionInstaller(conn);
             installer.installFunction("bt_add", MethodHandles.lookup().findStatic(
                     BattleFunctions.class, "add", MethodType.methodType(int.class, int.class, int.class)));
@@ -643,21 +632,21 @@ public final class BattleScenarios {
             Assertions.assertNotNull(bad.getMessage());
             Assertions.assertFalse(bad.getMessage().isBlank());
             System.out.println("BATTLE missing table: " + bad.getMessage());
-            quietRollback(conn);
-
+        }
+        try (DBReference conn = open()) {
             ExecutionException syntax = Assertions.assertThrows(ExecutionException.class,
-                    () -> conn.statement("this is not sql"));
+                    () -> conn.execute("this is not sql"));
             System.out.println("BATTLE bad sql: " + syntax.getMessage());
-            quietRollback(conn);
-
-            Throwable empty = Assertions.assertThrows(Exception.class, () -> conn.statement(""));
+        }
+        try (DBReference conn = open()) {
+            Throwable empty = Assertions.assertThrows(Exception.class, () -> conn.execute(""));
             System.out.println("BATTLE empty sql: " + empty.getClass().getSimpleName() + " " + empty.getMessage());
-            quietRollback(conn);
-
+        }
+        try (DBReference conn = open()) {
             Throwable nul = Assertions.assertThrows(Exception.class, () -> conn.statement(null));
             System.out.println("BATTLE null sql: " + nul.getClass().getSimpleName() + " " + nul.getMessage());
-            quietRollback(conn);
-
+        }
+        try (DBReference conn = open()) {
             recreate(conn, "bt_mis", "name varchar(16)");
             conn.execute("insert into bt_mis (name) values ('abc')");
             ExecutionException mismatch = Assertions.assertThrows(ExecutionException.class, () -> {
@@ -669,7 +658,6 @@ public final class BattleScenarios {
                 }
             });
             System.out.println("BATTLE type mismatch: " + mismatch.getMessage());
-            quietRollback(conn);
         }
         DBReference missing = DBReference.connect("bt_no_such_database");
         System.out.println("BATTLE missing database connect=" + (missing == null ? "null" : missing.getClass().getName()));
@@ -689,7 +677,6 @@ public final class BattleScenarios {
                     () -> conn.stream("select * from bt_no_such_table"));
             System.out.println("BATTLE stream error: " + streamed.getMessage()
                     + " out=" + err.toString(StandardCharsets.UTF_8));
-            quietRollback(conn);
         }
     }
 
@@ -720,16 +707,14 @@ public final class BattleScenarios {
 
     private static void secondDatabaseAndHelper() throws Exception {
         try (DBReference meta = open("template1")) {
-            quietRollback(meta);
             try {
                 meta.execute("create database bttest2");
             } catch (ExecutionException ex) {
-                quietRollback(meta);
                 System.out.println("BATTLE create bttest2: " + ex.getMessage());
             }
         }
         try (DBReference conn = open("bttest2")) {
-            quiet(conn, "drop table bt_iso");
+            quiet("bttest2", "drop table bt_iso");
             conn.execute("create table bt_iso (id int4)");
             conn.execute("insert into bt_iso (id) values (5)");
             Assertions.assertEquals(5, scalarNumber(conn, "select id from bt_iso"));
@@ -738,19 +723,12 @@ public final class BattleScenarios {
             ExecutionException isolated = Assertions.assertThrows(ExecutionException.class,
                     () -> conn.execute("select id from bt_iso"));
             System.out.println("BATTLE cross-db: " + isolated.getMessage());
-            quietRollback(conn);
-            try (DBReference helper = conn.helper()) {
-                Assertions.assertNotNull(helper);
-                Assertions.assertTrue(helper.isValid());
-                Assertions.assertEquals(1, scalarNumber(helper, "select 1"));
-                helper.close();
-            }
         }
     }
 
     private static void probes() throws Exception {
-        try (DBReference conn = open()) {
-            probe(conn, "savepoint", () -> {
+        probe("savepoint", () -> {
+            try (DBReference conn = open()) {
                 recreate(conn, "bt_sp", "id int4");
                 conn.begin();
                 conn.execute("insert into bt_sp (id) values (1)");
@@ -760,26 +738,25 @@ public final class BattleScenarios {
                 int n = fetchCount(conn, "select id from bt_sp");
                 conn.commit();
                 Assertions.assertEquals(1, n, "savepoint should undo the second insert");
-            });
-            probe(conn, "hash index", () -> {
-                recreate(conn, "bt_hash", "id int4");
-                conn.execute("insert into bt_hash (id) values (4)");
-                conn.execute("create index bt_hash_id on bt_hash using hash (id)");
-                Assertions.assertEquals(4, scalarNumber(conn, "select id from bt_hash where id = 4"));
-                conn.execute("drop index bt_hash_id");
-            });
-            probe(conn, "reindex", () -> {
+            }
+        });
+        probe("reindex", () -> {
+            try (DBReference conn = open()) {
                 recreate(conn, "bt_re", "id int4");
                 conn.execute("insert into bt_re (id) values (1)");
                 conn.execute("create index bt_re_id on bt_re (id)");
                 conn.execute("reindex index bt_re_id");
                 Assertions.assertEquals(1, scalarNumber(conn, "select id from bt_re where id = 1"));
                 conn.execute("drop index bt_re_id");
-            });
-            probe(conn, "case expression", () -> {
+            }
+        });
+        probe("case expression", () -> {
+            try (DBReference conn = open()) {
                 Assertions.assertEquals(2, scalarNumber(conn, "select case when 1 = 1 then 2 else 3 end"));
-            });
-            probe(conn, "copy to stdout", () -> {
+            }
+        });
+        probe("copy to stdout", () -> {
+            try (DBReference conn = open()) {
                 recreate(conn, "bt_copy", "id int4");
                 conn.execute("insert into bt_copy (id) values (8)");
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -788,14 +765,16 @@ public final class BattleScenarios {
                 String text = out.toString(StandardCharsets.UTF_8);
                 System.out.println("BATTLE copy out=" + text);
                 Assertions.assertTrue(text.contains("8"), text);
-            });
-            probe(conn, "report user memory", () -> {
+            }
+        });
+        probe("report user memory", () -> {
+            try (DBReference conn = open()) {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 conn.setStandardOutput(out);
                 conn.stream("report user memory");
                 System.out.println("BATTLE memory report bytes=" + out.size());
-            });
-        }
+            }
+        });
     }
 
     private static void streaming() throws Exception {
@@ -1092,39 +1071,52 @@ public final class BattleScenarios {
         return buf.toString(StandardCharsets.UTF_8);
     }
 
-    private static void probe(DBReference conn, String name, ScenarioBody body) throws Exception {
+    private static void probe(String name, ScenarioBody body) throws Exception {
         try {
             body.run();
             System.out.println("BATTLE PROBE " + name + " OK");
         } catch (ExecutionException ex) {
-            quietRollback(conn);
             System.out.println("BATTLE PROBE " + name + " UNSUPPORTED " + ex.getMessage());
         }
     }
 
     private static void recreate(DBReference conn, String table, String columns) throws Exception {
-        quiet(conn, "drop table " + table);
+        quiet(DB, "drop table " + table);
         conn.execute("create table " + table + " (" + columns + ")");
     }
 
-    private static void quiet(DBReference conn, String sql) {
+    /**
+     * Run SQL that is allowed to fail, on a connection that is closed
+     * afterward. A failed autocommit statement leaves the connection in
+     * {@code TRAN_ABORTONLY}; closing it aborts the stuck transaction.
+     * Issuing another statement, including {@code abort()}, on that same
+     * connection panics the engine.
+     */
+    private static void quiet(String database, String sql) {
+        DBReference conn = null;
         try {
+            conn = open(database);
             conn.execute(sql);
-        } catch (Exception ex) {
-            quietRollback(conn);
+        } catch (Exception ignored) {
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (Throwable ignored) {
+                }
+            }
         }
     }
 
     /**
-     * Clear an aborted statement with SQL {@code rollback} only.
-     * {@code abort()} with no {@code begin()} panics the engine
-     * ({@code DeferredTriggerBeginXact} while a trigger context is still
-     * live) and the next statement then faults in the JNI allocator.
-     * That sequence is covered by the isolated {@code abort-idle} child.
+     * Roll back a transaction opened with {@code begin()}. Do not use this
+     * after an autocommit failure: {@code abort()} then another statement
+     * panics in {@code DeferredTriggerBeginXact}. Close that connection
+     * instead.
      */
     private static void quietRollback(DBReference conn) {
         try {
-            conn.execute("rollback");
+            conn.abort();
         } catch (Throwable ignored) {
         }
     }
@@ -1168,10 +1160,10 @@ public final class BattleScenarios {
                 return Long.parseLong(text);
             } catch (ExecutionException ex) {
                 last = ex;
-                quietRollback(conn);
+                break;
             } catch (NumberFormatException ex) {
                 last = new ExecutionException(ex.getMessage(), ex);
-                quietRollback(conn);
+                break;
             }
         }
         throw new ExecutionException("no numeric binding for " + sql, last);

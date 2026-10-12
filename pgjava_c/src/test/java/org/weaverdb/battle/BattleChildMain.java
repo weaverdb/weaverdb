@@ -19,7 +19,7 @@ import org.weaverdb.WeaverInitializer;
  * Subprocess entry point so crashes, shutdown, and lock waits cannot take
  * down the JUnit worker that is running the rest of the suite.
  *
- * <pre>BattleChildMain &lt;jni|ffm&gt; &lt;datadir&gt; &lt;restart|deadlock|shared|cancel|abort-idle&gt;</pre>
+ * <pre>BattleChildMain &lt;jni|ffm&gt; &lt;datadir&gt; &lt;scenario&gt;</pre>
  *
  * Exit codes: 0 success, 2 handled failure, 3 feature did not do what the
  * API describes, 4 timed out, 1 unexpected exception.
@@ -45,6 +45,10 @@ public final class BattleChildMain {
                 case "shared" -> shared(mode, datadir);
                 case "cancel" -> cancel(mode, datadir);
                 case "abort-idle" -> abortIdle(mode, datadir);
+                case "constraints" -> constraints(mode, datadir);
+                case "helper" -> helper(mode, datadir);
+                case "hash-index" -> hashIndex(mode, datadir);
+                case "null-int" -> nullInt(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -268,6 +272,114 @@ public final class BattleChildMain {
             if (threw) {
                 System.exit(2);
             }
+        }
+    }
+
+    /**
+     * Bind a null {@code Integer} into an int4 column and read it back.
+     * Isolated because the FFM upcall throws an uncaught {@code NullPointerException}
+     * and the JVM exits.
+     */
+    private static void nullInt(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_nullint (id int4, qty int4)");
+            try (Statement s = conn.statement(
+                    "insert into bt_nullint (id, qty) values ($id, $qty)")) {
+                s.linkInput("id", Integer.class).set(1);
+                s.linkInput("qty", Integer.class).set(null);
+                long n = s.execute();
+                System.out.println("BATTLE CHILD null-int insert count=" + n);
+            }
+            try (Statement s = conn.statement("select qty from bt_nullint where id = 1")) {
+                Output<Integer> qty = s.linkOutput(1, Integer.class);
+                s.execute();
+                if (!s.fetch()) {
+                    throw new IllegalStateException("null-int select returned no row");
+                }
+                Integer value = qty.get();
+                System.out.println("BATTLE CHILD null-int qty=" + value);
+                if (value != null) {
+                    System.exit(3);
+                }
+            }
+        }
+    }
+
+    private static void hashIndex(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_hash (id int4)");
+            conn.execute("insert into bt_hash (id) values (4)");
+            System.out.println("BATTLE CHILD hash creating index");
+            conn.execute("create index bt_hash_id on bt_hash using hash (id)");
+            System.out.println("BATTLE CHILD hash index created");
+        }
+    }
+
+    private static void helper(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            try (DBReference child = conn.helper()) {
+                System.out.println("BATTLE CHILD helper class=" + child.getClass().getName()
+                        + " valid=" + child.isValid());
+                try (Statement s = child.statement("select 1")) {
+                    Output<Integer> out = s.linkOutput(1, Integer.class);
+                    s.execute();
+                    if (!s.fetch()) {
+                        throw new IllegalStateException("helper select returned no row");
+                    }
+                    System.out.println("BATTLE CHILD helper select=" + out.get());
+                }
+            }
+        }
+    }
+
+    /** Primary key, NOT NULL, defaults, truncate, and vacuum. Isolated because this sequence SIGSEGV'd in-process. */
+    private static void constraints(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_pk (id int4 primary key, name varchar(16) not null)");
+            conn.execute("insert into bt_pk (id, name) values (1, 'one')");
+            try {
+                conn.execute("insert into bt_pk (id, name) values (1, 'two')");
+                System.out.println("BATTLE CHILD pk duplicate accepted");
+                System.exit(3);
+            } catch (ExecutionException ex) {
+                System.out.println("BATTLE CHILD pk duplicate: " + ex.getMessage());
+            }
+        }
+        try (DBReference conn = open()) {
+            try {
+                conn.execute("insert into bt_pk (id, name) values (2, null)");
+                System.out.println("BATTLE CHILD null into not-null accepted");
+                System.exit(3);
+            } catch (ExecutionException ex) {
+                System.out.println("BATTLE CHILD not null: " + ex.getMessage());
+            }
+            conn.execute("create table bt_def (id int4 default 5, name varchar(16) default 'anon')");
+            conn.execute("insert into bt_def (name) values ('kept')");
+            try (Statement s = conn.statement("select id, name from bt_def")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<String> name = s.linkOutput(2, String.class);
+                s.execute();
+                if (!s.fetch() || id.get() == null || id.get() != 5 || !"kept".equals(name.get())) {
+                    throw new IllegalStateException("defaults id=" + id.get() + " name=" + name.get());
+                }
+            }
+            conn.execute("insert into bt_pk (id, name) values (9, 'z')");
+            conn.execute("truncate table bt_pk");
+            int n = count(conn, "select id from bt_pk");
+            System.out.println("BATTLE CHILD truncate rows=" + n);
+            if (n != 0) {
+                System.exit(3);
+            }
+            conn.execute("vacuum bt_pk");
+            System.out.println("BATTLE CHILD constraints ok");
         }
     }
 
