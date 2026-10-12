@@ -676,6 +676,13 @@ public final class BattleChildMain {
             } catch (ExecutionException ex) {
                 System.out.println("BATTLE CHILD not null: " + ex.getMessage());
             }
+        }
+        /*
+         * A failed autocommit statement leaves the connection abort-only.
+         * That is a separate scenario. Defaults, truncate, and vacuum run
+         * on a new connection, as the duplicate-key check already does.
+         */
+        try (DBReference conn = open()) {
             conn.execute("create table bt_def (id int4 default 5, name varchar(16) default 'anon')");
             conn.execute("insert into bt_def (name) values ('kept')");
             try (Statement s = conn.statement("select id, name from bt_def")) {

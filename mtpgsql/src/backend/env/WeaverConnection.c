@@ -671,9 +671,17 @@ WExec(OpaquePreparedStatement plan) {
             CommitTransactionCommand();
             needsCommit = false;
             /*
-             * increment after any utility if there are
-             * more subqueries to execute
+             * CREATE TABLE ... PRIMARY KEY is the table utility plus an
+             * IndexStmt on extras_after. The commit above deletes
+             * TopTransactionContext. DefineIndex then allocates an
+             * invalidation entry from that null context. Each later
+             * command needs its own transaction.
              */
+            if (trackquery != NULL) {
+                StartTransactionCommand();
+                SetQuerySnapshot();
+                needsCommit = true;
+            }
         } else {
             plan->state = CreateExecutorState();
             plan->stage = STMT_EXEC;
