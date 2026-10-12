@@ -48,7 +48,9 @@
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <execinfo.h>
 
 #include "postgres.h"
 
@@ -215,7 +217,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
     }
     
     status = smgrread(reln->rd_smgr, blockNum, (char *) (bufHdr->data));
-    bufHdr->generation = 0;
+    bufHdr->generation = -1;
     
     if ( !isLocalBuf && status == SM_SUCCESS ) {
         if ( reln->rd_rel->relkind == RELKIND_INDEX ) {
@@ -418,6 +420,46 @@ static void BufferPinInvalid(Buffer buf, Oid relid, Oid dbid, char* name) {
  *		Pin count is decremented.
  */
 
+/*
+ * A buffer write belongs to exactly one CriticalIO unit. Depth 0 is a write
+ * with no unit; depth above 1 is a nested BeginCriticalIO. Both are coding
+ * errors. The stack is recorded so the caller can be found.
+ */
+static void
+NoteCriticalIODepth(Relation rel, BufferDesc *bufHdr)
+{
+	static __thread int noting = 0;
+	int			depth;
+	void	   *frames[48];
+	int			nframes;
+	char	  **syms;
+	int			i;
+	const char *relname;
+
+	depth = GetCriticalIODepth();
+	if (depth == 1 || noting)
+		return;
+
+	noting = 1;
+	relname = (rel != NULL) ? RelationGetRelationName(rel) : NULL;
+	if (relname == NULL)
+		relname = bufHdr->blind.relname;
+	elog(NOTICE, "CriticalIO depth %d writing %s blk %lu",
+		 depth,
+		 relname != NULL ? relname : "?",
+		 (unsigned long) bufHdr->tag.blockNum);
+
+	nframes = backtrace(frames, 48);
+	syms = backtrace_symbols(frames, nframes);
+	if (syms != NULL)
+	{
+		for (i = 0; i < nframes; i++)
+			elog(NOTICE, "CriticalIO stack: %s", syms[i]);
+		free(syms);
+	}
+	noting = 0;
+}
+
 #undef WriteBuffer
 
 int
@@ -455,6 +497,7 @@ WriteBuffer(Relation rel, Buffer buffer) {
         b/c the Register command locks the buffer on its own
      */
     DirtyBufferIO(bufHdr);
+    NoteCriticalIODepth(rel, bufHdr);
     bool defer = bufenv->pinned_generation >= 0;
     long generation = RegisterBufferWrite(bufHdr, defer, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
     if (defer) {
@@ -577,6 +620,7 @@ WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
      * the write; Register locks the buffer on its own.
      */
     DirtyBufferIO(bufHdr);
+    NoteCriticalIODepth(rel, bufHdr);
     bool defer = env->pinned_generation >= 0;
     generation = RegisterBufferWrite(bufHdr, defer, false);
     if (defer) {
@@ -1558,7 +1602,7 @@ AbortCriticalIO(void) {
         memset(env->CriticalMark, 0, MaxBuffers*sizeof(int));
 
         env->critical_io_depth = 0;
-        env->pinned_generation = 1;
+        env->pinned_generation = -1;
     }
 }
 
@@ -1576,7 +1620,7 @@ TraceBufferFlushEnabled(void)
 bool ShadowBufferIfNeeded(long generation, BufferDesc* bufHdr) {
     bool shadowed = false;
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-    if (generation > 0 && bufHdr->generation < generation) {
+    if (generation >= 0 && bufHdr->generation < generation) {
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
         bufHdr->generation = generation;
         shadowed = true;

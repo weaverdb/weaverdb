@@ -744,8 +744,6 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 	bool		torn_cart;
 //	BTItem		lhikey;
 
-        BeginCriticalIO();
-
 	rbuf = _bt_getbuf(rel, P_NEW, BT_READYWRITE);
 
 	orig_leftpage = BufferGetPage(buf);
@@ -763,7 +761,7 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
         
         memmove(orig_rightpage,leftpage,PageGetPageSize(orig_rightpage));
         stub_cart = WriteNoReleaseBufferGen(rel, rbuf);
-        TraceIndexOp("split-unit stub-right %s blk=%lu cart=%ld shadow=%ld pin=%ld xid=%lu (before CriticalIO)",
+        TraceIndexOp("split-unit stub-right %s blk=%lu cart=%ld shadow=%ld pin=%ld xid=%lu",
                      RelationGetRelationName(rel),
                      (unsigned long) BufferGetBlockNumber(rbuf),
                      stub_cart,
@@ -771,7 +769,6 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
                      GetPinnedBufferGeneration(),
                      (unsigned long) GetCurrentTransactionId());
         LockBuffer(rel,rbuf,BT_NONE);
-        LockBuffer(rel,buf,BT_NONE);
 
 	_bt_pageinit(leftpage, BufferGetPageSize(buf));
 	_bt_pageinit(rightpage, BufferGetPageSize(rbuf));
@@ -965,7 +962,8 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
         LockBuffer(rel,rbuf,BT_NONE);
         right_cart = _bt_split_write(rel, rbuf, "right");
 
-        LockBuffer(rel,buf,BT_WRITE);
+	/* Left page stayed write-locked from entry, so next is published
+	 * before any other splitter can observe the old sibling link. */
 	PageRestoreTempPage(leftpage, BufferGetPage(buf));
         LockBuffer(rel,buf,BT_NONE);
         left_cart = _bt_split_write(rel, buf, "left");
@@ -976,7 +974,6 @@ _bt_split(Relation rel, Buffer buf, OffsetNumber firstright,
 		sib_cart = _bt_split_write(rel, sbuf, "sibling");
 		_bt_relbuf(rel, sbuf);
 	}
-        EndCriticalIO();
 
 	torn_cart = (left_cart != right_cart)
 		|| (sibblk != P_NONE && sib_cart != left_cart);
