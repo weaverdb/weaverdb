@@ -513,16 +513,8 @@ TypeCreate(char *typeName,
 							   nulls,
 							   replaces);
 
-		{
-			HeapTupleData ciotup;
-			Buffer ciobuf;
-			int ciores;
-			ciores = heap_lock_for_update(pg_type_desc, &tup->t_self, &ciobuf, &ciotup, NULL);
-			if (ciores != HeapTupleMayBeUpdated)
-				elog(ERROR, "could not lock tuple for update");
-			BeginCriticalIO();
-			heap_update_locked(pg_type_desc, ciobuf, &ciotup, tup, NULL);
-		}
+		BeginCriticalIO();
+		heap_update(pg_type_desc, &tup->t_self, tup, NULL, NULL);
 
 		typeObjectId = tup->t_data->t_oid;
 	}
@@ -599,16 +591,8 @@ TypeRename(const char *oldTypeName, const char *newTypeName)
 
 	namestrcpy(&(((Form_pg_type) GETSTRUCT(oldtup))->typname), newTypeName);
 
-	{
-		HeapTupleData ciotup;
-		Buffer ciobuf;
-		int ciores;
-		ciores = heap_lock_for_update(pg_type_desc, &oldtup->t_self, &ciobuf, &ciotup, NULL);
-		if (ciores != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock tuple for update");
-		BeginCriticalIO();
-		heap_update_locked(pg_type_desc, ciobuf, &ciotup, oldtup, NULL);
-	}
+	BeginCriticalIO();
+	heap_update(pg_type_desc, &oldtup->t_self, oldtup, NULL, NULL);
 
 	/* update the system catalog indices */
 	CatalogOpenIndices(Num_pg_type_indices, Name_pg_type_indices, idescs);

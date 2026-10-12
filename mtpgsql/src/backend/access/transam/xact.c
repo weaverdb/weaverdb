@@ -1188,17 +1188,13 @@ AbortTransactionBlock(void)
 	}
 
 	/* ----------------
-	 *	No user transaction block. An autocommit statement still has an
-	 *	implicit transaction (TBLOCK_AUTO / TRANS_INPROGRESS). Leave that
-	 *	in TBLOCK_ABORT so the upcoming CommitTransactionCommand() calls
-	 *	AbortTransaction and clears the deferred-trigger context.
-	 *	TBLOCK_DEFAULT would skip that cleanup.
+	 *	We should not get here, but if we do, we go to the ENDABORT
+	 *	state after printing a warning.  The upcoming call to
+	 *	CommitTransactionCommand() will then put us back into the
+	 *	default state.
 	 * ----------------
 	 */
-	if (s->blockState == TBLOCK_AUTO || s->state == TRANS_INPROGRESS)
-		s->blockState = TBLOCK_ABORT;
-	else
-		s->blockState = TBLOCK_DEFAULT;
+        s->blockState = TBLOCK_DEFAULT;
 	elog(NOTICE, "ABORT: no transaction in progress");
 }
 

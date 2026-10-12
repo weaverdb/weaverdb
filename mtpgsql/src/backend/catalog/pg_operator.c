@@ -823,16 +823,8 @@ OperatorDef(char *operatorName,
 								   nulls,
 								   replaces);
 
-			{
-				HeapTupleData ciotup;
-				Buffer ciobuf;
-				int ciores;
-				ciores = heap_lock_for_update(pg_operator_desc, &tup->t_self, &ciobuf, &ciotup, NULL);
-				if (ciores != HeapTupleMayBeUpdated)
-					elog(ERROR, "could not lock tuple for update");
-				BeginCriticalIO();
-				heap_update_locked(pg_operator_desc, ciobuf, &ciotup, tup, NULL);
-			}
+			BeginCriticalIO();
+			heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 		}
 		else
 			elog(ERROR, "OperatorDef: no operator %lu", operatorObjectId);
@@ -974,16 +966,8 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 									   nulls,
 									   replaces);
 
-				{
-					HeapTupleData ciotup;
-					Buffer ciobuf;
-					int ciores;
-					ciores = heap_lock_for_update(pg_operator_desc, &tup->t_self, &ciobuf, &ciotup, NULL);
-					if (ciores != HeapTupleMayBeUpdated)
-						elog(ERROR, "could not lock tuple for update");
-					BeginCriticalIO();
-					heap_update_locked(pg_operator_desc, ciobuf, &ciotup, tup, NULL);
-				}
+				BeginCriticalIO();
+				heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 
 				if (RelationGetForm(pg_operator_desc)->relhasindex)
 				{
@@ -1016,16 +1000,8 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 							   nulls,
 							   replaces);
 
-		{
-			HeapTupleData ciotup;
-			Buffer ciobuf;
-			int ciores;
-			ciores = heap_lock_for_update(pg_operator_desc, &tup->t_self, &ciobuf, &ciotup, NULL);
-			if (ciores != HeapTupleMayBeUpdated)
-				elog(ERROR, "could not lock tuple for update");
-			BeginCriticalIO();
-			heap_update_locked(pg_operator_desc, ciobuf, &ciotup, tup, NULL);
-		}
+		BeginCriticalIO();
+		heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 
 		if (RelationGetForm(pg_operator_desc)->relhasindex)
 		{
@@ -1063,16 +1039,8 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 							   nulls,
 							   replaces);
 
-		{
-			HeapTupleData ciotup;
-			Buffer ciobuf;
-			int ciores;
-			ciores = heap_lock_for_update(pg_operator_desc, &tup->t_self, &ciobuf, &ciotup, NULL);
-			if (ciores != HeapTupleMayBeUpdated)
-				elog(ERROR, "could not lock tuple for update");
-			BeginCriticalIO();
-			heap_update_locked(pg_operator_desc, ciobuf, &ciotup, tup, NULL);
-		}
+		BeginCriticalIO();
+		heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
 
 		if (RelationGetForm(pg_operator_desc)->relhasindex)
 		{

@@ -26,7 +26,6 @@
 #include "utils/tqual.h"
 #include "utils/relcache.h"
 #include "catalog/index.h"
-#include "catalog/pg_am.h"
 #include "utils/tuplesort.h"
 #include "utils/syscache.h"
 #include "env/freespace.h"
@@ -145,58 +144,6 @@ _bt_processqueue(Relation rel, void* spool) {
  *		This routine is called by the public interface routines, btbuild
  *		and btinsert.  By here, btitem is filled in, including the TID.
  */
-void
-_bt_wait_unique(Relation rel, Datum *datum, char *nulls, Relation heapRel, bool ignore_committed)
-{
-	IndexProp	atts;
-	IndexTuple	itup;
-	BTItem		btitem;
-	ScanKey		itup_scankey;
-	int			natts;
-
-	if (rel == NULL || rel->rd_rel->relam != BTREE_AM_OID)
-		return;
-	atts = IndexProperties(RelationGetRelid(rel));
-	if (!IndexPropIsUnique(atts) || IsPoolsweep())
-		return;
-
-	itup = index_formtuple(RelationGetDescr(rel), datum, nulls);
-	ItemPointerSetInvalid(&itup->t_tid);
-	btitem = _bt_formitem(itup);
-	natts = rel->rd_rel->relnatts;
-	itup_scankey = _bt_mkscankey(rel, &(btitem->bti_itup));
-
-	for (;;)
-	{
-		BTStack		stack;
-		Buffer		buf;
-		TransactionId xwait;
-		ItemPointerData other_ht;
-
-		stack = _bt_search(rel, natts, itup_scankey, &buf, BT_WRITE);
-		LockBuffer((rel), buf, BT_NONE);
-		LockBuffer((rel), buf, BT_WRITE);
-		buf = _bt_moveright(rel, buf, natts, itup_scankey, BT_WRITE);
-		ItemPointerSetInvalid(&other_ht);
-		xwait = _bt_check_unique(rel, &other_ht, heapRel, buf, itup_scankey);
-		_bt_relbuf(rel, buf);
-		_bt_freestack(stack);
-		if (TransactionIdIsValid(xwait))
-		{
-			XactLockTableWait(xwait);
-			continue;
-		}
-		if (ItemPointerIsValid(&other_ht) && !ignore_committed)
-			elog(ERROR, "Cannot insert a duplicate key into unique index %s ",
-				 RelationGetRelationName(rel));
-		break;
-	}
-
-	_bt_freeskey(itup_scankey);
-	pfree(btitem);
-	pfree(itup);
-}
-
 InsertIndexResult
 _bt_doinsert(Relation rel, BTItem btitem,
 			 bool index_is_unique, Relation heapRel)
@@ -266,17 +213,10 @@ top:;
 		if (TransactionIdIsValid(xwait))
 		{
                         _bt_relbuf(rel, buf);
-                        _bt_freestack(stack);
-			/*
-			 * The heap tuple and these index pages are one write
-			 * group. Waiting here would pin that group across another
-			 * transaction. Callers wait with _bt_wait_unique before
-			 * BeginCriticalIO, then recheck.
-			 */
-			if (GetCriticalIODepth() > 0)
-				elog(ERROR, "unique index wait inside CriticalIO (xid %lu)",
-					 (unsigned long) xwait);
+			/* Have to wait for the other guy ... */
 			XactLockTableWait(xwait);
+
+                        _bt_freestack(stack);
 			/* start over... */
 			goto top;
 		} else if ( ItemPointerIsValid(&other_ht) ) {

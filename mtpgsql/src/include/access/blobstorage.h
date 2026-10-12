@@ -30,16 +30,6 @@ typedef struct blobindex {
 Datum index_blob(Datum item);
 Datum seek_blob(Relation rel, Datum blob, Datum index, uint32 seek);
 
-#define MAX_BLOB_STORE_LOCKS 16
-
-typedef struct BlobStoreLocks {
-	Relation	rels[MAX_BLOB_STORE_LOCKS];
-	int			n;
-} BlobStoreLocks;
-
-void LockTupleBlobStores(Relation rel, HeapTuple tuple, BlobStoreLocks *locks);
-void UnlockTupleBlobStores(BlobStoreLocks *locks);
-
 int delete_tuple_blob(Relation rel, HeapTuple direct, HeapTuple newtup);
 BlockNumber store_tuple_blob(Relation rel, HeapTuple direct, int16 attnum);
 BlockNumber span_buffered_blob(Relation rel,HeapTuple direct);

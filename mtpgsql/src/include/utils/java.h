@@ -34,11 +34,8 @@ PG_EXTERN char*   javatextout(bytea* datum);
 PG_EXTERN bytea*   javain(jobject obj);
 PG_EXTERN jobject   javaout(bytea* datum);
 
-struct Environment;
-
 PG_EXTERN void SetJVM(JavaVM* java, const char* loader);
 PG_EXTERN void SetJavaObjectLoader(const char* loader);
-PG_EXTERN void InterruptEnvJavaCaller(struct Environment *env);
 
 
 PG_EXTERN Datum fmgr_javaA(const char *name, int nargs, Oid* types, Datum* values, Oid* returnType, bool *isNull);

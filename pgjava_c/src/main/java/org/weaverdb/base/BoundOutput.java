@@ -70,18 +70,11 @@ class BoundOutput<T> extends Bound<T> {
                 case Long:
                     return getTypeClass().cast(value);
                 case Date:
-                    if (java.time.Instant.class.equals(getTypeClass())) {
-                        if (value instanceof java.util.Date d) {
-                            return getTypeClass().cast(d.toInstant());
-                        }
-                        if (value instanceof java.time.Instant i) {
-                            return getTypeClass().cast(i);
-                        }
-                    }
                     if (value instanceof java.time.Instant i) {
                         return getTypeClass().cast(java.util.Date.from(i));
+                    } else {
+                        return getTypeClass().cast(value);
                     }
-                    return getTypeClass().cast(value);
                 case Java:
                     return getTypeClass().cast(JavaConverter.java_out((byte[]) value));
                 case Double:

@@ -79,8 +79,6 @@ typedef struct javacache {
     jmethodID                        createlong;
     jmethodID                        datevalue;
     jmethodID                        createdate;
-    jclass                           instanttype;
-    jmethodID                        instantmillis;
 } javacache;
 
 javacache* CreateCache(JNIEnv* env);

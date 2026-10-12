@@ -531,16 +531,8 @@ AtCommit_Notify()
 					{
 						rTuple = heap_modifytuple(lTuple, lRel,
 												  value, nulls, repl);
-						{
-							HeapTupleData ciotup;
-							Buffer ciobuf;
-							int ciores;
-							ciores = heap_lock_for_update(lRel, &lTuple->t_self, &ciobuf, &ciotup, NULL);
-							if (ciores != HeapTupleMayBeUpdated)
-								elog(ERROR, "could not lock tuple for update");
-							BeginCriticalIO();
-							heap_update_locked(lRel, ciobuf, &ciotup, rTuple, NULL);
-						}
+						BeginCriticalIO();
+						heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL);
 						if (RelationGetForm(lRel)->relhasindex)
 						{
 							Relation	idescs[Num_pg_listener_indices];
@@ -807,16 +799,8 @@ ProcessIncomingNotify(void)
 			NotifyMyFrontEnd(relname, sourcePID);
 			/* Rewrite the tuple with 0 in notification column */
 			rTuple = heap_modifytuple(lTuple, lRel, value, nulls, repl);
-			{
-				HeapTupleData ciotup;
-				Buffer ciobuf;
-				int ciores;
-				ciores = heap_lock_for_update(lRel, &lTuple->t_self, &ciobuf, &ciotup, NULL);
-				if (ciores != HeapTupleMayBeUpdated)
-					elog(ERROR, "could not lock tuple for update");
-				BeginCriticalIO();
-				heap_update_locked(lRel, ciobuf, &ciotup, rTuple, NULL);
-			}
+			BeginCriticalIO();
+			heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL);
 			if (RelationGetForm(lRel)->relhasindex)
 			{
 				Relation	idescs[Num_pg_listener_indices];

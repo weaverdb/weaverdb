@@ -355,14 +355,9 @@ XactLockTableWait(TransactionId xid)
 	tag.objId.xid = xid;
 
 	sid = GetCurrentTransactionId();
-	/*
-	 * Callers must not be inside CriticalIO. A row-lock wait can last
-	 * longer than a write group, and the group must not rotate while a
-	 * section is open. The wait happens first; the caller rechecks and
-	 * then writes every related page in one section.
-	 */
-	if (!LockAcquire(PartitionedTables[0], &tag, sid, ShareLock, false))
+	if (!LockAcquire(PartitionedTables[0], &tag, sid, ShareLock, false)) {
 		elog(ERROR, "XactLockTableWait: LockAcquire failed");
-	else
+	} else {
 		LockRelease(PartitionedTables[0], &tag, sid, ShareLock);
+	}
 }

@@ -68,26 +68,18 @@ class DirectInputChannel<T> extends DirectInput<ReadableByteChannel> {
     }
     
     private int transferIn(MemorySegment user, int type, MemorySegment var, int varSize) {
-        try {
-            ReadableByteChannel channel = super.get();
-            /*
-             * STREAM binds are probed with NULL_CHECK_OP (-16) before any
-             * bytes exist. A negative size is not a buffer, and a null
-             * pointer is not always the MemorySegment.NULL singleton.
-             * reinterpret() of that size throws out of the upcall and kills
-             * the JVM.
-             */
-            if (varSize <= 0 || var == null || var.equals(MemorySegment.NULL)) {
-                return channel != null ? 1 : DirectWeaverConnection.NULL_VALUE;
-            }
-            try (Arena a = Arena.ofConfined()) {
-                var = var.reinterpret(varSize, a, null);
-                ByteBuffer bb = var.asByteBuffer();
-                return channel.read(bb);
-            }
-        } catch (Throwable ex) {
-            return DirectWeaverConnection.NULL_VALUE;
+        ReadableByteChannel channel = super.get();
+        
+        if (var == MemorySegment.NULL) {
+            return get() != null ? 1 : -1;  // null check
         }
+        try (Arena a = Arena.ofConfined()) {
+            var = var.reinterpret(varSize, a, null);
+            ByteBuffer bb = var.asByteBuffer();
+            return channel.read(bb);
+        } catch (IOException io) {
+            return -1;
+        } 
     }
     
     @Override

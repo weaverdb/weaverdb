@@ -431,12 +431,11 @@ JNIEXPORT void JNICALL Java_org_weaverdb_base_BaseWeaverConnection_streamExec
                 
     ConnectStdIO(base,&commenv,pipein,pipeout);
 
-    short streamed = StreamExec(base,(char*)state); 
+    bool valid = StreamExec(base,(char*)state); 
 
     (*env)->ReleaseStringUTFChars(env,statement,state);
 
-    /* StreamExec returns 0 on success and non-zero when WGetErrorCode is set. */
-    if (streamed != 0) {
+    if (!valid) {
         checkError(env,talkerObject,NULL);
     }
 
@@ -673,11 +672,9 @@ static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
         if (!(*env)->IsSameObject(env, username, NULL) && !(*env)->IsSameObject(env, password, NULL)) {
             jsize passlen = (*env)->GetStringUTFLength(env,password);
             jsize namelen = (*env)->GetStringUTFLength(env,username);
-            jsize passchars = (*env)->GetStringLength(env,password);
-            jsize namechars = (*env)->GetStringLength(env,username);
             if (passlen >= 0 && passlen < 255 && namelen >= 0 && namelen < 255) {
-                (*env)->GetStringUTFRegion(env,password,0,passchars,pass);
-                (*env)->GetStringUTFRegion(env,username,0,namechars,name);
+                (*env)->GetStringUTFRegion(env,password,0,passlen,pass);
+                (*env)->GetStringUTFRegion(env,username,0,namelen,name);
                 pass[passlen] = '\0';
                 name[namelen] = '\0';
             } else {
@@ -690,9 +687,8 @@ static ConnMgr allocateWeaver(JNIEnv* env, jstring username,jstring password,jst
 
         if (!(*env)->IsSameObject(env, connection, NULL)) {
             jsize connlen = (*env)->GetStringUTFLength(env,connection);
-            jsize connchars = (*env)->GetStringLength(env,connection);
             if (connlen >= 0 && connlen < 255) {
-                (*env)->GetStringUTFRegion(env,connection,0,connchars,conn);
+                (*env)->GetStringUTFRegion(env,connection,0,connlen,conn);
                 conn[connlen] = '\0';
             } else {
                 errMsg = "Invalid database - too many characters";

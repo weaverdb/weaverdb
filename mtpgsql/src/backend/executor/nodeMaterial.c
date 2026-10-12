@@ -25,7 +25,6 @@
 #include "env/env.h"
 #include "access/heapam.h"
 #include "catalog/heap.h"
-#include "storage/bufmgr.h"
 #include "executor/executor.h"
 #include "executor/nodeMaterial.h"
 #include "optimizer/internal.h"
@@ -112,10 +111,7 @@ ExecMaterial(Material *node)
 			if (TupIsNull(slot))
 				break;
 
-			/* Materialize temp heap has no indexes. One heap page per tuple. */
-			BeginCriticalIO();
 			heap_insert(tempRelation, slot->val);
-			EndCriticalIO();
 
 			ExecClearTuple(slot);
 		}

@@ -115,16 +115,8 @@ setRelhasrulesInRelation(Oid relationId, bool relhasrules)
 	Assert(HeapTupleIsValid(tuple));
 
 	((Form_pg_class) GETSTRUCT(tuple))->relhasrules = relhasrules;
-	{
-		HeapTupleData ciotup;
-		Buffer ciobuf;
-		int ciores;
-		ciores = heap_lock_for_update(relationRelation, &tuple->t_self, &ciobuf, &ciotup, NULL);
-		if (ciores != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock tuple for update");
-		BeginCriticalIO();
-		heap_update_locked(relationRelation, ciobuf, &ciotup, tuple, NULL);
-	}
+	BeginCriticalIO();
+	heap_update(relationRelation, &tuple->t_self, tuple, NULL, NULL);
 
 	/* keep the catalog indices up to date */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, idescs);

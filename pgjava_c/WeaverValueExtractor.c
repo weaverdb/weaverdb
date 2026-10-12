@@ -107,9 +107,6 @@ javacache*  CreateCache(JNIEnv* env) {
         CachedClasses.datetype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/util/Date"));
         CachedClasses.datevalue = (*env)->GetMethodID(env,CachedClasses.datetype,"getTime","()J");         
         CachedClasses.createdate = (*env)->GetMethodID(env,CachedClasses.datetype,"<init>","(J)V");
-
-        CachedClasses.instanttype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/time/Instant"));
-        CachedClasses.instantmillis = (*env)->GetMethodID(env,CachedClasses.instanttype,"toEpochMilli","()J");
         
         CachedClasses.stringtype = (*env)->NewGlobalRef(env,(*env)->FindClass(env,"java/lang/String"));
         
@@ -132,7 +129,6 @@ javacache*  DropCache(JNIEnv* env) {
         (*env)->DeleteGlobalRef(env,CachedClasses.chartype);
         (*env)->DeleteGlobalRef(env,CachedClasses.longtype);
         (*env)->DeleteGlobalRef(env,CachedClasses.datetype);
-        (*env)->DeleteGlobalRef(env,CachedClasses.instanttype);
         (*env)->DeleteGlobalRef(env,CachedClasses.stringtype);
         
         return &CachedClasses;
@@ -332,26 +328,19 @@ ExtractLongValue(JNIEnv* env, jobject target, void* data, int len) {
 }
 
 
-static void
-StoreTimestamp(JNIEnv* env, jlong millis, void* data) {
-    union {
-        char    buffer[8];
-        jdouble val;
-    } convert;
-
-    convert.val = (jdouble) millis;
-    convert.val /= 1000;
-    convert.val -= (10957 * 86400);
-    MoveData(data, convert.buffer, 8);
-}
-
 int
 ExtractDateValue(JNIEnv* env, jobject target, void* data, int len) {
     if ( (*env)->IsInstanceOf(env,target,Cache->datetype) ) {
-        StoreTimestamp(env, (*env)->CallLongMethod(env,target,Cache->datevalue), data);
-        return 8;
-    } else if (Cache->instanttype != NULL && (*env)->IsInstanceOf(env,target,Cache->instanttype)) {
-        StoreTimestamp(env, (*env)->CallLongMethod(env,target,Cache->instantmillis), data);
+        union {
+            char    buffer[8];
+            jdouble  val;
+        }   convert;
+
+        convert.val = (jdouble)(*env)->CallLongMethod(env,target,Cache->datevalue);
+        convert.val /= 1000;
+        convert.val -= (10957 * 86400);
+
+        MoveData(data,convert.buffer,8);
         return 8;
     } else if (!(*env)->ExceptionOccurred(env) ) {
             (*env)->ThrowNew(env,Cache->exception,"passed in value is not a Date");    
@@ -394,9 +383,8 @@ static jobject CreateShortField(jshort* var, JNIEnv* env) {
 static jobject CreateIntField(jint* var, JNIEnv* env) {
     return (*env)->NewObject(env,Cache->inttype,Cache->createint,*var);
 }
-static jobject CreateCharField(char* var, JNIEnv* env) {
-    jchar ch = (jchar) (unsigned char) (*var);
-    return (*env)->NewObject(env,Cache->chartype,Cache->createchar,ch);
+static jobject CreateCharField(jchar* var, JNIEnv* env) {
+    return (*env)->NewObject(env,Cache->chartype,Cache->createchar,*var);
 }
 
 static jobject CreateBooleanField(char* var, JNIEnv* env) {
@@ -466,7 +454,7 @@ int PassOutValue(JNIEnv* env,int passType, jobject target, void* data, int lengt
                 setval = CreateStringField(data,length,env);
                 break;
             case CHARTYPE:
-                setval = CreateCharField((char*)data,env);
+                setval = CreateCharField(data,env);
                 break;
             case BOOLTYPE:
                 setval = CreateBooleanField(data,env);

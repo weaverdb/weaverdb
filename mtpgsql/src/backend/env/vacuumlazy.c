@@ -61,7 +61,6 @@
 #include "storage/sinval.h"
 #include "storage/lock.h"
 #include "storage/smgr.h"
-#include "storage/bufmgr.h"
 #include "catalog/catname.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
@@ -773,22 +772,6 @@ lazy_scan_heap_page(Relation onerel, Buffer buf, LVRelStats * vacrelstats) {
 }
 
 /*
- * One heap or index page. Callers that already hold a section (a move's
- * destination, indexes, and source page) pass through without nesting.
- */
-static void
-lazy_write_one_page(Relation rel, Buffer buf)
-{
-	bool		own_section = (GetCriticalIODepth() == 0);
-
-	if (own_section)
-		BeginCriticalIO();
-	WriteBuffer(rel, buf);
-	if (own_section)
-		EndCriticalIO();
-}
-
-/*
  * lazy_scan_heap() -- scan an open heap relation
  * 
  * This routine sets commit status bits, builds lists of dead tuples and pages
@@ -888,7 +871,7 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
 			lazy_record_free_space(vacrelstats, blkno,
 						 PageGetFreeSpace(page), 0);
 			LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
-			lazy_write_one_page(onerel, buf);
+			WriteBuffer(onerel,buf);
 			continue;
 		}
 		if (!BufferHasError(buf) && PageIsEmpty(page)) {
@@ -937,7 +920,7 @@ lazy_scan_heap(Relation onerel, LVRelStats * vacrelstats,
                 
 		LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
                 if ( changed ) {
-                    lazy_write_one_page(onerel, buf);
+                    WriteBuffer(onerel,buf);
                     vacrelstats->changed_pages += 1;
                 } else {
                     ReleaseBuffer(onerel, buf);
@@ -1079,9 +1062,10 @@ lazy_vacuum_heap(Relation onerel, LVRelStats * vacrelstats)
 		
 		LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
 
-		lazy_write_one_page(onerel, buf);
-                lazy_record_free_space(vacrelstats, tblk,
+		if ( WriteBuffer(onerel,buf) ) {
+                	lazy_record_free_space(vacrelstats, tblk,
 				       freespace, unused_p);
+                }
 
 		npages++;
 	}
@@ -1493,7 +1477,6 @@ repair_page_fragmentation(Relation onerel, Buffer buffer, FragRepairInfo* repair
                     
                     if ( handled ) {
                        WriteBuffer(onerel,try_buffer);
-                       NoteHeapWriteForIndexes(onerel);
                     } else {
                        ReleaseBuffer(onerel,try_buffer);
                        last_block = GetFreespace(onerel,newtup->t_len,last_block);
@@ -1580,17 +1563,7 @@ lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_inf
                 LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);
                 page = BufferGetPage(buf);
                 maxoff = PageGetMaxOffsetNumber(page);
-                {
-                HeapTuple *newtups = palloc((maxoff + 1) * sizeof(HeapTuple));
-
-                MemSet(newtups, 0, (maxoff + 1) * sizeof(HeapTuple));
-
-                /*
-                 * Respan reads blob segments and can wait on their
-                 * storage relation. That wait finishes before the
-                 * section that writes the new heap tuple, its index
-                 * entries, the deleted segment pages, and this page.
-                 */
+        
                 for (offnum = FirstOffsetNumber;
                         offnum <= maxoff;
                         offnum = OffsetNumberNext(offnum)) {
@@ -1611,110 +1584,40 @@ lazy_respan_blobs(Relation onerel, bool exclude_self, FragRepairInfo* repair_inf
                              if ( HeapTupleHasBlob(&tuple) && !(tuple.t_data->t_infomask & HEAP_BLOB_SEGMENT) ) {
                                  state = HeapTupleSatisfiesVacuum(tuple.t_data,repair_info->xmax_recent);
                                  if ( state == HEAPTUPLE_LIVE ) {
+                                    HeapTuple newtup = NULL;
+                                    
                                     tuple.t_data->t_xmax = GetCurrentTransactionId();
                                     tuple.t_data->t_infomask &= ~(HEAP_XMAX_COMMITTED | HEAP_XMAX_INVALID);
                                     tuple.t_data->t_infomask |= HEAP_MARKED_FOR_UPDATE;
                                     LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
-                                    newtups[offnum] = vacuum_respan_tuple_blob(onerel,&tuple,exclude_self);
+                                    newtup = vacuum_respan_tuple_blob(onerel,&tuple,exclude_self);
+                                    if ( newtup != NULL ) {
+                                        if (!(newtup->t_data->t_infomask & HEAP_MOVED_IN)) {
+                                            newtup->t_data->progress.t_vtran = newtup->t_data->t_xmin;
+                                        }
+                                        newtup->t_data->t_xmin = GetCurrentTransactionId();
+                                        newtup->t_data->t_xmax = InvalidTransactionId;
+                                        newtup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
+                                        newtup->t_data->t_infomask |= (HEAP_MOVED_IN | HEAP_XMAX_INVALID);
+                                        RelationPutHeapTupleAtFreespace(onerel,newtup,0);
+                                        repair_insert_index_for_entry(onerel, newtup, repair_info);
+                                        delete_tuple_blob(onerel,&tuple,newtup);
+                                        added++;
+                                    }
                                     LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);
+                                    if ( newtup != NULL ) {
+                                        tuple.t_data->t_infomask &= ~(HEAP_MARKED_FOR_UPDATE);
+                                        tuple.t_data->t_infomask |= (HEAP_MOVED_OUT);
+                                        heap_freetuple(newtup);
+                                    }
                                     page_altered = true;
                                  }
                              }
                        }
-                }
-
-                if (page_altered) {
-                    BlobStoreLocks *storelocks = palloc(sizeof(BlobStoreLocks));
-
-                    MemSet(storelocks, 0, sizeof(BlobStoreLocks));
-                    bool own_section;
-
-                    for (offnum = FirstOffsetNumber; offnum <= maxoff; offnum = OffsetNumberNext(offnum)) {
-                        HeapTupleData oldtup;
-                        ItemId lp;
-                        BlobStoreLocks one;
-                        int s;
-
-                        if (newtups[offnum] == NULL)
-                            continue;
-                        lp = PageGetItemId(page, offnum);
-                        oldtup.t_datamcxt = NULL;
-                        oldtup.t_datasrc = NULL;
-                        oldtup.t_info = 0;
-                        ItemPointerSet(&oldtup.t_self, marker, offnum);
-                        oldtup.t_data = (HeapTupleHeader) PageGetItem(page, lp);
-                        oldtup.t_len = ItemIdGetLength(lp);
-                        LockTupleBlobStores(onerel, &oldtup, &one);
-                        for (s = 0; s < one.n; s++) {
-                            int t;
-                            bool seen = false;
-
-                            for (t = 0; t < storelocks->n; t++) {
-                                if (storelocks->rels[t]->rd_id == one.rels[s]->rd_id) {
-                                    seen = true;
-                                    break;
-                                }
-                            }
-                            if (seen) {
-                                UnlockRelation(one.rels[s], AccessShareLock);
-                                RelationClose(one.rels[s]);
-                            } else {
-                                if (storelocks->n >= MAX_BLOB_STORE_LOCKS)
-                                    elog(ERROR, "too many blob storage relations");
-                                storelocks->rels[storelocks->n++] = one.rels[s];
-                            }
-                        }
-                    }
-
-                    own_section = (GetCriticalIODepth() == 0);
-                    if (own_section)
-                        BeginCriticalIO();
-                    for (offnum = FirstOffsetNumber; offnum <= maxoff; offnum = OffsetNumberNext(offnum)) {
-                        HeapTuple newtup = newtups[offnum];
-                        HeapTupleData oldtup;
-                        ItemId lp;
-
-                        if (newtup == NULL)
-                            continue;
-                        if (!(newtup->t_data->t_infomask & HEAP_MOVED_IN))
-                            newtup->t_data->progress.t_vtran = newtup->t_data->t_xmin;
-                        newtup->t_data->t_xmin = GetCurrentTransactionId();
-                        newtup->t_data->t_xmax = InvalidTransactionId;
-                        newtup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
-                        newtup->t_data->t_infomask |= (HEAP_MOVED_IN | HEAP_XMAX_INVALID);
-                        RelationPutHeapTupleAtFreespace(onerel, newtup, 0);
-                        NoteHeapWriteForIndexes(onerel);
-                        repair_insert_index_for_entry(onerel, newtup, repair_info);
-
-                        lp = PageGetItemId(page, offnum);
-                        oldtup.t_datamcxt = NULL;
-                        oldtup.t_datasrc = NULL;
-                        oldtup.t_info = 0;
-                        ItemPointerSet(&oldtup.t_self, marker, offnum);
-                        oldtup.t_data = (HeapTupleHeader) PageGetItem(page, lp);
-                        oldtup.t_len = ItemIdGetLength(lp);
-                        LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
-                        delete_tuple_blob(onerel, &oldtup, newtup);
-                        LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);
-                        oldtup.t_data = (HeapTupleHeader) PageGetItem(page, lp);
-                        oldtup.t_data->t_infomask &= ~(HEAP_MARKED_FOR_UPDATE);
-                        oldtup.t_data->t_infomask |= (HEAP_MOVED_OUT);
-                        heap_freetuple(newtup);
-                        newtups[offnum] = NULL;
-                        added++;
-                    }
-                    LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
-                    WriteBuffer(onerel, buf);
-                    if (own_section)
-                        EndCriticalIO();
-                    UnlockTupleBlobStores(storelocks);
-                    pfree(storelocks);
-                } else {
-                    LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
-                    ReleaseBuffer(onerel, buf);
-                }
-                pfree(newtups);
-                }
+                }        
+                LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
+		if ( page_altered ) WriteBuffer(onerel,buf);
+                else ReleaseBuffer(onerel, buf);
 
                 MemoryContextResetAndDeleteChildren(page_cxt);
                 
@@ -1795,27 +1698,14 @@ lazy_repair_fragmentation(Relation onerel, FragRepairInfo* repair_info) {
                 if ( !BufferIsValid(buf) ) {
                     elog(ERROR,"bad buffer read under repair fragmentation");
                 }
-		/*
-		 * Destination pages, the index entries for tuples moved off
-		 * this page, and this source page are one section. The
-		 * relation-lock check above is outside it.
-		 */
-		{
-			bool own_section = (GetCriticalIODepth() == 0);
-
-			if (own_section)
-				BeginCriticalIO();
-			LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);
-			page_altered = repair_page_fragmentation(onerel, buf, repair_info);
-			LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
-
-			if (page_altered)
-				WriteBuffer(onerel,buf);
-			else
-				ReleaseBuffer(onerel, buf);
-			if (own_section)
-				EndCriticalIO();
-		}
+                LockBuffer((onerel), buf, BUFFER_LOCK_EXCLUSIVE);
+                page_altered = repair_page_fragmentation(onerel, buf, repair_info);
+                LockBuffer((onerel), buf, BUFFER_LOCK_UNLOCK);
+				
+                if (page_altered)
+			WriteBuffer(onerel,buf);
+		else
+			ReleaseBuffer(onerel, buf);
                 
                 MemoryContextResetAndDeleteChildren(page_cxt);
                 
@@ -2437,16 +2327,7 @@ vac_update_relstats(Oid relid, BlockNumber num_pages, TupleCount num_tuples,
 	 * This info is not vital so let the poolsweep reset all caches at the
 	 * time of pause  */
 	RelationInvalidateHeapTuple(rd, &rtup);
-	/* One pg_class page (relpages, reltuples, relhasindex). */
-	{
-		bool own_section = (GetCriticalIODepth() == 0);
-
-		if (own_section)
-			BeginCriticalIO();
-		WriteBuffer(rd, buffer);
-		if (own_section)
-			EndCriticalIO();
-	}
+	WriteBuffer(rd, buffer);
 
 	heap_close(rd, RowExclusiveLock);
 }

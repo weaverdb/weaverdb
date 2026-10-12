@@ -1068,16 +1068,8 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
                     newtup = heap_modifytuple(&tuple,erel,values,nulls,replace);
                     ReleaseBuffer(erel,release);
 
-                    {
-                    	HeapTupleData ciotup;
-                    	Buffer ciobuf;
-                    	int ciores;
-                    	ciores = heap_lock_for_update(erel, &newtup->t_self, &ciobuf, &ciotup, NULL);
-                    	if (ciores != HeapTupleMayBeUpdated)
-                    		elog(ERROR, "could not lock tuple for update");
-                    	BeginCriticalIO();
-                    	heap_update_locked(erel, ciobuf, &ciotup, newtup, NULL);
-                    }
+                    BeginCriticalIO();
+                    heap_update(erel,&newtup->t_self,newtup,NULL,NULL);
                 }
                 set = true;
                 break;

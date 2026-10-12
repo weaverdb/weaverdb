@@ -50,7 +50,6 @@ public class JniBattleIsolatedTest {
         Assertions.assertEquals(0, result.code, result.output);
         Assertions.assertTrue(result.output.contains("vacuum-group ok"), result.output);
         Assertions.assertTrue(result.output.contains("recovered=true"), result.output);
-        Assertions.assertTrue(result.output.contains("cioWarnings=0"), result.output);
     }
 
     @Test

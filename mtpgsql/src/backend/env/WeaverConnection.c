@@ -38,7 +38,6 @@
 #include "catalog/pg_type.h"
 #include "executor/executor.h"
 #include "tcop/pquery.h"
-#include "utils/java.h"
 #include "tcop/utility.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
@@ -85,33 +84,24 @@ static SectionId   connection_section_id = SECTIONID("CONN");
 #define SETUP(target) (WConn)target
 
 #define READY(target, err, usingTransaction)  \
-    if (!SetEnv((target)->env)) { \
-        SetError((target), 454, "CONTEXT", "connection is in use on another thread; use helper()"); \
-        err = 454; \
-    } else { \
-    (target)->env->canJump = true; \
+    SetEnv(target->env);\
+    target->env->canJump = true;\
     \
-    err = setjmp((target)->env->errorContext); \
-    if (err != 0) { \
-        bool autocommit; \
-        (target)->env->canJump = false; \
-        strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39); \
-        autocommit = !IsTransactionBlock(); \
-        SetAbortOnly(); \
-        if (!WeaverIsPanicked() && ((usingTransaction) || (autocommit && CurrentXactInProgress()))) { \
+    err = setjmp(target->env->errorContext);\
+    if (err != 0) {\
+        target->env->canJump = false;\
+        strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);\
+        target->stage = TRAN_ABORTONLY;\
+        SetAbortOnly();\
+        if (usingTransaction && !WeaverIsPanicked()) { \
             CommitTransactionCommand(); \
-        } \
-        if (!WeaverIsPanicked() && autocommit) { \
-            (target)->stage = TRAN_INVALID; \
-        } else { \
-            (target)->stage = TRAN_ABORTONLY; \
         } \
         WHandleError(target,err); \
         if (!WeaverIsPanicked()) { \
             WResetQuery(connection,true); \
         } \
-    } else { \
-        (target)->CDA.rc = 0; \
+    } else {\
+        target->CDA.rc = 0;\
         if (usingTransaction) { \
             StartTransactionCommand(); \
         } \
@@ -122,8 +112,7 @@ static SectionId   connection_section_id = SECTIONID("CONN");
         } \
     } \
     if ((target)->env) (target)->env->canJump = false; \
-    SetEnv(NULL); \
-    } \
+    SetEnv(NULL);  \
 
 
 OpaqueWConn
@@ -270,52 +259,25 @@ WCreateSubConnection(OpaqueWConn parent) {
         WHandleError(parent, sqlError);
         return connection;
     }
-
-    /*
-     * CreateEnv(parent) switches into the parent memory context, so this
-     * thread has to enter the parent env first. SetEnv cannot move from
-     * the parent env to the child in one call.
-     */
-    if (!SetEnv(parent->env)) {
-        SetError(parent, 454, "CONTEXT", "connection is in use on another thread; use helper()");
-        return NULL;
-    }
-
+    
     env = CreateEnv(parent->env);
-
+    
     if (env == NULL) {
         sqlError = 99;
         strncpy(parent->env->errortext, "unsuccessful connection -- too many connections", 255);
         strncpy(parent->env->state, "DISCONNECTED", 39);
         WHandleError(parent, sqlError);
-        SetEnv(NULL);
         return connection;
+    } else {
+        SetEnv(env);
+        MemoryContextInit();
     }
-
-    SetEnv(NULL);
-    if (!SetEnv(env)) {
-        DestroyEnv(env);
-        SetError(parent, 99, "DISCONNECTED", "could not attach sub-connection");
-        return NULL;
-    }
-    MemoryContextInit();
     
     connection = AllocateEnvSpace(connection_section_id,sizeof (struct Connection));
     memmove(connection, parent, sizeof (struct Connection));
 
+    
     connection->env = env;
-    connection->plan = NULL;
-    connection->inselect = NULL;
-    connection->transaction_owner = 0;
-    connection->child_count = 0;
-    connection->child_trans = 0;
-    connection->stage = TRAN_INVALID;
-    connection->memory = AllocSetContextCreate(GetEnvMemoryContext(),
-            "SubConnection",
-            ALLOCSET_DEFAULT_MINSIZE,
-            ALLOCSET_DEFAULT_INITSIZE,
-            ALLOCSET_DEFAULT_MAXSIZE);
-    pthread_mutex_init(&connection->child_lock, NULL);
     SetProcessingMode(InitProcessing);
 
     connection->env->DatabaseId = parent->env->DatabaseId;
@@ -340,7 +302,7 @@ WCreateSubConnection(OpaqueWConn parent) {
 
     pthread_mutex_lock(&parent->child_lock);
     connection->parent = parent;
-    parent->child_count++;
+    connection->child_count++;
     pthread_mutex_unlock(&parent->child_lock);
 
     SetEnv(NULL);
@@ -363,14 +325,10 @@ WDestroyConnection(OpaqueWConn conn) {
         while (conn->child_count > 0) {
             pthread_t waitfor = 0;
             void* result;
-            int joined = 0;
             pthread_mutex_unlock(&conn->child_lock);
-            waitfor = FindOwnedChild(conn->env);
-            if (waitfor != 0 && !pthread_equal(waitfor, pthread_self()))
-                joined = pthread_join(waitfor, &result) == 0;
+            waitfor = FindChildThread(conn->env);
+            if (waitfor != 0) pthread_join(waitfor, &result);
             pthread_mutex_lock(&conn->child_lock);
-            if (!joined)
-                break;
         }
         pthread_mutex_unlock(&conn->child_lock);
     }
@@ -713,15 +671,9 @@ WExec(OpaquePreparedStatement plan) {
             CommitTransactionCommand();
             needsCommit = false;
             /*
-             * A statement such as CREATE TABLE ... PRIMARY KEY is more than
-             * one utility. The commit above drops TopTransactionContext, so
-             * the next command needs its own transaction.
+             * increment after any utility if there are
+             * more subqueries to execute
              */
-            if (trackquery != NULL) {
-                StartTransactionCommand();
-                SetQuerySnapshot();
-                needsCommit = true;
-            }
         } else {
             plan->state = CreateExecutorState();
             plan->stage = STMT_EXEC;
@@ -1081,7 +1033,6 @@ WCancel(OpaqueWConn conn) {
     int sqlError = 0;
 
     connection->env->cancelled = true;
-    InterruptEnvJavaCaller(connection->env);
 
     return sqlError;
 }
@@ -1272,7 +1223,7 @@ WAllocStatementMemory(OpaquePreparedStatement conn, size_t size) {
 void*
 AllocMemory(WConn conn, mem_type type, size_t size) {
     WConn connection = SETUP(conn);
-    void* pointer = NULL;
+    void* pointer;
     MemoryContext cxt;
     int err;
 
@@ -1600,44 +1551,33 @@ TransferExecArgs(PreparedPlan* plan) {
                 case CHAROID:
                 case BOOLOID: {
                     char value;
-                    /*
-                     * length is an unsigned Size. A null transfer returns
-                     * NULL_VALUE (-1); assigning that first makes the
-                     * comparison look like a huge positive length.
-                     */
-                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
                     paramLI->byval = true;
-                    if (len > 0) {
-                        paramLI->length = (Size) len;
+                    if (paramLI->length > 0) {
                         paramLI->value = CharGetDatum(value);
                     } else {
-                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
                 }
                 case INT4OID: {
                     int32 value;
-                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
                     paramLI->byval = true;
-                    if (len > 0) {
-                        paramLI->length = (Size) len;
+                    if (paramLI->length > 0) {
                         paramLI->value = Int32GetDatum(value);
                     } else {
-                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
                 }
                 case FLOAT4OID:{
                     int* value = palloc(4);
-                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,4);
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,4);
                     paramLI->byval = false;
-                    if (len > 0) {
-                        paramLI->length = (Size) len;
+                    if (paramLI->length > 0) {
                         paramLI->value = PointerGetDatum(value);
                     } else {
-                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
@@ -1646,13 +1586,11 @@ TransferExecArgs(PreparedPlan* plan) {
                 case FLOAT8OID:
                 case INT8OID: {
                     long* value = palloc(8);
-                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
+                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
                     paramLI->byval = false;
-                    if (len > 0) {
-                        paramLI->length = (Size) len;
+                    if (paramLI->length > 0) {
                         paramLI->value = PointerGetDatum(value);
                     } else {
-                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;

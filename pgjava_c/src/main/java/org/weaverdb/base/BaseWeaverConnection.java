@@ -73,9 +73,9 @@ class BaseWeaverConnection implements DBReference {
     private final ReferenceQueue<Statement> statements = new ReferenceQueue<>();
     private static final ReferenceQueue<BaseWeaverConnection> connections = new ReferenceQueue<>();
         
-    private BaseWeaverConnection(long nativePointer, StreamingTransformer version) {
+    private BaseWeaverConnection(long nativePointer) {
         this.nativePointer = nativePointer;
-        this.transformer = version;
+        this.transformer = null;
     }
 
     private BaseWeaverConnection(String username, String password, String database, StreamingTransformer version) {
@@ -155,9 +155,7 @@ class BaseWeaverConnection implements DBReference {
 
     @Override
     public void close() throws ExecutionException {
-        if (transformer != null) {
-            transformer.close();
-        }
+        transformer.close();
         dispose();
     }
 
@@ -171,13 +169,7 @@ class BaseWeaverConnection implements DBReference {
     }
 
     private  BaseWeaverConnection spawnHelper() throws ExecutionException {
-        closeDiscardedConnections();
-        long pointer = this.connectSubConnection();
-        BaseWeaverConnection connect = new BaseWeaverConnection(pointer, this.transformer);
-        if (pointer != 0) {
-            liveConnections.put(pointer, new ConnectionRef(connect, connections));
-        }
-        return connect;
+        return new BaseWeaverConnection(this.connectSubConnection());
     }
     
     @Override

@@ -178,12 +178,7 @@ ConnMgr
 CreateSubConnection(ConnMgr parent) {
     if (parent == NULL) return NULL;
     OpaqueWConn connection = WCreateSubConnection(parent->theConn);
-    ConnMgr mgr;
-    if (connection == NULL)
-        return NULL;
-    mgr = (WeaverConnectionManager*) WAllocConnectionMemory(connection, sizeof (WeaverConnectionManager));
-    if (mgr == NULL)
-        return NULL;
+    ConnMgr mgr = (WeaverConnectionManager*) WAllocConnectionMemory(connection, sizeof (WeaverConnectionManager));
     pthread_mutex_init(&mgr->control, NULL);
     mgr->refCount = 0;
     mgr->theConn = connection;

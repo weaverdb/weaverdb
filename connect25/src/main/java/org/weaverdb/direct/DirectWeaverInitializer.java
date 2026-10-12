@@ -43,7 +43,6 @@ public class DirectWeaverInitializer {
     private static boolean loaded = false;
     
     private static final MethodHandle initWeaverBackend;
-    private static final MethodHandle prepareForShutdown;
     private static final MethodHandle wrapupWeaverBackend;
     private static final MethodHandle registerJavaInvoker;
 
@@ -62,11 +61,6 @@ public class DirectWeaverInitializer {
             FunctionDescriptor.of(ValueLayout.JAVA_BOOLEAN, ValueLayout.ADDRESS)
         );
         
-        prepareForShutdown = linker.downcallHandle(
-            lookup.find("prepareforshutdown").orElseThrow(),
-            FunctionDescriptor.of(ValueLayout.JAVA_BOOLEAN)
-        );
-
         wrapupWeaverBackend = linker.downcallHandle(
             lookup.find("wrapupweaverbackend").orElseThrow(),
             FunctionDescriptor.ofVoid()
@@ -111,10 +105,7 @@ public class DirectWeaverInitializer {
 
     private static synchronized void close() {
         try {
-            boolean prepared = (boolean) prepareForShutdown.invokeExact();
-            if (prepared) {
-                wrapupWeaverBackend.invokeExact();
-            }
+            wrapupWeaverBackend.invokeExact();
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }

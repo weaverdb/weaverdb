@@ -24,7 +24,6 @@
 #include "env/freespace.h"
 
 #include "access/hio.h"
-#include "storage/bufmgr.h"
 
 #define SEQ_MAGIC	  0x1717
 
@@ -168,18 +167,9 @@ DefineSequence(CreateSeqStmt *seq)
         heap_insert(rel, tuple);
         do this b/c sequences only have one page */
         RelationPutHeapTuple(rel,buf,tuple);
-
-	/* One sequence page. */
-	{
-		bool own_section = (GetCriticalIODepth() == 0);
-
-		if (own_section)
-			BeginCriticalIO();
-		if (WriteBuffer(rel,buf) == STATUS_ERROR)
-			elog(ERROR, "DefineSequence: WriteBuffer failed");
-		if (own_section)
-			EndCriticalIO();
-	}
+        
+	if (WriteBuffer(rel,buf) == STATUS_ERROR)
+		elog(ERROR, "DefineSequence: WriteBuffer failed");
 
 	heap_close(rel, AccessExclusiveLock);
 }
@@ -275,17 +265,8 @@ nextval(struct varlena * seqin)
 
 	LockBuffer((elm->rel), buf, BUFFER_LOCK_UNLOCK);
 
-	/* One sequence page. nextval does not wait on another transaction. */
-	{
-		bool own_section = (GetCriticalIODepth() == 0);
-
-		if (own_section)
-			BeginCriticalIO();
-		if (WriteBuffer(elm->rel, buf) == STATUS_ERROR)
-			elog(ERROR, "%s.nextval: WriteBuffer failed", elm->name);
-		if (own_section)
-			EndCriticalIO();
-	}
+	if (WriteBuffer(elm->rel, buf) == STATUS_ERROR)
+		elog(ERROR, "%s.nextval: WriteBuffer failed", elm->name);
 
 	return result;
 
@@ -353,17 +334,8 @@ setval(struct varlena * seqin, int4 next)
 
 	LockBuffer((elm->rel), buf, BUFFER_LOCK_UNLOCK);
 
-	/* One sequence page. */
-	{
-		bool own_section = (GetCriticalIODepth() == 0);
-
-		if (own_section)
-			BeginCriticalIO();
-		if (WriteBuffer(elm->rel, buf) == STATUS_ERROR)
-			elog(ERROR, "%s.settval: WriteBuffer failed", seqname);
-		if (own_section)
-			EndCriticalIO();
-	}
+	if (WriteBuffer(elm->rel, buf) == STATUS_ERROR)
+		elog(ERROR, "%s.settval: WriteBuffer failed", seqname);
 
 	return next;
 }

@@ -494,16 +494,8 @@ AlterTableAddColumn(const char *relationName,
 	heap_close(attrdesc, RowExclusiveLock);
 
 	((Form_pg_class) GETSTRUCT(reltup))->relnatts = maxatts;
-	{
-		HeapTupleData ciotup;
-		Buffer ciobuf;
-		int ciores;
-		ciores = heap_lock_for_update(rel, &reltup->t_self, &ciobuf, &ciotup, NULL);
-		if (ciores != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock tuple for update");
-		BeginCriticalIO();
-		heap_update_locked(rel, ciobuf, &ciotup, reltup, NULL);
-	}
+	BeginCriticalIO();
+	heap_update(rel, &reltup->t_self, reltup, NULL,NULL);
 
 	/* keep catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
@@ -644,16 +636,8 @@ AlterTableAlterColumn(const char *relationName,
 			/* update to false */
 			newtuple = heap_copytuple(tuple);
 			((Form_pg_attribute) GETSTRUCT(newtuple))->atthasdef = FALSE;
-			{
-				HeapTupleData ciotup;
-				Buffer ciobuf;
-				int ciores;
-				ciores = heap_lock_for_update(attr_rel, &tuple->t_self, &ciobuf, &ciotup, NULL);
-				if (ciores != HeapTupleMayBeUpdated)
-					elog(ERROR, "could not lock tuple for update");
-				BeginCriticalIO();
-				heap_update_locked(attr_rel, ciobuf, &ciotup, newtuple, NULL);
-			}
+			BeginCriticalIO();
+			heap_update(attr_rel, &tuple->t_self, newtuple, NULL, NULL);
 
 			/* keep the system catalog indices current */
 			CatalogOpenIndices(Num_pg_attr_indices, Name_pg_attr_indices, irelations);
@@ -1036,16 +1020,8 @@ AlterTableDropColumn(const char *relationName,
 	namestrcpy(&(attribute->attname), dropColname);
 	ATTRIBUTE_DROP_COLUMN(attribute);
 
-	{
-		HeapTupleData ciotup;
-		Buffer ciobuf;
-		int ciores;
-		ciores = heap_lock_for_update(attrdesc, &tup->t_self, &ciobuf, &ciotup, NULL);
-		if (ciores != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock tuple for update");
-		BeginCriticalIO();
-		heap_update_locked(attrdesc, ciobuf, &ciotup, tup, NULL);
-	}
+	BeginCriticalIO();
+	heap_update(attrdesc, &tup->t_self, tup, NULL, NULL);
 	hasindex = (!IsIgnoringSystemIndexes() && RelationGetForm(attrdesc)->relhasindex);
 	if (hasindex)
 	{
@@ -1092,16 +1068,8 @@ AlterTableDropColumn(const char *relationName,
 
 		RemoveColumnReferences(myrelid, attnum, false, reltup);
 		/* update pg_class tuple */
-		{
-			HeapTupleData ciotup;
-			Buffer ciobuf;
-			int ciores;
-			ciores = heap_lock_for_update(rel, &reltup->t_self, &ciobuf, &ciotup, NULL);
-			if (ciores != HeapTupleMayBeUpdated)
-				elog(ERROR, "could not lock tuple for update");
-			BeginCriticalIO();
-			heap_update_locked(rel, ciobuf, &ciotup, reltup, NULL);
-		}
+		BeginCriticalIO();
+		heap_update(rel, &reltup->t_self, reltup, NULL, NULL);
 		CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 		CatalogIndexInsert(ridescs, Num_pg_class_indices, rel, reltup);
 		CatalogCloseIndices(Num_pg_class_indices, ridescs);

@@ -26,7 +26,6 @@
 #include "catalog/catname.h"
 #include "utils/relcache.h"
 #include "storage/sinval.h"
-#include "storage/bufmgr.h"
 #include "env/dbwriter.h"
 
 static int RecoveryCheckingEnabled(void);
@@ -352,14 +351,7 @@ TransRecover(Relation logrelation)
 	
 	elog(DEBUG,"xid is %llu",ctid);
 	elog(DEBUG,"low water is %llu\n",lowwater);
-
-	/*
-	 * Every pg_log page this pass rewrites is one recovery update.
-	 * The section starts at the first write and covers the rest of
-	 * the pass. There is no transaction wait inside the loop.
-	 */
-	{
-	bool		in_section = false;
+	
 	while (mark < ctid) {
 	
 		BlockNumber localblock = TransComputeBlockNumber(logrelation,mark);
@@ -377,19 +369,9 @@ TransRecover(Relation logrelation)
 		}
 
 		if ( rollback ) {
-			if (!in_section)
-			{
-				BeginCriticalIO();
-				in_section = true;
-			}
 			TransBlockSetXidStatus(block, mark, XID_ABORT);
 			WriteNoReleaseBuffer(logrelation,buffer);
 		} else if ( TransactionIdDidSoftCommit(mark) ) {
-			if (!in_section)
-			{
-				BeginCriticalIO();
-				in_section = true;
-			}
 			TransBlockSetXidStatus(block, mark, XID_ABORT);
 			WriteNoReleaseBuffer(logrelation,buffer);
 			elog(DEBUG,"soft to abort %llu",mark);
@@ -414,9 +396,6 @@ TransRecover(Relation logrelation)
 
 		mark++;
 		
-	}
-	if (in_section)
-		EndCriticalIO();
 	}
 
 	if ( BufferIsValid(buffer) ) {

@@ -105,8 +105,6 @@ typedef struct Environment {
 	int                     holdLock;
 /*  error codes  */
         bool                    cancelled;
-        /* Java Thread running a LANGUAGE 'java' call, so cancel() can interrupt it. */
-        void                   *javaCaller;
 	bool			InError;
 	char			errortext[256];
 	char			state[40];
@@ -249,7 +247,6 @@ bool CheckForCancel(void);
 void CancelEnvAndJoin(Env* env);
 void CancelAllEnvs(void);
 pthread_t FindChildThread(Env* env);
-pthread_t FindOwnedChild(Env* parent);
 
 bool WeaverIsPanicked(void);
 void WeaverPanicShutdown(const char *msg);

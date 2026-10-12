@@ -20,11 +20,9 @@ import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.channels.Pipe;
 import java.nio.channels.WritableByteChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Future;
 import org.weaverdb.ExecutionException;
 import org.weaverdb.Output;
@@ -88,47 +86,28 @@ class DirectOutputChannel<T> extends DirectOutput<WritableByteChannel> {
     }
     
     private int transferOut(MemorySegment user, int type, MemorySegment var, int varSize) {
-        try {
-            WritableByteChannel w = super.get();
-            /*
-             * The column name arrives as META before the payload. Writing it
-             * into the pipe prefixes the value with the column name.
-             */
-            if (type == DirectWeaverConnection.META) {
-                if (varSize > 0 && var != null && !var.equals(MemorySegment.NULL)) {
-                    try (Arena arena = Arena.ofConfined()) {
-                        MemorySegment name = var.reinterpret(varSize, arena, null);
-                        noteColumn(new String(name.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8));
-                    }
-                }
-                return varSize > 0 ? varSize : 0;
+        WritableByteChannel w = super.get();
+        
+        if (var == MemorySegment.NULL) {  // EOD
+            try {
+                w.close();
+            } catch (IOException io) {
+                
             }
-            /* CLOSE_OP arrives as a negative size on a null pointer. */
-            if (varSize < 0 || var == null || var.equals(MemorySegment.NULL)) {
-                if (w != null) {
-                    try {
-                        w.close();
-                    } catch (IOException io) {
-                    }
-                }
-                return -1;
-            }
+            return -1;
+        } else {
             try (Arena arena = Arena.ofConfined()) {
                 var = var.reinterpret(varSize, arena, null);
                 ByteBuffer bb = var.asByteBuffer();
                 int size = 0;
                 while (size < varSize) {
-                    int wrote = w.write(bb);
-                    if (wrote <= 0) {
-                        return size > 0 ? size : -1;
-                    }
-                    size += wrote;
+                    size += w.write(bb);
                 }
                 return size;
+            } catch (IOException io) {
+               return -1;     
             }
-        } catch (Throwable ex) {
-            return -1;
-        }
+        }        
     }
     
     @Override

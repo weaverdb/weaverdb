@@ -164,16 +164,8 @@ renameatt(char *relname,
 	StrNCpy(NameStr(((Form_pg_attribute) GETSTRUCT(oldatttup))->attname),
 			newattname, NAMEDATALEN);
 
-	{
-		HeapTupleData ciotup;
-		Buffer ciobuf;
-		int ciores;
-		ciores = heap_lock_for_update(attrelation, &oldatttup->t_self, &ciobuf, &ciotup, NULL);
-		if (ciores != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock tuple for update");
-		BeginCriticalIO();
-		heap_update_locked(attrelation, ciobuf, &ciotup, oldatttup, NULL);
-	}
+	BeginCriticalIO();
+	heap_update(attrelation, &oldatttup->t_self, oldatttup, NULL, NULL);
 
 	/* keep system catalog indices current */
 	{
@@ -307,16 +299,8 @@ renamerel(const char *oldrelname, const char *newrelname)
 	StrNCpy(NameStr(((Form_pg_class) GETSTRUCT(oldreltup))->relname),
 			newrelname, NAMEDATALEN);
 
-	{
-		HeapTupleData ciotup;
-		Buffer ciobuf;
-		int ciores;
-		ciores = heap_lock_for_update(relrelation, &oldreltup->t_self, &ciobuf, &ciotup, NULL);
-		if (ciores != HeapTupleMayBeUpdated)
-			elog(ERROR, "could not lock tuple for update");
-		BeginCriticalIO();
-		heap_update_locked(relrelation, ciobuf, &ciotup, oldreltup, NULL);
-	}
+	BeginCriticalIO();
+	heap_update(relrelation, &oldreltup->t_self, oldreltup, NULL, NULL);
 
 	/* keep the system catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, irelations);
