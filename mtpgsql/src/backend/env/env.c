@@ -874,6 +874,15 @@ MemoryContext GetEnvMemoryContext( void ) {
 }
 
 void SetProcessingMode(ProcessingMode mode) {
+    if ( CurrentMode == ShutdownProcessing && mode == InitProcessing ) {
+        /*
+         * initweaverbackend calls this before InitSystem on a second boot.
+         * CreateEnv refuses to run while the process is still shutting
+         * down, and GetEnv() is not current yet.
+         */
+        CurrentMode = InitProcessing;
+        return;
+    }
     if ( CurrentMode == InitProcessing && mode == NormalProcessing ) {
         /*
          * Publish Normal for the process, and for this thread. The
