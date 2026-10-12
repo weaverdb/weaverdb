@@ -145,10 +145,14 @@ elog(int lev, const char *fmt,...)
 	int			log_level;
 #endif
 
-	if (lev <= DEBUG && Debugfile < 0)
+	/*
+	 * DEBUG and NOIND are dropped when debug is off or no log fd is open.
+	 * WARN uses that same destination but is always emitted.
+	 */
+	if (lev <= DEBUG && lev != WARN && Debugfile < 0)
 		return;					/* ignore debug msgs if noplace to send */
 
-        if (lev <= DEBUG && IgnoreDebugLevel) 
+        if (lev <= DEBUG && lev != WARN && IgnoreDebugLevel)
                 return;
 
 	if (lev == ERROR || lev == FATAL)
@@ -184,6 +188,9 @@ elog(int lev, const char *fmt,...)
 			break;
 		case NOTICE:
 			prefix = "NOTICE:  ";
+			break;
+		case WARN:
+			prefix = "WARN:  ";
 			break;
 		case ERROR:
 			prefix = "ERROR:  ";
@@ -331,6 +338,9 @@ elog(int lev, const char *fmt,...)
 		case NOTICE:
 			log_level = LOG_NOTICE;
 			break;
+		case WARN:
+			log_level = LOG_WARNING;
+			break;
 		case ERROR:
 			log_level = LOG_WARNING;
 			break;
@@ -385,6 +395,18 @@ elog(int lev, const char *fmt,...)
 	} else if (Debugfile >= 0 && UseSyslog <= 1) {
 		write(Debugfile, msg_buf, strlen(msg_buf));
 		write(Debugfile, "\n", 1);
+	} else if (lev == WARN && UseSyslog <= 1) {
+		/*
+		 * Same destination DEBUG would use, before InitializeElog has
+		 * opened a log fd: the server's stderr.
+		 */
+		int			errfd = fileno(stderr);
+
+		if (errfd >= 0)
+		{
+			write(errfd, msg_buf, strlen(msg_buf));
+			write(errfd, "\n", 1);
+		}
 	}
 
 	/*

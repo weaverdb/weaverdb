@@ -382,7 +382,7 @@ transformTableEntry(ParseState *pstate, RangeVar *r)
 			}
 		}
 		else
-			elog(NOTICE, "transformTableEntry: column aliases not handled (internal error)");
+			elog(WARN, "transformTableEntry: column aliases not handled (internal error)");
 #else
 		elog(ERROR, "Column aliases not yet supported");
 #endif

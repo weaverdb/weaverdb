@@ -578,7 +578,7 @@ int ForgetFreespace(Relation rel, bool gone) {
 
         if ( !found ) {
             /*
-            elog(NOTICE,"de-referencing unknown freespace %s-%s",RelationGetRelationName(rel),GetDatabaseName());
+            elog(WARN,"de-referencing unknown freespace %s-%s",RelationGetRelationName(rel),GetDatabaseName());
             */
         } else {
 		pthread_cond_destroy(&entry->creator);

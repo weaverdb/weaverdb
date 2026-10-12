@@ -320,7 +320,7 @@ ShmemAlloc(Size size)
 	SpinRelease(ShmemLock);
 
 	if (!newSpace) {
-		elog(NOTICE, "ShmemAlloc: out of memory ");
+		elog(WARN, "ShmemAlloc: out of memory ");
                 newSpace = os_malloc(size);
         }
 	return newSpace;
@@ -570,7 +570,7 @@ ShmemInitStruct(char *name, Size size, bool *foundPtr)
 		{
 			SpinRelease(ShmemIndexLock);
 
-			elog(NOTICE, "ShmemInitStruct: ShmemIndex entry size is wrong");
+			elog(WARN, "ShmemInitStruct: ShmemIndex entry size is wrong");
 			/* let caller print its message too */
 			return NULL;
 		}
@@ -588,7 +588,7 @@ ShmemInitStruct(char *name, Size size, bool *foundPtr)
 			SpinRelease(ShmemIndexLock);
 			*foundPtr = FALSE;
 
-			elog(NOTICE, "ShmemInitStruct: cannot allocate '%s'",name);
+			elog(WARN, "ShmemInitStruct: cannot allocate '%s'",name);
 			return NULL;
 		}
 		result->size = size;

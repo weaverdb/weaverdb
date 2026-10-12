@@ -367,7 +367,7 @@ mdopen(Relation reln)
 		}
 		if (fd < 0)
 		{
-			elog(NOTICE, "mdopen: couldn't open %s: %m", path);
+			elog(WARN, "mdopen: couldn't open %s: %m", path);
 			/* mark relation closed and unlinked */
 			reln->rd_fd = -1;
 			reln->rd_unlinked = true;

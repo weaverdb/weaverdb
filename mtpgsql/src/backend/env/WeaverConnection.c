@@ -1078,7 +1078,7 @@ WDisposeConnection(OpaqueWConn conn) {
 #ifdef  USE_ASSERT_CHECKING  
     if (setjmp(connection->env->errorContext) == 0) {
         if (BufferPoolCheckLeak()) {
-            elog(NOTICE, "Buffer leak in dispose connection");
+            elog(WARN, "Buffer leak in dispose connection");
             ResetBufferPool(false);
         }
     }

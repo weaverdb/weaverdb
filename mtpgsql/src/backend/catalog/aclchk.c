@@ -198,7 +198,7 @@ get_groname(AclId grosysid)
 	if (HeapTupleIsValid(tuple))
 		name = NameStr(((Form_pg_group) GETSTRUCT(tuple))->groname);
 	else
-		elog(NOTICE, "get_groname: group %d not found", grosysid);
+		elog(WARN, "get_groname: group %d not found", grosysid);
 	return name;
 }
 
@@ -235,7 +235,7 @@ in_group(AclId uid, AclId gid)
 			}
 	}
 	else
-		elog(NOTICE, "in_group: group %d not found", gid);
+		elog(WARN, "in_group: group %d not found", gid);
 	heap_close(relation, RowExclusiveLock);
 	return found;
 }

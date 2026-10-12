@@ -135,7 +135,7 @@ RegisterSharedInvalid(int cacheId,		/* XXX */
 	insertOK = SIInsertDataEntry(shmInvalBuffer, &newInvalid);
 	SpinRelease(SInvalLock);
 	if (!insertOK)
-		elog(NOTICE, "RegisterSharedInvalid: SI buffer overflow");
+		elog(WARN, "RegisterSharedInvalid: SI buffer overflow");
 }
 
 void
@@ -167,7 +167,7 @@ InvalidateSharedInvalid(void)
 		if (getResult < 0)
 		{
 			/* got a reset message */
-			/*elog(NOTICE, "InvalidateSharedInvalid: cache state reset");*/
+			/*elog(WARN, "InvalidateSharedInvalid: cache state reset");*/
 			if ( getResult == -1 ) RelationCacheInvalidate();
                         else if ( getResult == -2 ) ResetSystemCache();
 		}

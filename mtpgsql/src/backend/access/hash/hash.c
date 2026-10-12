@@ -439,7 +439,7 @@ hashmarkpos(IndexScanDesc scan)
 	 * called, so_mrkbuf should be removed from the scan->opaque
 	 * structure.
 	 */
-	elog(NOTICE, "Hashmarkpos() called.");
+	elog(WARN, "Hashmarkpos() called.");
 
 	so = (HashScanOpaque) scan->opaque;
 
@@ -476,7 +476,7 @@ hashrestrpos(IndexScanDesc scan)
 	 * called, so_mrkbuf should be removed from the scan->opaque
 	 * structure.
 	 */
-	elog(NOTICE, "Hashrestrpos() called.");
+	elog(WARN, "Hashrestrpos() called.");
 
 	so = (HashScanOpaque) scan->opaque;
 

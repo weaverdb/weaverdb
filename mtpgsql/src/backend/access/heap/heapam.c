@@ -838,7 +838,7 @@ heap_update(Relation relation, ItemPointer otid, HeapTuple newtup,
         }
 /*
         if (!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid)) {
-            elog(NOTICE,"make sure aborted in heap_update self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
+            elog(WARN,"make sure aborted in heap_update self: %ld ctid: %ld xmax: %ld current, %ld, committed: %s crashed: %s aborted: %s",
                     oldtup.t_self,oldtup.t_data->t_ctid,oldtup.t_data->t_xmax,xid,
                     TransactionIdDidCommit(oldtup.t_data->t_xmax)?"yes":"no",
                     TransactionIdDidCrash(oldtup.t_data->t_xmax)?"yes":"no",

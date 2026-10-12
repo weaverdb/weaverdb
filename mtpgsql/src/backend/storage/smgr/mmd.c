@@ -279,7 +279,7 @@ mmdunlink(Relation reln)
 	 */
 	fd = RelationGetFile(reln);
 	if (fd < 0)		{			/* should not happen */
-		elog(NOTICE, "mdunlink: mdnblocks didn't open relation");
+		elog(WARN, "mdunlink: mdnblocks didn't open relation");
 		return SM_FAIL;
 	}
 
@@ -345,7 +345,7 @@ mmdextend(Relation reln, char *buffer)
 	v = _mmdfd_getseg(reln, nblocks, fsm);
 
 	if ((pos = FileSeek(v->mdfd_vfd, 0L, SEEK_END)) < 0) {
-		elog(NOTICE,"bad seek");
+		elog(WARN,"bad seek");
 		perror("bad seek");
 		FileUnpin(v->mdfd_vfd,4);
 		return SM_FAIL;
@@ -353,7 +353,7 @@ mmdextend(Relation reln, char *buffer)
 
 	if (pos % BLCKSZ != 0)		/* the last block is incomplete */
 	{
-		elog(NOTICE,"bad end");
+		elog(WARN,"bad end");
 		pos -= pos % BLCKSZ;
 		if (FileSeek(v->mdfd_vfd, pos, SEEK_SET) < 0) {
 			FileUnpin(v->mdfd_vfd,4);
@@ -363,7 +363,7 @@ mmdextend(Relation reln, char *buffer)
 
 	if ((nbytes = FileWrite(v->mdfd_vfd, buffer, BLCKSZ)) != BLCKSZ)
 	{
-		elog(NOTICE,"bad write");
+		elog(WARN,"bad write");
 		if (nbytes > 0)
 		{
 			FileTruncate(v->mdfd_vfd, pos);
@@ -434,7 +434,7 @@ mmdopen(Relation reln)
 		}
 		if (fd < 0)
 		{
-			elog(NOTICE, "mddopen: couldn't open %s: %m", path);
+			elog(WARN, "mddopen: couldn't open %s: %m", path);
 			/* mark relation closed and unlinked */
 			reln->rd_fd = -1;
 			reln->rd_unlinked = true;
@@ -601,16 +601,16 @@ mmdread(Relation reln, BlockNumber blocknum, char *buffer)
             long r = FileRead(v->mdfd_vfd, buffer, BLCKSZ-nbytes);
             if ( r < 0 ) {
         	FileUnpin(v->mdfd_vfd,6);
-                elog(NOTICE,"read error %d rel:%s,db:%u,blk no.:%llu,rel size:%llu",errno,RelationGetRelationName(reln),GetDatabaseId(),blocknum,_internal_mmdnblocks(reln,fsm));
+                elog(WARN,"read error %d rel:%s,db:%u,blk no.:%llu,rel size:%llu",errno,RelationGetRelationName(reln),GetDatabaseId(),blocknum,_internal_mmdnblocks(reln,fsm));
                 return SM_FAIL;
             } else if ( r == 0 ) {
                 if ( blocknum > _internal_mmdnblocks(reln,fsm) ) {
-                    elog(NOTICE,"trying to read non-existant block rel:%s,db:%u,blk no.:%llu,rel size:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum,_internal_mmdnblocks(reln,fsm));
+                    elog(WARN,"trying to read non-existant block rel:%s,db:%u,blk no.:%llu,rel size:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum,_internal_mmdnblocks(reln,fsm));
                     FileUnpin(v->mdfd_vfd,6);
                     return SM_FAIL;
                 }
                 if ( zerot++ == 100 ) {
-                    elog(NOTICE,"too many zero tries rel:%s,db:%u,blk no.:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum);
+                    elog(WARN,"too many zero tries rel:%s,db:%u,blk no.:%llu",RelationGetRelationName(reln),GetDatabaseId(),blocknum);
                     return SM_FAIL;
                 }
                 elog(DEBUG,"partial read amt:%d,rel:%s,db:%u,blk no.:%llu",r,RelationGetRelationName(reln),GetDatabaseId(),blocknum);
@@ -618,7 +618,7 @@ mmdread(Relation reln, BlockNumber blocknum, char *buffer)
                 nbytes += r;
                 buffer += r;
                 if ( r < BLCKSZ ) {
-                    elog(NOTICE,"partial read: %d block rel:%s,db:%u,blk no.:%llu",r,RelationGetRelationName(reln),GetDatabaseId(),blocknum);
+                    elog(WARN,"partial read: %d block rel:%s,db:%u,blk no.:%llu",r,RelationGetRelationName(reln),GetDatabaseId(),blocknum);
                 }
             }
         }
@@ -892,7 +892,7 @@ _internal_mmdnblocks(Relation reln, FSMemory* fsm)
 			{
 				v->mdfd_chain = _mmdfd_openseg(reln, segno, O_CREAT, fsm);
 				if (v->mdfd_chain == (MdfdVec *) NULL) {
-					elog(NOTICE, "cannot count blocks for %s -- open failed",
+					elog(WARN, "cannot count blocks for %s -- open failed",
 						 RelationGetRelationName(reln));
 				}
 			}
@@ -1231,7 +1231,7 @@ _mmdfd_getrelnfd(Relation reln)
 	if (fd < 0)
 	{
 		if ((fd = mmdopen(reln)) < 0) {
-			elog(NOTICE, "cannot open relation %s",
+			elog(WARN, "cannot open relation %s",
 				 RelationGetRelationName(reln));
 			fd = SM_FAIL;
 		} else {
@@ -1264,7 +1264,7 @@ _mmdfd_getseg(Relation reln, BlockNumber blkno, FSMemory*   fsm)
 			v->mdfd_chain = _mmdfd_openseg(reln, i, O_CREAT, fsm);
 
 			if (v->mdfd_chain == (MdfdVec *) NULL) 
-				elog(NOTICE, "cannot open segment %d of relation %s",
+				elog(WARN, "cannot open segment %d of relation %s",
 					 i, RelationGetRelationName(reln));
 		}
 		v = v->mdfd_chain;

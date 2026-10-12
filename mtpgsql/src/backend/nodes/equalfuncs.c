@@ -959,7 +959,7 @@ equal(void *a, void *b)
 			retval = _equalCaseWhen(a, b);
 			break;
 		default:
-			elog(NOTICE, "equal: don't know whether nodes of type %d are equal",
+			elog(WARN, "equal: don't know whether nodes of type %d are equal",
 				 nodeTag(a));
 			break;
 	}

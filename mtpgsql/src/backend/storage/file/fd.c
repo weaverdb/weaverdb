@@ -404,7 +404,7 @@ ActivateFile(Vfd* vfdP) {
     if (vfdP->seekPos != 0L) {
         off_t check = lseek(vfdP->fd, vfdP->seekPos, SEEK_SET);
         if (check != vfdP->seekPos) {
-            elog(NOTICE, "bad file activation during seek filename:%s, current: %ld, seeked: %lld", vfdP->fileName, vfdP->seekPos, (int64)check);
+            elog(WARN, "bad file activation during seek filename:%s, current: %ld, seeked: %lld", vfdP->fileName, vfdP->seekPos, (int64)check);
         }
     }
 
@@ -668,7 +668,7 @@ CheckFileAccess(Vfd* target) {
     while (target->fd == VFD_CLOSED && trys++ < 5) {
         if (!ActivateFile(target)) {
             char* err = strerror(errno);
-            elog(NOTICE, "bad file activation: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
+            elog(WARN, "bad file activation: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             errno = 0;
         }
     }
@@ -933,7 +933,7 @@ FileRead(File file, char *buffer, int amount) {
         if (blit < 0) {
             char* err = strerror(errno);
             errno = 0;
-            elog(NOTICE, "bad read file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
+            elog(WARN, "bad read file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             return -1;
         } else if (blit == 0) {
             /* EOF  */
@@ -969,10 +969,10 @@ FileWrite(File file, char *buffer, int amount) {
         ssize_t blit = write(target->fd, buffer, amount);
         if (blit < 0) {
             char* err = strerror(errno);
-            elog(NOTICE, "bad write file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
+            elog(WARN, "bad write file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             return -1;
         } else if (blit == 0) {
-            elog(NOTICE, "partial write %s", target->fileName);
+            elog(WARN, "partial write %s", target->fileName);
             return (request - amount);
         }
         buffer += blit;
@@ -1018,7 +1018,7 @@ FileSeek(File file, long offset, int whence) {
         blit = lseek(target->fd, offset, whence);
         if (blit < 0) {
             char* err = strerror(errno);
-            elog(NOTICE, "bad seek file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
+            elog(WARN, "bad seek file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             if (fails++ > 5) {
                 return -1;
             }
@@ -1261,7 +1261,7 @@ FreeFile(FILE *file) {
 
 
     if (i < 0)
-        elog(NOTICE, "FreeFile: file was not obtained from AllocateFile");
+        elog(WARN, "FreeFile: file was not obtained from AllocateFile");
 
     for (i = 0; i < MAX_PRIVATE_FILES; i++) {
         if (env->falloc[i] == file) env->falloc[i] = NULL;

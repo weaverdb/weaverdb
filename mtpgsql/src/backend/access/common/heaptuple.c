@@ -697,7 +697,7 @@ heap_freetuple(HeapTuple htup)
 	if (htup->t_data != NULL)
 		if (htup->t_datamcxt != NULL && (char *) (htup->t_data) !=
 		 ((char *) htup + HEAPTUPLESIZE) && htup->t_datasrc == NULL)
-			elog(NOTICE, "TELL Jan Wieck: heap_freetuple() found separate t_data");
+			elog(WARN, "TELL Jan Wieck: heap_freetuple() found separate t_data");
 
 	if (htup->t_datasrc != NULL)
 		pfree(htup->t_datasrc);

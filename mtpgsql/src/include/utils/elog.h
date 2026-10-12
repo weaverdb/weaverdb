@@ -15,14 +15,23 @@
 #ifndef ELOG_H
 #define ELOG_H
 
-#define NOTICE	0				/* random info - no special action */
+/*
+ * NOTICE goes to the connected client (or local output). DEBUG and NOIND
+ * go only to the server log and are dropped unless debug is on.
+ *
+ * WARN must stay numerically <= DEBUG. elog() uses `lev > DEBUG` to decide
+ * what is sent to the frontend, so WARN then shares DEBUG's destination
+ * (the InitializeElog file, or stderr) without being dropped when debug is off.
+ */
+#define NOTICE	0				/* client info when a frontend is connected */
 #define ERROR	(-1)			/* user error - return to known state */
 #define FATAL	1				/* fatal error - abort process (embedded: panic-shutdown instance) */
 #define REALLYFATAL 2			/* take down the other backends with me */
 #define STOP	REALLYFATAL
-#define DEBUG	(-2)			/* debug message */
+#define DEBUG	(-2)			/* debug message; server log only, if debug is on */
 #define LOG		DEBUG
 #define NOIND	(-3)			/* debug message, don't indent as far */
+#define WARN	(-4)			/* server-log warning; same place as DEBUG, always emitted */
 
 #ifdef __cplusplus
 extern "C" {

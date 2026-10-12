@@ -268,7 +268,7 @@ RI_FKey_check(FmgrInfo *proinfo)
 		 * ----------
 		 */
 		if (SPI_connect() != SPI_OK_CONNECT)
-			elog(NOTICE, "SPI_connect() failed in RI_FKey_check()");
+			elog(WARN, "SPI_connect() failed in RI_FKey_check()");
 
 		if (SPI_execp(qplan, check_values, check_nulls, 1) != SPI_OK_SELECT)
 			elog(ERROR, "SPI_execp() failed in RI_FKey_check()");
@@ -280,7 +280,7 @@ RI_FKey_check(FmgrInfo *proinfo)
 				 tgargs[RI_PK_RELNAME_ARGNO]);
 
 		if (SPI_finish() != SPI_OK_FINISH)
-			elog(NOTICE, "SPI_finish() failed in RI_FKey_check()");
+			elog(WARN, "SPI_finish() failed in RI_FKey_check()");
 
 		return NULL;
 
@@ -376,7 +376,7 @@ RI_FKey_check(FmgrInfo *proinfo)
 	 * ----------
 	 */
 	if (SPI_connect() != SPI_OK_CONNECT)
-		elog(NOTICE, "SPI_connect() failed in RI_FKey_check()");
+		elog(WARN, "SPI_connect() failed in RI_FKey_check()");
 
 	/* ----------
 	 * Fetch or prepare a saved plan for the real check
@@ -464,7 +464,7 @@ RI_FKey_check(FmgrInfo *proinfo)
 			 tgargs[RI_PK_RELNAME_ARGNO]);
 
 	if (SPI_finish() != SPI_OK_FINISH)
-		elog(NOTICE, "SPI_finish() failed in RI_FKey_check()");
+		elog(WARN, "SPI_finish() failed in RI_FKey_check()");
 
 	return NULL;
 
@@ -609,7 +609,7 @@ RI_FKey_noaction_del(FmgrInfo *proinfo)
 			heap_close(fk_rel, NoLock);
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_noaction_del()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_noaction_del()");
 
 			/* ----------
 			 * Fetch or prepare a saved plan for the restrict delete
@@ -690,7 +690,7 @@ RI_FKey_noaction_del(FmgrInfo *proinfo)
 					 tgargs[RI_FK_RELNAME_ARGNO]);
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_noaction_del()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_noaction_del()");
 
 			return NULL;
 
@@ -828,7 +828,7 @@ RI_FKey_noaction_upd(FmgrInfo *proinfo)
 				return NULL;
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_noaction_upd()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_noaction_upd()");
 
 			/* ----------
 			 * Fetch or prepare a saved plan for the noaction update
@@ -909,7 +909,7 @@ RI_FKey_noaction_upd(FmgrInfo *proinfo)
 					 tgargs[RI_FK_RELNAME_ARGNO]);
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_noaction_upd()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_noaction_upd()");
 
 			return NULL;
 
@@ -1035,7 +1035,7 @@ RI_FKey_cascade_del(FmgrInfo *proinfo)
 			heap_close(fk_rel, NoLock);
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_cascade_del()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_cascade_del()");
 
 			/* ----------
 			 * Fetch or prepare a saved plan for the cascaded delete
@@ -1105,7 +1105,7 @@ RI_FKey_cascade_del(FmgrInfo *proinfo)
 				elog(ERROR, "SPI_execp() failed in RI_FKey_cascade_del()");
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_cascade_del()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_cascade_del()");
 
 			return NULL;
 
@@ -1242,7 +1242,7 @@ RI_FKey_cascade_upd(FmgrInfo *proinfo)
 				return NULL;
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_cascade_upd()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_cascade_upd()");
 
 			/* ----------
 			 * Fetch or prepare a saved plan for the cascaded update
@@ -1333,7 +1333,7 @@ RI_FKey_cascade_upd(FmgrInfo *proinfo)
 				elog(ERROR, "SPI_execp() failed in RI_FKey_cascade_upd()");
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_cascade_upd()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_cascade_upd()");
 
 			return NULL;
 
@@ -1466,7 +1466,7 @@ RI_FKey_restrict_del(FmgrInfo *proinfo)
 			heap_close(fk_rel, NoLock);
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_restrict_del()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_restrict_del()");
 
 			/* ----------
 			 * Fetch or prepare a saved plan for the restrict delete
@@ -1547,7 +1547,7 @@ RI_FKey_restrict_del(FmgrInfo *proinfo)
 					 tgargs[RI_FK_RELNAME_ARGNO]);
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_restrict_del()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_restrict_del()");
 
 			return NULL;
 
@@ -1690,7 +1690,7 @@ RI_FKey_restrict_upd(FmgrInfo *proinfo)
 				return NULL;
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_restrict_upd()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_restrict_upd()");
 
 			/* ----------
 			 * Fetch or prepare a saved plan for the restrict update
@@ -1771,7 +1771,7 @@ RI_FKey_restrict_upd(FmgrInfo *proinfo)
 					 tgargs[RI_FK_RELNAME_ARGNO]);
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_restrict_upd()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_restrict_upd()");
 
 			return NULL;
 
@@ -1897,7 +1897,7 @@ RI_FKey_setnull_del(FmgrInfo *proinfo)
 			heap_close(fk_rel, NoLock);
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_setnull_del()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_setnull_del()");
 
 			/* ----------
 			 * Fetch or prepare a saved plan for the set null delete
@@ -1978,7 +1978,7 @@ RI_FKey_setnull_del(FmgrInfo *proinfo)
 				elog(ERROR, "SPI_execp() failed in RI_FKey_setnull_del()");
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_setnull_del()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_setnull_del()");
 
 			return NULL;
 
@@ -2118,7 +2118,7 @@ RI_FKey_setnull_upd(FmgrInfo *proinfo)
 				return NULL;
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_setnull_upd()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_setnull_upd()");
 
 			/*
 			 * "MATCH <unspecified>" only changes columns corresponding to
@@ -2236,7 +2236,7 @@ RI_FKey_setnull_upd(FmgrInfo *proinfo)
 				elog(ERROR, "SPI_execp() failed in RI_FKey_setnull_upd()");
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_setnull_upd()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_setnull_upd()");
 
 			return NULL;
 
@@ -2362,7 +2362,7 @@ RI_FKey_setdefault_del(FmgrInfo *proinfo)
 			heap_close(fk_rel, NoLock);
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_setdefault_del()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_setdefault_del()");
 
 			/* ----------
 			 * Prepare a plan for the set defalt delete operation.
@@ -2490,7 +2490,7 @@ RI_FKey_setdefault_del(FmgrInfo *proinfo)
 				elog(ERROR, "SPI_execp() failed in RI_FKey_setdefault_del()");
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_setdefault_del()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_setdefault_del()");
 
 			return NULL;
 
@@ -2629,7 +2629,7 @@ RI_FKey_setdefault_upd(FmgrInfo *proinfo)
 				return NULL;
 
 			if (SPI_connect() != SPI_OK_CONNECT)
-				elog(NOTICE, "SPI_connect() failed in RI_FKey_setdefault_upd()");
+				elog(WARN, "SPI_connect() failed in RI_FKey_setdefault_upd()");
 
 			/* ----------
 			 * Prepare a plan for the set defalt delete operation.
@@ -2774,7 +2774,7 @@ RI_FKey_setdefault_upd(FmgrInfo *proinfo)
 				elog(ERROR, "SPI_execp() failed in RI_FKey_setdefault_upd()");
 
 			if (SPI_finish() != SPI_OK_FINISH)
-				elog(NOTICE, "SPI_finish() failed in RI_FKey_setdefault_upd()");
+				elog(WARN, "SPI_finish() failed in RI_FKey_setdefault_upd()");
 
 			return NULL;
 

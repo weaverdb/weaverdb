@@ -615,7 +615,7 @@ vfdextend(SmgrInfo info, char *buffer, int count)
             int nbytes = FileWrite(fd, buffer, BLCKSZ);
             if (nbytes != BLCKSZ)
             {
-                elog(NOTICE,"file extend failed %d does not equal block size",nbytes);
+                elog(WARN,"file extend failed %d does not equal block size",nbytes);
                 if (nbytes > 0)
                 {
                     FileTruncate(fd, pos);
@@ -655,7 +655,7 @@ vfdopen(SmgrInfo info)
 		}
 		if (fd < 0)
 		{
-			elog(NOTICE, "vfdopen: couldn't open %s: %m", path);
+			elog(WARN, "vfdopen: couldn't open %s: %m", path);
 			/* mark relation closed and unlinked */
 			info->fd = -1;
 			info->unlinked = true;
@@ -715,36 +715,36 @@ vfdread(SmgrInfo info, BlockNumber blocknum, char *buffer)
 	seekpos = (long) (BLCKSZ * (blocknum));
 
         if ( fd < 0 ) {
-            elog(NOTICE,"File not valid");
+            elog(WARN,"File not valid");
             return SM_FAIL;
         }
 
         FilePin(fd, 3);
         Assert(strstr(FileGetName(fd),NameStr(info->relname))!=NULL);
 	if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-            elog(NOTICE,"bad read seek filename:%s, %ld db:%s,rel:%s,blk no.:%lu",FileGetName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
+            elog(WARN,"bad read seek filename:%s, %ld db:%s,rel:%s,blk no.:%lu",FileGetName(fd),seekpos,NameStr(info->dbname),NameStr(info->relname),blocknum);
             status = SM_FAIL_SEEK;
         } else {
             blit = FileRead(fd, buffer, BLCKSZ);
             if (blit < 0) {
-                elog(NOTICE,"bad read %d filename:%s, db:%s,rel:%s,blk no.:%lu",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum);
+                elog(WARN,"bad read %d filename:%s, db:%s,rel:%s,blk no.:%lu",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum);
                 status = SM_FAIL_BASE;
             } else if ( blit == 0 ) {
                 long checkpos = FileSeek(fd,0L,SEEK_END);
                 MemSet(buffer, 0, BLCKSZ);
                 if ( seekpos >= checkpos ) {
                     if ( seekpos > checkpos ) {
-                        elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
+                        elog(WARN,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
                     }
                     status = SM_FAIL_EOF;
                 } else {
                     if (FileSeek(fd, seekpos, SEEK_SET) != seekpos) {
-                        elog(NOTICE,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
+                        elog(WARN,"read past end of file filename: %s, rel: %s %ld %ld",FileGetName(fd), NameStr(info->relname),seekpos,checkpos);
                         status = SM_FAIL_SEEK;
                     }
                 }
             } else if ( blit != BLCKSZ ) {
-                elog(NOTICE,"bad read %d filename:%s,db:%s,rel:%s,blk no.:%lu,read length:%d",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum,blit);
+                elog(WARN,"bad read %d filename:%s,db:%s,rel:%s,blk no.:%lu,read length:%d",errno,FileGetName(fd),NameStr(info->dbname),NameStr(info->relname),blocknum,blit);
                 status = SM_FAIL_BASE;
             }
         }

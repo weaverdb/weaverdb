@@ -227,8 +227,8 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                     AddReindexRequest(RelationGetRelationName(reln),GetDatabaseName(),bufHdr->tag.relId.relId,bufHdr->tag.relId.dbId);
                     status = SM_FAIL;
                 }
-                elog(NOTICE, "Index Page is corrupted name:%s page:%ld check:%ld\n", NameStr(reln->rd_rel->relname), blockNum,check);
-                elog(NOTICE, "checksum=%lld\n", ((PageHeader)bufHdr->data)->checksum);
+                elog(WARN, "Index Page is corrupted name:%s page:%ld check:%ld\n", NameStr(reln->rd_rel->relname), blockNum,check);
+                elog(WARN, "checksum=%lld\n", ((PageHeader)bufHdr->data)->checksum);
             }
         } else if ( reln->rd_rel->relkind == RELKIND_RELATION ) {
             if ( !PageIsNew((Page)(bufHdr->data)) && !PageConfirmChecksum((Page)(bufHdr->data)) ) {
@@ -241,7 +241,7 @@ ReadBuffer(Relation reln, BlockNumber blockNum) {
                     PageInit((Page)(bufHdr->data),BLCKSZ,0);
                     status = SM_FAIL;
                 }
-                elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", NameStr(reln->rd_rel->relname), blockNum);
+                elog(WARN, "Heap Page is corrupted name:%s page:%ld", NameStr(reln->rd_rel->relname), blockNum);
            }
         }
     }
@@ -444,7 +444,7 @@ NoteCriticalIODepth(Relation rel, BufferDesc *bufHdr)
 	relname = (rel != NULL) ? RelationGetRelationName(rel) : NULL;
 	if (relname == NULL)
 		relname = bufHdr->blind.relname;
-	elog(NOTICE, "CriticalIO depth %d writing %s blk %lu",
+	elog(WARN, "CriticalIO depth %d writing %s blk %lu",
 		 depth,
 		 relname != NULL ? relname : "?",
 		 (unsigned long) bufHdr->tag.blockNum);
@@ -454,7 +454,7 @@ NoteCriticalIODepth(Relation rel, BufferDesc *bufHdr)
 	if (syms != NULL)
 	{
 		for (i = 0; i < nframes; i++)
-			elog(NOTICE, "CriticalIO stack: %s", syms[i]);
+			elog(WARN, "CriticalIO stack: %s", syms[i]);
 		free(syms);
 	}
 	noting = 0;
@@ -565,7 +565,7 @@ retry:
 
             status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, data);
             if (status == SM_FAIL) {
-                elog(NOTICE, "FlushBuffer: cannot flush block %lu of the relation %s",
+                elog(WARN, "FlushBuffer: cannot flush block %lu of the relation %s",
                 bufHdr->tag.blockNum, bufHdr->blind.relname);
                 ErrorBufferIO(iostatus,bufHdr);
                 sleep(3);
@@ -732,7 +732,7 @@ BufferPoolCheckLeak() {
         if (env->PrivateRefCount[i] != 0) {
             BufferDesc *buf = &(BufferDescriptors[i]);
             
-            elog(NOTICE,
+            elog(WARN,
             "Buffer Leak: [%03d] (freeNext=%ld, \
             relname=%s, blockNum=%ld, flags=0x%x, refCount=%d %ld)",
             i, buf->freeNext,
@@ -903,7 +903,7 @@ PrintPinnedBufs() {
     lockowner = pthread_self();
     for (i = 0; i < MaxBuffers; ++i, ++buf) {
         if (env->PrivateRefCount[i] > 0)
-            elog(NOTICE, "[%02d] (freeNext=%ld, relname=%s, \
+            elog(WARN, "[%02d] (freeNext=%ld, relname=%s, \
             blockNum=%ld, flags=0x%x, refCount=%d %ld)\n",
             i, buf->freeNext, buf->blind.relname,
             buf->tag.blockNum, buf->ioflags,

@@ -228,13 +228,13 @@ static void RelationCacheDelete(Relation RELATION) {
     if (namehentry == NULL)
         elog(FATAL, "can't delete from relation descriptor cache");
     if (!found)
-        elog(NOTICE, "trying to delete a reldesc that does not exist.");
+        elog(WARN, "trying to delete a reldesc that does not exist.");
 
     idhentry = (RelIdCacheEnt*) hash_search(rglobal->RelationIdCache, (char *) &RELATION->rd_id, HASH_REMOVE, &found);
     if (idhentry == NULL)
         elog(FATAL, "can't delete from relation descriptor cache");
     if (!found)
-        elog(NOTICE, "trying to delete a reldesc that does not exist.");
+        elog(WARN, "trying to delete a reldesc that does not exist.");
 }
 
 /* non-export function prototypes */
@@ -1340,7 +1340,7 @@ RelationNameGetRelation(const char *relationName, Oid databaseId) {
                     rd->rd_lockInfo.lockRelId.relId);
         }
     } else {
-//        elog(NOTICE, "Relation not found %s", relationName);
+//        elog(WARN, "Relation not found %s", relationName);
     }
 
     return rd;
@@ -1535,7 +1535,7 @@ RelationClearRelation(Relation relation, bool rebuildIt) {
         relation->rd_nblocks = 0;
 
         if (relDescChanged && old_refcnt > 0) {
-            elog(NOTICE, "RelationClearRelation: relation %lu modified while in use %d",
+            elog(WARN, "RelationClearRelation: relation %lu modified while in use %d",
                     buildinfo.i.info_id, old_refcnt);
         }
 
@@ -1973,7 +1973,7 @@ AttrDefaultFetch(Relation relation) {
             if (adform->adnum != attrdef[i].adnum)
                 continue;
             if (attrdef[i].adbin != NULL)
-                elog(NOTICE, "AttrDefaultFetch: second record found for attr %s in rel %s",
+                elog(WARN, "AttrDefaultFetch: second record found for attr %s in rel %s",
                     NameStr(relation->rd_att->attrs[adform->adnum - 1]->attname),
                     RelationGetRelationName(relation));
 
@@ -1981,7 +1981,7 @@ AttrDefaultFetch(Relation relation) {
                     Anum_pg_attrdef_adbin,
                     adrel->rd_att, &isnull);
             if (isnull)
-                elog(NOTICE, "AttrDefaultFetch: adbin IS NULL for attr %s in rel %s",
+                elog(WARN, "AttrDefaultFetch: adbin IS NULL for attr %s in rel %s",
                     NameStr(relation->rd_att->attrs[adform->adnum - 1]->attname),
                     RelationGetRelationName(relation));
             attrdef[i].adbin = textout(val);
@@ -1991,13 +1991,13 @@ AttrDefaultFetch(Relation relation) {
             ReleaseBuffer(relation, buffer);
 
         if (i >= ndef)
-            elog(NOTICE, "AttrDefaultFetch: unexpected record found for attr %d in rel %s",
+            elog(WARN, "AttrDefaultFetch: unexpected record found for attr %d in rel %s",
                 adform->adnum,
                 RelationGetRelationName(relation));
     }
 
     if (found < ndef)
-        elog(NOTICE, "AttrDefaultFetch: %d record not found for rel %s",
+        elog(WARN, "AttrDefaultFetch: %d record not found for rel %s",
             ndef - found, RelationGetRelationName(relation));
 
     if (hasindex) {

@@ -356,7 +356,7 @@ SetUserId()
                                                                       0, 0, 0);
             if (!HeapTupleIsValid(userTup)) {
 
-                    elog(NOTICE, "SetUserId: user '%s' is not in '%s'",
+                    elog(WARN, "SetUserId: user '%s' is not in '%s'",
                              userName,
                              ShadowRelationName);
                 GetEnv()->UserId = 0;

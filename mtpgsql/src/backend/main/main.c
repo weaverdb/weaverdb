@@ -76,7 +76,7 @@ main(int argc, char *argv[])
 #if defined(__alpha__)
 	if (setsysinfo(SSI_NVPAIRS, buffer, 1, (caddr_t) NULL,
 				   (unsigned long) NULL) < 0)
-		elog(NOTICE, "setsysinfo failed: %d\n", errno);
+		elog(WARN, "setsysinfo failed: %d\n", errno);
 #endif
 
 #endif	 /* NOFIXADE || NOPRINTADE */

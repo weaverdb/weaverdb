@@ -69,7 +69,7 @@ lo_open(Oid lobjId, int mode)
 	MemoryContext currentContext;
 
 #if FSDB
-	elog(NOTICE, "LOopen(%u,%d)", lobjId, mode);
+	elog(WARN, "LOopen(%u,%d)", lobjId, mode);
 #endif
 
 	if (fscxt == NULL)
@@ -86,7 +86,7 @@ lo_open(Oid lobjId, int mode)
 	{							/* lookup failed */
 		MemoryContextSwitchTo(currentContext);
 #if FSDB
-		elog(NOTICE, "cannot open large object %u", lobjId);
+		elog(WARN, "cannot open large object %u", lobjId);
 #endif
 		return -1;
 	}
@@ -98,7 +98,7 @@ lo_open(Oid lobjId, int mode)
 
 #if FSDB
 	if (fd < 0)					/* newLOfd couldn't find a slot */
-		elog(NOTICE, "Out of space for large object FDs");
+		elog(WARN, "Out of space for large object FDs");
 #endif
 
 	return fd;
@@ -120,7 +120,7 @@ lo_close(int fd)
 		return -3;
 	}
 #if FSDB
-	elog(NOTICE, "LOclose(%d)", fd);
+	elog(WARN, "LOclose(%d)", fd);
 #endif
 
 	Assert(fscxt != NULL);

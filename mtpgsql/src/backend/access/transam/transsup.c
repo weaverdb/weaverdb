@@ -153,7 +153,7 @@ TransComputeBlockNumber(Relation relation,		/* relation to test */
 		elog(FATAL,"transaction id %llu block number %lu",(transactionId),compublock);
 	}
 	if ( compublock > 8192 ) {
-		elog(NOTICE,"Transaction Log is very large vacuum all databases soon. transaction id %llu block number %lu",(transactionId),compublock);
+		elog(WARN,"Transaction Log is very large vacuum all databases soon. transaction id %llu block number %lu",(transactionId),compublock);
         }
         return compublock;
 }
@@ -234,7 +234,7 @@ TransBlockSetXidStatus(Block tblock,
                         seg = 3;       
 			break;
 		default:
-			elog(NOTICE,
+			elog(WARN,
 				 "TransBlockSetXidStatus: invalid status: %d (ignored)",
 				 xstatus);
 			return;

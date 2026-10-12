@@ -275,7 +275,7 @@ Async_Listen(char *relname, int pid)
 	if (!unlistenExitRegistered)
 	{
 		if (on_shmem_exit(Async_UnlistenOnExit, (caddr_t) NULL) < 0)
-			elog(NOTICE, "Async_Listen: out of shmem_exit slots");
+			elog(WARN, "Async_Listen: out of shmem_exit slots");
 		unlistenExitRegistered = 1;
 	}
 }

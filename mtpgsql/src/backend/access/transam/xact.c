@@ -785,7 +785,7 @@ StartTransaction()
 		return;
 
 	if (s->state == TRANS_INPROGRESS)
-		elog(NOTICE,"transaction already in progress");
+		elog(WARN,"transaction already in progress");
 	/* ----------------
 	 *	set the current transaction state information
 	 *	appropriately during start processing
@@ -881,7 +881,7 @@ CommitTransaction()
 		return;
 
 	if (s->state != TRANS_INPROGRESS)
-		elog(NOTICE, "CommitTransaction and not in in-progress state ");
+		elog(WARN, "CommitTransaction and not in in-progress state ");
 
 	/* ----------------
 	 *	Tell the trigger manager that this transaction is about to be
@@ -976,7 +976,7 @@ AbortTransaction()
 		return;
 
 	if (s->state != TRANS_INPROGRESS && s->state != TRANS_START)
-		elog(NOTICE, "AbortTransaction and not in start or in-progress state ");
+		elog(WARN, "AbortTransaction and not in start or in-progress state ");
 
 	/* ----------------
 	 *	Tell the trigger manager that this transaction is about to be
@@ -1051,17 +1051,17 @@ StartTransactionCommand()
 
 
 		case TBLOCK_AUTO:
-			elog(NOTICE,"StartTransactionCommand: unexpected TBLOCK_AUTO");
+			elog(WARN,"StartTransactionCommand: unexpected TBLOCK_AUTO");
 			break;
 
 		case TBLOCK_MANUAL:
 			break;
 
 		case TBLOCK_ABORT:
-			elog(NOTICE,"StartTransactionCommand: unexpected TBLOCK_ABORT");
+			elog(WARN,"StartTransactionCommand: unexpected TBLOCK_ABORT");
 			break;
 		case TBLOCK_COMMIT:
-			elog(NOTICE,"StartTransactionCommand: unexpected TBLOCK_COMMIT");
+			elog(WARN,"StartTransactionCommand: unexpected TBLOCK_COMMIT");
 			break;	
 	}
         if (!TransactionSystemDisabled) {
@@ -1082,7 +1082,7 @@ CommitTransactionCommand()
 	switch (s->blockState)
 	{
 		case TBLOCK_DEFAULT:
-			elog(NOTICE,"CommitTransactionCommand: unexpected TBLOCK_DEFAULT");
+			elog(WARN,"CommitTransactionCommand: unexpected TBLOCK_DEFAULT");
 			break;
 
 		case TBLOCK_AUTO:
@@ -1242,7 +1242,7 @@ CloseSubTransaction() {
 		return;
 
 	if (s->state != TRANS_INPROGRESS)
-		elog(NOTICE, "CommitTransaction and not in in-progress state ");
+		elog(WARN, "CommitTransaction and not in in-progress state ");
 
 	/* ----------------
 	 *	set the current transaction state information
@@ -1327,7 +1327,7 @@ CommitTransactionBlock(void)
 		 * ----------------
 		 */
 		s->blockState = TBLOCK_ABORT;
-		elog(NOTICE,"abort only state");
+		elog(WARN,"abort only state");
 		return;
 	}
 

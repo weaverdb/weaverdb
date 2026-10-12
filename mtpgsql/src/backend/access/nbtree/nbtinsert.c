@@ -1574,7 +1574,7 @@ _bt_fixtree(Relation rel, BlockNumber blkno)
 			/* Call _bt_fixroot() if there is no upper level */
 			if (BTreeInvalidParent(opaque))
 			{
-				elog(NOTICE, "bt_fixtree[%s]: fixing root page", RelationGetRelationName(rel));
+				elog(WARN, "bt_fixtree[%s]: fixing root page", RelationGetRelationName(rel));
 				buf = _bt_fixroot(rel, buf, true);
 				_bt_wrtbuf(rel, buf);
 				return;
@@ -1929,7 +1929,7 @@ _bt_fixbranch(Relation rel, BlockNumber lblkno,
 		break;
 	}
 
-	elog(NOTICE, "bt_fixbranch[%s]: fixing upper levels", RelationGetRelationName(rel));
+	elog(WARN, "bt_fixbranch[%s]: fixing upper levels", RelationGetRelationName(rel));
 	_bt_fixup(rel, buf);
 
 	return;
@@ -1960,7 +1960,7 @@ _bt_fixup(Relation rel, Buffer buf)
 		{
 			blkno = opaque->btpo_parent;
 			_bt_relbuf(rel, buf);
-			elog(NOTICE, "bt_fixup[%s]: checking/fixing upper levels", RelationGetRelationName(rel));
+			elog(WARN, "bt_fixup[%s]: checking/fixing upper levels", RelationGetRelationName(rel));
 			_bt_fixtree(rel, blkno);
 			return;
 		}
@@ -1975,7 +1975,7 @@ _bt_fixup(Relation rel, Buffer buf)
 	 * Ok, we are on the leftmost page, it's write locked by us and its
 	 * btpo_parent points to meta page - time for _bt_fixroot().
 	 */
-	elog(NOTICE, "bt_fixup[%s]: fixing root page", RelationGetRelationName(rel));
+	elog(WARN, "bt_fixup[%s]: fixing root page", RelationGetRelationName(rel));
 	buf = _bt_fixroot(rel, buf, true);
 	_bt_wrtbuf(rel, buf);
 }
@@ -2154,7 +2154,7 @@ _bt_validate_node(Relation rel, BlockNumber block) {
                              (unsigned) current,
                              (unsigned long) ItemPointerGetBlockNumber(pointer),
                              (unsigned) ItemPointerGetOffsetNumber(pointer));
-                elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
+                elog(WARN, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
                 current = OffsetNumberPrev(current);
                 changed = true;
             }
@@ -2230,12 +2230,12 @@ _bt_validate_leaf(Relation rel, BlockNumber block) {
                              (unsigned) current,
                              (unsigned long) ItemPointerGetBlockNumber(pointer),
                              (unsigned) ItemPointerGetOffsetNumber(pointer));
-                elog(NOTICE, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
+                elog(WARN, "nbtree: Removing btree leaf page index tuple block: %ld offset: %d", block, current);
                 current = OffsetNumberPrev(current);
                 changed = true;
             } else {
                 /*
-                                elog(NOTICE,"Validated btree index tuple block: %d offset: %d",block,current);
+                                elog(WARN,"Validated btree index tuple block: %d offset: %d",block,current);
                  */
             }
         }

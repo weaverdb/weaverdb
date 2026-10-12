@@ -1059,7 +1059,7 @@ hnsw_recoverpage(Relation index, BlockNumber blkno)
 			if (!ItemPointerEquals(&etup->heaptids[checks[i].idx], &checks[i].tid))
 				continue;
 			ItemPointerSetInvalid(&etup->heaptids[checks[i].idx]);
-			elog(NOTICE,
+			elog(WARN,
 				 "hnsw: Removing orphan heaptid block: %lu offset: %u slot: %d",
 				 (unsigned long) blkno, offno, checks[i].idx);
 			changed = true;
@@ -1074,7 +1074,7 @@ hnsw_recoverpage(Relation index, BlockNumber blkno)
 			if (!ItemPointerEquals(&ntup->indextids[checks[i].idx], &checks[i].tid))
 				continue;
 			ItemPointerSetInvalid(&ntup->indextids[checks[i].idx]);
-			elog(NOTICE,
+			elog(WARN,
 				 "hnsw: Removing orphan neighbor edge block: %lu offset: %u edge: %d",
 				 (unsigned long) blkno, offno, checks[i].idx);
 			changed = true;

@@ -270,7 +270,7 @@ LockMethodTableInit(char *tabName,
 
 	if (numModes > MAX_LOCKMODES)
 	{
-		elog(NOTICE, "LockMethodTableInit: too many lock types %d greater than %d",
+		elog(WARN, "LockMethodTableInit: too many lock types %d greater than %d",
 			 numModes, MAX_LOCKMODES);
 		return INVALID_LOCKMETHOD;
 	}
@@ -919,7 +919,7 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 	lockMethodTable = LockMethodTable[lockmethod];
 	if (!lockMethodTable)
 	{
-		elog(NOTICE, "lockMethodTable is null in LockRelease");
+		elog(WARN, "lockMethodTable is null in LockRelease");
 		return FALSE;
 	}
 
@@ -947,10 +947,10 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 		ReleaseLockProtection(lock);
 #ifdef USER_LOCKS
 		if (lockmethod == USER_LOCKMETHOD)
-                    elog(NOTICE, "LockRelease: no lock with this tag");
+                    elog(WARN, "LockRelease: no lock with this tag");
 		else
 #endif
-                    elog(NOTICE, "LockRelease: holder table corrupted");
+                    elog(WARN, "LockRelease: holder table corrupted");
 		return FALSE;
 	}
 	HOLDER_PRINT("LockRelease: found", holder);
@@ -964,7 +964,7 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 	{
 		ReleaseLockProtection(lock);
 		HOLDER_PRINT("LockRelease: WRONGTYPE", holder);
-		elog(NOTICE, "LockRelease: you don't own a lock of type %s",
+		elog(WARN, "LockRelease: you don't own a lock of type %s",
 			 lock_mode_names[lockmode]);
 		Assert(holder->holders[lockmode] >= 0);
 		return FALSE;
@@ -987,9 +987,9 @@ LockRelease(LOCKMETHOD lockmethod, LOCKTAG *locktag,
 	{
                 SHMQueueLock(&holder->queue);
 		if (holder->queue.prev == INVALID_OFFSET)
-			elog(NOTICE, "LockRelease: holder.prev == INVALID_OFFSET");
+			elog(WARN, "LockRelease: holder.prev == INVALID_OFFSET");
 		if (holder->queue.next == INVALID_OFFSET)
-			elog(NOTICE, "LockRelease: holder.next == INVALID_OFFSET");
+			elog(WARN, "LockRelease: holder.next == INVALID_OFFSET");
 		if (holder->queue.next != INVALID_OFFSET)
 			SHMQueueDelete(&holder->queue);
                 
@@ -1065,7 +1065,7 @@ LockReleaseAll(LOCKMETHOD lockmethod, THREAD *proc,
 	lockMethodTable = LockMethodTable[lockmethod];
 	if (!lockMethodTable)
 	{
-		elog(NOTICE, "LockReleaseAll: bad lockmethod %d", lockmethod);
+		elog(WARN, "LockReleaseAll: bad lockmethod %d", lockmethod);
 		return FALSE;
 	}
         
@@ -1219,7 +1219,7 @@ LOCK* SearchLockTable(LOCKMETHOD tid, LOCKTAG* lid, HASHACTION action) {
 
         if (!table)
         {
-                elog(NOTICE, "bad lock table %d", tid);
+                elog(WARN, "bad lock table %d", tid);
                 return FALSE;
         }
 
@@ -1303,7 +1303,7 @@ HOLDER* SearchHolderTable(LOCKMETHOD tid, HOLDERTAG* lid, HASHACTION action) {
                             &found);
 
         if ( action == HASH_REMOVE ) {
-            if ( !found ) elog(NOTICE,"Holder Table Corrupted (Remove not found)");
+            if ( !found ) elog(WARN,"Holder Table Corrupted (Remove not found)");
             target = NULL;
         } else if ( action == HASH_ENTER && !found ) {
             target->nHolding = 0;

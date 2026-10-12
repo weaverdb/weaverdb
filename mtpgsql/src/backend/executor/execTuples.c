@@ -301,7 +301,7 @@ ExecAllocTableSlot(TupleTable table)
 		 * TableSlotSize); bzero(table->array, newsize * TableSlotSize);
 		 * table->size =  newsize;
 		 */
-		elog(NOTICE, "Plan requires more slots than are available");
+		elog(WARN, "Plan requires more slots than are available");
 		elog(ERROR, "send mail to your local executor guru to fix this");
 	}
 

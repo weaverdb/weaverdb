@@ -89,7 +89,7 @@ do { \
 	if (hentry == NULL) \
 		elog(ERROR, "out of memory in PortalHashTable"); \
 	if (found) \
-		elog(NOTICE, "trying to insert a portal name that exists."); \
+		elog(WARN, "trying to insert a portal name that exists."); \
 	hentry->portal = PORTAL; \
 } while(0)
 
@@ -103,7 +103,7 @@ do { \
 	hentry = (PortalHashEnt*)hash_search(pdinfo->PortalHashTable, \
 										 key, HASH_REMOVE, NULL); \
 	if (hentry == NULL) \
-		elog(NOTICE, "trying to delete portal name that does not exist."); \
+		elog(WARN, "trying to delete portal name that does not exist."); \
 } while(0)
 /*
 static MemoryContext PortalMemory = NULL;

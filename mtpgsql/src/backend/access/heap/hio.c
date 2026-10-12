@@ -125,7 +125,7 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
            
             if ( !BlockNumberIsValid(limit) ) {
                 limit = 0;
-                elog(NOTICE,"Invalid limit for heap io");
+                elog(WARN,"Invalid limit for heap io");
             }
             
             if (lastblock + 1 == relation->rd_nblocks) {
@@ -195,7 +195,7 @@ RelationGetTupleData(Relation rel, HeapTuple tuple, bool readonly, Buffer buffer
                 desc->ioflags &= BM_READONLY;
                 if ( status == SM_SUCCESS ) {
                     if ( !PageConfirmChecksum((Page)(desc->data) ) ) {
-                        elog(NOTICE, "Heap Page is corrupted name:%s page:%ld", NameStr(rel->rd_rel->relname), ItemPointerGetBlockNumber(pointer));
+                        elog(WARN, "Heap Page is corrupted name:%s page:%ld", NameStr(rel->rd_rel->relname), ItemPointerGetBlockNumber(pointer));
                     }
                 }
             }
@@ -273,7 +273,7 @@ LockHeapTupleForUpdate(Relation relation, Buffer * buf, HeapTuple tuple, Snapsho
      while ( result != HeapTupleMayBeUpdated ) {
         *buf = RelationGetHeapTuple(relation, tuple);
         if ( !BufferIsValid(*buf) ) {
-            elog(NOTICE,"lock for update pointer error");
+            elog(WARN,"lock for update pointer error");
             return HeapTupleInvisible;
         }
         LockHeapTuple(relation,*buf,tuple,TUPLE_LOCK_WRITE);
@@ -285,7 +285,7 @@ LockHeapTupleForUpdate(Relation relation, Buffer * buf, HeapTuple tuple, Snapsho
                 memset(pid,0x00,255);
                 sprintf(pid,"pstack %d",getpid());
                 
-                elog(NOTICE, "locking invisible tuple");
+                elog(WARN, "locking invisible tuple");
                 my_system(pid);
                 break;
         } else if (result == HeapTupleBeingUpdated) {

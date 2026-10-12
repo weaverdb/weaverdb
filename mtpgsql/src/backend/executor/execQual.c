@@ -1260,7 +1260,7 @@ ExecEvalExpr(Node * expression,
                                             isNull,
                                             isDone);
                     if (checkType != returnType) {
-                        elog(NOTICE, "relabel return type does not equal expected type %ld != %ld", checkType, returnType);
+                        elog(WARN, "relabel return type does not equal expected type %ld != %ld", checkType, returnType);
                     }
                 }
 		break;

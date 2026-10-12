@@ -1097,7 +1097,7 @@ ExecMergeJoin(MergeJoin *node)
 				 * just end the join prematurely.
 				 */
 			default:
-				elog(NOTICE, "ExecMergeJoin: invalid join state. aborting");
+				elog(WARN, "ExecMergeJoin: invalid join state. aborting");
 				return NULL;
 		}
 	}

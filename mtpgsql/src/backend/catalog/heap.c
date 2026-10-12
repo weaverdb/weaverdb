@@ -1230,7 +1230,7 @@ RelationTruncateIndexes(Relation heapRelation)
 			procTuple = SearchSysCacheTuple(PROCOID, ObjectIdGetDatum(procId),
 											0, 0, 0);
 			if (!HeapTupleIsValid(procTuple)) {
-				elog(NOTICE, "RelationTruncateIndexes: index procedure not found");
+				elog(WARN, "RelationTruncateIndexes: index procedure not found");
                                 continue;
                         }
 			namecpy(&(funcInfo->funcName),
@@ -1242,7 +1242,7 @@ RelationTruncateIndexes(Relation heapRelation)
 		classTuple = SearchSysCacheTupleCopy(RELOID, ObjectIdGetDatum(indexId),
 											 0, 0, 0);
 		if (!HeapTupleIsValid(classTuple)) {
-			elog(NOTICE, "RelationTruncateIndexes: index access method not found");
+			elog(WARN, "RelationTruncateIndexes: index access method not found");
                         continue;
                 }
 		accessMethodId = ((Form_pg_class) GETSTRUCT(classTuple))->relam;
@@ -1250,7 +1250,7 @@ RelationTruncateIndexes(Relation heapRelation)
 		/* Open our index relation */
 		currentIndex = index_open(indexId);
 		if (currentIndex == NULL)
-			elog(NOTICE, "RelationTruncateIndexes: can't open index relation");
+			elog(WARN, "RelationTruncateIndexes: can't open index relation");
 
 		/* Obtain exclusive lock on it, just to be sure */
 		LockRelation(currentIndex, AccessExclusiveLock);

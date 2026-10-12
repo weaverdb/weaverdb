@@ -1336,7 +1336,7 @@ PostgresMain(int argc, char *argv[], int real_argc, char *real_argv[])
 
 
 		if (!(pw = getpwuid(geteuid()))) {
-			elog(NOTICE, "SetPgUserName: no entry in host passwd file");
+			elog(WARN, "SetPgUserName: no entry in host passwd file");
                 } else {
                     SetPgUserName(pw->pw_name);
                 }

@@ -552,7 +552,7 @@ void* DBWriter(void *jones) {
         
     RelationInitialize();
     
-    while ( !CallableInitInvalidationState() ) { elog(NOTICE,"cannot create dbwriter's shared state"); };
+    while ( !CallableInitInvalidationState() ) { elog(WARN,"cannot create dbwriter's shared state"); };
     
     SetProcessingMode(NormalProcessing);
     
@@ -1026,7 +1026,7 @@ long RegisterBufferWrite(BufferDesc * bufHdr, bool defer, bool release) {
                 bufHdr->tag.relId.relId != cart->descriptions[bufHdr->buf_id].relId.relId ||
                 bufHdr->tag.blockNum != cart->descriptions[bufHdr->buf_id].blockNum
             ) {
-            elog(NOTICE, "register write should not happen");
+            elog(WARN, "register write should not happen");
             elog(FATAL, "dbid:%ld relid:%ld blk:%ld\n",
                     bufHdr->tag.relId.dbId,
                     bufHdr->tag.relId.relId,
@@ -1411,7 +1411,7 @@ int SyncBuffers(WriteGroup list,bool forcommit) {
                         TerminateBufferIO(iostatus, bufHdr);
                     }
                 } else {
-                    elog(NOTICE, "DBWriter: buffer failed sync for writeio bufid:%d dbid:%ld relid:%ld blk:%ld",
+                    elog(WARN, "DBWriter: buffer failed sync for writeio bufid:%d dbid:%ld relid:%ld blk:%ld",
                         bufHdr->buf_id,
                         bufHdr->tag.relId.dbId,
                         bufHdr->tag.relId.relId,
@@ -1628,7 +1628,7 @@ int SignalDBWriter(WriteGroup  cart) {
         case (WAITING):
             cart->currstate = READY;
             if (pthread_cond_signal(&cart->gate) != 0) {
-                elog(NOTICE, "[DBWriter]problem waking db writer");
+                elog(WARN, "[DBWriter]problem waking db writer");
             }
             break;
         case (READY):
@@ -1749,7 +1749,7 @@ int ForgetPathCache(Oid relid, Oid dbid) {
     
     if ( !found ) {
         /*
-         * elog(NOTICE,"de-referencing unknown freespace %s-%s",RelationGetRelationName(rel),GetDatabaseName());
+         * elog(WARN,"de-referencing unknown freespace %s-%s",RelationGetRelationName(rel),GetDatabaseName());
          */
     } else {
         

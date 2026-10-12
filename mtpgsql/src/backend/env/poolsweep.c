@@ -447,7 +447,7 @@ Poolsweep(void *args) {
     /* all done cleaning, we should have no valid threads or write groups  */
 #ifdef  USE_ASSERT_CHECKING  
         if ( BufferPoolCheckLeak() ) {
-            elog(NOTICE,"Buffer leak in poolsweep");
+            elog(WARN,"Buffer leak in poolsweep");
             ResetBufferPool(false);
         }
 #endif

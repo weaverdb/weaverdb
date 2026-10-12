@@ -82,7 +82,8 @@
 #define DEBUG1 10
 #endif
 #ifndef INFO
-#define INFO NOTICE
+/* Upstream INFO is not a client notice here; it shares WARN's server log. */
+#define INFO WARN
 #endif
 
 /* Forward declare so VarBit name can be used before utils/varbit.h.

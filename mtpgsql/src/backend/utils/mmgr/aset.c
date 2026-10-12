@@ -758,7 +758,7 @@ AllocSetFree(MemoryContext context, void *pointer)
 	/* Test for someone scribbling on unused space in chunk */
 	if (chunk->requested_size < chunk->size)
 		if (((char *) pointer)[chunk->requested_size] != 0x7E)
-			elog(NOTICE, "AllocSetFree: detected write past chunk end in %s %p",
+			elog(WARN, "AllocSetFree: detected write past chunk end in %s %p",
 				 set->header.name, chunk);
 #endif
 
@@ -833,7 +833,7 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
 	/* Test for someone scribbling on unused space in chunk */
 	if (chunk->requested_size < oldsize)
 		if (((char *) pointer)[chunk->requested_size] != 0x7E)
-			elog(NOTICE, "AllocSetRealloc: detected write past chunk end in %s %p",
+			elog(WARN, "AllocSetRealloc: detected write past chunk end in %s %p",
 				 set->header.name, chunk);
 #endif
 
@@ -1068,7 +1068,7 @@ AllocSetCheck(MemoryContext context)
 		if (!blk_used)
 		{
 			if (set->keeper != block)
-				elog(NOTICE, "AllocSetCheck: %s: empty block %p",
+				elog(WARN, "AllocSetCheck: %s: empty block %p",
 					 name, block);
 		}
 
@@ -1090,16 +1090,16 @@ AllocSetCheck(MemoryContext context)
 			 * Check chunk size
 			 */
 			if (dsize > chsize)
-				elog(NOTICE, "AllocSetCheck: %s: req size > alloc size for chunk %p in block %p",
+				elog(WARN, "AllocSetCheck: %s: req size > alloc size for chunk %p in block %p",
 					 name, chunk, block);
 			if (chsize < (1 << ALLOC_MINBITS))
-				elog(NOTICE, "AllocSetCheck: %s: bad size %lu for chunk %p in block %p",
+				elog(WARN, "AllocSetCheck: %s: bad size %lu for chunk %p in block %p",
 					 name, (unsigned long) chsize, chunk, block);
 
 			/* single-chunk block? */
 			if (chsize > ALLOC_CHUNK_LIMIT &&
 				chsize + ALLOC_CHUNKHDRSZ != blk_used)
-				elog(NOTICE, "AllocSetCheck: %s: bad single-chunk %p in block %p",
+				elog(WARN, "AllocSetCheck: %s: bad single-chunk %p in block %p",
 					 name, chunk, block);
 
 			/*
@@ -1108,14 +1108,14 @@ AllocSetCheck(MemoryContext context)
 			 * check as easily...)
 			 */
 			if (dsize > 0 && chunk->aset != (void *) set)
-				elog(NOTICE, "AllocSetCheck: %s: bogus aset link in block %p, chunk %p",
+				elog(WARN, "AllocSetCheck: %s: bogus aset link in block %p, chunk %p",
 					 name, block, chunk);
 
 			/*
 			 * Check for overwrite of "unallocated" space in chunk
 			 */
 			if (dsize > 0 && dsize < chsize && *chdata_end != 0x7E)
-				elog(NOTICE, "AllocSetCheck: %s: detected write past chunk end in block %p, chunk %p",
+				elog(WARN, "AllocSetCheck: %s: detected write past chunk end in block %p, chunk %p",
 					 name, block, chunk);
 
 			blk_data += chsize;
@@ -1125,7 +1125,7 @@ AllocSetCheck(MemoryContext context)
 		}
 
 		if ((blk_data + (nchunks * ALLOC_CHUNKHDRSZ)) != blk_used)
-			elog(NOTICE, "AllocSetCheck: %s: found inconsistent memory block %p",
+			elog(WARN, "AllocSetCheck: %s: found inconsistent memory block %p",
 				 name, block);
 	}
 }

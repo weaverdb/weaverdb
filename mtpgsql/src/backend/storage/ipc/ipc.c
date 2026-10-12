@@ -276,7 +276,7 @@ IPCPrivateMemoryKill(int status,
 #ifndef PRIVATEONLY
 		if (shmctl(shmId, IPC_RMID, (struct shmid_ds *) NULL) < 0)
 		{
-			elog(NOTICE, "IPCPrivateMemoryKill: shmctl(%d, %d, 0) failed: %m",
+			elog(WARN, "IPCPrivateMemoryKill: shmctl(%d, %d, 0) failed: %m",
 				 shmId, IPC_RMID);
 		}
 #endif
@@ -352,7 +352,7 @@ IpcMemoryDetach(int status, char *shmaddr)
 {
 #ifndef PRIVATEONLY
 	if (shmdt(shmaddr) < 0)
-		elog(NOTICE, "IpcMemoryDetach: shmdt(0x%p): %m", shmaddr);
+		elog(WARN, "IpcMemoryDetach: shmdt(0x%p): %m", shmaddr);
 #endif
 }
 
@@ -402,7 +402,7 @@ IpcMemoryKill(IpcMemoryKey memKey)
 	{
 		if (shmctl(shmid, IPC_RMID, (struct shmid_ds *) NULL) < 0)
 		{
-			elog(NOTICE, "IpcMemoryKill: shmctl(%d, %d, 0) failed: %m",
+			elog(WARN, "IpcMemoryKill: shmctl(%d, %d, 0) failed: %m",
 				 shmid, IPC_RMID);
 		}
 	}

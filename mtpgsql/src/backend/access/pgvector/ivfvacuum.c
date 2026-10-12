@@ -380,7 +380,7 @@ ivfflat_recoverpage(Relation index, BlockNumber blkno)
 			if (!ItemPointerEquals(&itup->t_tid, &tids[i]))
 				continue;
 			deletable[ndeletable++] = offs[i];
-			elog(NOTICE,
+			elog(WARN,
 				 "ivfflat: Removing orphan index tuple block: %lu offset: %u",
 				 (unsigned long) blkno, offs[i]);
 		}

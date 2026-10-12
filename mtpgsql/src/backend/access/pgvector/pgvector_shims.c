@@ -383,6 +383,8 @@ pgvector_map_elevel(int elevel)
 		return REALLYFATAL;
 	if (elevel == DEBUG || elevel == NOIND || elevel == LOG)
 		return DEBUG;
+	if (elevel == WARN)
+		return WARN;
 	if (elevel == NOTICE)
 		return NOTICE;
 	/* PG13+ DEBUG1.. and other positive modern levels (DEBUG1=10 here) */
