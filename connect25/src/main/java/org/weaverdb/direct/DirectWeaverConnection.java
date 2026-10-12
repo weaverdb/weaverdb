@@ -388,11 +388,12 @@ class DirectWeaverConnection implements DBReference {
     
     @Override
     public long transaction() {
-        if (transactionId == 0) {
-            return getTransactionId();
-        } else {
-            return transactionId;
-        }
+        /*
+         * This is the user transaction started by begin(). Commit and abort
+         * clear it. GetCurrentTransactionId stays at the last xid after
+         * commit, so asking the engine here would report a finished transaction.
+         */
+        return transactionId;
     }
     
     private MemorySegment grabConnection(String name, String password, String connect) throws ExecutionException {
@@ -531,14 +532,6 @@ class DirectWeaverConnection implements DBReference {
             throw ee;
         } catch (Throwable t) {
             throw new ExecutionException(t);
-        }
-    }
-
-    private long getTransactionId() {
-        try {
-            return (long) WGetTransactionId.invokeExact(nativePointer);
-        } catch (Throwable e) {
-            return 0;
         }
     }
 

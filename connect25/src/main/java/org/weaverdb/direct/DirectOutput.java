@@ -103,6 +103,10 @@ class DirectOutput<T> {
     String getName() {
         return column;
     }
+
+    void noteColumn(String name) {
+        this.column = name;
+    }
     
     int getIndex() {
         return index;

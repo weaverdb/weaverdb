@@ -946,13 +946,27 @@ ConvertToJavaArg(Oid type, Datum val)
         case TEXTOID:
 	case VARCHAROID:
 		{
-			bytea          *strvar = (bytea *) val;
-                        int            len = VARSIZE(strvar) - VARHDRSZ;
-			char           *string = palloc(len + 1);
-			memmove(string, VARDATA(strvar), len);
+			Datum           flat;
+			bytea          *strvar;
+                        int            len;
+			char           *string;
+
+			/* A null parameter is a null pointer. VARSIZE on it segfaults. */
+			if (val == (Datum) 0 || DatumGetPointer(val) == NULL) {
+				rval.l = NULL;
+				break;
+			}
+			flat = materialize_blob_datum(val);
+			strvar = (bytea *) DatumGetPointer(flat);
+                        len = VARSIZE(strvar) - VARHDRSZ;
+			string = palloc(len + 1);
+			if (len > 0)
+				memmove(string, VARDATA(strvar), len);
 			string[len] = 0x00;
 			rval.l = (*jenv)->NewStringUTF(jenv, string);
 			pfree(string);
+			if (flat != val)
+				pfree(DatumGetPointer(flat));
 			break;
 		}
 	case FLOAT8OID:
