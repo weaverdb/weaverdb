@@ -68,6 +68,7 @@ public class JniBattleIsolatedTest {
         System.out.println(result.output);
         Assertions.assertEquals(0, result.code,
                 "helper() crashed the process\n" + result.output);
+        Assertions.assertTrue(result.output.contains("helper select=1"), result.output);
     }
 
     @Test

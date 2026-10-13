@@ -187,6 +187,11 @@ typedef struct Environment {
 #endif
     HTAB*   			global_hash;
     EnvPointer                  parent;
+    /*
+     * Set for a helper sub-connection. DOL and parallel workers leave this
+     * false so they stop when the leader leaves its transaction.
+     */
+    bool                        independent;
 } Env;   
 
 typedef struct commbuffer {

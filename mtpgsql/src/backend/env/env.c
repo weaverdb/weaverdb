@@ -211,8 +211,13 @@ extern bool SetEnv(void* envp)
         } else {
             if ( current == NULL ) return FALSE;
            if ( current->parent != NULL ) {
-/* sub-connections cannot jump threads b/c we need to be able to join */
-                
+            /*
+             * Keep owner so a parent can join this thread. Clear the
+             * thread-local env so this thread can enter its other
+             * connection. Sub-connections do not drop owner the way a
+             * top-level env does.
+             */
+                pthread_setspecific(envkey, NULL);
             } else {
                 pthread_mutex_lock(current->env_guard);
                 current->owner = 0;
@@ -705,7 +710,15 @@ bool CheckForCancel() {
         }
 
         if ( env->parent != NULL ) {
-            return (env->parent->cancelled || !env->parent->in_transaction);
+            if ( env->parent->cancelled )
+                return TRUE;
+            /*
+             * Workers created under a leader stop when that transaction
+             * ends. A helper is its own sub-connection and stays runnable
+             * while the parent is idle.
+             */
+            if ( !env->independent && !env->parent->in_transaction )
+                return TRUE;
         }
         
         return FALSE;

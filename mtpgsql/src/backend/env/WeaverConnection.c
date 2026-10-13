@@ -270,6 +270,8 @@ WCreateSubConnection(OpaqueWConn parent) {
         WHandleError(parent, sqlError);
         return connection;
     } else {
+        /* Own sub-connection: not cancelled just because the parent is idle. */
+        env->independent = true;
         SetEnv(env);
         MemoryContextInit();
     }
@@ -280,6 +282,15 @@ WCreateSubConnection(OpaqueWConn parent) {
     
     connection->env = env;
     connection->thread_owner = pthread_self();
+    connection->transaction_owner = 0;
+    connection->plan = NULL;
+    connection->inselect = NULL;
+    connection->memory = AllocSetContextCreate(GetEnvMemoryContext(),
+						    "Connection",
+						    ALLOCSET_DEFAULT_MINSIZE,
+						  ALLOCSET_DEFAULT_INITSIZE,
+						  ALLOCSET_DEFAULT_MAXSIZE);
+    pthread_mutex_init(&connection->child_lock, NULL);
     SetProcessingMode(InitProcessing);
 
     connection->env->DatabaseId = parent->env->DatabaseId;
