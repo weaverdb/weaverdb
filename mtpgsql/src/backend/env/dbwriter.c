@@ -1037,7 +1037,17 @@ long RegisterBufferWrite(BufferDesc * bufHdr, bool defer, bool release) {
         cart->defers[bufHdr->buf_id] += 1;
     }
 
+    /*
+     * pg_log and pg_variable are left out of the replay log in LogBuffers
+     * and SyncBuffers. Their writes are not a CriticalIO unit, so they
+     * do not take the depth check.
+     */
+    bool check_depth = bufHdr->tag.relId.relId != cart->LogId &&
+                       bufHdr->tag.relId.relId != cart->VarId;
+
     UnlockWriteGroup(cart);
+    if (check_depth)
+        NoteCriticalIODepth(NULL, bufHdr);
     /*
      * it's now safe to give up the shared pin of the caller because we
      * know we now have ours, this method is only called by the thread

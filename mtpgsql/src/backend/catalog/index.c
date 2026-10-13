@@ -1531,7 +1531,9 @@ setRelhasindexInplace(Oid relid, bool hasindex, bool immediate)
 			ImmediateInvalidateSharedHeapTuple(pg_class, tuple);
 		rd_rel = (Form_pg_class) GETSTRUCT(tuple);
 		rd_rel->relhasindex = hasindex;
+		BeginCriticalIO();
 		WriteNoReleaseBuffer(pg_class_scan->rs_rd,pg_class_scan->rs_cbuf);
+		EndCriticalIO();
 	}
 	else
 	{
@@ -1543,7 +1545,10 @@ setRelhasindexInplace(Oid relid, bool hasindex, bool immediate)
 		ImmediateInvalidateSharedHeapTuple(pg_class, tuple);
 		rd_rel = (Form_pg_class) GETSTRUCT(&htup);
 		rd_rel->relhasindex = hasindex;
+		/* The tuple is already in hand. This section only dirties it. */
+		BeginCriticalIO();
 		WriteBuffer(pg_class, buffer);
+		EndCriticalIO();
 	}
 
 	if (!pg_class_scan)
