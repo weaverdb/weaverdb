@@ -16,7 +16,11 @@ public final class BattleFunctions {
         return value;
     }
 
+    /** Set when {@link #sleepMs(int)} has entered the sleep, before it returns. */
+    public static volatile boolean sleepEntered;
+
     public static int sleepMs(int millis) throws InterruptedException {
+        sleepEntered = true;
         Thread.sleep(Math.max(0, millis));
         return millis;
     }

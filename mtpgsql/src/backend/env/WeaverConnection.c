@@ -58,6 +58,7 @@
 #include "utils/temprel.h"
 #include "parser/parse_coerce.h"
 #include "parser/parserinfo.h"
+#include "utils/java.h"
 
 typedef enum {
     TRANSACTION_MEMORY,
@@ -76,6 +77,10 @@ static void* AllocMemory(WConn connection, mem_type type, size_t size);
 static int ExpandSlots(PreparedPlan* connection,TransferType type);
 static short CheckThreadContext(WConn);
 static PreparedPlan* ClearPlan(PreparedPlan* plan);
+static void FinishCancelledStatement(WConn connection);
+
+static __thread int cancelCleanup;
+static __thread int cancelAbortStarted;
 
 static SectionId   connection_section_id = SECTIONID("CONN");
 
@@ -89,6 +94,9 @@ static SectionId   connection_section_id = SECTIONID("CONN");
     \
     err = setjmp(target->env->errorContext);\
     if (err != 0) {\
+        if (target->env->cancelled) \
+            cancelCleanup = 1; \
+        JavaClearRunningThread(); \
         target->env->canJump = false;\
         strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);\
         target->stage = TRAN_ABORTONLY;\
@@ -100,6 +108,8 @@ static SectionId   connection_section_id = SECTIONID("CONN");
         if (!WeaverIsPanicked()) { \
             WResetQuery(connection,true); \
         } \
+        if (cancelCleanup && !WeaverIsPanicked()) \
+            FinishCancelledStatement(target); \
     } else {\
         target->CDA.rc = 0;\
         if (usingTransaction) { \
@@ -625,6 +635,30 @@ WeaverFetchNextSlot(PreparedPlan *plan)
 	}
 }
 
+/*
+ * Autocommit cancel rolls the statement's transaction back and leaves
+ * the connection usable. An explicit transaction stays abort-only.
+ * cancelAbortStarted survives a longjmp out of AbortTransaction.
+ */
+static void
+FinishCancelledStatement(WConn connection)
+{
+    TransactionState s = GetTransactionInfo()->CurrentTransactionState;
+
+    if (cancelAbortStarted == 0
+        && s->blockState == TBLOCK_ABORT
+        && CurrentXactInProgress()) {
+        cancelAbortStarted = 1;
+        AbortTransaction();
+        AbandonTransactionBlock();
+    }
+    s = GetTransactionInfo()->CurrentTransactionState;
+    if (s->blockState == TBLOCK_DEFAULT)
+        connection->stage = TRAN_INVALID;
+    cancelCleanup = 0;
+    cancelAbortStarted = 0;
+}
+
 long
 WExec(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
@@ -658,6 +692,9 @@ WExec(OpaquePreparedStatement plan) {
 
     err = setjmp(connection->env->errorContext);
     if (err != 0) {
+        if (connection->env->cancelled)
+            cancelCleanup = 1;
+        JavaClearRunningThread();
         connection->env->canJump = false;
         strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);
         connection->stage = TRAN_ABORTONLY;
@@ -666,8 +703,9 @@ WExec(OpaquePreparedStatement plan) {
          * TBLOCK_AUTO becomes TBLOCK_ABORT. Roll that transaction back
          * now, before query cleanup, so a failed later command undoes
          * earlier commands in the same statement. An explicit user
-         * transaction is left TBLOCK_ABORTONLY. The connection stays
-         * abort-only either way.
+         * transaction is left TBLOCK_ABORTONLY. A cancel of an autocommit
+         * statement clears that stage afterward so the connection can
+         * run another statement.
          */
         if (xactAbortStarted == 0 && !WeaverIsPanicked()
             && GetTransactionInfo()->CurrentTransactionState->blockState == TBLOCK_ABORT
@@ -680,6 +718,8 @@ WExec(OpaquePreparedStatement plan) {
         if (!WeaverIsPanicked()) {
             WResetQuery(connection, true);
         }
+        if (cancelCleanup && !WeaverIsPanicked())
+            FinishCancelledStatement(connection);
     } else {
         connection->CDA.rc = 0;
 
@@ -1084,7 +1124,13 @@ WCancel(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     int sqlError = 0;
 
+    /*
+     * Callable from another thread. The owner is inside the statement
+     * and holds the env; this only raises the flag and interrupts a
+     * LANGUAGE java call blocked on that env.
+     */
     connection->env->cancelled = true;
+    JavaInterruptRunningThread(connection->env);
 
     return sqlError;
 }

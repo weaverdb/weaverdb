@@ -422,17 +422,31 @@ public final class BattleChildMain {
         }
     }
 
+    /**
+     * The worker opens its own connection and runs {@code bt_sleep(6000)} on it.
+     * {@code WCancel} only sets the env cancel flag and does not check
+     * {@code thread_owner}, so another thread may call {@code cancel()} on
+     * that connection while the owner is inside the statement.
+     */
     private static void cancel(String mode, String datadir) throws Exception {
         boot(mode, datadir);
         ensureDatabase();
-        try (DBReference conn = open()) {
-            new FunctionInstaller(conn).installFunction("bt_sleep",
+        try (DBReference setup = open()) {
+            new FunctionInstaller(setup).installFunction("bt_sleep",
                     MethodHandles.lookup().findStatic(BattleFunctions.class, "sleepMs",
                             MethodType.methodType(int.class, int.class)));
-            AtomicReference<Throwable> error = new AtomicReference<>();
-            AtomicInteger returned = new AtomicInteger(Integer.MIN_VALUE);
-            Thread worker = new Thread(() -> {
-                try (Statement s = conn.statement("select bt_sleep($ms)")) {
+        }
+        BattleFunctions.sleepEntered = false;
+        AtomicReference<DBReference> holder = new AtomicReference<>();
+        CountDownLatch opened = new CountDownLatch(1);
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        AtomicInteger returned = new AtomicInteger(Integer.MIN_VALUE);
+        AtomicReference<String> followup = new AtomicReference<>("missing");
+        Thread worker = new Thread(() -> {
+            try (DBReference own = open()) {
+                holder.set(own);
+                opened.countDown();
+                try (Statement s = own.statement("select bt_sleep($ms)")) {
                     s.linkInput("ms", Integer.class).set(6000);
                     Output<Integer> out = s.linkOutput(1, Integer.class);
                     s.execute();
@@ -442,27 +456,67 @@ public final class BattleChildMain {
                 } catch (Throwable t) {
                     error.set(t);
                 }
-            }, "bt-cancel-worker");
-            long start = System.nanoTime();
-            worker.start();
-            Thread.sleep(400);
-            try {
-                conn.cancel();
+                try (Statement s = own.statement("select 1")) {
+                    Output<Integer> out = s.linkOutput(1, Integer.class);
+                    s.execute();
+                    if (!s.fetch() || out.get() == null || out.get() != 1) {
+                        followup.set("bad");
+                    } else {
+                        followup.set(String.valueOf(out.get()));
+                    }
+                }
             } catch (Throwable t) {
-                System.out.println("BATTLE CHILD cancel() threw " + t);
+                if (error.get() == null) {
+                    error.set(t);
+                }
+                opened.countDown();
             }
-            worker.join(3_000);
-            long elapsedMs = (System.nanoTime() - start) / 1_000_000L;
-            System.out.println("BATTLE CHILD cancel alive=" + worker.isAlive()
-                    + " elapsedMs=" + elapsedMs
-                    + " returned=" + returned.get()
-                    + " err=" + text(error.get()));
-            if (worker.isAlive()) {
-                System.exit(4);
-            }
-            if (returned.get() == 6000) {
+        }, "bt-cancel-worker");
+        worker.start();
+        if (!opened.await(10, TimeUnit.SECONDS) || holder.get() == null) {
+            System.out.println("BATTLE CHILD cancel worker did not open");
+            worker.join(1_000);
+            System.exit(4);
+        }
+        long waitStart = System.nanoTime();
+        while (!BattleFunctions.sleepEntered) {
+            if (!worker.isAlive()) {
+                System.out.println("BATTLE CHILD cancel sleep never started err=" + text(error.get()));
                 System.exit(3);
             }
+            if ((System.nanoTime() - waitStart) / 1_000_000L > 5_000) {
+                System.out.println("BATTLE CHILD cancel sleep never started");
+                System.exit(3);
+            }
+            Thread.sleep(20);
+        }
+        System.out.println("BATTLE CHILD cancel sleep started");
+        long start = System.nanoTime();
+        try {
+            holder.get().cancel();
+        } catch (Throwable t) {
+            System.out.println("BATTLE CHILD cancel() threw " + text(t));
+            System.exit(3);
+        }
+        worker.join(3_000);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000L;
+        String err = text(error.get());
+        System.out.println("BATTLE CHILD cancel alive=" + worker.isAlive()
+                + " elapsedMs=" + elapsedMs
+                + " returned=" + returned.get()
+                + " err=" + err);
+        System.out.println("BATTLE CHILD cancel followup=" + followup.get());
+        if (worker.isAlive()) {
+            System.exit(4);
+        }
+        if (returned.get() == 6000 || elapsedMs >= 2_500) {
+            System.exit(3);
+        }
+        if (!err.toLowerCase().contains("cancel")) {
+            System.exit(3);
+        }
+        if (!"1".equals(followup.get())) {
+            System.exit(3);
         }
     }
 

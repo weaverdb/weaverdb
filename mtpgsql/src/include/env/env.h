@@ -192,6 +192,8 @@ typedef struct Environment {
      * false so they stop when the leader leaves its transaction.
      */
     bool                        independent;
+    /* JNI global ref of the Java thread inside a LANGUAGE java call. */
+    void*                       java_runner;
 } Env;   
 
 typedef struct commbuffer {

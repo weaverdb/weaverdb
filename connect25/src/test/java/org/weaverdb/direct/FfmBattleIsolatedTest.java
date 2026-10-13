@@ -36,7 +36,12 @@ public class FfmBattleIsolatedTest {
     @Test
     public void cancelStopsRunningStatement() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "cancel", 30);
+        System.out.println(result.output);
         Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("cancel sleep started"), result.output);
+        Assertions.assertTrue(result.output.contains("cancel alive=false"), result.output);
+        Assertions.assertTrue(result.output.toLowerCase().contains("cancel"), result.output);
+        Assertions.assertTrue(result.output.contains("cancel followup=1"), result.output);
     }
 
     @Test

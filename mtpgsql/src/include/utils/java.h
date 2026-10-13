@@ -41,6 +41,11 @@ PG_EXTERN void SetJavaObjectLoader(const char* loader);
 PG_EXTERN Datum fmgr_javaA(const char *name, int nargs, Oid* types, Datum* values, Oid* returnType, bool *isNull);
 PG_EXTERN Datum fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, bool *isNull);
 
+/* Record the calling Java thread around a LANGUAGE java call so cancel can interrupt it. */
+PG_EXTERN void JavaNoteRunningThread(void);
+PG_EXTERN void JavaClearRunningThread(void);
+PG_EXTERN void JavaInterruptRunningThread(void* env);
+
 PG_EXTERN bool java_instanceof(bytea* obj,bytea* cname);
 PG_EXTERN int32 java_compare(bytea* obj1,bytea* obj2);
 
