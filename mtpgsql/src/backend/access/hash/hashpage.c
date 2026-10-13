@@ -34,7 +34,6 @@
 #include "access/hash.h"
 #include "miscadmin.h"
 #include "env/freespace.h"
-#include "storage/bufmgr.h"
 #include "storage/smgr.h"
 
 static void _hash_setpagelock(Relation rel, BlockNumber blkno, int access);
@@ -75,7 +74,6 @@ _hash_metapinit(Relation rel)
 	uint32		lg2nelem;		/* _hash_log2(nelem)   */
 	uint32		nblocks;
 	uint16		i;
-	bool		own_cio = false;
 
 	/* can't be sharing this with anyone, now... */
 	if (USELOCKING)
@@ -85,16 +83,6 @@ _hash_metapinit(Relation rel)
 	{
 		elog(ERROR, "Cannot initialize non-empty hash table %s",
 			 RelationGetRelationName(rel));
-	}
-
-	/*
-	 * Bitmap, metapage, and the two buckets are one write group. Stay in
-	 * a caller's section when one is already open.
-	 */
-	if (GetCriticalIODepth() == 0)
-	{
-		BeginCriticalIO();
-		own_cio = true;
 	}
 
 	metabuf = _hash_getbuf(rel, HASH_METAPAGE, HASH_WRITE);
@@ -174,9 +162,6 @@ _hash_metapinit(Relation rel)
 
 	_hash_relbuf(rel, metabuf, HASH_WRITE);
 
-	if (own_cio)
-		EndCriticalIO();
-
 	if (USELOCKING)
 		UnlockRelation(rel, AccessExclusiveLock);
 }
@@ -215,7 +200,6 @@ _hash_getbuf(Relation rel, BlockNumber blkno, int access)
 	 * Bucket, bitmap, and overflow blocks sit at fixed numbers. smgrread
 	 * only accepts a block that already exists or is exactly one past
 	 * EOF, so grow a zero-filled file through blkno before the read.
-	 * The caller writes the initialized pages in one CriticalIO section.
 	 */
 	{
 		long		nblocks = smgrnblocks(rel->rd_smgr);
@@ -407,17 +391,6 @@ _hash_pagedel(Relation rel, ItemPointer tid)
 	OffsetNumber offno;
 	HashMetaPage metap;
 	HashPageOpaque opaque;
-	bool		own_cio = false;
-
-	/*
-	 * The bucket or overflow page and the metapage are written together.
-	 * Stay in a caller's section when one is already open.
-	 */
-	if (GetCriticalIODepth() == 0)
-	{
-		BeginCriticalIO();
-		own_cio = true;
-	}
 
 	blkno = ItemPointerGetBlockNumber(tid);
 	offno = ItemPointerGetOffsetNumber(tid);
@@ -444,9 +417,6 @@ _hash_pagedel(Relation rel, ItemPointer tid)
 	_hash_checkpage((Page) metap, LH_META_PAGE);
 	++metap->hashm_nkeys;
 	_hash_wrtbuf(rel, metabuf);
-
-	if (own_cio)
-		EndCriticalIO();
 }
 
 void
