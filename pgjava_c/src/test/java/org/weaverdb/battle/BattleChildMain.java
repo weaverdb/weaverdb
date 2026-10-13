@@ -939,6 +939,12 @@ public final class BattleChildMain {
         props.setProperty("disable_crc", "TRUE");
         props.setProperty("index_corruption", "IGNORE");
         props.setProperty("heap_corruption", "IGNORE");
+        /*
+         * DBWriter sync wait, milliseconds. Production leaves this at 5000
+         * (dbwriter.c). Tests pass synctimeout so a kill can land after the
+         * hard sync without waiting out the default.
+         */
+        props.setProperty("synctimeout", "1000");
         if ("ffm".equals(mode)) {
             Class<?> cls = Class.forName("org.weaverdb.direct.DirectWeaverInitializer");
             cls.getMethod("initialize", Properties.class).invoke(null, props);

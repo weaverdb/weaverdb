@@ -68,6 +68,8 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             prop.setProperty("disable_crc", "TRUE");
         prop.setProperty("index_corruption", "IGNORE");
         prop.setProperty("heap_corruption", "IGNORE");
+            /* Test-only. Production DBWriter sync wait stays 5000ms. */
+            prop.setProperty("synctimeout", "1000");
             WeaverInitializer.initialize(prop);
 
             try (DBReference conn = DBReferenceManager.connect("template1");

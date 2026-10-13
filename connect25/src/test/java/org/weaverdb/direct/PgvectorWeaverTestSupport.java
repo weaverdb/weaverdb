@@ -67,6 +67,8 @@ final class PgvectorWeaverTestSupport {
                  */
                 prop.setProperty("sortmem",
                         System.getProperty("weaver.sortmem", "131072"));
+                /* Test-only. Production DBWriter sync wait stays 5000ms. */
+                prop.setProperty("synctimeout", "1000");
                 DirectWeaverInitializer.initialize(prop);
             }
             initialized = true;
