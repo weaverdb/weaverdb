@@ -16,6 +16,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import org.weaverdb.WeaverObjectLoader;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import org.weaverdb.ExecutionException;
@@ -248,11 +249,7 @@ enum TransferType {
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
                 case DirectWeaverConnection.TIMESTAMP:
-                    // Seconds since 2000-01-01, same double JNI CreateDateField decodes.
-                    double seconds = val.get(ValueLayout.JAVA_DOUBLE, 0);
-                    seconds += 10957 * 86400;
-                    seconds *= 1000;
-                    return new Date((long) seconds);
+                    return new Date(timestampToEpochMilli(val.get(ValueLayout.JAVA_DOUBLE, 0)));
                 case DirectWeaverConnection.LONG:
                     return new Date(val.get(ValueLayout.JAVA_LONG, 0));
                 default:
@@ -262,9 +259,29 @@ enum TransferType {
 
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            double seconds = ((Date) value).getTime() / 1000.0;
-            seconds -= 10957 * 86400;
-            val.set(ValueLayout.JAVA_DOUBLE, 0, seconds);
+            val.set(ValueLayout.JAVA_DOUBLE, 0, epochMilliToTimestamp(((Date) value).getTime()));
+            return Double.BYTES;
+        }
+    },
+    INSTANT {
+        @Override
+        int getType() {
+            return DirectWeaverConnection.TIMESTAMP;
+        }
+
+        @Override
+        Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
+            switch (type) {
+                case DirectWeaverConnection.TIMESTAMP:
+                    return Instant.ofEpochMilli(timestampToEpochMilli(val.get(ValueLayout.JAVA_DOUBLE, 0)));
+                default:
+                    throw new ExecutionException("unable to convert");
+            }
+        }
+
+        @Override
+        int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
+            val.set(ValueLayout.JAVA_DOUBLE, 0, epochMilliToTimestamp(((Instant) value).toEpochMilli()));
             return Double.BYTES;
         }
     },
@@ -406,6 +423,7 @@ enum TransferType {
         Map.entry(String.class, TransferType.STRING),
         Map.entry(Object.class, TransferType.OBJECT),
         Map.entry(Date.class, TransferType.DATE),
+        Map.entry(Instant.class, TransferType.INSTANT),
         Map.entry(byte[].class, TransferType.BINARY),
         Map.entry(Serializable.class, TransferType.JAVA)
     );
@@ -448,6 +466,17 @@ enum TransferType {
         return null;
     }
     
+    /** Seconds since 2000-01-01, the timestamp double JNI CreateDateField uses. */
+    private static final int PG_EPOCH_OFFSET_SECONDS = 10957 * 86400;
+
+    private static double epochMilliToTimestamp(long epochMilli) {
+        return epochMilli / 1000.0 - PG_EPOCH_OFFSET_SECONDS;
+    }
+
+    private static long timestampToEpochMilli(double seconds) {
+        return (long) ((seconds + PG_EPOCH_OFFSET_SECONDS) * 1000.0);
+    }
+
     abstract int getType();
     
     abstract Object read(int type, MemorySegment val, int varLen) throws ExecutionException;
