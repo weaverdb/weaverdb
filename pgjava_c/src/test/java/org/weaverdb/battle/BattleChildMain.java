@@ -681,7 +681,34 @@ public final class BattleChildMain {
          * A failed autocommit statement leaves the connection abort-only.
          * That is a separate scenario. Defaults, truncate, and vacuum run
          * on a new connection, as the duplicate-key check already does.
+         *
+         * CREATE TABLE ... PRIMARY KEY is the table plus an index build in
+         * one transaction. A conflicting index name fails the index step
+         * and must roll the table back with it.
          */
+        try (DBReference conn = open()) {
+            conn.execute("create index bt_bad_pkey on bt_pk (id)");
+            try {
+                conn.execute("create table bt_bad (id int4 primary key)");
+                System.out.println("BATTLE CHILD conflicting pkey index accepted");
+                System.exit(3);
+            } catch (ExecutionException ex) {
+                System.out.println("BATTLE CHILD index step: " + ex.getMessage());
+            }
+        }
+        try (DBReference conn = open()) {
+            try {
+                conn.execute("select id from bt_bad");
+                System.out.println("BATTLE CHILD rolled-back table still exists");
+                System.exit(3);
+            } catch (ExecutionException ex) {
+                String msg = ex.getMessage() == null ? "" : ex.getMessage();
+                System.out.println("BATTLE CHILD index rollback: " + msg);
+                if (!msg.contains("not found") && !msg.contains("does not exist")) {
+                    System.exit(3);
+                }
+            }
+        }
         try (DBReference conn = open()) {
             conn.execute("create table bt_def (id int4 default 5, name varchar(16) default 'anon')");
             conn.execute("insert into bt_def (name) values ('kept')");

@@ -631,9 +631,44 @@ WExec(OpaquePreparedStatement plan) {
 
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
-    }  
-    
-    READY(connection, err, false);
+    }
+
+    /*
+     * Local setjmp, same shape as READY(connection, err, false). The
+     * error path has to abort an autocommit transaction that this
+     * statement started, which READY does not do.
+     */
+    volatile int xactAbortStarted = 0;
+
+    SetEnv(connection->env);
+    connection->env->canJump = true;
+
+    err = setjmp(connection->env->errorContext);
+    if (err != 0) {
+        connection->env->canJump = false;
+        strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);
+        connection->stage = TRAN_ABORTONLY;
+        SetAbortOnly();
+        /*
+         * TBLOCK_AUTO becomes TBLOCK_ABORT. Roll that transaction back
+         * now, before query cleanup, so a failed later command undoes
+         * earlier commands in the same statement. An explicit user
+         * transaction is left TBLOCK_ABORTONLY. The connection stays
+         * abort-only either way.
+         */
+        if (xactAbortStarted == 0 && !WeaverIsPanicked()
+            && GetTransactionInfo()->CurrentTransactionState->blockState == TBLOCK_ABORT
+            && CurrentXactInProgress()) {
+            xactAbortStarted = 1;
+            AbortTransaction();
+            AbandonTransactionBlock();
+        }
+        WHandleError(connection, err);
+        if (!WeaverIsPanicked()) {
+            WResetQuery(connection, true);
+        }
+    } else {
+        connection->CDA.rc = 0;
 
     if (connection->inselect != NULL) {
         WResetExecutor(connection->inselect);
@@ -668,20 +703,6 @@ WExec(OpaquePreparedStatement plan) {
         if (querytree->commandType == CMD_UTILITY) {
             ProcessUtility(querytree->utilityStmt, None);
             plan->processed += 1;  // one util op processed
-            CommitTransactionCommand();
-            needsCommit = false;
-            /*
-             * CREATE TABLE ... PRIMARY KEY is the table utility plus an
-             * IndexStmt on extras_after. The commit above deletes
-             * TopTransactionContext. DefineIndex then allocates an
-             * invalidation entry from that null context. Each later
-             * command needs its own transaction.
-             */
-            if (trackquery != NULL) {
-                StartTransactionCommand();
-                SetQuerySnapshot();
-                needsCommit = true;
-            }
         } else {
             plan->state = CreateExecutorState();
             plan->stage = STMT_EXEC;
@@ -749,11 +770,21 @@ WExec(OpaquePreparedStatement plan) {
         }
 
         /*
-         * Increment Command Counter so we see everything
-         * that happened in this transaction to here
+         * One transaction covers every command in the statement.
+         * Later commands have to see catalog rows from earlier ones.
+         * DML already committed inside WResetExecutor, so skip the
+         * counter once that transaction is gone. Commit once, after
+         * the list, when this statement still owns the transaction.
          */
+        if (trackquery != NULL && CurrentXactInProgress())
+            CommandCounterIncrement();
     }
-    RELEASE(connection, needsCommit);
+        if (needsCommit)
+            CommitTransactionCommand();
+    }
+    if (connection->env)
+        connection->env->canJump = false;
+    SetEnv(NULL);
     return err;
 }
 
