@@ -55,6 +55,7 @@ class DirectWeaverConnection implements DBReference {
     private static final Linker LINKER = Linker.nativeLinker();
 
     private static final MethodHandle WCreateConnection;
+    private static final MethodHandle WIsValidConnection;
     private static final MethodHandle WCreateSubConnection;
     private static final MethodHandle WDestroyConnection;
     private static final MethodHandle WDestroyPreparedStatement;
@@ -89,6 +90,8 @@ class DirectWeaverConnection implements DBReference {
 
         WCreateConnection = LINKER.downcallHandle(LOADER.find("WCreateConnection").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+        WIsValidConnection = LINKER.downcallHandle(LOADER.find("WIsValidConnection").orElseThrow(),
+                FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WCreateSubConnection = LINKER.downcallHandle(LOADER.find("WCreateSubConnection").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS));
         WDestroyConnection = LINKER.downcallHandle(LOADER.find("WDestroyConnection").orElseThrow(),
@@ -382,6 +385,18 @@ class DirectWeaverConnection implements DBReference {
             MemorySegment connSeg = (connect == null) ? MemorySegment.NULL : arena.allocateFrom(connect);
             MemorySegment connection = (MemorySegment) WCreateConnection.invokeExact(nameSeg, passSeg, connSeg);
             if (connection.equals(MemorySegment.NULL)) {
+                throw new ExecutionException("could not connect to weaver");
+            }
+            /*
+             * An unknown user still returns a handle. validFlag is 0, and
+             * isValid() would otherwise treat that pointer as a live connection.
+             */
+            long valid = (long) WIsValidConnection.invokeExact(connection);
+            if (valid == 0) {
+                long destroyed = (long) WDestroyConnection.invokeExact(connection);
+                if (destroyed != 0) {
+                    LOGGING.warning("error disposing rejected connection: " + destroyed);
+                }
                 throw new ExecutionException("could not connect to weaver");
             }
             return connection;
