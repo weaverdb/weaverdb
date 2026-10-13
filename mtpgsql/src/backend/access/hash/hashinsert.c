@@ -16,6 +16,7 @@
 #include "postgres.h"
 
 #include "access/hash.h"
+#include "storage/bufmgr.h"
 
 static InsertIndexResult _hash_insertonpg(Relation rel, Buffer buf, int keysz, ScanKey scankey, HashItem hitem, Buffer metabuf);
 static OffsetNumber _hash_pgaddtup(Relation rel, Buffer buf, int keysz, ScanKey itup_scankey, Size itemsize, HashItem hitem);
@@ -118,6 +119,18 @@ _hash_insertonpg(Relation rel,
 	Buffer		ovflbuf;
 	HashMetaPage metap;
 	Bucket		bucket;
+	bool		own_cio = false;
+
+	/*
+	 * Bucket, overflow, bitmap, and metapage updates for this insert
+	 * (including a split) are one write group. Stay in a caller's section
+	 * when one is already open.
+	 */
+	if (GetCriticalIODepth() == 0)
+	{
+		BeginCriticalIO();
+		own_cio = true;
+	}
 
 	metap = (HashMetaPage) BufferGetPage(metabuf);
 	_hash_checkpage((Page) metap, LH_META_PAGE);
@@ -206,6 +219,8 @@ _hash_insertonpg(Relation rel,
 		> metap->hashm_ffactor)
 		_hash_expandtable(rel, metabuf);
 	_hash_relbuf(rel, metabuf, HASH_READ);
+	if (own_cio)
+		EndCriticalIO();
 	return res;
 }
 
