@@ -29,12 +29,16 @@
 #include "access/blobstorage.h"
 #include "catalog/pg_attribute.h"
 
+#include <limits.h>
+
 #include "miscadmin.h"
 #include "access/printtup.h"
 #include "access/htup.h"
 #include "parser/gramparse.h"
 #include "parser/parse_coerce.h"
 #include "parser/parserinfo.h"
+#include "utils/timestamp.h"
+#include "utils/date.h"
 
 static int
 StreamOutValue(InputOutput* dest, Datum val, Oid type) {
@@ -123,6 +127,12 @@ DirectCharCopyValue(InputOutput* output, Datum value) {
     char val = DatumGetChar(value);
     return output->transfer(output->userargs, CHAROID, &val, 1);
 }
+
+static int
+DirectBoolCopyValue(InputOutput* output, Datum value) {
+    char val = DatumGetChar(value);
+    return output->transfer(output->userargs, BOOLOID, &val, 1);
+}
   
 static int
 IndirectDateCopyValue(InputOutput* output, Datum value) {
@@ -159,6 +169,52 @@ DirectDoubleCopyValue(InputOutput* output, double value) {
     return output->transfer(output->userargs, FLOAT8OID, &value, 8);
 }
 
+static bool
+IsIntegerOid(Oid type)
+{
+    return type == INT2OID || type == INT4OID || type == INT8OID;
+}
+
+static int64
+ReadIntegerColumn(Form_pg_attribute desc, Datum value)
+{
+    switch (desc->atttypid) {
+        case INT2OID:
+            return (int64) DatumGetInt16(value);
+        case INT4OID:
+            return (int64) DatumGetInt32(value);
+        case INT8OID:
+            if (desc->attbyval)
+                return (int64) DatumGetInt64(value);
+            return *(int64 *) DatumGetPointer(value);
+        default:
+            return 0;
+    }
+}
+
+/*
+ * Move an int2/int4/int8 column into the registered link width.
+ * Narrowing that does not fit raises a clear error instead of returning
+ * the generic "conversion not implemented" failure.
+ */
+static int
+TransferInteger(InputOutput *output, Form_pg_attribute desc, Datum value)
+{
+    int64 wide = ReadIntegerColumn(desc, value);
+
+    if (output->varType == INT2OID) {
+        if (wide < SHRT_MIN || wide > SHRT_MAX)
+            coded_elog(ERROR, 107, "integer value %ld is out of range for int2", (long) wide);
+        return DirectShortCopyValue(output, Int32GetDatum((int32) (int16) wide));
+    }
+    if (output->varType == INT4OID) {
+        if (wide < (int64) INT_MIN || wide > (int64) INT_MAX)
+            coded_elog(ERROR, 107, "integer value %ld is out of range for int4", (long) wide);
+        return DirectIntCopyValue(output, Int32GetDatum((int32) wide));
+    }
+    return DirectLongCopyValue(output, (long) wide);
+}
+
 bool
 TransferColumnName(InputOutput* output, Form_pg_attribute desc) {
     output->transfer(output->userargs, NAMEOID,NameStr(desc->attname),strlen(NameStr(desc->attname)));
@@ -173,6 +229,8 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
     } else if (output->varType == 0 || desc->atttypid == output->varType) {
         switch (desc->atttypid) {
             case BOOLOID:
+                result = DirectBoolCopyValue(output,value);
+                break;
             case CHAROID:
                 result = DirectCharCopyValue(output,value);
                 break;
@@ -229,24 +287,50 @@ TransferToRegistered(InputOutput* output, Form_pg_attribute desc, Datum value, b
             case BLOBOID:
                 result = BinaryCopyOutValue(output,desc,value);
                 break;
+            case INT2OID:
+                if (!IsIntegerOid(desc->atttypid))
+                    return false;
+                result = TransferInteger(output, desc, value);
+                break;
             case INT4OID:
                 if (desc->atttypid == CONNECTOROID ) result = DirectIntCopyValue(output,value);
                 else if (desc->atttypid == BOOLOID) result = DirectIntCopyValue(output,Int32GetDatum((value) ? 1 : 0));
-                else if ( desc->atttypid == INT8OID ) {
-                    int64 var = desc->attbyval ? DatumGetLong(value) : *(int64*)DatumGetPointer(value);
-                    if (var  > 0x7fffffffL ) return false;
-                    else {
-                        IndirectLongCopyValue(output,value);
-                    }
-                }
+                else if (IsIntegerOid(desc->atttypid))
+                    result = TransferInteger(output, desc, value);
                 else return false;
                 break;
             case BOOLOID:
-                if (desc->atttypid == INT4OID) result = DirectCharCopyValue(output,CharGetDatum((value == 0) ? FALSE : TRUE));
+                if (desc->atttypid == INT4OID) result = DirectBoolCopyValue(output,CharGetDatum((value == 0) ? FALSE : TRUE));
                 else return false;
                 break;
             case INT8OID:
-                result = desc->attbyval ? DirectLongCopyValue(output,value) : IndirectLongCopyValue(output,value);
+                if (IsIntegerOid(desc->atttypid))
+                    result = TransferInteger(output, desc, value);
+                else
+                    result = desc->attbyval ? DirectLongCopyValue(output,value) : IndirectLongCopyValue(output,value);
+                break;
+            case TIMESTAMPOID:
+                if (desc->atttypid == DATEOID) {
+                    Timestamp *ts = date_timestamp(DatumGetInt32(value));
+                    result = IndirectDateCopyValue(output, PointerGetDatum(ts));
+                    pfree(ts);
+                } else
+                    return false;
+                break;
+            case DATEOID:
+                if (desc->atttypid == TIMESTAMPOID) {
+                    DateADT date;
+                    int32 raw;
+                    if (desc->attbyval) {
+                        union { Datum d; Timestamp ts; } bits;
+                        bits.d = value;
+                        date = timestamp_date(&bits.ts);
+                    } else
+                        date = timestamp_date((Timestamp *) DatumGetPointer(value));
+                    raw = date;
+                    result = output->transfer(output->userargs, DATEOID, &raw, sizeof(raw));
+                } else
+                    return false;
                 break;
             case FLOAT8OID:
                 if (desc->atttypid == FLOAT4OID) {

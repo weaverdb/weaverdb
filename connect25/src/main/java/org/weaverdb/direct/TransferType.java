@@ -33,6 +33,7 @@ enum TransferType {
         @Override
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
+                case DirectWeaverConnection.BOOLEAN:
                 case DirectWeaverConnection.BYTE:
                     return val.get(ValueLayout.JAVA_BYTE, 0) != 0;
                 case DirectWeaverConnection.SHORT:
@@ -247,9 +248,13 @@ enum TransferType {
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
                 case DirectWeaverConnection.TIMESTAMP:
+                    // Seconds since 2000-01-01, same double JNI CreateDateField decodes.
+                    double seconds = val.get(ValueLayout.JAVA_DOUBLE, 0);
+                    seconds += 10957 * 86400;
+                    seconds *= 1000;
+                    return new Date((long) seconds);
                 case DirectWeaverConnection.LONG:
-                    long date = val.get(ValueLayout.JAVA_LONG, 0);
-                    return new Date(date);
+                    return new Date(val.get(ValueLayout.JAVA_LONG, 0));
                 default:
                     throw new ExecutionException("unable to convert");
             }
@@ -257,8 +262,10 @@ enum TransferType {
 
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            val.set(ValueLayout.JAVA_LONG, 0, ((Date)value).getTime());
-            return Long.BYTES;
+            double seconds = ((Date) value).getTime() / 1000.0;
+            seconds -= 10957 * 86400;
+            val.set(ValueLayout.JAVA_DOUBLE, 0, seconds);
+            return Double.BYTES;
         }
     },
     STREAM {
