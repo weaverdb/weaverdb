@@ -127,6 +127,16 @@ public class FfmBattleIsolatedTest {
     }
 
     @Test
+    public void concurrentAutocommitDoesNotCrashInTimezone() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "concurrent-autocommit", 90);
+        System.out.println(result.output);
+        Assertions.assertNotEquals(4, result.code, "concurrent autocommit hung\n" + result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("concurrent-autocommit ok"), result.output);
+        Assertions.assertTrue(result.output.contains("concurrent-autocommit rows=160"), result.output);
+    }
+
+    @Test
     public void abortWithoutBeginDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "abort-idle", 60);
         System.out.println(result.output);

@@ -55,6 +55,7 @@ public final class BattleChildMain {
                 case "vacuum-group" -> vacuumGroup(mode, datadir);
                 case "prefetch-drop" -> prefetchDrop(mode, datadir);
                 case "freespace-extend" -> freespaceExtend(mode, datadir);
+                case "concurrent-autocommit" -> concurrentAutocommit(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -847,6 +848,65 @@ public final class BattleChildMain {
         }
         shutdown(mode);
         System.out.println("BATTLE CHILD freespace-extend ok");
+    }
+
+    /**
+     * Several connections autocommit at once. The first transactions on
+     * those threads all used to call localtime_r and strcpy the zone name
+     * into the same global; a null tm_zone SIGSEGV'd in libc.
+     */
+    private static void concurrentAutocommit(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_ac (id int4)");
+        }
+        int writers = 8;
+        int perWriter = 20;
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread[] threads = new Thread[writers];
+        for (int w = 0; w < writers; w++) {
+            int base = w * perWriter;
+            threads[w] = new Thread(() -> {
+                try {
+                    if (!start.await(15, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("start");
+                    }
+                    try (DBReference conn = open()) {
+                        for (int i = 0; i < perWriter; i++) {
+                            conn.execute("insert into bt_ac (id) values (" + (base + i) + ")");
+                        }
+                    }
+                } catch (Throwable t) {
+                    failure.compareAndSet(null, t);
+                }
+            }, "bt-ac-" + w);
+            threads[w].start();
+        }
+        start.countDown();
+        for (Thread thread : threads) {
+            thread.join(60_000);
+        }
+        for (Thread thread : threads) {
+            if (thread.isAlive()) {
+                System.out.println("BATTLE CHILD concurrent-autocommit hung");
+                System.exit(4);
+            }
+        }
+        if (failure.get() != null) {
+            failure.get().printStackTrace(System.out);
+            System.exit(1);
+        }
+        try (DBReference conn = open()) {
+            int n = count(conn, "select id from bt_ac");
+            System.out.println("BATTLE CHILD concurrent-autocommit rows=" + n);
+            if (n != writers * perWriter) {
+                throw new IllegalStateException("rows=" + n);
+            }
+        }
+        shutdown(mode);
+        System.out.println("BATTLE CHILD concurrent-autocommit ok");
     }
 
     private static void boot(String mode, String datadir) throws Exception {

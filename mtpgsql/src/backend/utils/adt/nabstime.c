@@ -17,6 +17,8 @@
  *-------------------------------------------------------------------------
  */
 #include <ctype.h>
+#include <pthread.h>
+#include <string.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -125,6 +127,77 @@ static int istinterval(char *i_string,
 			AbsoluteTime *i_start,
 			AbsoluteTime *i_end);
 
+/*
+ * CTimeZone, CDayLight, and CTZName are process-wide. Every thread that
+ * started a transaction used to fill them. Concurrent localtime_r calls
+ * can leave tm_zone NULL, and strcpy of that pointer SIGSEGVs in libc.
+ * Initialize the globals once, and skip a null zone name.
+ */
+static pthread_once_t client_tz_once = PTHREAD_ONCE_INIT;
+
+static void
+copy_zone_name(const char *zone)
+{
+	if (zone == NULL)
+		return;
+	strncpy(CTZName, zone, MAXTZLEN);
+	CTZName[MAXTZLEN] = '\0';
+}
+
+static void
+InitClientTimeZoneOnce(void)
+{
+	time_t		now;
+
+#ifdef USE_POSIX_TIME
+	struct tm	tm;
+	const char *zone = NULL;
+
+	now = time(NULL);
+#ifdef MACOSX
+	{
+		struct tm *tmp = localtime(&now);
+
+		if (tmp == NULL)
+			return;
+		memcpy(&tm, tmp, sizeof(tm));
+	}
+#else
+	if (localtime_r(&now, &tm) == NULL)
+		return;
+#endif
+#if defined(HAVE_TM_ZONE)
+	CTimeZone = -tm.tm_gmtoff;		/* tm_gmtoff is Sun/DEC-ism */
+	CDayLight = (tm.tm_isdst > 0);
+	zone = tm.tm_zone;
+#elif defined(HAVE_INT_TIMEZONE)
+	CDayLight = tm.tm_isdst;
+	CTimeZone =
+#ifdef __CYGWIN32__
+		(tm.tm_isdst ? (_timezone - 3600) : _timezone);
+#else
+		(tm.tm_isdst ? (timezone - 3600) : timezone);
+#endif
+	if (tm.tm_isdst == 0 || tm.tm_isdst == 1)
+		zone = tzname[tm.tm_isdst];
+#else
+#error USE_POSIX_TIME defined but no time zone available
+#endif
+	copy_zone_name(zone);
+#else							/* ! USE_POSIX_TIME */
+	struct timeb tb;			/* the old V7-ism */
+	struct tm *tmp;
+
+	ftime(&tb);
+	now = tb.time;
+	CTimeZone = tb.timezone * 60;
+	CDayLight = (tb.dstflag != 0);
+	tmp = localtime(&now);
+	if (tmp != NULL)
+		strftime(CTZName, MAXTZLEN, "%Z", tmp);
+#endif
+}
+
 /* GetCurrentAbsoluteTime()
  * Get the current system time. Set timezone parameters if not specified elsewhere.
  * Define HasTZSet to allow clients to specify the default timezone.
@@ -137,8 +210,6 @@ GetCurrentAbsoluteTime(void)
 	time_t		now;
 
 #ifdef USE_POSIX_TIME
-	struct tm  tm;
-
 	now = time(NULL);
 #else							/* ! USE_POSIX_TIME */
 	struct timeb tb;			/* the old V7-ism */
@@ -148,60 +219,7 @@ GetCurrentAbsoluteTime(void)
 #endif
 
 	if (!HasCTZSet)
-	{
-#ifdef USE_POSIX_TIME
-#if defined(HAVE_TM_ZONE)
-#ifdef MACOSX
-                memcpy(&tm,localtime(&now),sizeof(tm));
-#else 
-		localtime_r(&now,&tm);
-#endif
-		CTimeZone = -tm.tm_gmtoff;		/* tm_gmtoff is Sun/DEC-ism */
-		CDayLight = (tm.tm_isdst > 0);
-
-#ifdef NOT_USED
-
-		/*
-		 * XXX is there a better way to get local timezone string w/o
-		 * tzname? - tgl 97/03/18
-		 */
-		strftime(CTZName, MAXTZLEN, "%Z", tm);
-#endif
-
-		/*
-		 * XXX FreeBSD man pages indicate that this should work - thomas
-		 * 1998-12-12
-		 */
-		strcpy(CTZName, tm.tm_zone);
-
-#elif defined(HAVE_INT_TIMEZONE)
-#ifdef MACOSX
-                memcpy(&tm,localtime(&now),sizeof(tm));
-#else 
-		localtime_r(&now,&tm);
-#endif
-		CDayLight = tm.tm_isdst;
-		CTimeZone =
-#ifdef __CYGWIN32__
-			(tm.tm_isdst ? (_timezone - 3600) : _timezone);
-#else
-			(tm.tm_isdst ? (timezone - 3600) : timezone);
-#endif
-		strcpy(CTZName, tzname[tm.tm_isdst]);
-#else
-#error USE_POSIX_TIME defined but no time zone available
-#endif
-#else							/* ! USE_POSIX_TIME */
-		CTimeZone = tb.timezone * 60;
-		CDayLight = (tb.dstflag != 0);
-
-		/*
-		 * XXX does this work to get the local timezone string in V7? -
-		 * tgl 97/03/18
-		 */
-		strftime(CTZName, MAXTZLEN, "%Z", localtime(&now));
-#endif
-	};
+		pthread_once(&client_tz_once, InitClientTimeZoneOnce);
 
 	return (AbsoluteTime) now;
 }	/* GetCurrentAbsoluteTime() */
