@@ -87,27 +87,41 @@ class DirectOutputChannel<T> extends DirectOutput<WritableByteChannel> {
     
     private int transferOut(MemorySegment user, int type, MemorySegment var, int varSize) {
         WritableByteChannel w = super.get();
-        
-        if (var == MemorySegment.NULL) {  // EOD
+        /*
+         * The column name arrives as NAMEOID before the value. It is not
+         * part of the stream.
+         */
+        if (type == DirectWeaverConnection.META) {
+            return varSize < 0 ? 0 : varSize;
+        }
+        /*
+         * End of a streamed value is a NULL buffer and CLOSE_OP (-4).
+         * Closing the sink lets the reader finish.
+         */
+        if (varSize < 0 || var == null || var.address() == 0) {
             try {
-                w.close();
+                if (w != null && w.isOpen()) {
+                    w.close();
+                }
             } catch (IOException io) {
-                
             }
             return -1;
-        } else {
-            try (Arena arena = Arena.ofConfined()) {
-                var = var.reinterpret(varSize, arena, null);
-                ByteBuffer bb = var.asByteBuffer();
-                int size = 0;
-                while (size < varSize) {
-                    size += w.write(bb);
+        }
+        try (Arena arena = Arena.ofConfined()) {
+            var = var.reinterpret(varSize, arena, null);
+            ByteBuffer bb = var.asByteBuffer();
+            int size = 0;
+            while (size < varSize) {
+                int wrote = w.write(bb);
+                if (wrote < 0) {
+                    return -1;
                 }
-                return size;
-            } catch (IOException io) {
-               return -1;     
+                size += wrote;
             }
-        }        
+            return size;
+        } catch (IOException io) {
+            return -1;
+        }
     }
     
     @Override

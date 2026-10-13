@@ -14,6 +14,8 @@ package org.weaverdb.direct;
 import java.io.Serializable;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import org.weaverdb.WeaverObjectLoader;
 import java.time.Instant;
@@ -425,7 +427,9 @@ enum TransferType {
         Map.entry(Date.class, TransferType.DATE),
         Map.entry(Instant.class, TransferType.INSTANT),
         Map.entry(byte[].class, TransferType.BINARY),
-        Map.entry(Serializable.class, TransferType.JAVA)
+        Map.entry(Serializable.class, TransferType.JAVA),
+        Map.entry(ReadableByteChannel.class, TransferType.STREAM),
+        Map.entry(WritableByteChannel.class, TransferType.STREAM)
     );
     
     public static TransferType type(Class<?> type) {
