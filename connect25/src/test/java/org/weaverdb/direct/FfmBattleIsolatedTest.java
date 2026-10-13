@@ -117,6 +117,16 @@ public class FfmBattleIsolatedTest {
     }
 
     @Test
+    public void concurrentHeapInsertDoesNotTripFreespaceAssert() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "freespace-extend", 90);
+        System.out.println(result.output);
+        Assertions.assertNotEquals(4, result.code, "concurrent insert hung\n" + result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("freespace-extend ok"), result.output);
+        Assertions.assertTrue(result.output.contains("freespace-extend rows=240"), result.output);
+    }
+
+    @Test
     public void abortWithoutBeginDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "abort-idle", 60);
         System.out.println(result.output);

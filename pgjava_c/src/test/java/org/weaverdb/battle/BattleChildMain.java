@@ -54,6 +54,7 @@ public final class BattleChildMain {
                 case "multipage" -> multipage(mode, datadir);
                 case "vacuum-group" -> vacuumGroup(mode, datadir);
                 case "prefetch-drop" -> prefetchDrop(mode, datadir);
+                case "freespace-extend" -> freespaceExtend(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -785,6 +786,67 @@ public final class BattleChildMain {
         }
         shutdown(mode);
         System.out.println("BATTLE CHILD prefetch-drop ok");
+    }
+
+    /**
+     * Concurrent autocommit inserts, each on its own connection. The first
+     * insert used to extend the heap with ReadBuffer(P_NEW) while another
+     * connection was in PerformAllocation, which asserted that it alone had
+     * grown the file.
+     */
+    private static void freespaceExtend(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_fs (id int4, payload varchar(200))");
+        }
+        int writers = 6;
+        int perWriter = 40;
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread[] threads = new Thread[writers];
+        for (int w = 0; w < writers; w++) {
+            int base = w * perWriter;
+            threads[w] = new Thread(() -> {
+                try {
+                    if (!start.await(15, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("start");
+                    }
+                    try (DBReference conn = open()) {
+                        for (int i = 0; i < perWriter; i++) {
+                            conn.execute("insert into bt_fs (id, payload) values ("
+                                    + (base + i) + ", '" + "x".repeat(180) + "')");
+                        }
+                    }
+                } catch (Throwable t) {
+                    failure.compareAndSet(null, t);
+                }
+            }, "bt-fs-" + w);
+            threads[w].start();
+        }
+        start.countDown();
+        for (Thread thread : threads) {
+            thread.join(60_000);
+        }
+        for (Thread thread : threads) {
+            if (thread.isAlive()) {
+                System.out.println("BATTLE CHILD freespace-extend hung");
+                System.exit(4);
+            }
+        }
+        if (failure.get() != null) {
+            failure.get().printStackTrace(System.out);
+            System.exit(1);
+        }
+        try (DBReference conn = open()) {
+            int n = count(conn, "select id from bt_fs");
+            System.out.println("BATTLE CHILD freespace-extend rows=" + n);
+            if (n != writers * perWriter) {
+                throw new IllegalStateException("rows=" + n);
+            }
+        }
+        shutdown(mode);
+        System.out.println("BATTLE CHILD freespace-extend ok");
     }
 
     private static void boot(String mode, String datadir) throws Exception {

@@ -128,11 +128,16 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
                 elog(WARN,"Invalid limit for heap io");
             }
             
-            if (lastblock + 1 == relation->rd_nblocks) {
-                lastblock = P_NEW;
-            } else {
-                lastblock = GetFreespace(relation,len,limit);
-            }
+            /*
+             * A freshly opened relation has rd_nblocks == 0, so the first
+             * insert on every connection used to take ReadBuffer(P_NEW).
+             * That extends the file without the freespace extender lock.
+             * PerformAllocation snapshots smgrnblocks and asserts the file
+             * grew only by the pages it added; a concurrent P_NEW makes
+             * that assert fail. Every heap placement goes through
+             * GetFreespace, which holds the extender across the extend.
+             */
+            lastblock = GetFreespace(relation, len, limit);
 
             buffer = ReadBuffer(relation,lastblock);
 
