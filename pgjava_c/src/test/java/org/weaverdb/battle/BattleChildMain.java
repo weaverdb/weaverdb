@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.HashSet;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,6 +49,7 @@ public final class BattleChildMain {
                 case "abort-idle" -> abortIdle(mode, datadir);
                 case "constraints" -> constraints(mode, datadir);
                 case "helper" -> helper(mode, datadir);
+                case "helper-nested" -> helperNested(mode, datadir);
                 case "hash-index" -> hashIndex(mode, datadir);
                 case "null-int" -> nullInt(mode, datadir);
                 case "char-bind" -> charBind(mode, datadir);
@@ -64,6 +66,8 @@ public final class BattleChildMain {
                 case "kill-recover-update" -> killRecoverUpdate(mode, datadir);
                 case "kill-recover-index" -> killRecoverIndex(mode, datadir);
                 case "kill-recover-insert" -> killRecoverInsert(mode, datadir);
+                case "restart-loop" -> restartLoop(mode, datadir);
+                case "mutate" -> mutate(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -669,6 +673,7 @@ public final class BattleChildMain {
         boot(mode, datadir);
         ensureDatabase();
         try (DBReference conn = open()) {
+            conn.execute("create table bt_help (id int4)");
             try (DBReference child = conn.helper()) {
                 System.out.println("BATTLE CHILD helper class=" + child.getClass().getName()
                         + " valid=" + child.isValid());
@@ -680,8 +685,156 @@ public final class BattleChildMain {
                     }
                     System.out.println("BATTLE CHILD helper select=" + out.get());
                 }
+                child.execute("insert into bt_help (id) values (1)");
+            }
+            int owned = count(conn, "select id from bt_help");
+            System.out.println("BATTLE CHILD helper parent rows=" + owned);
+            if (owned != 1) {
+                System.exit(3);
+            }
+            AtomicReference<Throwable> otherErr = new AtomicReference<>();
+            Thread other = new Thread(() -> {
+                try (DBReference sub = conn.helper()) {
+                    sub.execute("insert into bt_help (id) values (2)");
+                } catch (Throwable t) {
+                    otherErr.set(t);
+                }
+            }, "bt-help-other");
+            other.start();
+            other.join(20_000);
+            if (other.isAlive()) {
+                System.out.println("BATTLE CHILD helper cross hung");
+                System.exit(4);
+            }
+            if (otherErr.get() != null) {
+                otherErr.get().printStackTrace(System.out);
+                System.exit(1);
+            }
+            int rows = count(conn, "select id from bt_help");
+            System.out.println("BATTLE CHILD helper cross rows=" + rows);
+            if (rows != 2) {
+                System.exit(3);
             }
         }
+    }
+
+    /** A helper is not allowed to create its own helper. */
+    private static void helperNested(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open();
+                DBReference child = conn.helper();
+                DBReference nested = child.helper()) {
+            System.out.println("BATTLE CHILD helper nested accepted valid=" + nested.isValid());
+            System.exit(3);
+        } catch (ExecutionException ex) {
+            System.out.println("BATTLE CHILD helper nested: " + ex.getMessage());
+        }
+        shutdown(mode);
+        System.out.println("BATTLE CHILD helper nested ok");
+    }
+
+    /** Three clean shutdowns. Each committed row is still there after the next boot. */
+    private static void restartLoop(String mode, String datadir) throws Exception {
+        for (int round = 1; round <= 3; round++) {
+            boot(mode, datadir);
+            if (round == 1) {
+                ensureDatabase();
+            }
+            try (DBReference conn = open()) {
+                if (round == 1) {
+                    conn.execute("create table bt_rloop (id int4, note varchar(16))");
+                }
+                conn.execute("insert into bt_rloop (id, note) values (" + round + ", 'r" + round + "')");
+                int n = count(conn, "select id from bt_rloop");
+                System.out.println("BATTLE CHILD restart-loop wrote round=" + round + " rows=" + n);
+                if (n != round) {
+                    throw new IllegalStateException("rows=" + n);
+                }
+            }
+            shutdown(mode);
+            boot(mode, datadir);
+            try (DBReference conn = open()) {
+                int n = count(conn, "select id from bt_rloop");
+                String note = scalarText(conn, "select note from bt_rloop where id = " + round);
+                System.out.println("BATTLE CHILD restart-loop recovered round=" + round
+                        + " rows=" + n + " note=" + note);
+                if (n != round || !("r" + round).equals(note)) {
+                    throw new IllegalStateException("recovered rows=" + n + " note=" + note);
+                }
+            }
+            shutdown(mode);
+        }
+        System.out.println("BATTLE CHILD restart-loop ok");
+    }
+
+    /**
+     * Two connections update and delete disjoint id ranges. The seed is fixed
+     * so the schedule does not change between runs. Every id remains exactly once.
+     */
+    private static void mutate(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        int rows = 40;
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_mix (id int4, v int4)");
+            conn.execute("create index bt_mix_id on bt_mix (id)");
+            conn.begin();
+            for (int i = 1; i <= rows; i++) {
+                conn.execute("insert into bt_mix (id, v) values (" + i + ", 1)");
+            }
+            conn.commit();
+        }
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread[] threads = new Thread[2];
+        for (int t = 0; t < threads.length; t++) {
+            int base = t * 20 + 1;
+            threads[t] = new Thread(() -> {
+                Random rng = new Random(17L + base);
+                try (DBReference conn = open()) {
+                    for (int op = 0; op < 40; op++) {
+                        int id = base + rng.nextInt(20);
+                        if (rng.nextBoolean()) {
+                            conn.execute("update bt_mix set v = v + 1 where id = " + id);
+                        } else {
+                            conn.begin();
+                            conn.execute("delete from bt_mix where id = " + id);
+                            conn.execute("insert into bt_mix (id, v) values (" + id + ", 1)");
+                            conn.commit();
+                        }
+                    }
+                } catch (Throwable t1) {
+                    failure.compareAndSet(null, t1);
+                }
+            }, "bt-mix-" + t);
+            threads[t].start();
+        }
+        for (Thread thread : threads) {
+            thread.join(30_000);
+            if (thread.isAlive()) {
+                System.out.println("BATTLE CHILD mutate hung " + thread.getName());
+                System.exit(4);
+            }
+        }
+        if (failure.get() != null) {
+            failure.get().printStackTrace(System.out);
+            System.exit(1);
+        }
+        try (DBReference conn = open()) {
+            int n = count(conn, "select id from bt_mix");
+            int lookups = 0;
+            for (int i = 1; i <= rows; i++) {
+                if (count(conn, "select v from bt_mix where id = " + i) == 1) {
+                    lookups++;
+                }
+            }
+            System.out.println("BATTLE CHILD mutate rows=" + n + " lookups=" + lookups);
+            if (n != rows || lookups != rows) {
+                System.exit(1);
+            }
+        }
+        shutdown(mode);
+        System.out.println("BATTLE CHILD mutate ok");
     }
 
     /** Primary key, NOT NULL, defaults, truncate, and vacuum. Isolated because this sequence SIGSEGV'd in-process. */

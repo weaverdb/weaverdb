@@ -74,6 +74,17 @@ public class JniBattleIsolatedTest {
         Assertions.assertEquals(0, result.code,
                 "helper() crashed the process\n" + result.output);
         Assertions.assertTrue(result.output.contains("helper select=1"), result.output);
+        Assertions.assertTrue(result.output.contains("helper parent rows=1"), result.output);
+        Assertions.assertTrue(result.output.contains("helper cross rows=2"), result.output);
+    }
+
+    @Test
+    public void nestedHelperIsRejected() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "helper-nested", 60);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("helper nested:"), result.output);
+        Assertions.assertTrue(result.output.contains("helper nested ok"), result.output);
     }
 
     @Test
@@ -180,5 +191,24 @@ public class JniBattleIsolatedTest {
         Assertions.assertTrue(result.output.contains("BATTLE killed=true"), result.output);
         Assertions.assertTrue(result.output.contains("dups=0 missing=0 lookups=80"), result.output);
         Assertions.assertEquals(0, result.code, result.output);
+    }
+
+    @Test
+    public void restartLoopKeepsCommittedRows() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "restart-loop", 90);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("restart-loop ok"), result.output);
+        Assertions.assertTrue(result.output.contains("recovered round=3 rows=3"), result.output);
+    }
+
+    @Test
+    public void concurrentUpdateDeleteKeepsEveryRow() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "mutate", 60);
+        System.out.println(result.output);
+        Assertions.assertNotEquals(4, result.code, "mutate hung\n" + result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("mutate rows=40 lookups=40"), result.output);
+        Assertions.assertTrue(result.output.contains("mutate ok"), result.output);
     }
 }

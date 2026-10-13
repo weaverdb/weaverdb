@@ -992,6 +992,16 @@ public final class BattleScenarios {
             for (int i = 0; i < 50; i++) {
                 conn.execute("update bt_soak set note = 'u' where id = " + (i % commits));
             }
+            int second = 30;
+            for (int i = 0; i < second; i++) {
+                conn.begin();
+                conn.execute("insert into bt_soak (id, note) values (" + (20_000 + i) + ", 'r')");
+                conn.commit();
+            }
+            Assertions.assertEquals(commits + second, fetchCount(conn, "select id from bt_soak"));
+            conn.execute("delete from bt_soak where id >= 20000");
+            Assertions.assertEquals(commits, fetchCount(conn, "select id from bt_soak"));
+            System.out.println("BATTLE soak rounds=2");
         }
         long rssAfter = rssKb();
         System.out.println("BATTLE soak commits=" + commits + " rssKbBefore=" + rssBefore + " rssKbAfter=" + rssAfter
