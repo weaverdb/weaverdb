@@ -139,7 +139,7 @@ class DirectWeaverConnection implements DBReference {
     }
     
     public final static int  SHORT=	21;
-    public final static int  CHAR=	21;
+    public final static int  CHAR=	18;   // CHAROID
     public final static int  INT=	23;
     public final static int  STRING=	1043;
     public final static int  BOOLEAN=	16;

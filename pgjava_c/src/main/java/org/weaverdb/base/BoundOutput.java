@@ -63,6 +63,13 @@ class BoundOutput<T> extends Bound<T> {
                 case BLOB:
                     return getTypeClass().cast(new java.io.ByteArrayInputStream((byte[]) value));
                 case Character:
+                    if (value instanceof String text) {
+                        if (text.isEmpty()) {
+                            return null;
+                        }
+                        return getTypeClass().cast(text.charAt(0));
+                    }
+                    return getTypeClass().cast(value);
                 case Binary:
                 case String:
                 case Boolean:

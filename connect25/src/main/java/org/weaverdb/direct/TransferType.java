@@ -101,15 +101,27 @@ enum TransferType {
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
                 case DirectWeaverConnection.CHAR:
-                    return val.get(ValueLayout.JAVA_CHAR, 0);
+                    return (char) (val.get(ValueLayout.JAVA_BYTE, 0) & 0xFF);
+                case DirectWeaverConnection.STRING:
+                case DirectWeaverConnection.TEXT:
+                    if (varLen <= 0) {
+                        throw new ExecutionException("empty character");
+                    }
+                    byte[] chars = new byte[varLen];
+                    MemorySegment.copy(val, 0, MemorySegment.ofArray(chars), 0, varLen);
+                    String text = new String(chars, StandardCharsets.UTF_8);
+                    if (text.isEmpty()) {
+                        throw new ExecutionException("empty character");
+                    }
+                    return text.charAt(0);
                 default:
                     throw new ExecutionException("unable to convert");
             }
         }
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            val.set(ValueLayout.JAVA_CHAR, 0, (Character)value);
-            return Character.BYTES;
+            val.set(ValueLayout.JAVA_BYTE, 0, (byte) ((Character) value).charValue());
+            return 1;
         }
     },
     INTEGER {
