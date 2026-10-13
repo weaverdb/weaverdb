@@ -866,10 +866,13 @@ javatextout(bytea * target)
 		(*jenv)->PopLocalFrame(jenv, NULL);
 		elog(ERROR, "javatextout: embedded exception occurred");
 	}
+	/*
+	 * GetStringUTFRegion counts Java characters. GetStringUTFLength
+	 * counts modified UTF-8 bytes. A non-ASCII string is longer in bytes.
+	 */
 	length = (*jenv)->GetStringUTFLength(jenv, result);
 	data = palloc(length + 1);
-
-	(*jenv)->GetStringUTFRegion(jenv, result, 0, length, data);
+	(*jenv)->GetStringUTFRegion(jenv, result, 0, (*jenv)->GetStringLength(jenv, result), data);
 	data[length] = 0x00;
 	(*jenv)->PopLocalFrame(jenv, NULL);
 	return data;
@@ -981,8 +984,15 @@ ConvertToJavaArg(Oid type, Datum val)
         case TEXTOID:
 	case VARCHAROID:
 		{
-			bytea          *strvar = (bytea *) val;
-                        int            len = VARSIZE(strvar) - VARHDRSZ;
+			bytea          *strvar;
+                        int            len;
+
+			if (val == 0 || DatumGetPointer(val) == NULL) {
+				rval.l = NULL;
+				break;
+			}
+			strvar = (bytea *) val;
+                        len = VARSIZE(strvar) - VARHDRSZ;
 			char           *string = palloc(len + 1);
 			memmove(string, VARDATA(strvar), len);
 			string[len] = 0x00;
@@ -1027,11 +1037,24 @@ ConvertFromJavaArg(Oid type, jvalue val, bool *isNull)
             case VARCHAROID:
                     {
                             jstring         strvar = (jstring) val.l;
-                            int             len = (*jenv)->GetStringUTFLength(jenv, strvar);
-                            bytea          *string = palloc(len + VARHDRSZ + 1);
+                            int             len;
+                            bytea          *string;
 
+                            if (strvar == NULL || (*jenv)->IsSameObject(jenv, strvar, NULL)) {
+                                    if (isNull)
+                                            *isNull = true;
+                                    break;
+                            }
+                            /*
+                             * Region length is a character count. The byte
+                             * length is longer when the string is not ASCII.
+                             */
+                            len = (*jenv)->GetStringUTFLength(jenv, strvar);
+                            string = palloc(len + VARHDRSZ + 1);
                             SETVARSIZE(string, len + VARHDRSZ);
-                            (*jenv)->GetStringUTFRegion(jenv, strvar, 0, len, VARDATA(string));
+                            (*jenv)->GetStringUTFRegion(jenv, strvar, 0,
+                                    (*jenv)->GetStringLength(jenv, strvar),
+                                    VARDATA(string));
                             VARDATA(string)[len] = '\0';
                             ret_datum = PointerGetDatum(string);
                             break;
