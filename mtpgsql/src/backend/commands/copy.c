@@ -327,7 +327,12 @@ DoCopy(char *relname, bool binary, bool oids, bool from, bool pipe,
 			elog(ERROR, "You cannot change sequence relation %s", relname);
 		if (pipe)
 		{
-                    fp = stdin;
+			/*
+			 * fp NULL selects the frontend pipe. An embedded session has
+			 * that pipe on the connection; a standalone backend still
+			 * uses the process stdin.
+			 */
+			fp = (GetEnv()->pipein != NULL) ? NULL : stdin;
 		}
 		else
 		{
@@ -348,7 +353,12 @@ DoCopy(char *relname, bool binary, bool oids, bool from, bool pipe,
 	{							/* copy from database to file */
 		if (pipe)
 		{
-			fp = stdout;
+			/*
+			 * fp NULL selects the frontend pipe. An embedded session has
+			 * that pipe on the connection; a standalone backend still
+			 * uses the process stdout.
+			 */
+			fp = (GetEnv()->pipeout != NULL) ? NULL : stdout;
 		}
 		else
 		{
