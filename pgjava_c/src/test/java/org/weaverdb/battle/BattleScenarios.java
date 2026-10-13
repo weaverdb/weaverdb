@@ -1049,6 +1049,127 @@ public final class BattleScenarios {
         return new ChildResult(code, output);
     }
 
+    /**
+     * SIGKILL the child after it has committed a seed and waited out
+     * {@code synctimeout}, while a later statement is still running.
+     * A second process then checks the hard-synced rows.
+     */
+    public static ChildResult killAfterSync(String mode, String phase, int timeoutSeconds) throws Exception {
+        Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        Path initdb = root.resolve("build_test/mtpg/bin/initdb");
+        Path lib = root.resolve("build_test/mtpg/lib");
+        Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
+        Path work = Files.createTempDirectory("weaver-battle-kill-");
+        Path data = work.resolve("data");
+        ProcessBuilder init = new ProcessBuilder(initdb.toString(), "-D", data.toString());
+        init.redirectErrorStream(true);
+        Process initProc = init.start();
+        String initOut = readAll(initProc, 60);
+        int initRc = initProc.waitFor();
+        if (initRc != 0) {
+            throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
+        }
+        String marker = "BATTLE KILLWINDOW " + phase;
+        Process victim = startChild(mode, lib, data, "kill-" + phase);
+        StringBuilder victimBuf = new StringBuilder();
+        Thread pump = pumpInto(victim, victimBuf);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+        while (victim.isAlive() && !snapshot(victimBuf).contains(marker)) {
+            if (System.nanoTime() > deadline) {
+                victim.destroyForcibly();
+                victim.waitFor(5, TimeUnit.SECONDS);
+                pump.join(2_000);
+                String output = snapshot(victimBuf) + "\nBATTLE kill missed window";
+                System.out.println(output);
+                return new ChildResult(4, output);
+            }
+            Thread.sleep(30);
+        }
+        String soFar = snapshot(victimBuf);
+        if (!victim.isAlive()) {
+            pump.join(2_000);
+            String output = snapshot(victimBuf) + "\nBATTLE child exited before kill window";
+            System.out.println(output);
+            return new ChildResult(victim.exitValue(), output);
+        }
+        if (!soFar.contains("[DBWriter]sync timeout 1000")) {
+            victim.destroyForcibly();
+            victim.waitFor(5, TimeUnit.SECONDS);
+            pump.join(2_000);
+            String output = snapshot(victimBuf) + "\nBATTLE synctimeout 1000 was not applied";
+            System.out.println(output);
+            return new ChildResult(3, output);
+        }
+        Thread.sleep(300);
+        boolean killed = false;
+        if (victim.isAlive()) {
+            victim.destroyForcibly();
+            killed = true;
+        }
+        victim.waitFor(5, TimeUnit.SECONDS);
+        pump.join(2_000);
+        String victimOut = snapshot(victimBuf);
+        System.out.println("BATTLE KILL " + mode + " " + phase + " killed=" + killed);
+        System.out.println(victimOut);
+
+        Process recover = startChild(mode, lib, data, "kill-recover-" + phase);
+        String recoverOut = readAll(recover, timeoutSeconds);
+        boolean finished = recover.waitFor(1, TimeUnit.SECONDS);
+        int code;
+        if (!finished) {
+            recover.destroyForcibly();
+            recover.waitFor(5, TimeUnit.SECONDS);
+            code = 4;
+            recoverOut = recoverOut + "\nBATTLE recover timed out";
+        } else {
+            code = recover.exitValue();
+        }
+        String output = victimOut + "\n----- recover -----\n" + recoverOut + "\nBATTLE killed=" + killed;
+        System.out.println("BATTLE RECOVER " + mode + " " + phase + " exit=" + code);
+        System.out.println(recoverOut);
+        return new ChildResult(code, output);
+    }
+
+    private static Process startChild(String mode, Path lib, Path data, String scenario) throws Exception {
+        List<String> cmd = List.of(
+                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "--enable-native-access=ALL-UNNAMED",
+                "-Djava.library.path=" + lib,
+                "-cp", System.getProperty("java.class.path"),
+                "org.weaverdb.battle.BattleChildMain",
+                mode,
+                data.toString(),
+                scenario);
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.environment().put("LD_LIBRARY_PATH", lib.toString());
+        pb.redirectErrorStream(true);
+        return pb.start();
+    }
+
+    private static Thread pumpInto(Process process, StringBuilder buf) {
+        Thread pump = new Thread(() -> {
+            try (InputStream in = process.getInputStream()) {
+                byte[] block = new byte[4096];
+                int n;
+                while ((n = in.read(block)) >= 0) {
+                    synchronized (buf) {
+                        buf.append(new String(block, 0, n, StandardCharsets.UTF_8));
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }, "battle-kill-pump");
+        pump.setDaemon(true);
+        pump.start();
+        return pump;
+    }
+
+    private static String snapshot(StringBuilder buf) {
+        synchronized (buf) {
+            return buf.toString();
+        }
+    }
+
     public static final class ChildResult {
         public final int code;
         public final String output;

@@ -153,4 +153,33 @@ public class FfmBattleIsolatedTest {
         Assertions.assertTrue(result.code == 0 || result.code == 2,
                 "abort() with no begin() crashed the process\n" + result.output);
     }
+
+    @Test
+    public void killDuringUpdateRecoversSyncedRows() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.killAfterSync("ffm", "update", 90);
+        System.out.println(result.output);
+        Assertions.assertTrue(result.output.contains("BATTLE killed=true"), result.output);
+        Assertions.assertTrue(result.output.contains(
+                "BATTLE RECOVER update rows=100 dups=0 missing=0 bad=0 lookups=100"), result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+    }
+
+    @Test
+    public void killDuringIndexBuildRecoversSyncedRows() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.killAfterSync("ffm", "index", 180);
+        System.out.println(result.output);
+        Assertions.assertTrue(result.output.contains("BATTLE killed=true"), result.output);
+        Assertions.assertTrue(result.output.contains(
+                "BATTLE RECOVER index rows=1200 dups=0 missing=0 bad=0 lookups=1200"), result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+    }
+
+    @Test
+    public void killDuringInsertRecoversSyncedRows() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.killAfterSync("ffm", "insert", 90);
+        System.out.println(result.output);
+        Assertions.assertTrue(result.output.contains("BATTLE killed=true"), result.output);
+        Assertions.assertTrue(result.output.contains("dups=0 missing=0 lookups=80"), result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+    }
 }

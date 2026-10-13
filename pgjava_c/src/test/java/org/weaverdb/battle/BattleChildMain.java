@@ -2,6 +2,7 @@ package org.weaverdb.battle;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -57,6 +58,12 @@ public final class BattleChildMain {
                 case "freespace-extend" -> freespaceExtend(mode, datadir);
                 case "concurrent-autocommit" -> concurrentAutocommit(mode, datadir);
                 case "begin-id" -> beginId(mode, datadir);
+                case "kill-update" -> killUpdate(mode, datadir);
+                case "kill-index" -> killIndex(mode, datadir);
+                case "kill-insert" -> killInsert(mode, datadir);
+                case "kill-recover-update" -> killRecoverUpdate(mode, datadir);
+                case "kill-recover-index" -> killRecoverIndex(mode, datadir);
+                case "kill-recover-insert" -> killRecoverInsert(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -930,6 +937,249 @@ public final class BattleChildMain {
         }
         shutdown(mode);
         System.out.println("BATTLE CHILD begin ok");
+    }
+
+    /** Past synctimeout (1000ms) plus the writer's fsync of the seeded group. */
+    private static final int KILL_SYNC_WAIT_MS = 2500;
+    private static final int KILL_UPDATE_ROWS = 100;
+    private static final int KILL_INDEX_ROWS = 1200;
+    private static final int KILL_INSERT_SEED = 80;
+
+    /**
+     * Commit a seeded, indexed table, wait out the hard sync, then keep
+     * updating until the parent SIGKILLs.
+     */
+    private static void killUpdate(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_ku (id int4, v int4)");
+            conn.execute("create index bt_ku_id on bt_ku (id)");
+            conn.begin();
+            for (int i = 1; i <= KILL_UPDATE_ROWS; i++) {
+                conn.execute("insert into bt_ku (id, v) values (" + i + ", 0)");
+            }
+            conn.commit();
+        }
+        System.out.println("BATTLE SEEDED update rows=" + KILL_UPDATE_ROWS);
+        System.out.flush();
+        Thread.sleep(KILL_SYNC_WAIT_MS);
+        System.out.println("BATTLE KILLWINDOW update");
+        System.out.flush();
+        try (DBReference conn = open()) {
+            for (int round = 0; round < 200_000; round++) {
+                int id = (round % KILL_UPDATE_ROWS) + 1;
+                conn.execute("update bt_ku set v = v + 1 where id = " + id);
+            }
+        }
+    }
+
+    /**
+     * Commit the heap, wait out the hard sync, then build and drop indexes
+     * until the parent SIGKILLs. One build of this table returns before a
+     * kill can land, so the window is a run of builds.
+     */
+    private static void killIndex(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        String note = "k".repeat(60);
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_ki (id int4, note varchar(80))");
+            conn.begin();
+            for (int i = 1; i <= KILL_INDEX_ROWS; i++) {
+                conn.execute("insert into bt_ki (id, note) values (" + i + ", '" + note + i + "')");
+            }
+            conn.commit();
+        }
+        System.out.println("BATTLE SEEDED index rows=" + KILL_INDEX_ROWS);
+        System.out.flush();
+        Thread.sleep(KILL_SYNC_WAIT_MS);
+        System.out.println("BATTLE KILLWINDOW index");
+        System.out.flush();
+        try (DBReference conn = open()) {
+            for (int n = 0; n < 400; n++) {
+                conn.execute("create index bt_ki_n" + n + " on bt_ki (id)");
+                conn.execute("drop index bt_ki_n" + n);
+            }
+        }
+        System.out.println("BATTLE INDEX BUILT");
+        System.out.flush();
+    }
+
+    /**
+     * Commit the seed rows, wait out the hard sync, then insert a second
+     * wave until the parent SIGKILLs.
+     */
+    private static void killInsert(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_kn (id int4, v int4)");
+            conn.execute("create index bt_kn_id on bt_kn (id)");
+            conn.begin();
+            for (int i = 1; i <= KILL_INSERT_SEED; i++) {
+                conn.execute("insert into bt_kn (id, v) values (" + i + ", 1)");
+            }
+            conn.commit();
+        }
+        System.out.println("BATTLE SEEDED insert rows=" + KILL_INSERT_SEED);
+        System.out.flush();
+        Thread.sleep(KILL_SYNC_WAIT_MS);
+        System.out.println("BATTLE KILLWINDOW insert");
+        System.out.flush();
+        try (DBReference conn = open()) {
+            for (int i = 0; i < 200_000; i++) {
+                int id = 10_001 + i;
+                conn.execute("insert into bt_kn (id, v) values (" + id + ", 2)");
+            }
+        }
+    }
+
+    private static void killRecoverUpdate(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        int rows = 0;
+        int dups = 0;
+        int bad = 0;
+        boolean[] seen = new boolean[KILL_UPDATE_ROWS + 1];
+        try (DBReference conn = open()) {
+            try (Statement s = conn.statement("select id, v from bt_ku")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<Integer> v = s.linkOutput(2, Integer.class);
+                s.execute();
+                while (s.fetch()) {
+                    rows++;
+                    Integer got = id.get();
+                    Integer val = v.get();
+                    if (got == null || got < 1 || got > KILL_UPDATE_ROWS || seen[got]) {
+                        dups++;
+                    } else {
+                        seen[got] = true;
+                    }
+                    if (val == null || val < 0 || val > 100_000) {
+                        bad++;
+                    }
+                }
+            }
+            int missing = 0;
+            int lookups = 0;
+            for (int i = 1; i <= KILL_UPDATE_ROWS; i++) {
+                if (!seen[i]) {
+                    missing++;
+                }
+                if (count(conn, "select id from bt_ku where id = " + i) == 1) {
+                    lookups++;
+                }
+            }
+            System.out.println("BATTLE RECOVER update rows=" + rows
+                    + " dups=" + dups
+                    + " missing=" + missing
+                    + " bad=" + bad
+                    + " lookups=" + lookups);
+            if (rows != KILL_UPDATE_ROWS || dups != 0 || missing != 0 || bad != 0
+                    || lookups != KILL_UPDATE_ROWS) {
+                System.exit(1);
+            }
+        }
+        shutdown(mode);
+    }
+
+    private static void killRecoverIndex(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        String prefix = "k".repeat(60);
+        int rows = 0;
+        int dups = 0;
+        boolean[] seen = new boolean[KILL_INDEX_ROWS + 1];
+        try (DBReference conn = open()) {
+            try (Statement s = conn.statement("select id from bt_ki")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                s.execute();
+                while (s.fetch()) {
+                    rows++;
+                    Integer got = id.get();
+                    if (got == null || got < 1 || got > KILL_INDEX_ROWS || seen[got]) {
+                        dups++;
+                    } else {
+                        seen[got] = true;
+                    }
+                }
+            }
+            int missing = 0;
+            int bad = 0;
+            int lookups = 0;
+            for (int i = 1; i <= KILL_INDEX_ROWS; i++) {
+                if (!seen[i]) {
+                    missing++;
+                }
+                int n = 0;
+                try (Statement s = conn.statement("select note from bt_ki where id = " + i)) {
+                    Output<String> note = s.linkOutput(1, String.class);
+                    s.execute();
+                    while (s.fetch()) {
+                        n++;
+                        if (!(prefix + i).equals(note.get())) {
+                            bad++;
+                        }
+                    }
+                }
+                if (n == 1) {
+                    lookups++;
+                }
+            }
+            System.out.println("BATTLE RECOVER index rows=" + rows
+                    + " dups=" + dups
+                    + " missing=" + missing
+                    + " bad=" + bad
+                    + " lookups=" + lookups);
+            if (rows != KILL_INDEX_ROWS || dups != 0 || missing != 0 || bad != 0
+                    || lookups != KILL_INDEX_ROWS) {
+                System.exit(1);
+            }
+        }
+        shutdown(mode);
+    }
+
+    private static void killRecoverInsert(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        int rows = 0;
+        int dups = 0;
+        HashSet<Integer> ids = new HashSet<>();
+        try (DBReference conn = open()) {
+            try (Statement s = conn.statement("select id, v from bt_kn")) {
+                Output<Integer> id = s.linkOutput(1, Integer.class);
+                Output<Integer> v = s.linkOutput(2, Integer.class);
+                s.execute();
+                while (s.fetch()) {
+                    rows++;
+                    Integer got = id.get();
+                    Integer val = v.get();
+                    if (got == null || !ids.add(got)) {
+                        dups++;
+                    }
+                    if (got != null && got >= 1 && got <= KILL_INSERT_SEED
+                            && (val == null || val < 1)) {
+                        dups++;
+                    }
+                }
+            }
+            int missing = 0;
+            int lookups = 0;
+            for (int i = 1; i <= KILL_INSERT_SEED; i++) {
+                if (!ids.contains(i)) {
+                    missing++;
+                }
+                if (count(conn, "select id from bt_kn where id = " + i) == 1) {
+                    lookups++;
+                }
+            }
+            System.out.println("BATTLE RECOVER insert rows=" + rows
+                    + " dups=" + dups
+                    + " missing=" + missing
+                    + " lookups=" + lookups);
+            if (dups != 0 || missing != 0 || lookups != KILL_INSERT_SEED || rows < KILL_INSERT_SEED) {
+                System.exit(1);
+            }
+        }
+        shutdown(mode);
     }
 
     private static void boot(String mode, String datadir) throws Exception {
