@@ -28,7 +28,9 @@ public class FfmBattleIsolatedTest {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "shared", 40);
         System.out.println(result.output);
         Assertions.assertEquals(0, result.code,
-                "helper() from a second thread failed\n" + result.output);
+                "foreign thread did not get a clean rejection\n" + result.output);
+        Assertions.assertTrue(result.output.contains("owned by a different thread"), result.output);
+        Assertions.assertTrue(result.output.contains("shared rows=1"), result.output);
     }
 
     @Test

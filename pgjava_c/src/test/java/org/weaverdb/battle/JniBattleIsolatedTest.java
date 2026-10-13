@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Process-isolated JNI cases: engine restart, lock waits, and a second
- * thread that uses {@code helper()}. A crash here does not kill the in-process suite.
+ * thread that uses a connection it does not own. A crash here does not kill the in-process suite.
  */
 public class JniBattleIsolatedTest {
 
@@ -27,7 +27,9 @@ public class JniBattleIsolatedTest {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "shared", 40);
         System.out.println(result.output);
         Assertions.assertEquals(0, result.code,
-                "helper() from a second thread failed\n" + result.output);
+                "foreign thread did not get a clean rejection\n" + result.output);
+        Assertions.assertTrue(result.output.contains("owned by a different thread"), result.output);
+        Assertions.assertTrue(result.output.contains("shared rows=1"), result.output);
     }
 
     @Test

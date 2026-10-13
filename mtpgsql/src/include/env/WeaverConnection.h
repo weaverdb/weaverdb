@@ -85,6 +85,8 @@ typedef struct Connection {
     int                             child_trans;
     
     pthread_t                       transaction_owner;
+    /* Thread that opened this connection. Not cleared between calls. */
+    pthread_t                       thread_owner;
     pthread_mutex_t                 child_lock;
 
 } * WConn;

@@ -234,6 +234,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
         SetUserId();
         pthread_mutex_init(&connection->child_lock, NULL);
         connection->parent = NULL;
+        connection->thread_owner = pthread_self();
     } else {
         connection->validFlag = 0;
         strncpy(connection->env->state, "DISCONNECTED", 39);
@@ -278,6 +279,7 @@ WCreateSubConnection(OpaqueWConn parent) {
 
     
     connection->env = env;
+    connection->thread_owner = pthread_self();
     SetProcessingMode(InitProcessing);
 
     connection->env->DatabaseId = parent->env->DatabaseId;
@@ -1738,6 +1740,16 @@ ParsePlan(PreparedPlan* plan) {
 
 short CheckThreadContext(WConn connection) {
     long err;
+    /*
+     * The opening thread owns the connection for its whole life.
+     * Another thread has to call helper() and use that sub-connection.
+     */
+    if (connection->thread_owner != 0
+        && !pthread_equal(connection->thread_owner, pthread_self())) {
+        err = 454;
+        SetError(connection, err, "CONTEXT", "connection is owned by a different thread");
+        return 1;
+    }
     if (connection->transaction_owner == 0) {
         return 0;
     } else if (!pthread_equal(connection->transaction_owner, pthread_self())) {

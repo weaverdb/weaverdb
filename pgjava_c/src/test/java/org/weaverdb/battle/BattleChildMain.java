@@ -384,75 +384,41 @@ public final class BattleChildMain {
     }
 
     /**
-     * Two threads. The second thread must call {@code helper()} itself;
-     * sharing one connection without a helper is not supported.
+     * A second thread must not use the parent's connection. That call has
+     * to throw. A helper sub-connection is a different scenario.
      */
     private static void shared(String mode, String datadir) throws Exception {
         boot(mode, datadir);
         ensureDatabase();
         try (DBReference conn = open()) {
-            conn.execute("create table bt_shared (id int4, note varchar(32))");
-            AtomicInteger failures = new AtomicInteger();
-            AtomicReference<Throwable> first = new AtomicReference<>();
-            CountDownLatch helperReady = new CountDownLatch(1);
+            conn.execute("create table bt_shared (id int4)");
+            conn.execute("insert into bt_shared (id) values (1)");
+            AtomicReference<Throwable> foreign = new AtomicReference<>();
             Thread t2 = new Thread(() -> {
-                DBReference helper = null;
                 try {
-                    helper = conn.helper();
-                    helperReady.countDown();
-                    hammer(helper, 1000, failures, first);
+                    conn.execute("insert into bt_shared (id) values (2)");
+                    foreign.set(new IllegalStateException("foreign thread insert succeeded"));
                 } catch (Throwable t) {
-                    failures.incrementAndGet();
-                    first.compareAndSet(null, t);
-                } finally {
-                    helperReady.countDown();
-                    if (helper != null) {
-                        try {
-                            helper.close();
-                        } catch (Throwable t) {
-                            failures.incrementAndGet();
-                            first.compareAndSet(null, t);
-                        }
-                    }
+                    foreign.set(t);
                 }
             }, "bt-sh-2");
             t2.start();
-            if (!helperReady.await(20, TimeUnit.SECONDS)) {
-                System.out.println("BATTLE CHILD shared helper timed out");
-                System.exit(4);
-            }
-            Thread t1 = new Thread(() -> hammer(conn, 0, failures, first), "bt-sh-1");
-            t1.start();
-            t1.join(20_000);
             t2.join(20_000);
-            if (t1.isAlive() || t2.isAlive()) {
+            if (t2.isAlive()) {
                 System.out.println("BATTLE CHILD shared hung");
                 System.exit(4);
             }
+            Throwable thrown = foreign.get();
+            String msg = text(thrown);
+            System.out.println("BATTLE CHILD shared foreign=" + msg);
+            if (thrown == null || !msg.contains("owned by a different thread")) {
+                System.exit(3);
+            }
             int rows = count(conn, "select id from bt_shared");
-            System.out.println("BATTLE CHILD shared rows=" + rows + " failures=" + failures.get()
-                    + " first=" + text(first.get()));
-            if (failures.get() > 0) {
-                System.exit(2);
+            System.out.println("BATTLE CHILD shared rows=" + rows);
+            if (rows != 1) {
+                System.exit(3);
             }
-            if (rows != 40) {
-                throw new IllegalStateException("expected 40 rows, got " + rows);
-            }
-        }
-    }
-
-    private static void hammer(DBReference conn, int base, AtomicInteger failures, AtomicReference<Throwable> first) {
-        try {
-            for (int i = 0; i < 20; i++) {
-                try (Statement s = conn.statement("insert into bt_shared (id, note) values ($id, $note)")) {
-                    s.linkInput("id", Integer.class).set(base + i);
-                    s.linkInput("note", String.class).set("n" + (base + i));
-                    s.execute();
-                }
-            }
-        } catch (Throwable t) {
-            failures.incrementAndGet();
-            first.compareAndSet(null, t);
         }
     }
 
