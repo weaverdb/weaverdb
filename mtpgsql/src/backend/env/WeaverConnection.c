@@ -703,9 +703,7 @@ WExec(OpaquePreparedStatement plan) {
          * TBLOCK_AUTO becomes TBLOCK_ABORT. Roll that transaction back
          * now, before query cleanup, so a failed later command undoes
          * earlier commands in the same statement. An explicit user
-         * transaction is left TBLOCK_ABORTONLY. A cancel of an autocommit
-         * statement clears that stage afterward so the connection can
-         * run another statement.
+         * transaction is left TBLOCK_ABORTONLY until the user ends it.
          */
         if (xactAbortStarted == 0 && !WeaverIsPanicked()
             && GetTransactionInfo()->CurrentTransactionState->blockState == TBLOCK_ABORT
@@ -714,6 +712,13 @@ WExec(OpaquePreparedStatement plan) {
             AbortTransaction();
             AbandonTransactionBlock();
         }
+        /*
+         * The autocommit transaction is gone. Drop the abort-only stage
+         * so the next statement can run. TBLOCK_ABORTONLY stays put.
+         */
+        if (!WeaverIsPanicked()
+            && GetTransactionInfo()->CurrentTransactionState->blockState == TBLOCK_DEFAULT)
+            connection->stage = TRAN_INVALID;
         WHandleError(connection, err);
         if (!WeaverIsPanicked()) {
             WResetQuery(connection, true);

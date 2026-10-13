@@ -702,10 +702,6 @@ public final class BattleChildMain {
             }
         }
         /*
-         * A failed autocommit statement leaves the connection abort-only.
-         * That is a separate scenario. Defaults, truncate, and vacuum run
-         * on a new connection, as the duplicate-key check already does.
-         *
          * CREATE TABLE ... PRIMARY KEY is the table plus an index build in
          * one transaction. A conflicting index name fails the index step
          * and must roll the table back with it.
