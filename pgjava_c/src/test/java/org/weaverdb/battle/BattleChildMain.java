@@ -53,6 +53,7 @@ public final class BattleChildMain {
                 case "autocommit-error" -> autocommitError(mode, datadir);
                 case "multipage" -> multipage(mode, datadir);
                 case "vacuum-group" -> vacuumGroup(mode, datadir);
+                case "prefetch-drop" -> prefetchDrop(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -750,6 +751,40 @@ public final class BattleChildMain {
             conn.execute("vacuum bt_pk");
             System.out.println("BATTLE CHILD constraints ok");
         }
+    }
+
+    /**
+     * Two inits in one process used to multiply the xid prefetch
+     * (8 → 8192 → 8388608) and persist that high-water. The next boot's
+     * first commit, here a DROP INDEX, then read pg_log past EOF, DBWriter
+     * FATAL'd, and shutdown joined SyncWriter forever.
+     */
+    private static void prefetchDrop(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_prefetch (id int4)");
+            conn.execute("create index bt_prefetch_hash on bt_prefetch using hash (id)");
+            conn.execute("insert into bt_prefetch (id) values (1)");
+        }
+        shutdown(mode);
+        boot(mode, datadir);
+        try (DBReference conn = open()) {
+            conn.execute("insert into bt_prefetch (id) values (2)");
+        }
+        shutdown(mode);
+        boot(mode, datadir);
+        try (DBReference conn = open()) {
+            conn.execute("drop index bt_prefetch_hash");
+            conn.execute("insert into bt_prefetch (id) values (3)");
+            int n = count(conn, "select id from bt_prefetch");
+            System.out.println("BATTLE CHILD prefetch-drop rows=" + n);
+            if (n != 3) {
+                throw new IllegalStateException("rows=" + n);
+            }
+        }
+        shutdown(mode);
+        System.out.println("BATTLE CHILD prefetch-drop ok");
     }
 
     private static void boot(String mode, String datadir) throws Exception {

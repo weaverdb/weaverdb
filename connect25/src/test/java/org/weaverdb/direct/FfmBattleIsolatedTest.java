@@ -107,6 +107,16 @@ public class FfmBattleIsolatedTest {
     }
 
     @Test
+    public void hashDropAfterReinitDoesNotReadPastLog() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "prefetch-drop", 90);
+        System.out.println(result.output);
+        Assertions.assertNotEquals(4, result.code, "shutdown hung after drop index\n" + result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("prefetch-drop ok"), result.output);
+        Assertions.assertTrue(result.output.contains("prefetch-drop rows=3"), result.output);
+    }
+
+    @Test
     public void abortWithoutBeginDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("ffm", "abort-idle", 60);
         System.out.println(result.output);

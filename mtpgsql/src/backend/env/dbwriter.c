@@ -1558,10 +1558,28 @@ static WriteGroup GetNextTarget(WriteGroup last) {
     return cart;
 }
 
+/*
+ * SyncWriter blocks on sync_group->broadcaster until the group is WAITING
+ * or DEAD. The normal DBWriter exit marks it DEAD. A FATAL pthread_exits
+ * from WeaverPanicShutdown and skips that mark, so ShutdownDBWriter's join
+ * of SyncWriter waits forever.
+ */
+static void
+WakeSyncWriterForShutdown(void)
+{
+    if (sync_group == NULL)
+        return;
+    pthread_mutex_lock(&sync_group->checkpoint);
+    stopped = true;
+    sync_group->currstate = DEAD;
+    pthread_cond_broadcast(&sync_group->broadcaster);
+    pthread_mutex_unlock(&sync_group->checkpoint);
+}
+
 void
 PanicStopDBWriter(void)
 {
-    stopped = true;
+    WakeSyncWriterForShutdown();
 }
 
 void ShutdownDBWriter(void) {
@@ -1580,10 +1598,14 @@ void ShutdownDBWriter(void) {
     
     UnlockWriteGroup(cart);
     
-    /* now join all DBWriter threads  */
+    /* now join all DBWriter threads. DBWriter is created last and joined
+     * first. If it died in FATAL it never marked the sync group DEAD, so
+     * wake SyncWriter before joining it. */
     for (writercount -= 1; writercount >= 0; writercount--) {
         void           *ret;
         pthread_join(writerid[writercount], &ret);
+        if (writercount > 0)
+            WakeSyncWriterForShutdown();
     }
     /* now destroy all the write groups  */
     {
