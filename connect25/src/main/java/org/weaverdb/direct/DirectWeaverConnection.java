@@ -372,11 +372,7 @@ class DirectWeaverConnection implements DBReference {
     
     @Override
     public long transaction() {
-        if (transactionId == 0) {
-            return getTransactionId();
-        } else {
-            return transactionId;
-        }
+        return transactionId;
     }
     
     private MemorySegment grabConnection(String name, String password, String connect) throws ExecutionException {
@@ -514,14 +510,6 @@ class DirectWeaverConnection implements DBReference {
             throw ee;
         } catch (Throwable t) {
             throw new ExecutionException(t);
-        }
-    }
-
-    private long getTransactionId() {
-        try {
-            return (long) WGetTransactionId.invokeExact(nativePointer);
-        } catch (Throwable e) {
-            return 0;
         }
     }
 
