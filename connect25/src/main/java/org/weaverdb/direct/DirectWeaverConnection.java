@@ -459,15 +459,21 @@ class DirectWeaverConnection implements DBReference {
         }
     }
 
+    /**
+     * {@code WBegin} returns an error code. Zero means the transaction
+     * started. The id comes from {@code WGetTransactionId}, as JNI does.
+     */
     private long beginTransaction() throws ExecutionException {
         try {
-            long id = (long) WBegin.invokeExact(nativePointer, 0L);
-            if (id == 0) {
-                handleError();
+            long err = (long) WBegin.invokeExact(nativePointer, 0L);
+            if (err != 0) {
+                handleError(err);
             }
-            return id;
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+            return (long) WGetTransactionId.invokeExact(nativePointer);
+        } catch (ExecutionException ee) {
+            throw ee;
+        } catch (Throwable t) {
+            throw new ExecutionException(t);
         }
     }
 

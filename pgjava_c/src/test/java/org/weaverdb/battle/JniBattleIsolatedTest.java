@@ -136,6 +136,16 @@ public class JniBattleIsolatedTest {
     }
 
     @Test
+    public void beginReturnsTransactionId() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "begin-id", 60);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("begin rows=1"), result.output);
+        Assertions.assertTrue(result.output.contains("begin ok"), result.output);
+        Assertions.assertFalse(result.output.contains("code 0"), result.output);
+    }
+
+    @Test
     public void abortWithoutBeginDoesNotCrash() throws Exception {
         BattleScenarios.ChildResult result = BattleScenarios.launchChild("jni", "abort-idle", 60);
         System.out.println(result.output);

@@ -56,6 +56,7 @@ public final class BattleChildMain {
                 case "prefetch-drop" -> prefetchDrop(mode, datadir);
                 case "freespace-extend" -> freespaceExtend(mode, datadir);
                 case "concurrent-autocommit" -> concurrentAutocommit(mode, datadir);
+                case "begin-id" -> beginId(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -907,6 +908,32 @@ public final class BattleChildMain {
         }
         shutdown(mode);
         System.out.println("BATTLE CHILD concurrent-autocommit ok");
+    }
+
+    /**
+     * begin() must return the transaction id. WBegin's 0 means success, not
+     * a missing id; treating that 0 as failure reports "code 0".
+     */
+    private static void beginId(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_begin (id int4)");
+            long id = conn.begin();
+            System.out.println("BATTLE CHILD begin id=" + id);
+            if (id <= 0) {
+                throw new IllegalStateException("begin id=" + id);
+            }
+            conn.execute("insert into bt_begin (id) values (1)");
+            conn.commit();
+            int n = count(conn, "select id from bt_begin");
+            System.out.println("BATTLE CHILD begin rows=" + n);
+            if (n != 1) {
+                throw new IllegalStateException("rows=" + n);
+            }
+        }
+        shutdown(mode);
+        System.out.println("BATTLE CHILD begin ok");
     }
 
     private static void boot(String mode, String datadir) throws Exception {
