@@ -1040,13 +1040,14 @@ long RegisterBufferWrite(BufferDesc * bufHdr, bool defer, bool release) {
     /*
      * pg_log and pg_variable are left out of the replay log in LogBuffers
      * and SyncBuffers. Their writes are not a CriticalIO unit, so they
-     * do not take the depth check.
+     * do not take the depth check. The warning itself is the writer flush
+     * trace (property trace_index), same as the FLUSH lines in this file.
      */
     bool check_depth = bufHdr->tag.relId.relId != cart->LogId &&
                        bufHdr->tag.relId.relId != cart->VarId;
 
     UnlockWriteGroup(cart);
-    if (check_depth)
+    if (check_depth && TraceBufferFlushEnabled())
         NoteCriticalIODepth(NULL, bufHdr);
     /*
      * it's now safe to give up the shared pin of the caller because we
