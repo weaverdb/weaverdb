@@ -468,7 +468,21 @@ ThreadSleep(LOCKMETHODCTL *lockctl,
                     err =  pthread_cond_timedwait(&self->sem,&lock->protection,&t);
 
                     while ( err != 0 ) {
-                        if ( err == ETIMEDOUT && !CheckForCancel() ) break;
+                        if ( err == ETIMEDOUT && !CheckForCancel() ) {
+                            /*
+                             * Cross-lock cycles (two transactions waiting
+                             * on each other's xid locks) are not visible
+                             * to ThreadEnqueue, which only compares waiters
+                             * on this lock. DeadLockCheck walks the queues.
+                             */
+                            if (DeadLockCheck(self, lock)) {
+                                ThreadDequeue(self);
+                                self->locked = 0;
+                                self->errType = STATUS_ERROR;
+                                lock->waitMask = origMask;
+                            }
+                            break;
+                        }
 
                         ThreadDequeue(self);
                         self->locked = 0;

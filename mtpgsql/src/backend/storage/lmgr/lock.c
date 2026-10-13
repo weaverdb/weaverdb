@@ -1356,8 +1356,30 @@ LockShmemSize(int maxBackends)
  *
  * We have already locked the master lock before being called.
  */
+static bool DeadLockCheckInternal(THREAD *thisProc, LOCK *findlock);
+
+/*
+ * checked_procs in the walker is static. One top-level check at a time.
+ * The walker calls DeadLockCheckInternal directly so it does not relock.
+ */
+static pthread_mutex_t deadlock_serial = PTHREAD_MUTEX_INITIALIZER;
+
 bool
 DeadLockCheck(THREAD *thisProc, LOCK *findlock)
+{
+	bool		found;
+
+	if (thisProc != GetMyThread())
+		return DeadLockCheckInternal(thisProc, findlock);
+
+	pthread_mutex_lock(&deadlock_serial);
+	found = DeadLockCheckInternal(thisProc, findlock);
+	pthread_mutex_unlock(&deadlock_serial);
+	return found;
+}
+
+static bool
+DeadLockCheckInternal(THREAD *thisProc, LOCK *findlock)
 {
 	HOLDER	   *holder = NULL;
 	HOLDER	   *nextHolder = NULL;
@@ -1425,7 +1447,7 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 		 * If we found proc holding findlock and sleeping on some my other
 		 * lock then we have to check does it block me or another waiters.
 		 */
-		if (lock == findlock && !first_run)
+			if (lock == findlock && !first_run)
 		{
 			int			lm;
 
@@ -1469,7 +1491,10 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 				{
 					/* and he blocked by me -> deadlock */
 					if (lockctl->conflictTab[waitProc->waitLockMode] & thread->holdLock)
+					{
+						SHMQueueRelease(lockQueue);
 						return true;
+					}
 					/* we shouldn't look at lockQueue of our blockers */
 					goto nextWaitProc;
 				}
@@ -1503,7 +1528,7 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 			Assert(nprocs < GetMaxBackends());
 			checked_procs[nprocs++] = waitProc;
 
-			if (DeadLockCheck(waitProc, findlock))
+			if (DeadLockCheckInternal(waitProc, findlock))
 			{
 				int			holdLock;
 
@@ -1517,17 +1542,23 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 				}
 				else
 				{
-					/* should we cache holdLock to speed this up? */
+					/* should we cache holdLock to speed this up?
+					 * LockGetMyHoldLocks locks this queue, which this
+					 * walk already holds. */
+					SHMQueueRelease(lockQueue);
 					holdLock = LockGetMyHoldLocks(holder->tag.lock, thisProc);
+					SHMQueueLock(lockQueue);
 					Assert(holdLock != 0);
 				}
 				if (lockctl->conflictTab[waitProc->waitLockMode] & holdLock)
 				{
 					/*
 					 * Last attempt to avoid deadlock: try to wakeup myself.
+					 * LockResolveConflicts locks this queue, so drop it first.
 					 */
 					if (first_run)
 					{
+						SHMQueueRelease(lockQueue);
 						if (LockResolveConflicts(DEFAULT_LOCKMETHOD,
 												 thread->waitLockMode,
 												 (LOCK*)MAKE_PTR(thread->waitLock),
@@ -1541,6 +1572,7 @@ DeadLockCheck(THREAD *thisProc, LOCK *findlock)
 							ThreadWakeup(thread, NO_ERROR);
 							return false;
 						}
+						return true;
 					}
                                         SHMQueueRelease(lockQueue);
 					return true;
