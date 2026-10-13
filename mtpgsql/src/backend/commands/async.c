@@ -318,7 +318,9 @@ Async_Unlisten(char *relname, int pid)
 								 Int32GetDatum(pid),
 								 0, 0);
 	if (lTuple != NULL)
+	{
 		heap_delete(lRel, &lTuple->t_self, NULL, NULL);
+	}
 	heap_close(lRel, AccessExclusiveLock);
 
 	/*
@@ -365,7 +367,9 @@ Async_UnlistenAll()
 	sRel = heap_beginscan(lRel, SnapshotNow, 1, key);
 
 	while (HeapTupleIsValid(lTuple = heap_getnext(sRel)))
+	{
 		heap_delete(lRel, &lTuple->t_self, NULL, NULL);
+	}
 
 	heap_endscan(sRel);
 	heap_close(lRel, AccessExclusiveLock);
@@ -531,8 +535,10 @@ AtCommit_Notify()
 					{
 						rTuple = heap_modifytuple(lTuple, lRel,
 												  value, nulls, repl);
+						if (heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL) != HeapTupleMayBeUpdated)
+							elog(ERROR, "tuple was already updated");
 						BeginCriticalIO();
-						heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL);
+						heap_update_new(lRel, &lTuple->t_self, rTuple);
 						if (RelationGetForm(lRel)->relhasindex)
 						{
 							Relation	idescs[Num_pg_listener_indices];
@@ -799,8 +805,10 @@ ProcessIncomingNotify(void)
 			NotifyMyFrontEnd(relname, sourcePID);
 			/* Rewrite the tuple with 0 in notification column */
 			rTuple = heap_modifytuple(lTuple, lRel, value, nulls, repl);
+			if (heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL) != HeapTupleMayBeUpdated)
+				elog(ERROR, "tuple was already updated");
 			BeginCriticalIO();
-			heap_update(lRel, &lTuple->t_self, rTuple, NULL,NULL);
+			heap_update_new(lRel, &lTuple->t_self, rTuple);
 			if (RelationGetForm(lRel)->relhasindex)
 			{
 				Relation	idescs[Num_pg_listener_indices];

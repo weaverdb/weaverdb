@@ -1068,8 +1068,10 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
                     newtup = heap_modifytuple(&tuple,erel,values,nulls,replace);
                     ReleaseBuffer(erel,release);
 
+                    if (heap_update(erel,&newtup->t_self,newtup,NULL,NULL) != HeapTupleMayBeUpdated)
+                    	elog(ERROR, "tuple was already updated");
                     BeginCriticalIO();
-                    heap_update(erel,&newtup->t_self,newtup,NULL,NULL);
+                    heap_update_new(erel, &newtup->t_self, newtup);
                 }
                 set = true;
                 break;

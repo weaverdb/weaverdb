@@ -213,10 +213,17 @@ top:;
 		if (TransactionIdIsValid(xwait))
 		{
                         _bt_relbuf(rel, buf);
-			/* Have to wait for the other guy ... */
-			XactLockTableWait(xwait);
-
                         _bt_freestack(stack);
+			/*
+			 * The heap page is already in this section. Waiting here
+			 * would hold CriticalIO across XactLockTableWait. The
+			 * caller waits before opening the section; a conflict
+			 * that appears after that aborts instead of waiting.
+			 */
+			if (GetCriticalIODepth() != 0)
+				elog(ERROR, "unique index \"%s\" conflicts with an in-progress transaction",
+					 RelationGetRelationName(rel));
+			XactLockTableWait(xwait);
 			/* start over... */
 			goto top;
 		} else if ( ItemPointerIsValid(&other_ht) ) {
@@ -240,6 +247,60 @@ top:;
 	_bt_freeskey(itup_scankey);
 
 	return res;
+}
+
+/*
+ * Wait out in-progress unique conflicts for this key. A committed
+ * conflict is returned in conflict when that pointer is non-NULL.
+ * Must run at CriticalIO depth 0: the real insert refuses to wait
+ * once the heap-and-index section is open.
+ */
+void
+_bt_wait_unique(Relation rel, Datum *datum, char *nulls, Relation heapRel,
+				ItemPointer conflict)
+{
+	IndexTuple	itup;
+	ScanKey		itup_scankey;
+	int			natts = rel->rd_rel->relnatts;
+
+	if (conflict != NULL)
+		ItemPointerSetInvalid(conflict);
+	if (GetCriticalIODepth() != 0)
+		elog(ERROR, "unique-key wait inside CriticalIO on %s",
+			 RelationGetRelationName(rel));
+	if (IsPoolsweep())
+		return;
+
+	itup = index_formtuple(RelationGetDescr(rel), datum, nulls);
+	ItemPointerSetInvalid(&itup->t_tid);
+	itup_scankey = _bt_mkscankey(rel, itup);
+
+	for (;;)
+	{
+		BTStack		stack;
+		Buffer		buf;
+		TransactionId xwait;
+		ItemPointerData other_ht;
+
+		ItemPointerSetInvalid(&other_ht);
+		stack = _bt_search(rel, natts, itup_scankey, &buf, BT_WRITE);
+		LockBuffer(rel, buf, BT_NONE);
+		LockBuffer(rel, buf, BT_WRITE);
+		buf = _bt_moveright(rel, buf, natts, itup_scankey, BT_WRITE);
+		xwait = _bt_check_unique(rel, &other_ht, heapRel, buf, itup_scankey);
+		_bt_relbuf(rel, buf);
+		_bt_freestack(stack);
+		if (!TransactionIdIsValid(xwait))
+		{
+			if (conflict != NULL && ItemPointerIsValid(&other_ht))
+				ItemPointerCopy(&other_ht, conflict);
+			break;
+		}
+		XactLockTableWait(xwait);
+	}
+
+	_bt_freeskey(itup_scankey);
+	pfree(itup);
 }
 
 /*

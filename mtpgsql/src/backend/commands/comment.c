@@ -175,13 +175,17 @@ CreateComments(Oid oid, char *comment)
 		/*** If the comment is blank, call heap_delete, else heap_update ***/
 
 		if ((comment == NULL) || (strlen(comment) == 0))
+		{
 			heap_delete(description, &searchtuple->t_self, NULL, NULL);
+		}
 		else
 		{
 			desctuple = heap_modifytuple(searchtuple, description, values,
 										 nulls, replaces);
+			if (heap_update(description, &searchtuple->t_self, desctuple, NULL, NULL) != HeapTupleMayBeUpdated)
+				elog(ERROR, "tuple was already updated");
 			BeginCriticalIO();
-			heap_update(description, &searchtuple->t_self, desctuple, NULL, NULL);
+			heap_update_new(description, &searchtuple->t_self, desctuple);
 			modified = TRUE;
 		}
 
@@ -259,7 +263,9 @@ DeleteComments(Oid oid)
 	/*** If a previous tuple exists, delete it ***/
 
 	if (HeapTupleIsValid(searchtuple))
+	{
 		heap_delete(description, &searchtuple->t_self, NULL,NULL);
+	}
 
 	/*** Complete the scan, update indices, if necessary ***/
 
