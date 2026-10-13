@@ -118,6 +118,7 @@ typedef struct Environment {
 	Oid			DatabaseId;
 	char* 			UserName;
 	int			UserId;
+	int			DatabaseOwner;	/* pg_database.datdba, 0 if unknown */
 /*  processing mode */
 	ProcessingMode  	Mode;           
 /*  prepkeyset.c   */

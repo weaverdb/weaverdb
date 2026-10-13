@@ -268,6 +268,7 @@ GetRawDatabaseInfo(const char *name, Oid *db_id, char *path)
 			{
 				/* Found it; extract the OID and the database path. */
 				*db_id = tup.t_data->t_oid;
+				GetEnv()->DatabaseOwner = tup_db->datdba;
                                 if (path != NULL) {
                                     strncpy(path, VARDATA(&(tup_db->datpath)),
 						(VARSIZE(&(tup_db->datpath)) - VARHDRSZ));
