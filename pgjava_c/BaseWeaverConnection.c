@@ -147,7 +147,7 @@ JNIEXPORT jlong JNICALL Java_org_weaverdb_base_BaseWeaverConnection_connectSubCo
         ConnMgr mgr = CreateSubConnection(cparent);
 
         if ( mgr == NULL ) {
-            (*env)->ThrowNew(env,Cache->exception,"User not valid");
+            (*env)->ThrowNew(env,Cache->exception,"could not create sub connection");
         } 
         
         return (jlong)mgr;

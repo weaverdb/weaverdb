@@ -178,6 +178,12 @@ ConnMgr
 CreateSubConnection(ConnMgr parent) {
     if (parent == NULL) return NULL;
     OpaqueWConn connection = WCreateSubConnection(parent->theConn);
+    /*
+     * A helper of a helper, or any other refused sub-connection, comes
+     * back NULL. Allocating on that pointer is a SIGSEGV.
+     */
+    if (connection == NULL)
+        return NULL;
     ConnMgr mgr = (WeaverConnectionManager*) WAllocConnectionMemory(connection, sizeof (WeaverConnectionManager));
     pthread_mutex_init(&mgr->control, NULL);
     mgr->refCount = 0;
