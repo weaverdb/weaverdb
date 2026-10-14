@@ -54,6 +54,7 @@
 
 static int                      envcount;
 static pthread_key_t		envkey;
+static bool			envkey_ready = false;
 static CommitType               default_type = SOFT_COMMIT;
 
 static Env*                     *envmap;
@@ -142,7 +143,8 @@ Env* InitSystem(bool  isPrivate) {
         	pthread_mutexattr_setpshared(&process_mutex_attr,PTHREAD_PROCESS_SHARED);
         }
          
-        counter = pthread_key_create(&envkey,NULL);
+        if (pthread_key_create(&envkey, NULL) == 0)
+            envkey_ready = true;
                 
         SetEnv(CreateEnv(NULL));
 	InitVirtualFileSystem();  
@@ -173,7 +175,16 @@ extern Env* GetEnv(void) {
 #else
 	EnvPointer* 		envp;
 	EnvPointer 		env;
-        
+
+        /*
+         * envkey is 0 until InitSystem. pthread key 0 belongs to the JVM,
+         * so a lookup here returns some other thread-local value and
+         * CheckForCancel faults on it. initweaverbackend asks whether the
+         * process is shutting down before InitSystem.
+         */
+        if (!envkey_ready)
+            return NULL;
+
         envp = (EnvPointer*)pthread_getspecific(envkey);
 	if ( envp == NULL ) return NULL;
 	env = *envp;
@@ -694,13 +705,19 @@ IsMultiuser()
 }
 
 bool CheckForCancel() {
-	Env* env = GetEnv();
+	Env* env;
 
         if (WeaverIsPanicked())
             return true;
-        
+
+        /*
+         * Shutdown is process-wide. Do not touch GetEnv first: on a
+         * restart the thread-local env is not current yet, and before
+         * InitSystem the pthread key does not exist.
+         */
         if ( CurrentMode == ShutdownProcessing ) return true;
-	
+
+	env = GetEnv();
         if ( env == NULL ) {
             return false;
         }

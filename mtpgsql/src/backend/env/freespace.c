@@ -380,6 +380,9 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
     int 	space = request;
 
     if (IsBootstrapProcessingMode()) {
+        /* Empty heap: rd_nblocks - 1 wraps. Caller must extend. */
+        if (rel->rd_nblocks == 0)
+            return P_NEW;
         return rel->rd_nblocks - 1;
     }
 
