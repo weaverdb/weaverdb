@@ -89,7 +89,6 @@ typedef struct _PrivateMemStruct
 } PrivateMem;
 
 static PrivateMem IpcPrivateMem[16];
-static int	memid = 0;
 
 SLock*		SLockArray;
 
@@ -98,24 +97,43 @@ static int
 PrivateMemoryCreate(IpcMemoryKey memKey,
 					uint32 size)
 {
+	int			slot;
 
 	UsePrivateMemory = 1;
 
-	IpcPrivateMem[memid].id = memid;
-	IpcPrivateMem[memid].memptr = os_malloc(size);
-	if (IpcPrivateMem[memid].memptr == NULL) {
+	/*
+	 * Embedded shutdown frees these slots. Reuse a free one. The old
+	 * counter never moved backward, so the sixth initialize in one
+	 * process walked off this 16-entry table.
+	 */
+	for (slot = 0; slot < 16; slot++)
+	{
+		if (IpcPrivateMem[slot].memptr == NULL)
+			break;
+	}
+	if (slot >= 16)
+	{
+		elog(FATAL, "PrivateMemoryCreate: no free private memory slot");
+		return -1;
+	}
+
+	IpcPrivateMem[slot].id = slot;
+	IpcPrivateMem[slot].memptr = os_malloc(size);
+	if (IpcPrivateMem[slot].memptr == NULL) {
                 GetEnv()->errorcode = 747;
 		elog(ERROR, "PrivateMemoryCreate: not enough memory to malloc");
         }
-	MemSet(IpcPrivateMem[memid].memptr, 0, size);		/* XXX PURIFY */
+	MemSet(IpcPrivateMem[slot].memptr, 0, size);		/* XXX PURIFY */
 
-	return memid++;
+	return slot;
 }
 
 static char *
-PrivateMemoryAttach(IpcMemoryId memid)
+PrivateMemoryAttach(IpcMemoryId id)
 {
-	return IpcPrivateMem[memid].memptr;
+	if (id < 0 || id >= 16)
+		return NULL;
+	return IpcPrivateMem[id].memptr;
 }
 
 
@@ -269,7 +287,11 @@ IPCPrivateMemoryKill(int status,
 {
 	if (UsePrivateMemory)
 	{
-		/* free ( IpcPrivateMem[shmId].memptr ); */
+		if (shmId >= 0 && shmId < 16 && IpcPrivateMem[shmId].memptr != NULL)
+		{
+			os_free(IpcPrivateMem[shmId].memptr);
+			IpcPrivateMem[shmId].memptr = NULL;
+		}
 	}
 	else
 	{
