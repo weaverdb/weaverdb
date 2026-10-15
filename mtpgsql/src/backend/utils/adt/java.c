@@ -17,6 +17,7 @@
 #include <strings.h>
 
 #include "postgres.h"
+#include "env/env.h"
 
 #include "utils/builtins.h"
 #include "utils/java.h"
@@ -340,6 +341,7 @@ InvokeJavaViaFFMFromDatums(JavaFunction def, int nargs, Datum *args, bool *isNul
 
     BuildArgBlockFromDatums(def, nargs, args, &argBlock, &argLen);
 
+    JavaNoteRunningThread();
     rc = CallJavaInvokerWithGrowableResult(
         fn,
         def->className ? def->className : "",
@@ -351,6 +353,10 @@ InvokeJavaViaFFMFromDatums(JavaFunction def, int nargs, Datum *args, bool *isNul
     );
 
     pfree(argBlock);
+    JavaClearRunningThread();
+
+    if (CheckForCancel())
+        elog(ERROR, "Query Cancelled");
 
     if (dynamicResult != NULL) {
         result = ParseInvokerResultToDatum(dynamicResult, dynamicResultLen, def->returnType, isNull);
@@ -552,6 +558,8 @@ ParseInvokerResultToDatum(const char *buf, int bufLen, Oid returnType, bool *isN
             }
         case INV_TAG_ERROR:
             {
+                if (CheckForCancel())
+                    elog(ERROR, "Query Cancelled");
                 if (vlen > 0) {
                     char *msg = palloc(vlen + 1);
                     memcpy(msg, buf + offset, vlen);
@@ -607,6 +615,125 @@ GetJavaEnv(JNIEnv** env)
 	}
 	return result;
 
+}
+
+static pthread_mutex_t java_runner_guard = PTHREAD_MUTEX_INITIALIZER;
+
+static JavaVM *
+ActiveJavaVM(void)
+{
+	JavaVM	   *vms[1];
+	jsize		n = 0;
+
+	if (jvm != NULL)
+		return jvm;
+	if (JNI_GetCreatedJavaVMs(vms, 1, &n) == JNI_OK && n > 0)
+		return vms[0];
+	return NULL;
+}
+
+static JNIEnv *
+AttachJava(void)
+{
+	JavaVM	   *vm = ActiveJavaVM();
+	JNIEnv	   *env = NULL;
+	jint		rc;
+
+	if (vm == NULL)
+		return NULL;
+	rc = (*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_8);
+	if (rc == JNI_OK)
+		return env;
+	if (rc == JNI_EDETACHED &&
+		(*vm)->AttachCurrentThread(vm, (void **) &env, NULL) == JNI_OK)
+		return env;
+	return NULL;
+}
+
+void
+JavaNoteRunningThread(void)
+{
+	Env		   *env = GetEnv();
+	JNIEnv	   *jenv;
+	jclass		cls;
+	jmethodID	mid;
+	jobject		local;
+	jobject		global;
+
+	if (env == NULL)
+		return;
+	jenv = AttachJava();
+	if (jenv == NULL)
+		return;
+	cls = (*jenv)->FindClass(jenv, "java/lang/Thread");
+	if (cls == NULL)
+	{
+		(*jenv)->ExceptionClear(jenv);
+		return;
+	}
+	mid = (*jenv)->GetStaticMethodID(jenv, cls, "currentThread", "()Ljava/lang/Thread;");
+	local = (*jenv)->CallStaticObjectMethod(jenv, cls, mid);
+	if ((*jenv)->ExceptionCheck(jenv) || local == NULL)
+	{
+		(*jenv)->ExceptionClear(jenv);
+		return;
+	}
+	global = (*jenv)->NewGlobalRef(jenv, local);
+	(*jenv)->DeleteLocalRef(jenv, local);
+	pthread_mutex_lock(&java_runner_guard);
+	if (env->java_runner != NULL)
+		(*jenv)->DeleteGlobalRef(jenv, (jobject) env->java_runner);
+	env->java_runner = global;
+	pthread_mutex_unlock(&java_runner_guard);
+}
+
+void
+JavaClearRunningThread(void)
+{
+	Env		   *env = GetEnv();
+	JNIEnv	   *jenv;
+	jobject		ref;
+
+	if (env == NULL || env->java_runner == NULL)
+		return;
+	jenv = AttachJava();
+	pthread_mutex_lock(&java_runner_guard);
+	ref = (jobject) env->java_runner;
+	env->java_runner = NULL;
+	pthread_mutex_unlock(&java_runner_guard);
+	if (jenv != NULL && ref != NULL)
+		(*jenv)->DeleteGlobalRef(jenv, ref);
+}
+
+void
+JavaInterruptRunningThread(void *envp)
+{
+	Env		   *env = (Env *) envp;
+	JNIEnv	   *jenv;
+	jobject		runner;
+	jclass		cls;
+	jmethodID	mid;
+
+	if (env == NULL)
+		return;
+	pthread_mutex_lock(&java_runner_guard);
+	runner = (jobject) env->java_runner;
+	pthread_mutex_unlock(&java_runner_guard);
+	if (runner == NULL)
+		return;
+	jenv = AttachJava();
+	if (jenv == NULL)
+		return;
+	cls = (*jenv)->FindClass(jenv, "java/lang/Thread");
+	if (cls == NULL)
+	{
+		(*jenv)->ExceptionClear(jenv);
+		return;
+	}
+	mid = (*jenv)->GetMethodID(jenv, cls, "interrupt", "()V");
+	(*jenv)->CallVoidMethod(jenv, runner, mid);
+	if ((*jenv)->ExceptionCheck(jenv))
+		(*jenv)->ExceptionClear(jenv);
 }
 
 jobject
@@ -739,10 +866,13 @@ javatextout(bytea * target)
 		(*jenv)->PopLocalFrame(jenv, NULL);
 		elog(ERROR, "javatextout: embedded exception occurred");
 	}
+	/*
+	 * GetStringUTFRegion counts Java characters. GetStringUTFLength
+	 * counts modified UTF-8 bytes. A non-ASCII string is longer in bytes.
+	 */
 	length = (*jenv)->GetStringUTFLength(jenv, result);
 	data = palloc(length + 1);
-
-	(*jenv)->GetStringUTFRegion(jenv, result, 0, length, data);
+	(*jenv)->GetStringUTFRegion(jenv, result, 0, (*jenv)->GetStringLength(jenv, result), data);
 	data[length] = 0x00;
 	(*jenv)->PopLocalFrame(jenv, NULL);
 	return data;
@@ -774,11 +904,18 @@ fmgr_javaA(const char* function, int nargs, Oid* types, Datum *args, Oid* return
             jargs[x] = ConvertToJavaArg(def->argTypes[x], args[x]);
         }
 
+        JavaNoteRunningThread();
         rval = CallJavaFunction(def, nargs, jargs);
+        JavaClearRunningThread();
 
 	if ((*jenv)->ExceptionCheck(jenv)) {
+		(*jenv)->ExceptionClear(jenv);
+		if (CheckForCancel())
+			elog(ERROR, "Query Cancelled");
 		elog(ERROR, "fmgr_javaA: embedded exception occurred");
 	}
+	if (CheckForCancel())
+		elog(ERROR, "Query Cancelled");
 	ret_datum = ConvertFromJavaArg(def->returnType, rval, isNull);
 	(*jenv)->PopLocalFrame(jenv, NULL);
 
@@ -810,11 +947,18 @@ fmgr_cached_javaA(JavaFunction jinfo, int nargs, Datum *args, Oid* returnType, b
             jargs[x] = ConvertToJavaArg(jinfo->argTypes[x], args[x]);
         }
 
+        JavaNoteRunningThread();
         rval = CallJavaFunction(jinfo,  nargs, jargs);
+        JavaClearRunningThread();
 
 	if ((*jenv)->ExceptionCheck(jenv)) {
+		(*jenv)->ExceptionClear(jenv);
+		if (CheckForCancel())
+			elog(ERROR, "Query Cancelled");
 		elog(ERROR, "fmgr_cached_javaA: embedded exception occurred");
 	}
+	if (CheckForCancel())
+		elog(ERROR, "Query Cancelled");
 
 	ret_datum = ConvertFromJavaArg(jinfo->returnType, rval,isNull);
 
@@ -840,8 +984,15 @@ ConvertToJavaArg(Oid type, Datum val)
         case TEXTOID:
 	case VARCHAROID:
 		{
-			bytea          *strvar = (bytea *) val;
-                        int            len = VARSIZE(strvar) - VARHDRSZ;
+			bytea          *strvar;
+                        int            len;
+
+			if (val == 0 || DatumGetPointer(val) == NULL) {
+				rval.l = NULL;
+				break;
+			}
+			strvar = (bytea *) val;
+                        len = VARSIZE(strvar) - VARHDRSZ;
 			char           *string = palloc(len + 1);
 			memmove(string, VARDATA(strvar), len);
 			string[len] = 0x00;
@@ -886,11 +1037,24 @@ ConvertFromJavaArg(Oid type, jvalue val, bool *isNull)
             case VARCHAROID:
                     {
                             jstring         strvar = (jstring) val.l;
-                            int             len = (*jenv)->GetStringUTFLength(jenv, strvar);
-                            bytea          *string = palloc(len + VARHDRSZ + 1);
+                            int             len;
+                            bytea          *string;
 
+                            if (strvar == NULL || (*jenv)->IsSameObject(jenv, strvar, NULL)) {
+                                    if (isNull)
+                                            *isNull = true;
+                                    break;
+                            }
+                            /*
+                             * Region length is a character count. The byte
+                             * length is longer when the string is not ASCII.
+                             */
+                            len = (*jenv)->GetStringUTFLength(jenv, strvar);
+                            string = palloc(len + VARHDRSZ + 1);
                             SETVARSIZE(string, len + VARHDRSZ);
-                            (*jenv)->GetStringUTFRegion(jenv, strvar, 0, len, VARDATA(string));
+                            (*jenv)->GetStringUTFRegion(jenv, strvar, 0,
+                                    (*jenv)->GetStringLength(jenv, strvar),
+                                    VARDATA(string));
                             VARDATA(string)[len] = '\0';
                             ret_datum = PointerGetDatum(string);
                             break;

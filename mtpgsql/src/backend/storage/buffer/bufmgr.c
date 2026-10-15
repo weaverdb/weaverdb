@@ -425,7 +425,7 @@ static void BufferPinInvalid(Buffer buf, Oid relid, Oid dbid, char* name) {
  * with no unit; depth above 1 is a nested BeginCriticalIO. Both are coding
  * errors. The stack is recorded so the caller can be found.
  */
-static void
+void
 NoteCriticalIODepth(Relation rel, BufferDesc *bufHdr)
 {
 	static __thread int noting = 0;
@@ -497,7 +497,6 @@ WriteBuffer(Relation rel, Buffer buffer) {
         b/c the Register command locks the buffer on its own
      */
     DirtyBufferIO(bufHdr);
-    NoteCriticalIODepth(rel, bufHdr);
     bool defer = bufenv->pinned_generation >= 0;
     long generation = RegisterBufferWrite(bufHdr, defer, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
     if (defer) {
@@ -620,7 +619,6 @@ WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
      * the write; Register locks the buffer on its own.
      */
     DirtyBufferIO(bufHdr);
-    NoteCriticalIODepth(rel, bufHdr);
     bool defer = env->pinned_generation >= 0;
     generation = RegisterBufferWrite(bufHdr, defer, false);
     if (defer) {

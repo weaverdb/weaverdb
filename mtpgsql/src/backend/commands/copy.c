@@ -21,6 +21,7 @@
 #include "env/env.h"
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "access/nbtree.h"
 #include "catalog/catname.h"
 #include "catalog/index.h"
 #include "catalog/pg_index.h"
@@ -326,7 +327,12 @@ DoCopy(char *relname, bool binary, bool oids, bool from, bool pipe,
 			elog(ERROR, "You cannot change sequence relation %s", relname);
 		if (pipe)
 		{
-                    fp = stdin;
+			/*
+			 * fp NULL selects the frontend pipe. An embedded session has
+			 * that pipe on the connection; a standalone backend still
+			 * uses the process stdin.
+			 */
+			fp = (GetEnv()->pipein != NULL) ? NULL : stdin;
 		}
 		else
 		{
@@ -347,7 +353,12 @@ DoCopy(char *relname, bool binary, bool oids, bool from, bool pipe,
 	{							/* copy from database to file */
 		if (pipe)
 		{
-			fp = stdout;
+			/*
+			 * fp NULL selects the frontend pipe. An embedded session has
+			 * that pipe on the connection; a standalone backend still
+			 * uses the process stdout.
+			 */
+			fp = (GetEnv()->pipeout != NULL) ? NULL : stdout;
 		}
 		else
 		{
@@ -922,6 +933,38 @@ CopyFrom(StringInfo attribute_buf,Relation rel, bool binary, bool oids, FILE *fp
 
 			if (rel->rd_att->constr)
 				ExecConstraints("CopyFrom", rel, tuple, estate);
+
+			if (has_index)
+			{
+				for (i = 0; i < n_indices; i++)
+				{
+					IndexProp	atts;
+
+					if (index_rels[i] == NULL)
+						continue;
+					if (index_rels[i]->rd_rel->relam != BTREE_AM_OID)
+						continue;
+					atts = IndexProperties(RelationGetRelid(index_rels[i]));
+					if (!IndexPropIsUnique(atts))
+						continue;
+					if (indexPred[i] != NULL)
+					{
+#ifndef OMIT_PARTIAL_INDEX
+						ExecStoreTuple(tuple, slot, false);
+						if (!ExecQual((List *) indexPred[i], econtext, false))
+							continue;
+#endif
+					}
+					FormIndexDatum(indexNatts[i],
+								(AttrNumber *) &(pgIndexP[i]->indkey[0]),
+								   tuple,
+								   tupDesc,
+								   idatum,
+								   index_nulls,
+								   finfoP[i]);
+					_bt_wait_unique(index_rels[i], idatum, index_nulls, rel, NULL);
+				}
+			}
 
 			BeginCriticalIO();
 			heap_insert(rel, tuple);

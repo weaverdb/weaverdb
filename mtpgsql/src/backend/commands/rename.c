@@ -164,8 +164,10 @@ renameatt(char *relname,
 	StrNCpy(NameStr(((Form_pg_attribute) GETSTRUCT(oldatttup))->attname),
 			newattname, NAMEDATALEN);
 
+	if (heap_update(attrelation, &oldatttup->t_self, oldatttup, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(attrelation, &oldatttup->t_self, oldatttup, NULL, NULL);
+	heap_update_new(attrelation, &oldatttup->t_self, oldatttup);
 
 	/* keep system catalog indices current */
 	{
@@ -299,8 +301,10 @@ renamerel(const char *oldrelname, const char *newrelname)
 	StrNCpy(NameStr(((Form_pg_class) GETSTRUCT(oldreltup))->relname),
 			newrelname, NAMEDATALEN);
 
+	if (heap_update(relrelation, &oldreltup->t_self, oldreltup, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(relrelation, &oldreltup->t_self, oldreltup, NULL, NULL);
+	heap_update_new(relrelation, &oldreltup->t_self, oldreltup);
 
 	/* keep the system catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, irelations);

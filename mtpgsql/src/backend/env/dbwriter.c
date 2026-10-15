@@ -1037,7 +1037,18 @@ long RegisterBufferWrite(BufferDesc * bufHdr, bool defer, bool release) {
         cart->defers[bufHdr->buf_id] += 1;
     }
 
+    /*
+     * pg_log and pg_variable are left out of the replay log in LogBuffers
+     * and SyncBuffers. Their writes are not a CriticalIO unit, so they
+     * do not take the depth check. The warning itself is the writer flush
+     * trace (property trace_index), same as the FLUSH lines in this file.
+     */
+    bool check_depth = bufHdr->tag.relId.relId != cart->LogId &&
+                       bufHdr->tag.relId.relId != cart->VarId;
+
     UnlockWriteGroup(cart);
+    if (check_depth && TraceBufferFlushEnabled())
+        NoteCriticalIODepth(NULL, bufHdr);
     /*
      * it's now safe to give up the shared pin of the caller because we
      * know we now have ours, this method is only called by the thread
@@ -1558,10 +1569,28 @@ static WriteGroup GetNextTarget(WriteGroup last) {
     return cart;
 }
 
+/*
+ * SyncWriter blocks on sync_group->broadcaster until the group is WAITING
+ * or DEAD. The normal DBWriter exit marks it DEAD. A FATAL pthread_exits
+ * from WeaverPanicShutdown and skips that mark, so ShutdownDBWriter's join
+ * of SyncWriter waits forever.
+ */
+static void
+WakeSyncWriterForShutdown(void)
+{
+    if (sync_group == NULL)
+        return;
+    pthread_mutex_lock(&sync_group->checkpoint);
+    stopped = true;
+    sync_group->currstate = DEAD;
+    pthread_cond_broadcast(&sync_group->broadcaster);
+    pthread_mutex_unlock(&sync_group->checkpoint);
+}
+
 void
 PanicStopDBWriter(void)
 {
-    stopped = true;
+    WakeSyncWriterForShutdown();
 }
 
 void ShutdownDBWriter(void) {
@@ -1580,10 +1609,14 @@ void ShutdownDBWriter(void) {
     
     UnlockWriteGroup(cart);
     
-    /* now join all DBWriter threads  */
+    /* now join all DBWriter threads. DBWriter is created last and joined
+     * first. If it died in FATAL it never marked the sync group DEAD, so
+     * wake SyncWriter before joining it. */
     for (writercount -= 1; writercount >= 0; writercount--) {
         void           *ret;
         pthread_join(writerid[writercount], &ret);
+        if (writercount > 0)
+            WakeSyncWriterForShutdown();
     }
     /* now destroy all the write groups  */
     {
@@ -1596,8 +1629,17 @@ void ShutdownDBWriter(void) {
         DestroyWriteGroup(sync_group);
         
     }
-    /* free id memory */
-    os_free(writerid);
+    /* free id memory. The join loop leaves writercount at -1; a later
+     * DBCreateWriterThread would otherwise realloc the freed pointer. */
+    if (writerid != NULL)
+        os_free(writerid);
+    writerid = NULL;
+    writercount = 0;
+    db_inited = false;
+    sync_group = NULL;
+    log_group = NULL;
+    db_table = NULL;
+    db_cxt = NULL;
 }
 
 bool IsDBWriter() {

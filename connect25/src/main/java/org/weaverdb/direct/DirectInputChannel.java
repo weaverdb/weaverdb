@@ -69,9 +69,12 @@ class DirectInputChannel<T> extends DirectInput<ReadableByteChannel> {
     
     private int transferIn(MemorySegment user, int type, MemorySegment var, int varSize) {
         ReadableByteChannel channel = super.get();
-        
-        if (var == MemorySegment.NULL) {
-            return get() != null ? 1 : -1;  // null check
+        /*
+         * STREAMINGOID probes with a NULL buffer and NULL_CHECK_OP (-16)
+         * before reading chunks. That size is not a buffer length.
+         */
+        if (varSize < 0 || var == null || var.address() == 0) {
+            return channel != null ? 1 : DirectWeaverConnection.NULL_VALUE;
         }
         try (Arena a = Arena.ofConfined()) {
             var = var.reinterpret(varSize, a, null);
@@ -79,7 +82,7 @@ class DirectInputChannel<T> extends DirectInput<ReadableByteChannel> {
             return channel.read(bb);
         } catch (IOException io) {
             return -1;
-        } 
+        }
     }
     
     @Override

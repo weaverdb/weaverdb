@@ -300,8 +300,10 @@ CreateTrigger(CreateTrigStmt *stmt)
 
 	((Form_pg_class) GETSTRUCT(tuple))->reltriggers = found + 1;
 	RelationInvalidateHeapTuple(pgrel, tuple);
+	if (heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL);
+	heap_update_new(pgrel, &tuple->t_self, tuple);
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 	CatalogIndexInsert(ridescs, Num_pg_class_indices, pgrel, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, ridescs);
@@ -379,8 +381,10 @@ DropTrigger(DropTrigStmt *stmt)
 
 	((Form_pg_class) GETSTRUCT(tuple))->reltriggers = found;
 	RelationInvalidateHeapTuple(pgrel, tuple);
+	if (heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(pgrel, &tuple->t_self, tuple, NULL, NULL);
+	heap_update_new(pgrel, &tuple->t_self, tuple);
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 	CatalogIndexInsert(ridescs, Num_pg_class_indices, pgrel, tuple);
 	CatalogCloseIndices(Num_pg_class_indices, ridescs);

@@ -823,8 +823,10 @@ OperatorDef(char *operatorName,
 								   nulls,
 								   replaces);
 
+			if (heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL) != HeapTupleMayBeUpdated)
+				elog(ERROR, "tuple was already updated");
 			BeginCriticalIO();
-			heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
+			heap_update_new(pg_operator_desc, &tup->t_self, tup);
 		}
 		else
 			elog(ERROR, "OperatorDef: no operator %lu", operatorObjectId);
@@ -966,8 +968,10 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 									   nulls,
 									   replaces);
 
+				if (heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL) != HeapTupleMayBeUpdated)
+					elog(ERROR, "tuple was already updated");
 				BeginCriticalIO();
-				heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
+				heap_update_new(pg_operator_desc, &tup->t_self, tup);
 
 				if (RelationGetForm(pg_operator_desc)->relhasindex)
 				{
@@ -1000,8 +1004,10 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 							   nulls,
 							   replaces);
 
+		if (heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL) != HeapTupleMayBeUpdated)
+			elog(ERROR, "tuple was already updated");
 		BeginCriticalIO();
-		heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
+		heap_update_new(pg_operator_desc, &tup->t_self, tup);
 
 		if (RelationGetForm(pg_operator_desc)->relhasindex)
 		{
@@ -1039,8 +1045,10 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 							   nulls,
 							   replaces);
 
+		if (heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL) != HeapTupleMayBeUpdated)
+			elog(ERROR, "tuple was already updated");
 		BeginCriticalIO();
-		heap_update(pg_operator_desc, &tup->t_self, tup, NULL, NULL);
+		heap_update_new(pg_operator_desc, &tup->t_self, tup);
 
 		if (RelationGetForm(pg_operator_desc)->relhasindex)
 		{

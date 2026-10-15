@@ -46,6 +46,7 @@
 #include "env/env.h"
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "access/nbtree.h"
 #include "catalog/catname.h"
 #include "catalog/index.h"
 #include "catalog/pg_index.h"
@@ -1020,6 +1021,94 @@ ExecCloseIndices(RelationInfo *resultRelationInfo)
 	/*
 	 * XXX should free indexInfo array here too.
 	 */
+}
+
+/* ----------------------------------------------------------------
+ *		ExecWaitUniqueIndexes
+ *
+ *		XactLockTableWait for in-progress duplicates of this tuple's
+ *		unique btree keys. Called before CriticalIO opens so the later
+ *		heap write and index writes stay in one section. A primary-key
+ *		conflict tid is stored in pk_conflict when that pointer is set.
+ * ----------------------------------------------------------------
+ */
+void
+ExecWaitUniqueIndexes(TupleTableSlot *slot,
+					  EState *estate,
+					  ItemPointer pk_conflict)
+{
+	HeapTuple	heapTuple;
+	RelationInfo *resultRelationInfo;
+	int			i;
+	int			numIndices;
+	RelationPtr relationDescs;
+	Relation	heapRelation;
+	IndexInfo **indexInfoArray;
+	IndexInfo  *indexInfo;
+	Node	   *predicate;
+	ExprContext *econtext;
+	int			numberOfAttributes;
+	AttrNumber *keyAttributeNumbers;
+	FuncIndexInfoPtr fInfoP;
+	TupleDesc	heapDescriptor;
+	Datum	   *datum;
+	char	   *nulls;
+
+	heapTuple = slot->val;
+	resultRelationInfo = estate->es_result_relation_info;
+	numIndices = resultRelationInfo->ri_NumIndices;
+	relationDescs = resultRelationInfo->ri_IndexRelationDescs;
+	indexInfoArray = resultRelationInfo->ri_IndexRelationInfo;
+	heapRelation = resultRelationInfo->ri_RelationDesc;
+
+	econtext = NULL;
+	for (i = 0; i < numIndices; i++)
+	{
+		ItemPointerData conflict;
+		IndexProp	atts;
+
+		if (relationDescs[i] == NULL)
+			continue;
+		if (relationDescs[i]->rd_rel->relam != BTREE_AM_OID)
+			continue;
+		atts = IndexProperties(RelationGetRelid(relationDescs[i]));
+		if (!IndexPropIsUnique(atts))
+			continue;
+
+		indexInfo = indexInfoArray[i];
+		predicate = indexInfo->ii_Predicate;
+		if (predicate != NULL)
+		{
+			if (econtext == NULL)
+				econtext = makeNode(ExprContext);
+			econtext->ecxt_scantuple = slot;
+			if (!ExecQual((List *) predicate, econtext, false))
+				continue;
+		}
+
+		numberOfAttributes = indexInfo->ii_NumKeyAttributes;
+		keyAttributeNumbers = indexInfo->ii_KeyAttributeNumbers;
+		fInfoP = indexInfo->ii_FuncIndexInfo;
+		datum = (Datum *) palloc(numberOfAttributes * sizeof *datum);
+		nulls = (char *) palloc(numberOfAttributes * sizeof *nulls);
+		heapDescriptor = (TupleDesc) RelationGetDescr(heapRelation);
+		FormIndexDatum(numberOfAttributes,
+					   keyAttributeNumbers,
+					   heapTuple,
+					   heapDescriptor,
+					   datum,
+					   nulls,
+					   fInfoP);
+		ItemPointerSetInvalid(&conflict);
+		_bt_wait_unique(relationDescs[i], datum, nulls, heapRelation, &conflict);
+		if (pk_conflict != NULL && IndexPropIsPrimary(atts) &&
+			ItemPointerIsValid(&conflict))
+			*pk_conflict = conflict;
+		pfree(datum);
+		pfree(nulls);
+	}
+	if (econtext != NULL)
+		pfree(econtext);
 }
 
 /* ----------------------------------------------------------------

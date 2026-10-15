@@ -63,6 +63,13 @@ class BoundOutput<T> extends Bound<T> {
                 case BLOB:
                     return getTypeClass().cast(new java.io.ByteArrayInputStream((byte[]) value));
                 case Character:
+                    if (value instanceof String text) {
+                        if (text.isEmpty()) {
+                            return null;
+                        }
+                        return getTypeClass().cast(text.charAt(0));
+                    }
+                    return getTypeClass().cast(value);
                 case Binary:
                 case String:
                 case Boolean:
@@ -70,11 +77,16 @@ class BoundOutput<T> extends Bound<T> {
                 case Long:
                     return getTypeClass().cast(value);
                 case Date:
-                    if (value instanceof java.time.Instant i) {
-                        return getTypeClass().cast(java.util.Date.from(i));
-                    } else {
-                        return getTypeClass().cast(value);
+                    if (getTypeClass() == java.time.Instant.class) {
+                        java.time.Instant instant = value instanceof java.time.Instant i
+                                ? i
+                                : ((java.util.Date) value).toInstant();
+                        return getTypeClass().cast(instant);
                     }
+                    if (value instanceof java.time.Instant instant) {
+                        return getTypeClass().cast(java.util.Date.from(instant));
+                    }
+                    return getTypeClass().cast(value);
                 case Java:
                     return getTypeClass().cast(JavaConverter.java_out((byte[]) value));
                 case Double:

@@ -60,13 +60,15 @@ class DirectInput<T> {
     
     private int transferIn(MemorySegment user, int type, MemorySegment var, int varSize) {
         try {
+            // Fixed-size writes unbox (Integer.intValue and friends). A null
+            // binding must return NULL_VALUE before that, matching JNI transferin.
+            if (value == null) {
+                return DirectWeaverConnection.NULL_VALUE;
+            }
             // WeaverConnection probes BYTEA/TEXT/etc with NULL + LENGTH_QUERY_OP
             // before allocating the transfer buffer (see PassInValue / ExtractBytes).
             if (varSize == DirectWeaverConnection.LENGTH_QUERY_OP
                     || var.equals(MemorySegment.NULL)) {
-                if (value == null) {
-                    return -1;
-                }
                 if (this.type == TransferType.JAVA) {
                     byte[] serialized = WeaverObjectLoader.java_in(value);
                     return serialized == null ? -1 : serialized.length;

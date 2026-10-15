@@ -380,6 +380,9 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
     int 	space = request;
 
     if (IsBootstrapProcessingMode()) {
+        /* Empty heap: rd_nblocks - 1 wraps. Caller must extend. */
+        if (rel->rd_nblocks == 0)
+            return P_NEW;
         return rel->rd_nblocks - 1;
     }
 
@@ -1068,8 +1071,10 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
                     newtup = heap_modifytuple(&tuple,erel,values,nulls,replace);
                     ReleaseBuffer(erel,release);
 
+                    if (heap_update(erel,&newtup->t_self,newtup,NULL,NULL) != HeapTupleMayBeUpdated)
+                    	elog(ERROR, "tuple was already updated");
                     BeginCriticalIO();
-                    heap_update(erel,&newtup->t_self,newtup,NULL,NULL);
+                    heap_update_new(erel, &newtup->t_self, newtup);
                 }
                 set = true;
                 break;

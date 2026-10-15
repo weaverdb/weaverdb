@@ -364,7 +364,26 @@ SetUserId()
                 GetEnv()->UserId =  ((Form_pg_shadow) GETSTRUCT(userTup))->usesysid;
             }
         } else {
-            GetEnv()->UserId = 0;
+            /*
+             * Anonymous session. pg_shadow has no usesysid 0 unless initdb
+             * was run --anonymous, and a view rewrite looks the relation
+             * owner up. Own new objects as pg_database.datdba when that id
+             * is real. A database created by an anonymous session stores
+             * datdba 0; use template1's owner, the installation superuser.
+             */
+            int owner = GetEnv()->DatabaseOwner;
+
+            if (owner == 0) {
+                Oid templateId = InvalidOid;
+                Oid savedDb = GetEnv()->DatabaseId;
+
+                GetRawDatabaseInfo("template1", &templateId, NULL);
+                if (templateId != InvalidOid)
+                    owner = GetEnv()->DatabaseOwner;
+                GetEnv()->DatabaseOwner = 0;
+                GetEnv()->DatabaseId = savedDb;
+            }
+            GetEnv()->UserId = owner;
         }
 }
 

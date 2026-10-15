@@ -75,7 +75,9 @@ add_library(weaver SHARED empty.c)
 # Darwin ld pulls needed archive members via the export list. ELF linkers do not
 # unless the static archive is wrapped in --whole-archive.
 if (APPLE)
-    target_link_libraries(weaver PRIVATE mtpg)
+    find_package(JNI REQUIRED COMPONENTS JVM)
+    # WCancel -> JavaInterruptRunningThread -> JNI_GetCreatedJavaVMs (java.c).
+    target_link_libraries(weaver PRIVATE mtpg JNI::JVM)
 else()
     target_link_libraries(weaver PRIVATE
         -Wl,--whole-archive mtpg -Wl,--no-whole-archive)
@@ -117,6 +119,9 @@ add_executable(postgres
 )
 
 target_link_libraries(postgres PRIVATE mtpg Threads::Threads m)
+if (APPLE)
+    target_link_libraries(postgres PRIVATE JNI::JVM)
+endif()
 
 add_custom_command(
     TARGET mtpg POST_BUILD

@@ -936,15 +936,25 @@ FileRead(File file, char *buffer, int amount) {
             elog(WARN, "bad read file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
             return -1;
         } else if (blit == 0) {
-            /* EOF  */
-            blit = lseek(target->fd,0,SEEK_END);
-            if ( blit == target->seekPos ) {
-                target->seekPos += blit;
-                return (request - amount);
-            } else {
-                off_t pos = lseek(target->fd,target->seekPos + request - amount,SEEK_SET);
-                blit = 0;
+            /*
+             * EOF. A read past the current end used to seek back to the
+             * same offset and spin. Return the short count unless the
+             * file grew past this offset.
+             */
+            off_t end = lseek(target->fd, 0, SEEK_END);
+            off_t cur = (off_t) target->seekPos + (off_t) (request - amount);
+
+            if (end < 0 || lseek(target->fd, cur, SEEK_SET) < 0) {
+                char* err = strerror(errno);
+                errno = 0;
+                elog(WARN, "bad read file: %s loc: %ld err: %s", target->fileName, target->seekPos, err);
+                return -1;
             }
+            if (end <= cur) {
+                target->seekPos = cur;
+                return (request - amount);
+            }
+            continue;
         }
         amount -= blit;
         buffer += blit;

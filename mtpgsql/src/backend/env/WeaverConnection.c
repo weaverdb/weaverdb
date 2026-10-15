@@ -58,6 +58,7 @@
 #include "utils/temprel.h"
 #include "parser/parse_coerce.h"
 #include "parser/parserinfo.h"
+#include "utils/java.h"
 
 typedef enum {
     TRANSACTION_MEMORY,
@@ -76,6 +77,10 @@ static void* AllocMemory(WConn connection, mem_type type, size_t size);
 static int ExpandSlots(PreparedPlan* connection,TransferType type);
 static short CheckThreadContext(WConn);
 static PreparedPlan* ClearPlan(PreparedPlan* plan);
+static void FinishCancelledStatement(WConn connection);
+
+static __thread int cancelCleanup;
+static __thread int cancelAbortStarted;
 
 static SectionId   connection_section_id = SECTIONID("CONN");
 
@@ -89,6 +94,9 @@ static SectionId   connection_section_id = SECTIONID("CONN");
     \
     err = setjmp(target->env->errorContext);\
     if (err != 0) {\
+        if (target->env->cancelled) \
+            cancelCleanup = 1; \
+        JavaClearRunningThread(); \
         target->env->canJump = false;\
         strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);\
         target->stage = TRAN_ABORTONLY;\
@@ -100,6 +108,8 @@ static SectionId   connection_section_id = SECTIONID("CONN");
         if (!WeaverIsPanicked()) { \
             WResetQuery(connection,true); \
         } \
+        if (cancelCleanup && !WeaverIsPanicked()) \
+            FinishCancelledStatement(target); \
     } else {\
         target->CDA.rc = 0;\
         if (usingTransaction) { \
@@ -234,6 +244,7 @@ WCreateConnection(const char *tName, const char *pass, const char *conn) {
         SetUserId();
         pthread_mutex_init(&connection->child_lock, NULL);
         connection->parent = NULL;
+        connection->thread_owner = pthread_self();
     } else {
         connection->validFlag = 0;
         strncpy(connection->env->state, "DISCONNECTED", 39);
@@ -269,6 +280,8 @@ WCreateSubConnection(OpaqueWConn parent) {
         WHandleError(parent, sqlError);
         return connection;
     } else {
+        /* Own sub-connection: not cancelled just because the parent is idle. */
+        env->independent = true;
         SetEnv(env);
         MemoryContextInit();
     }
@@ -278,6 +291,16 @@ WCreateSubConnection(OpaqueWConn parent) {
 
     
     connection->env = env;
+    connection->thread_owner = pthread_self();
+    connection->transaction_owner = 0;
+    connection->plan = NULL;
+    connection->inselect = NULL;
+    connection->memory = AllocSetContextCreate(GetEnvMemoryContext(),
+						    "Connection",
+						    ALLOCSET_DEFAULT_MINSIZE,
+						  ALLOCSET_DEFAULT_INITSIZE,
+						  ALLOCSET_DEFAULT_MAXSIZE);
+    pthread_mutex_init(&connection->child_lock, NULL);
     SetProcessingMode(InitProcessing);
 
     connection->env->DatabaseId = parent->env->DatabaseId;
@@ -612,6 +635,30 @@ WeaverFetchNextSlot(PreparedPlan *plan)
 	}
 }
 
+/*
+ * Autocommit cancel rolls the statement's transaction back and leaves
+ * the connection usable. An explicit transaction stays abort-only.
+ * cancelAbortStarted survives a longjmp out of AbortTransaction.
+ */
+static void
+FinishCancelledStatement(WConn connection)
+{
+    TransactionState s = GetTransactionInfo()->CurrentTransactionState;
+
+    if (cancelAbortStarted == 0
+        && s->blockState == TBLOCK_ABORT
+        && CurrentXactInProgress()) {
+        cancelAbortStarted = 1;
+        AbortTransaction();
+        AbandonTransactionBlock();
+    }
+    s = GetTransactionInfo()->CurrentTransactionState;
+    if (s->blockState == TBLOCK_DEFAULT)
+        connection->stage = TRAN_INVALID;
+    cancelCleanup = 0;
+    cancelAbortStarted = 0;
+}
+
 long
 WExec(OpaquePreparedStatement plan) {
     WConn connection = SETUP(plan->owner);
@@ -631,9 +678,55 @@ WExec(OpaquePreparedStatement plan) {
 
     if (CheckThreadContext(connection)) {
         return GETERROR(connection);
-    }  
-    
-    READY(connection, err, false);
+    }
+
+    /*
+     * Local setjmp, same shape as READY(connection, err, false). The
+     * error path has to abort an autocommit transaction that this
+     * statement started, which READY does not do.
+     */
+    volatile int xactAbortStarted = 0;
+
+    SetEnv(connection->env);
+    connection->env->canJump = true;
+
+    err = setjmp(connection->env->errorContext);
+    if (err != 0) {
+        if (connection->env->cancelled)
+            cancelCleanup = 1;
+        JavaClearRunningThread();
+        connection->env->canJump = false;
+        strncpy(connection->env->state, WeaverIsPanicked() ? "PANIC" : "ABORTONLY", 39);
+        connection->stage = TRAN_ABORTONLY;
+        SetAbortOnly();
+        /*
+         * TBLOCK_AUTO becomes TBLOCK_ABORT. Roll that transaction back
+         * now, before query cleanup, so a failed later command undoes
+         * earlier commands in the same statement. An explicit user
+         * transaction is left TBLOCK_ABORTONLY until the user ends it.
+         */
+        if (xactAbortStarted == 0 && !WeaverIsPanicked()
+            && GetTransactionInfo()->CurrentTransactionState->blockState == TBLOCK_ABORT
+            && CurrentXactInProgress()) {
+            xactAbortStarted = 1;
+            AbortTransaction();
+            AbandonTransactionBlock();
+        }
+        /*
+         * The autocommit transaction is gone. Drop the abort-only stage
+         * so the next statement can run. TBLOCK_ABORTONLY stays put.
+         */
+        if (!WeaverIsPanicked()
+            && GetTransactionInfo()->CurrentTransactionState->blockState == TBLOCK_DEFAULT)
+            connection->stage = TRAN_INVALID;
+        WHandleError(connection, err);
+        if (!WeaverIsPanicked()) {
+            WResetQuery(connection, true);
+        }
+        if (cancelCleanup && !WeaverIsPanicked())
+            FinishCancelledStatement(connection);
+    } else {
+        connection->CDA.rc = 0;
 
     if (connection->inselect != NULL) {
         WResetExecutor(connection->inselect);
@@ -668,12 +761,6 @@ WExec(OpaquePreparedStatement plan) {
         if (querytree->commandType == CMD_UTILITY) {
             ProcessUtility(querytree->utilityStmt, None);
             plan->processed += 1;  // one util op processed
-            CommitTransactionCommand();
-            needsCommit = false;
-            /*
-             * increment after any utility if there are
-             * more subqueries to execute
-             */
         } else {
             plan->state = CreateExecutorState();
             plan->stage = STMT_EXEC;
@@ -741,11 +828,21 @@ WExec(OpaquePreparedStatement plan) {
         }
 
         /*
-         * Increment Command Counter so we see everything
-         * that happened in this transaction to here
+         * One transaction covers every command in the statement.
+         * Later commands have to see catalog rows from earlier ones.
+         * DML already committed inside WResetExecutor, so skip the
+         * counter once that transaction is gone. Commit once, after
+         * the list, when this statement still owns the transaction.
          */
+        if (trackquery != NULL && CurrentXactInProgress())
+            CommandCounterIncrement();
     }
-    RELEASE(connection, needsCommit);
+        if (needsCommit)
+            CommitTransactionCommand();
+    }
+    if (connection->env)
+        connection->env->canJump = false;
+    SetEnv(NULL);
     return err;
 }
 
@@ -1032,7 +1129,13 @@ WCancel(OpaqueWConn conn) {
     WConn connection = (WConn) conn;
     int sqlError = 0;
 
+    /*
+     * Callable from another thread. The owner is inside the statement
+     * and holds the env; this only raises the flag and interrupts a
+     * LANGUAGE java call blocked on that env.
+     */
     connection->env->cancelled = true;
+    JavaInterruptRunningThread(connection->env);
 
     return sqlError;
 }
@@ -1551,33 +1654,40 @@ TransferExecArgs(PreparedPlan* plan) {
                 case CHAROID:
                 case BOOLOID: {
                     char value;
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,1);
                     paramLI->byval = true;
-                    if (paramLI->length > 0) {
+                    /* length is Size (unsigned); NULL_VALUE (-1) must not compare > 0. */
+                    if (len > 0) {
+                        paramLI->length = len;
                         paramLI->value = CharGetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
                 }
                 case INT4OID: {
                     int32 value;
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, &value,4);
                     paramLI->byval = true;
-                    if (paramLI->length > 0) {
+                    if (len > 0) {
+                        paramLI->length = len;
                         paramLI->value = Int32GetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
                 }
                 case FLOAT4OID:{
                     int* value = palloc(4);
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,4);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,4);
                     paramLI->byval = false;
-                    if (paramLI->length > 0) {
+                    if (len > 0) {
+                        paramLI->length = len;
                         paramLI->value = PointerGetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
@@ -1586,11 +1696,13 @@ TransferExecArgs(PreparedPlan* plan) {
                 case FLOAT8OID:
                 case INT8OID: {
                     long* value = palloc(8);
-                    paramLI->length = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
+                    int len = plan->slot[k].transfer(plan->slot[k].userargs, plan->slot[k].varType, value,8);
                     paramLI->byval = false;
-                    if (paramLI->length > 0) {
+                    if (len > 0) {
+                        paramLI->length = len;
                         paramLI->value = PointerGetDatum(value);
                     } else {
+                        paramLI->length = 0;
                         paramLI->isnull = true;
                     }
                     break;
@@ -1699,6 +1811,16 @@ ParsePlan(PreparedPlan* plan) {
 
 short CheckThreadContext(WConn connection) {
     long err;
+    /*
+     * The opening thread owns the connection for its whole life.
+     * Another thread has to call helper() and use that sub-connection.
+     */
+    if (connection->thread_owner != 0
+        && !pthread_equal(connection->thread_owner, pthread_self())) {
+        err = 454;
+        SetError(connection, err, "CONTEXT", "connection is owned by a different thread");
+        return 1;
+    }
     if (connection->transaction_owner == 0) {
         return 0;
     } else if (!pthread_equal(connection->transaction_owner, pthread_self())) {

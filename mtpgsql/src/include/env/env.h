@@ -118,6 +118,7 @@ typedef struct Environment {
 	Oid			DatabaseId;
 	char* 			UserName;
 	int			UserId;
+	int			DatabaseOwner;	/* pg_database.datdba, 0 if unknown */
 /*  processing mode */
 	ProcessingMode  	Mode;           
 /*  prepkeyset.c   */
@@ -187,6 +188,13 @@ typedef struct Environment {
 #endif
     HTAB*   			global_hash;
     EnvPointer                  parent;
+    /*
+     * Set for a helper sub-connection. DOL and parallel workers leave this
+     * false so they stop when the leader leaves its transaction.
+     */
+    bool                        independent;
+    /* JNI global ref of the Java thread inside a LANGUAGE java call. */
+    void*                       java_runner;
 } Env;   
 
 typedef struct commbuffer {

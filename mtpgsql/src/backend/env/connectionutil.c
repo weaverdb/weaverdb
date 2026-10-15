@@ -235,6 +235,9 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         
 	gettimeofday(&timer,NULL);	
 
+        if (IsShutdownProcessingMode())
+            SetProcessingMode(InitProcessing);
+
 	env = InitSystem(isPrivate);	
         
 	if ( output != NULL && strlen(output) == 0 ) {
@@ -598,7 +601,14 @@ wrapupweaverbackend()
 /*  not part of the inval message queue  */	
 /*	CallableCleanupInvalidationState();    */
 	SetEnv(env);
-        
+
+        /*
+         * JNI already stopped sweeps in prepareforshutdown. FFM calls
+         * wrapup directly, and a sweep still running faults in
+         * MemoryContextGetEnv once this env is destroyed.
+         */
+        PoolsweepDestroy();
+
 	ShutdownDBWriter();
 
 	RelationCacheShutdown();  

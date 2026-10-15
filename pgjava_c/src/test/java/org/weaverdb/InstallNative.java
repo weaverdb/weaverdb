@@ -13,6 +13,7 @@
 package org.weaverdb;
 
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -52,7 +53,13 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             b.inheritIO().start().waitFor();
 
             b = new ProcessBuilder(moduleDir.resolve("build/mtpg/bin/initdb").toString(), "-D", dbDir);
-            b.inheritIO().start().waitFor();
+            b.redirectErrorStream(true);
+            Process initdb = b.start();
+            String initOut = new String(initdb.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            int initRc = initdb.waitFor();
+            if (initRc != 0) {
+                throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
+            }
 
             Properties prop = new Properties();
             prop.setProperty("datadir", dbDir);
@@ -61,6 +68,8 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             prop.setProperty("disable_crc", "TRUE");
         prop.setProperty("index_corruption", "IGNORE");
         prop.setProperty("heap_corruption", "IGNORE");
+            /* Test-only. Production DBWriter sync wait stays 5000ms. */
+            prop.setProperty("synctimeout", "1000");
             WeaverInitializer.initialize(prop);
 
             try (DBReference conn = DBReferenceManager.connect("template1");

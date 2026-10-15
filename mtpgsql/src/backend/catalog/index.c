@@ -924,7 +924,11 @@ UpdateIndexPredicate(Oid indexoid, Node *oldPred, Node *predicate)
 
 	newtup = heap_modifytuple(tuple, pg_index, values, nulls, replace);
 
-	heap_update(pg_index, &newtup->t_self, newtup, NULL, NULL);
+	if (heap_update(pg_index, &newtup->t_self, newtup, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
+	BeginCriticalIO();
+	heap_update_new(pg_index, &newtup->t_self, newtup);
+	EndCriticalIO();
 
 	heap_freetuple(newtup);
 	heap_close(pg_index, RowExclusiveLock);
@@ -1527,7 +1531,9 @@ setRelhasindexInplace(Oid relid, bool hasindex, bool immediate)
 			ImmediateInvalidateSharedHeapTuple(pg_class, tuple);
 		rd_rel = (Form_pg_class) GETSTRUCT(tuple);
 		rd_rel->relhasindex = hasindex;
+		BeginCriticalIO();
 		WriteNoReleaseBuffer(pg_class_scan->rs_rd,pg_class_scan->rs_cbuf);
+		EndCriticalIO();
 	}
 	else
 	{
@@ -1539,7 +1545,10 @@ setRelhasindexInplace(Oid relid, bool hasindex, bool immediate)
 		ImmediateInvalidateSharedHeapTuple(pg_class, tuple);
 		rd_rel = (Form_pg_class) GETSTRUCT(&htup);
 		rd_rel->relhasindex = hasindex;
+		/* The tuple is already in hand. This section only dirties it. */
+		BeginCriticalIO();
 		WriteBuffer(pg_class, buffer);
+		EndCriticalIO();
 	}
 
 	if (!pg_class_scan)
@@ -1709,8 +1718,10 @@ UpdateStats(Oid relid, long reltuples)
 		replace[Anum_pg_class_reltuples - 1] = 'r';
 		values[Anum_pg_class_reltuples - 1] = LongGetDatum(reltuples);
 		newtup = heap_modifytuple(tuple, pg_class, values, nulls, replace);
+		if (heap_update(pg_class, &tuple->t_self, newtup, NULL, NULL) != HeapTupleMayBeUpdated)
+			elog(ERROR, "tuple was already updated");
 		BeginCriticalIO();
-		heap_update(pg_class, &tuple->t_self, newtup, NULL, NULL);
+		heap_update_new(pg_class, &tuple->t_self, newtup);
 		if (!IsIgnoringSystemIndexes())
 		{
 			CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, idescs);

@@ -151,6 +151,8 @@ PG_EXTERN Form_pg_attribute ExecGetTypeInfo(Relation relDesc);
 PG_EXTERN void ExecOpenIndices(Oid resultRelationOid,
 				RelationInfo *resultRelationInfo);
 PG_EXTERN void ExecCloseIndices(RelationInfo *resultRelationInfo);
+PG_EXTERN void ExecWaitUniqueIndexes(TupleTableSlot *slot, EState *estate,
+					   ItemPointer pk_conflict);
 PG_EXTERN void ExecInsertIndexTuples(TupleTableSlot *slot, ItemPointer tupleid,
 					  EState *estate, bool is_put);
  #ifdef __cplusplus

@@ -15,6 +15,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'com.drewnoakes:metadata-extractor:2.19.0'
     implementation project(':pgjava_c')
+    testImplementation project(path: ':pgjava_c', configuration: 'tests')
 }
 
 java {

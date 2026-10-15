@@ -7,6 +7,7 @@
 
 package org.weaverdb.direct;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Properties;
 import org.weaverdb.DBReference;
@@ -47,7 +48,13 @@ final class PgvectorWeaverTestSupport {
 
                 b = new ProcessBuilder(
                         connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", DB_DIR);
-                b.inheritIO().start().waitFor();
+                b.redirectErrorStream(true);
+                Process initdb = b.start();
+                String initOut = new String(initdb.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                int initRc = initdb.waitFor();
+                if (initRc != 0) {
+                    throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
+                }
 
                 Properties prop = new Properties();
                 prop.setProperty("datadir", DB_DIR);
@@ -60,6 +67,8 @@ final class PgvectorWeaverTestSupport {
                  */
                 prop.setProperty("sortmem",
                         System.getProperty("weaver.sortmem", "131072"));
+                /* Test-only. Production DBWriter sync wait stays 5000ms. */
+                prop.setProperty("synctimeout", "1000");
                 DirectWeaverInitializer.initialize(prop);
             }
             initialized = true;

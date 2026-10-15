@@ -92,6 +92,7 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
 	Item		item;
 	bool		satisfied = false;
         Size            pageSize = 0;
+        int             attempts = 0;
 	
 	/*
 	 * If we're gonna fail for oversize tuple, do it right away... this
@@ -128,11 +129,22 @@ RelationPutHeapTupleAtFreespace(Relation relation, HeapTuple tuple, BlockNumber 
                 elog(WARN,"Invalid limit for heap io");
             }
             
-            if (lastblock + 1 == relation->rd_nblocks) {
+            /*
+             * Normal backends extend only through GetFreespace. That holds
+             * the extender lock across the new page. A concurrent
+             * ReadBuffer(P_NEW) makes PerformAllocation assert that the
+             * file grew by more than the pages it added.
+             *
+             * Bootstrap has no freespace map. GetFreespace returns the last
+             * block, and rd_nblocks == 0 wraps that to an invalid block, so
+             * initdb's first insert seeks pg_proc at block -1. Extend with
+             * P_NEW when that last block does not exist yet or did not fit.
+             */
+
+            if (IsBootstrapProcessingMode() && attempts > 0)
                 lastblock = P_NEW;
-            } else {
-                lastblock = GetFreespace(relation,len,limit);
-            }
+            else
+                lastblock = GetFreespace(relation, len, limit);
 
             buffer = ReadBuffer(relation,lastblock);
 
@@ -151,7 +163,7 @@ manager may be old and incorrect.   MKS 12.31.2001
 */	
                 if ( BufferHasError(buffer) ) {
                     pageSize = 0;
-                } else if ( pageSize < MAXALIGN(len) ) { 
+                } else if ( pageSize < MAXALIGN(len) ) {
                     DTRACE_PROBE2(mtpg,freespace__miss,len,pageSize);
                 } else {
                     DTRACE_PROBE2(mtpg,freespace__hit,len,pageSize);
@@ -171,6 +183,8 @@ manager may be old and incorrect.   MKS 12.31.2001
                     ItemPointerSet(&((HeapTupleHeader)item)->t_ctid, lastblock, offnum);
                     ItemPointerSet(&tuple->t_self, lastblock, offnum);	
                     ItemPointerSet(&tuple->t_data->t_ctid, lastblock, offnum);	
+                } else {
+                    attempts += 1;
                 }
 
                 LockBuffer(relation, buffer, BUFFER_LOCK_UNLOCK);

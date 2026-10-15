@@ -155,7 +155,9 @@ class BaseWeaverConnection implements DBReference {
 
     @Override
     public void close() throws ExecutionException {
-        transformer.close();
+        if (transformer != null) {
+            transformer.close();
+        }
         dispose();
     }
 
