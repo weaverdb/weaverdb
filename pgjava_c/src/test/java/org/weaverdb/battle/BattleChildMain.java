@@ -68,6 +68,7 @@ public final class BattleChildMain {
                 case "kill-recover-insert" -> killRecoverInsert(mode, datadir);
                 case "restart-loop" -> restartLoop(mode, datadir);
                 case "mutate" -> mutate(mode, datadir);
+                case "initdb-catalog" -> initdbCatalog(mode, datadir);
                 default -> {
                     System.err.println("unknown scenario " + scenario);
                     System.exit(2);
@@ -835,6 +836,41 @@ public final class BattleChildMain {
         }
         shutdown(mode);
         System.out.println("BATTLE CHILD mutate ok");
+    }
+
+    /**
+     * The datadir was just created by initdb. Catalogs must be loaded, and a
+     * new heap must accept a row. This is the bootstrap regression for an
+     * empty pg_proc.
+     */
+    private static void initdbCatalog(String mode, String datadir) throws Exception {
+        boot(mode, datadir);
+        try (DBReference conn = DBReference.connect("template1")) {
+            if (conn == null || !conn.isValid()) {
+                throw new IllegalStateException("template1 connect failed");
+            }
+            String className = scalarText(conn, "select relname from pg_class where relname = 'pg_class'");
+            String procName = scalarText(conn, "select relname from pg_class where relname = 'pg_proc'");
+            String boolin = scalarText(conn, "select proname from pg_proc where proname = 'boolin'");
+            System.out.println("BATTLE INITDB pg_class=" + className
+                    + " pg_proc=" + procName
+                    + " boolin=" + boolin);
+            if (!"pg_class".equals(className) || !"pg_proc".equals(procName) || !"boolin".equals(boolin)) {
+                System.exit(1);
+            }
+        }
+        ensureDatabase();
+        try (DBReference conn = open()) {
+            conn.execute("create table bt_boot (id int4)");
+            conn.execute("insert into bt_boot (id) values (7)");
+            int n = count(conn, "select id from bt_boot where id = 7");
+            System.out.println("BATTLE INITDB rows=" + n);
+            if (n != 1) {
+                System.exit(1);
+            }
+        }
+        shutdown(mode);
+        System.out.println("BATTLE INITDB ok");
     }
 
     /** Primary key, NOT NULL, defaults, truncate, and vacuum. Isolated because this sequence SIGSEGV'd in-process. */

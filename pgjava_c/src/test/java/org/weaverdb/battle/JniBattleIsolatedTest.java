@@ -211,4 +211,16 @@ public class JniBattleIsolatedTest {
         Assertions.assertTrue(result.output.contains("mutate rows=40 lookups=40"), result.output);
         Assertions.assertTrue(result.output.contains("mutate ok"), result.output);
     }
+
+    @Test
+    public void freshInitdbLoadsCatalogs() throws Exception {
+        BattleScenarios.ChildResult result = BattleScenarios.launchBootstrap("jni", 60);
+        System.out.println(result.output);
+        Assertions.assertEquals(0, result.code, result.output);
+        Assertions.assertTrue(result.output.contains("pg_class=pg_class"), result.output);
+        Assertions.assertTrue(result.output.contains("pg_proc=pg_proc"), result.output);
+        Assertions.assertTrue(result.output.contains("boolin=boolin"), result.output);
+        Assertions.assertTrue(result.output.contains("BATTLE INITDB rows=1"), result.output);
+        Assertions.assertTrue(result.output.contains("BATTLE INITDB ok"), result.output);
+    }
 }

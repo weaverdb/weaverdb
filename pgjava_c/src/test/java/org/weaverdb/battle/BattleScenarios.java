@@ -1180,6 +1180,49 @@ public final class BattleScenarios {
         }
     }
 
+    /**
+     * Fresh initdb into a temp directory, then a child that checks the
+     * bootstrap catalogs. A hung initdb is killed instead of waiting forever.
+     */
+    public static ChildResult launchBootstrap(String mode, int timeoutSeconds) throws Exception {
+        Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        Path initdb = root.resolve("build_test/mtpg/bin/initdb");
+        Path lib = root.resolve("build_test/mtpg/lib");
+        Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
+        Path work = Files.createTempDirectory("weaver-battle-initdb-");
+        Path data = work.resolve("data");
+        ProcessBuilder init = new ProcessBuilder("setsid", initdb.toString(), "-D", data.toString());
+        init.redirectErrorStream(true);
+        Process initProc = init.start();
+        String initOut = readAll(initProc, 40);
+        if (initProc.isAlive()) {
+            long pid = initProc.pid();
+            new ProcessBuilder("kill", "-KILL", "--", "-" + pid).start().waitFor(2, TimeUnit.SECONDS);
+            initProc.destroyForcibly();
+            initProc.waitFor(5, TimeUnit.SECONDS);
+            throw new IllegalStateException("initdb timed out\n" + initOut);
+        }
+        int initRc = initProc.exitValue();
+        if (initRc != 0) {
+            throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
+        }
+        Process child = startChild(mode, lib, data, "initdb-catalog");
+        String output = readAll(child, timeoutSeconds);
+        boolean finished = child.waitFor(1, TimeUnit.SECONDS);
+        int code;
+        if (!finished) {
+            child.destroyForcibly();
+            child.waitFor(5, TimeUnit.SECONDS);
+            code = 4;
+            output = output + "\nBATTLE parent killed child after timeout";
+        } else {
+            code = child.exitValue();
+        }
+        System.out.println("BATTLE CHILD " + mode + " initdb-catalog exit=" + code);
+        System.out.println(output);
+        return new ChildResult(code, output);
+    }
+
     public static final class ChildResult {
         public final int code;
         public final String output;
