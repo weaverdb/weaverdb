@@ -138,6 +138,7 @@ PG_EXTERN int	PrivateWriteBuffer(Relation rel, Buffer buffer, bool release);
 PG_EXTERN int	SyncRelation(Relation rel);
 
 PG_EXTERN void InitBufferPool(IPCKey key);
+PG_EXTERN void ShutdownBufferPool(void);
 PG_EXTERN int AddMoreBuffers(int count);
 PG_EXTERN int RetireBuffers(int start, int count);
 PG_EXTERN void InitThreadBuffer(void);

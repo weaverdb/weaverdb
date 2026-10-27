@@ -50,6 +50,8 @@ PG_EXTERN void RelationIdInvalidateRelationCache(Oid relationId,Oid databaseId);
 
 PG_EXTERN void RelationCacheInvalidate(void);
 PG_EXTERN void RelationCacheShutdown(void);
+PG_EXTERN void RelationBootstrapCacheShutdown(void);
+PG_EXTERN void RelationBootstrapCacheRelease(void);
 
 PG_EXTERN MemoryContext RelationGetCacheContext(void);
 

@@ -169,6 +169,13 @@ proc_exit(int code)
 		(*on_proc_exit_list[on_proc_exit_index].function) (code,
 							  on_proc_exit_list[on_proc_exit_index].arg);
 
+	/*
+	 * The loop leaves the index at -1. Embedded shutdown returns, and the
+	 * next on_proc_exit() would write on_proc_exit_list[-1].
+	 */
+	if (on_proc_exit_index < 0)
+		on_proc_exit_index = 0;
+
 	TPRINTF(TRACE_VERBOSE, "exit(%d)", code);
         
         if (code >= 0 ) {
@@ -217,7 +224,7 @@ shmem_exit(int code)
 int
 on_proc_exit(void (*function) (), caddr_t arg)
 {
-	if (on_proc_exit_index >= MAX_ON_EXITS)
+	if (on_proc_exit_index < 0 || on_proc_exit_index >= MAX_ON_EXITS)
 		return -1;
 
 	on_proc_exit_list[on_proc_exit_index].function = function;
@@ -238,7 +245,7 @@ on_proc_exit(void (*function) (), caddr_t arg)
 int
 			on_shmem_exit(void (*function) (), caddr_t arg)
 {
-	if (on_shmem_exit_index >= MAX_ON_EXITS)
+	if (on_shmem_exit_index < 0 || on_shmem_exit_index >= MAX_ON_EXITS)
 		return -1;
 
 	on_shmem_exit_list[on_shmem_exit_index].function = function;

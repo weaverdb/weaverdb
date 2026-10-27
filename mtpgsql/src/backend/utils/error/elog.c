@@ -486,6 +486,8 @@ int
 InitializeElog(const char* logfile, bool debug, bool redirecterr) {
 	int			fd;
 
+	if (Debugfile >= 0 && Debugfile != fileno(stderr))
+		close(Debugfile);
 	Debugfile = -1;
 	ElogDebugIndentLevel = 0;
 	IgnoreDebugLevel = !debug;

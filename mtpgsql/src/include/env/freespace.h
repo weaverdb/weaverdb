@@ -28,6 +28,7 @@
 extern "C" {
 #endif
 void InitFreespace(void);
+void ShutdownFreespace(void);
 int SetFreespacePending(Oid relid,  Oid dbid);
 int RegisterFreespace(Relation rel, int space,
 	BlockNumber* index,Size* sa,int* unused_pointer_count,

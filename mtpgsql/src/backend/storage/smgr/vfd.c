@@ -489,7 +489,10 @@ vfdshutdown()
         FileClose(log_file);
     }
     
-    os_free(scratch_space);
+    if (scratch_space != NULL)
+        os_free(scratch_space);
+    scratch_space = NULL;
+    log_file = -1;
     return SM_SUCCESS;
 }
 

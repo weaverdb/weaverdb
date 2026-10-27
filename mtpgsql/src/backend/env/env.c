@@ -159,6 +159,20 @@ int DestroySystem(void) {
     if ( envcount != 0 ) {
         printf("all system environments not shutdown\n");
     }
+
+	/*
+	 * InitSystem allocates a new map and a new pthread key. Leave the
+	 * old ones in place and the next boot leaks a key; enough restarts
+	 * and pthread_key_create fails.
+	 */
+	if (envmap != NULL) {
+		os_free(envmap);
+		envmap = NULL;
+	}
+	if (envkey_ready) {
+		pthread_key_delete(envkey);
+		envkey_ready = false;
+	}
 	
 	pthread_mutex_destroy(&envlock);
 

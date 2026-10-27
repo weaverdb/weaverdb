@@ -66,6 +66,8 @@ static FreeList* IndexList;
 
 static FlushManager  FlushBlock;
 
+static bool freelist_ready = false;
+
 static float     IndexBufferReserve = 0.0;
 static	 int 		split = 0;
 static bool        lingeringbuffers = false;
@@ -503,6 +505,30 @@ BufferDesc * GetFreeBuffer(Relation rel) {
  *		queue.	 Only called by postmaster and only during
  *		initialization.
  */
+static void
+DestroyFreeList(FreeList *list)
+{
+	if (list == NULL)
+		return;
+	pthread_mutex_destroy(&list->guard);
+	pthread_cond_destroy(&list->gate);
+	os_free(list);
+}
+
+void
+ShutdownFreeList(void)
+{
+	if (!freelist_ready)
+		return;
+	DestroyFreeList(IndexList);
+	IndexList = NULL;
+	DestroyFreeList(MasterList);
+	MasterList = NULL;
+	pthread_mutex_destroy(&FlushBlock.flush_gate);
+	pthread_cond_destroy(&FlushBlock.flush_wait);
+	freelist_ready = false;
+}
+
 void InitFreeList(bool init) {
     int count = 0;
     
@@ -526,6 +552,8 @@ void InitFreeList(bool init) {
     }
             
     if (init) {
+        if (freelist_ready)
+            ShutdownFreeList();
         split = NBuffers * reserve;
         
         pthread_mutex_init(&FlushBlock.flush_gate, &process_mutex_attr);
@@ -560,6 +588,7 @@ void InitFreeList(bool init) {
         
         if ( split != 0 ) BufferDescriptors[split - 1].freeNext = INVALID_DESCRIPTOR;
         BufferDescriptors[NBuffers - 1].freeNext = INVALID_DESCRIPTOR;
+        freelist_ready = true;
     }
     
 }

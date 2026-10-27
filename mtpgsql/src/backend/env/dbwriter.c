@@ -205,6 +205,7 @@ static WriteGroup sync_group;   /*  a holder for buffers that need to be synced 
 static int    sync_buffers = 0;
 
 static pthread_attr_t writerprops;
+static bool writer_attr_ready = false;
 
 static bool     logging = false;
 static bool     stopped = false;
@@ -237,6 +238,8 @@ static int      writercount = 0;
 
 void DBWriterInit() {
     struct sched_param sched;
+    if (db_inited)
+        ShutdownDBWriter();
     stopped = false;
     int             sched_policy;
     maxtrans = MAXTRANS;
@@ -270,7 +273,10 @@ void DBWriterInit() {
     memset(&writerprops, 0, sizeof(pthread_attr_t));
     memset(&sched, 0, sizeof(struct sched_param));
     /* init thread attributes  */
+    if (writer_attr_ready)
+        pthread_attr_destroy(&writerprops);
     pthread_attr_init(&writerprops);
+    writer_attr_ready = true;
     #ifndef MACOSX
     pthread_attr_setscope(&writerprops, PTHREAD_SCOPE_SYSTEM);
     /*
@@ -1640,6 +1646,11 @@ void ShutdownDBWriter(void) {
     log_group = NULL;
     db_table = NULL;
     db_cxt = NULL;
+    sync_buffers = 0;
+    if (writer_attr_ready) {
+        pthread_attr_destroy(&writerprops);
+        writer_attr_ready = false;
+    }
 }
 
 bool IsDBWriter() {

@@ -126,10 +126,29 @@ static void FreespaceFree(void* pointer,void* cxt)
 }
 
 void
+ShutdownFreespace(void)
+{
+	if (!inited)
+		return;
+
+	inited = false;
+	pthread_mutex_destroy(&freespace_access);
+	freetable = NULL;
+	if (free_cxt != NULL) {
+		MemoryContextDelete(free_cxt);
+		free_cxt = NULL;
+	}
+}
+
+void
 InitFreespace()
 {
 	HASHCTL ctl;
     MemoryContext  hash_cxt,old;
+
+	/* A second boot must not pthread_mutex_init the live mutex. */
+	if (inited)
+		ShutdownFreespace();
 	
     free_cxt = AllocSetContextCreate((MemoryContext) NULL,
                                                  "FreespaceMemoryContext",
