@@ -395,16 +395,23 @@ InitTransactionLowWaterMark()
         if ( IsMultiuser() ) {
             char* pre = GetProperty("transaction_prefetch");
             char* oid = GetProperty("objectid_prefetch");
+            /*
+             * Recompute from the constants on every init. Multiplying the
+             * static squares the prefetch each time this process boots the
+             * engine (8 -> 8192 -> 8388608). VariableRelationGetNextXid
+             * persists that jump, and the next process's first commit reads
+             * a pg_log block that was never extended.
+             */
             if ( pre != NULL ) {
                 xid_prefetch = atoi(pre);
             } else {
-                xid_prefetch *= 1024;
+                xid_prefetch = VAR_XID_PREFETCH * 1024;
             }
             if ( xid_prefetch <= 0 ) xid_prefetch = VAR_XID_PREFETCH * 1024;
             if ( oid != NULL ) {
                 oid_prefetch = atoi(oid);
             } else {
-                oid_prefetch *= VAR_OID_PREFETCH;  // square if not set and multiuser
+                oid_prefetch = VAR_OID_PREFETCH * VAR_OID_PREFETCH;  /* square once */
             }
             if ( oid_prefetch <= 0 ) oid_prefetch = VAR_OID_PREFETCH;
         }

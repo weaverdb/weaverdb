@@ -14,8 +14,11 @@ package org.weaverdb.direct;
 import java.io.Serializable;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import org.weaverdb.WeaverObjectLoader;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import org.weaverdb.ExecutionException;
@@ -33,6 +36,7 @@ enum TransferType {
         @Override
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
+                case DirectWeaverConnection.BOOLEAN:
                 case DirectWeaverConnection.BYTE:
                     return val.get(ValueLayout.JAVA_BYTE, 0) != 0;
                 case DirectWeaverConnection.SHORT:
@@ -101,15 +105,27 @@ enum TransferType {
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
                 case DirectWeaverConnection.CHAR:
-                    return val.get(ValueLayout.JAVA_CHAR, 0);
+                    return (char) (val.get(ValueLayout.JAVA_BYTE, 0) & 0xFF);
+                case DirectWeaverConnection.STRING:
+                case DirectWeaverConnection.TEXT:
+                    if (varLen <= 0) {
+                        throw new ExecutionException("empty character");
+                    }
+                    byte[] chars = new byte[varLen];
+                    MemorySegment.copy(val, 0, MemorySegment.ofArray(chars), 0, varLen);
+                    String text = new String(chars, StandardCharsets.UTF_8);
+                    if (text.isEmpty()) {
+                        throw new ExecutionException("empty character");
+                    }
+                    return text.charAt(0);
                 default:
                     throw new ExecutionException("unable to convert");
             }
         }
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            val.set(ValueLayout.JAVA_CHAR, 0, (Character)value);
-            return Character.BYTES;
+            val.set(ValueLayout.JAVA_BYTE, 0, (byte) ((Character) value).charValue());
+            return 1;
         }
     },
     INTEGER {
@@ -235,9 +251,9 @@ enum TransferType {
         Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
             switch (type) {
                 case DirectWeaverConnection.TIMESTAMP:
+                    return new Date(timestampToEpochMilli(val.get(ValueLayout.JAVA_DOUBLE, 0)));
                 case DirectWeaverConnection.LONG:
-                    long date = val.get(ValueLayout.JAVA_LONG, 0);
-                    return new Date(date);
+                    return new Date(val.get(ValueLayout.JAVA_LONG, 0));
                 default:
                     throw new ExecutionException("unable to convert");
             }
@@ -245,8 +261,30 @@ enum TransferType {
 
         @Override
         int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
-            val.set(ValueLayout.JAVA_LONG, 0, ((Date)value).getTime());
-            return Long.BYTES;
+            val.set(ValueLayout.JAVA_DOUBLE, 0, epochMilliToTimestamp(((Date) value).getTime()));
+            return Double.BYTES;
+        }
+    },
+    INSTANT {
+        @Override
+        int getType() {
+            return DirectWeaverConnection.TIMESTAMP;
+        }
+
+        @Override
+        Object read(int type, MemorySegment val, int varLen) throws ExecutionException {
+            switch (type) {
+                case DirectWeaverConnection.TIMESTAMP:
+                    return Instant.ofEpochMilli(timestampToEpochMilli(val.get(ValueLayout.JAVA_DOUBLE, 0)));
+                default:
+                    throw new ExecutionException("unable to convert");
+            }
+        }
+
+        @Override
+        int write(Object value, int type, MemorySegment val, int varLen) throws ExecutionException {
+            val.set(ValueLayout.JAVA_DOUBLE, 0, epochMilliToTimestamp(((Instant) value).toEpochMilli()));
+            return Double.BYTES;
         }
     },
     STREAM {
@@ -387,8 +425,11 @@ enum TransferType {
         Map.entry(String.class, TransferType.STRING),
         Map.entry(Object.class, TransferType.OBJECT),
         Map.entry(Date.class, TransferType.DATE),
+        Map.entry(Instant.class, TransferType.INSTANT),
         Map.entry(byte[].class, TransferType.BINARY),
-        Map.entry(Serializable.class, TransferType.JAVA)
+        Map.entry(Serializable.class, TransferType.JAVA),
+        Map.entry(ReadableByteChannel.class, TransferType.STREAM),
+        Map.entry(WritableByteChannel.class, TransferType.STREAM)
     );
     
     public static TransferType type(Class<?> type) {
@@ -429,6 +470,17 @@ enum TransferType {
         return null;
     }
     
+    /** Seconds since 2000-01-01, the timestamp double JNI CreateDateField uses. */
+    private static final int PG_EPOCH_OFFSET_SECONDS = 10957 * 86400;
+
+    private static double epochMilliToTimestamp(long epochMilli) {
+        return epochMilli / 1000.0 - PG_EPOCH_OFFSET_SECONDS;
+    }
+
+    private static long timestampToEpochMilli(double seconds) {
+        return (long) ((seconds + PG_EPOCH_OFFSET_SECONDS) * 1000.0);
+    }
+
     abstract int getType();
     
     abstract Object read(int type, MemorySegment val, int varLen) throws ExecutionException;

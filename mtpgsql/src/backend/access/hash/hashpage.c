@@ -34,6 +34,7 @@
 #include "access/hash.h"
 #include "miscadmin.h"
 #include "env/freespace.h"
+#include "storage/smgr.h"
 
 static void _hash_setpagelock(Relation rel, BlockNumber blkno, int access);
 static void _hash_unsetpagelock(Relation rel, BlockNumber blkno, int access);
@@ -194,6 +195,35 @@ _hash_getbuf(Relation rel, BlockNumber blkno, int access)
 				 access, RelationGetRelationName(rel));
 			break;
 	}
+
+	/*
+	 * Bucket, bitmap, and overflow blocks sit at fixed numbers. smgrread
+	 * only accepts a block that already exists or is exactly one past
+	 * EOF, so grow a zero-filled file through blkno before the read.
+	 */
+	{
+		long		nblocks = smgrnblocks(rel->rd_smgr);
+
+		if (nblocks <= (long) blkno)
+		{
+			union {
+				double	align;
+				char	data[BLCKSZ];
+			}			zpage;
+
+			MemSet(zpage.data, 0, BLCKSZ);
+			while (nblocks <= (long) blkno)
+			{
+				nblocks = smgrextend(rel->rd_smgr, zpage.data, 1);
+				if (nblocks <= 0)
+					elog(ERROR, "cannot extend hash index %s",
+						 RelationGetRelationName(rel));
+				NoteFreespaceRelationSize(rel, (BlockNumber) nblocks);
+			}
+			rel->rd_nblocks = (BlockNumber) nblocks;
+		}
+	}
+
 	buf = ReadBuffer(rel, blkno);
         if (!BufferIsValid(buf) ) 
                     elog(ERROR,"bad buffer read while scanning hash %s",RelationGetRelationName(rel));

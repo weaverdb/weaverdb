@@ -513,8 +513,10 @@ TypeCreate(char *typeName,
 							   nulls,
 							   replaces);
 
+		if (heap_update(pg_type_desc, &tup->t_self, tup, NULL, NULL) != HeapTupleMayBeUpdated)
+			elog(ERROR, "tuple was already updated");
 		BeginCriticalIO();
-		heap_update(pg_type_desc, &tup->t_self, tup, NULL, NULL);
+		heap_update_new(pg_type_desc, &tup->t_self, tup);
 
 		typeObjectId = tup->t_data->t_oid;
 	}
@@ -591,8 +593,10 @@ TypeRename(const char *oldTypeName, const char *newTypeName)
 
 	namestrcpy(&(((Form_pg_type) GETSTRUCT(oldtup))->typname), newTypeName);
 
+	if (heap_update(pg_type_desc, &oldtup->t_self, oldtup, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(pg_type_desc, &oldtup->t_self, oldtup, NULL, NULL);
+	heap_update_new(pg_type_desc, &oldtup->t_self, oldtup);
 
 	/* update the system catalog indices */
 	CatalogOpenIndices(Num_pg_type_indices, Name_pg_type_indices, idescs);

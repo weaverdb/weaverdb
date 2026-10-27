@@ -494,8 +494,10 @@ AlterTableAddColumn(const char *relationName,
 	heap_close(attrdesc, RowExclusiveLock);
 
 	((Form_pg_class) GETSTRUCT(reltup))->relnatts = maxatts;
+	if (heap_update(rel, &reltup->t_self, reltup, NULL,NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(rel, &reltup->t_self, reltup, NULL,NULL);
+	heap_update_new(rel, &reltup->t_self, reltup);
 
 	/* keep catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
@@ -636,8 +638,10 @@ AlterTableAlterColumn(const char *relationName,
 			/* update to false */
 			newtuple = heap_copytuple(tuple);
 			((Form_pg_attribute) GETSTRUCT(newtuple))->atthasdef = FALSE;
+			if (heap_update(attr_rel, &tuple->t_self, newtuple, NULL, NULL) != HeapTupleMayBeUpdated)
+				elog(ERROR, "tuple was already updated");
 			BeginCriticalIO();
-			heap_update(attr_rel, &tuple->t_self, newtuple, NULL, NULL);
+			heap_update_new(attr_rel, &tuple->t_self, newtuple);
 
 			/* keep the system catalog indices current */
 			CatalogOpenIndices(Num_pg_attr_indices, Name_pg_attr_indices, irelations);
@@ -676,7 +680,9 @@ drop_default(Oid relid, int16 attnum)
 	AssertState(scan != NULL);
 
 	if (HeapTupleIsValid(tuple = heap_getnext(scan)))
+	{
 		heap_delete(attrdef_rel, &tuple->t_self, NULL, NULL);
+	}
 
 	heap_endscan(scan);
 
@@ -1020,8 +1026,10 @@ AlterTableDropColumn(const char *relationName,
 	namestrcpy(&(attribute->attname), dropColname);
 	ATTRIBUTE_DROP_COLUMN(attribute);
 
+	if (heap_update(attrdesc, &tup->t_self, tup, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(attrdesc, &tup->t_self, tup, NULL, NULL);
+	heap_update_new(attrdesc, &tup->t_self, tup);
 	hasindex = (!IsIgnoringSystemIndexes() && RelationGetForm(attrdesc)->relhasindex);
 	if (hasindex)
 	{
@@ -1068,8 +1076,10 @@ AlterTableDropColumn(const char *relationName,
 
 		RemoveColumnReferences(myrelid, attnum, false, reltup);
 		/* update pg_class tuple */
+		if (heap_update(rel, &reltup->t_self, reltup, NULL, NULL) != HeapTupleMayBeUpdated)
+			elog(ERROR, "tuple was already updated");
 		BeginCriticalIO();
-		heap_update(rel, &reltup->t_self, reltup, NULL, NULL);
+		heap_update_new(rel, &reltup->t_self, reltup);
 		CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices, ridescs);
 		CatalogIndexInsert(ridescs, Num_pg_class_indices, rel, reltup);
 		CatalogCloseIndices(Num_pg_class_indices, ridescs);

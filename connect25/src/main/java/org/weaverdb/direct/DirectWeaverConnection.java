@@ -55,6 +55,7 @@ class DirectWeaverConnection implements DBReference {
     private static final Linker LINKER = Linker.nativeLinker();
 
     private static final MethodHandle WCreateConnection;
+    private static final MethodHandle WIsValidConnection;
     private static final MethodHandle WCreateSubConnection;
     private static final MethodHandle WDestroyConnection;
     private static final MethodHandle WDestroyPreparedStatement;
@@ -89,6 +90,8 @@ class DirectWeaverConnection implements DBReference {
 
         WCreateConnection = LINKER.downcallHandle(LOADER.find("WCreateConnection").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, ADDRESS));
+        WIsValidConnection = LINKER.downcallHandle(LOADER.find("WIsValidConnection").orElseThrow(),
+                FunctionDescriptor.of(JAVA_LONG, ADDRESS));
         WCreateSubConnection = LINKER.downcallHandle(LOADER.find("WCreateSubConnection").orElseThrow(),
                 FunctionDescriptor.of(ADDRESS, ADDRESS));
         WDestroyConnection = LINKER.downcallHandle(LOADER.find("WDestroyConnection").orElseThrow(),
@@ -139,7 +142,7 @@ class DirectWeaverConnection implements DBReference {
     }
     
     public final static int  SHORT=	21;
-    public final static int  CHAR=	21;
+    public final static int  CHAR=	18;   // CHAROID
     public final static int  INT=	23;
     public final static int  STRING=	1043;
     public final static int  BOOLEAN=	16;
@@ -372,11 +375,7 @@ class DirectWeaverConnection implements DBReference {
     
     @Override
     public long transaction() {
-        if (transactionId == 0) {
-            return getTransactionId();
-        } else {
-            return transactionId;
-        }
+        return transactionId;
     }
     
     private MemorySegment grabConnection(String name, String password, String connect) throws ExecutionException {
@@ -386,6 +385,18 @@ class DirectWeaverConnection implements DBReference {
             MemorySegment connSeg = (connect == null) ? MemorySegment.NULL : arena.allocateFrom(connect);
             MemorySegment connection = (MemorySegment) WCreateConnection.invokeExact(nameSeg, passSeg, connSeg);
             if (connection.equals(MemorySegment.NULL)) {
+                throw new ExecutionException("could not connect to weaver");
+            }
+            /*
+             * An unknown user still returns a handle. validFlag is 0, and
+             * isValid() would otherwise treat that pointer as a live connection.
+             */
+            long valid = (long) WIsValidConnection.invokeExact(connection);
+            if (valid == 0) {
+                long destroyed = (long) WDestroyConnection.invokeExact(connection);
+                if (destroyed != 0) {
+                    LOGGING.warning("error disposing rejected connection: " + destroyed);
+                }
                 throw new ExecutionException("could not connect to weaver");
             }
             return connection;
@@ -459,15 +470,21 @@ class DirectWeaverConnection implements DBReference {
         }
     }
 
+    /**
+     * {@code WBegin} returns an error code. Zero means the transaction
+     * started. The id comes from {@code WGetTransactionId}, as JNI does.
+     */
     private long beginTransaction() throws ExecutionException {
         try {
-            long id = (long) WBegin.invokeExact(nativePointer, 0L);
-            if (id == 0) {
-                handleError();
+            long err = (long) WBegin.invokeExact(nativePointer, 0L);
+            if (err != 0) {
+                handleError(err);
             }
-            return id;
-        } catch (Throwable e) {
-            throw new ExecutionException(e);
+            return (long) WGetTransactionId.invokeExact(nativePointer);
+        } catch (ExecutionException ee) {
+            throw ee;
+        } catch (Throwable t) {
+            throw new ExecutionException(t);
         }
     }
 
@@ -508,14 +525,6 @@ class DirectWeaverConnection implements DBReference {
             throw ee;
         } catch (Throwable t) {
             throw new ExecutionException(t);
-        }
-    }
-
-    private long getTransactionId() {
-        try {
-            return (long) WGetTransactionId.invokeExact(nativePointer);
-        } catch (Throwable e) {
-            return 0;
         }
     }
 

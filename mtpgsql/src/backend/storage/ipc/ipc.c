@@ -38,6 +38,7 @@
 #include "postgres.h"
 #include "env/env.h"
 #include "env/dbwriter.h"
+#include "env/poolsweep.h"
 #include "storage/ipc.h"
 #ifdef SPIN_IS_MUTEX
 #include "storage/m_lock.h"
@@ -89,7 +90,6 @@ typedef struct _PrivateMemStruct
 } PrivateMem;
 
 static PrivateMem IpcPrivateMem[16];
-static int	memid = 0;
 
 SLock*		SLockArray;
 
@@ -98,24 +98,43 @@ static int
 PrivateMemoryCreate(IpcMemoryKey memKey,
 					uint32 size)
 {
+	int			slot;
 
 	UsePrivateMemory = 1;
 
-	IpcPrivateMem[memid].id = memid;
-	IpcPrivateMem[memid].memptr = os_malloc(size);
-	if (IpcPrivateMem[memid].memptr == NULL) {
+	/*
+	 * Embedded shutdown frees these slots. Reuse a free one. The old
+	 * counter never moved backward, so the sixth initialize in one
+	 * process walked off this 16-entry table.
+	 */
+	for (slot = 0; slot < 16; slot++)
+	{
+		if (IpcPrivateMem[slot].memptr == NULL)
+			break;
+	}
+	if (slot >= 16)
+	{
+		elog(FATAL, "PrivateMemoryCreate: no free private memory slot");
+		return -1;
+	}
+
+	IpcPrivateMem[slot].id = slot;
+	IpcPrivateMem[slot].memptr = os_malloc(size);
+	if (IpcPrivateMem[slot].memptr == NULL) {
                 GetEnv()->errorcode = 747;
 		elog(ERROR, "PrivateMemoryCreate: not enough memory to malloc");
         }
-	MemSet(IpcPrivateMem[memid].memptr, 0, size);		/* XXX PURIFY */
+	MemSet(IpcPrivateMem[slot].memptr, 0, size);		/* XXX PURIFY */
 
-	return memid++;
+	return slot;
 }
 
 static char *
-PrivateMemoryAttach(IpcMemoryId memid)
+PrivateMemoryAttach(IpcMemoryId id)
 {
-	return IpcPrivateMem[memid].memptr;
+	if (id < 0 || id >= 16)
+		return NULL;
+	return IpcPrivateMem[id].memptr;
 }
 
 
@@ -131,8 +150,27 @@ PrivateMemoryAttach(IpcMemoryId memid)
 void
 proc_exit(int code)
 {
+	static int	in_proc_exit = 0;
+
+	/*
+	 * elog(FATAL) from a shutdown helper calls back here. Exit rather
+	 * than free the same regions twice.
+	 */
+	if (in_proc_exit)
+		exit(code >= 0 ? code : 1);
+	in_proc_exit = 1;
 
 	TPRINTF(TRACE_VERBOSE, "proc_exit(%d)", code);
+
+	/*
+	 * shmem_exit frees private regions the background threads still
+	 * read. Bootstrap cleanup() reaches here without
+	 * wrapupweaverbackend, so the DBWriter was still in DiscardInvalid
+	 * when slot 2 disappeared (CacheIdInvalidate cacheId=0). Stop them
+	 * first. A second ShutdownDBWriter from wrapup is a no-op.
+	 */
+	PoolsweepDestroy();
+	ShutdownDBWriter();
 
 	/* do our shared memory exits first */
 	shmem_exit(code);
@@ -151,17 +189,25 @@ proc_exit(int code)
 		(*on_proc_exit_list[on_proc_exit_index].function) (code,
 							  on_proc_exit_list[on_proc_exit_index].arg);
 
+	/*
+	 * The loop leaves the index at -1. Embedded shutdown returns, and the
+	 * next on_proc_exit() would write on_proc_exit_list[-1].
+	 */
+	if (on_proc_exit_index < 0)
+		on_proc_exit_index = 0;
+
 	TPRINTF(TRACE_VERBOSE, "exit(%d)", code);
         
-        if (code >= 0 ) {
+	if (code >= 0 ) {
             if ( GetEnv() != NULL ) {
-                ShutdownDBWriter();
                 ShutdownVirtualFileSystem();                
                 DestroyEnv(GetEnv());
                 DestroySystem();
             }
             exit(code);  
         }
+	/* Embedded shutdown returns and may boot again in this process. */
+	in_proc_exit = 0;
 }
 
 /* ------------------
@@ -199,7 +245,7 @@ shmem_exit(int code)
 int
 on_proc_exit(void (*function) (), caddr_t arg)
 {
-	if (on_proc_exit_index >= MAX_ON_EXITS)
+	if (on_proc_exit_index < 0 || on_proc_exit_index >= MAX_ON_EXITS)
 		return -1;
 
 	on_proc_exit_list[on_proc_exit_index].function = function;
@@ -220,7 +266,7 @@ on_proc_exit(void (*function) (), caddr_t arg)
 int
 			on_shmem_exit(void (*function) (), caddr_t arg)
 {
-	if (on_shmem_exit_index >= MAX_ON_EXITS)
+	if (on_shmem_exit_index < 0 || on_shmem_exit_index >= MAX_ON_EXITS)
 		return -1;
 
 	on_shmem_exit_list[on_shmem_exit_index].function = function;
@@ -269,7 +315,11 @@ IPCPrivateMemoryKill(int status,
 {
 	if (UsePrivateMemory)
 	{
-		/* free ( IpcPrivateMem[shmId].memptr ); */
+		if (shmId >= 0 && shmId < 16 && IpcPrivateMem[shmId].memptr != NULL)
+		{
+			os_free(IpcPrivateMem[shmId].memptr);
+			IpcPrivateMem[shmId].memptr = NULL;
+		}
 	}
 	else
 	{

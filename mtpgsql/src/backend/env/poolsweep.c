@@ -129,6 +129,9 @@ void
 PoolsweepInit(int priority) {
     struct sched_param sched;
 
+    if (inited)
+        PoolsweepDestroy();
+
     memset(&sweeperprops, 0, sizeof(pthread_attr_t));
     memset(&sched, 0, sizeof(struct sched_param));
     /* init thread attributes  */
@@ -207,6 +210,8 @@ PoolsweepDestroy() {
 
     inited = false;
     pthread_mutex_unlock(&list_guard);
+    pthread_mutex_destroy(&list_guard);
+    pthread_attr_destroy(&sweeperprops);
 }
 
 Sweeps         *
@@ -258,6 +263,7 @@ ShutdownPoolsweep(Sweeps * job) {
     
     pthread_mutex_lock(&list_guard);
     next = job->next;
+    pthread_cond_destroy(&job->gate);
     MemoryContextDelete(job->context);
     pfree(job);
     

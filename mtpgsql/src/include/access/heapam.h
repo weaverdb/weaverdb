@@ -274,8 +274,11 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 /* extern */ ItemPointerData heap_get_latest_tid(Relation relation, Snapshot snapshot, ItemPointer tid);
 /* extern */ Oid	heap_insert(Relation relation, HeapTuple tup);
 /* extern */ int	heap_delete(Relation relation, ItemPointer tid, ItemPointer ctid,Snapshot snapshot);
+/* extern */ void heap_write_xmax(Relation relation, Buffer buffer, HeapTuple tuple);
 /* extern */ int heap_update(Relation relation, ItemPointer otid, HeapTuple tup,
 			ItemPointer ctid, Snapshot snapshot);
+/* extern */ void heap_update_new(Relation relation, ItemPointer otid, HeapTuple newtup);
+/* extern */ void heap_chain_ctid(Relation relation, ItemPointer otid, ItemPointer ntid);
 /* extern */ int	heap_mark4update(Relation relation, Buffer *userbuf, HeapTuple tup, Snapshot snapshot);
 /* extern */ void heap_markpos(HeapScanDesc scan);
 /* extern */ void heap_restrpos(HeapScanDesc scan);

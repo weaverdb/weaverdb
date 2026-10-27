@@ -147,7 +147,7 @@ JNIEXPORT jlong JNICALL Java_org_weaverdb_base_BaseWeaverConnection_connectSubCo
         ConnMgr mgr = CreateSubConnection(cparent);
 
         if ( mgr == NULL ) {
-            (*env)->ThrowNew(env,Cache->exception,"User not valid");
+            (*env)->ThrowNew(env,Cache->exception,"could not create sub connection");
         } 
         
         return (jlong)mgr;
@@ -431,11 +431,15 @@ JNIEXPORT void JNICALL Java_org_weaverdb_base_BaseWeaverConnection_streamExec
                 
     ConnectStdIO(base,&commenv,pipein,pipeout);
 
-    bool valid = StreamExec(base,(char*)state); 
+    /*
+     * StreamExec returns 0 when the statement ran, and non-zero when it
+     * failed. The failure is already on the connection; surface it.
+     */
+    short rc = StreamExec(base,(char*)state);
 
     (*env)->ReleaseStringUTFChars(env,statement,state);
 
-    if (!valid) {
+    if (rc != 0) {
         checkError(env,talkerObject,NULL);
     }
 

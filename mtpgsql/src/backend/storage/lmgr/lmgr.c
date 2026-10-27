@@ -92,7 +92,9 @@ InitLockTable(int parts, int maxBackends)
 {
         int count;
         numberOfPartitions = parts;
-        
+
+        if (PartitionedTables != NULL)
+            os_free(PartitionedTables);
         PartitionedTables = os_malloc(sizeof(LOCKMETHOD) * numberOfPartitions);
         
         for (count=0;count<numberOfPartitions;count++) {

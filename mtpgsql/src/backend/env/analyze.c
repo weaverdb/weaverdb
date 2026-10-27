@@ -1726,8 +1726,10 @@ update_attstats(Oid relid, int natts, AnalyzeAttrStats ** vacattrstats)
 						nulls,
 						replaces);
 
+			if (heap_update(sd, &oldtup->t_self, stup, &stup->t_self, NULL) != HeapTupleMayBeUpdated)
+				elog(ERROR, "tuple was already updated");
 			BeginCriticalIO();
-			heap_update(sd, &oldtup->t_self, stup, &stup->t_self, NULL);
+			heap_update_new(sd, &oldtup->t_self, stup);
 		} else {
 			/* No, insert new tuple */
 			stup = heap_formtuple(sd->rd_att, values, nulls);

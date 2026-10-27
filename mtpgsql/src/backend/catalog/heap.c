@@ -1048,7 +1048,9 @@ RelationRemoveInheritance(Relation relation, bool schemadelete)
 
 	scan = heap_beginscan(catalogRelation, SnapshotNow, 1, &entry);
 	while (HeapTupleIsValid(tuple = heap_getnext(scan)))
+	{
 		heap_delete(catalogRelation, &tuple->t_self, NULL, NULL);
+	}
 
 	heap_endscan(scan);
 	heap_close(catalogRelation, RowExclusiveLock);
@@ -1857,8 +1859,10 @@ StoreAttrDefault(Relation rel, AttrNumber attnum, char *adbin,
 	if (!attStruct->atthasdef)
 	{
 		attStruct->atthasdef = true;
+		if (heap_update(attrrel, &atttup->t_self, atttup, NULL, NULL) != HeapTupleMayBeUpdated)
+			elog(ERROR, "tuple was already updated");
 		BeginCriticalIO();
-		heap_update(attrrel, &atttup->t_self, atttup, NULL, NULL);
+		heap_update_new(attrrel, &atttup->t_self, atttup);
 		/* keep catalog indices current */
 		CatalogOpenIndices(Num_pg_attr_indices, Name_pg_attr_indices,
 						   attridescs);
@@ -2210,8 +2214,10 @@ AddRelationRawConstraints(Relation rel,
 
 	relStruct->relchecks = numchecks;
 
+	if (heap_update(relrel, &reltup->t_self, reltup, NULL,NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(relrel, &reltup->t_self, reltup, NULL,NULL);
+	heap_update_new(relrel, &reltup->t_self, reltup);
 
 	/* keep catalog indices current */
 	CatalogOpenIndices(Num_pg_class_indices, Name_pg_class_indices,
@@ -2240,7 +2246,9 @@ RelationRemoveStorageDirectives(Relation rel)
 	rcscan = heap_beginscan(rcrel, SnapshotNow, 1, &key);
 
 	while (HeapTupleIsValid(tup = heap_getnext(rcscan)))
+	{
 		heap_delete(rcrel, &tup->t_self, NULL,NULL);
+	}
 
 	heap_endscan(rcscan);
 	heap_close(rcrel, RowExclusiveLock);
@@ -2335,7 +2343,9 @@ RemoveAttrDefault(Relation rel)
 	adscan = heap_beginscan(adrel, SnapshotNow, 1, &key);
 
 	while (HeapTupleIsValid(tup = heap_getnext(adscan)))
+	{
 		heap_delete(adrel, &tup->t_self, NULL,NULL);
+	}
 
 	heap_endscan(adscan);
 	heap_close(adrel, RowExclusiveLock);
@@ -2357,7 +2367,9 @@ RemoveRelCheck(Relation rel)
 	rcscan = heap_beginscan(rcrel, SnapshotNow, 1, &key);
 
 	while (HeapTupleIsValid(tup = heap_getnext(rcscan)))
+	{
 		heap_delete(rcrel, &tup->t_self, NULL,NULL);
+	}
 
 	heap_endscan(rcscan);
 	heap_close(rcrel, RowExclusiveLock);
@@ -2394,7 +2406,9 @@ RemoveStatistics(Relation rel)
 	scan = heap_beginscan(pgstatistic, SnapshotNow, 1, &key);
 
 	while (HeapTupleIsValid(tuple = heap_getnext(scan)))
+	{
 		heap_delete(pgstatistic, &tuple->t_self, NULL,NULL);
+	}
 
 	heap_endscan(scan);
 	heap_close(pgstatistic, RowExclusiveLock);

@@ -138,6 +138,7 @@ PG_EXTERN int	PrivateWriteBuffer(Relation rel, Buffer buffer, bool release);
 PG_EXTERN int	SyncRelation(Relation rel);
 
 PG_EXTERN void InitBufferPool(IPCKey key);
+PG_EXTERN void ShutdownBufferPool(void);
 PG_EXTERN int AddMoreBuffers(int count);
 PG_EXTERN int RetireBuffers(int start, int count);
 PG_EXTERN void InitThreadBuffer(void);
@@ -186,6 +187,7 @@ PG_EXTERN void SetBufferGeneration(long generation);
 PG_EXTERN long BufferGetIOGeneration(Buffer buffer);
 PG_EXTERN long GetPinnedBufferGeneration(void);
 PG_EXTERN int GetCriticalIODepth(void);
+PG_EXTERN void NoteCriticalIODepth(Relation rel, BufferDesc *bufHdr);
 PG_EXTERN Block BufferGetBlock(Buffer buffer);
 
 PG_EXTERN void IncrBufferRefCount(Relation rel, Buffer buffer);

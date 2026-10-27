@@ -480,8 +480,10 @@ AlterUser(AlterUserStmt *stmt)
 	new_tuple = heap_formtuple(pg_shadow_dsc, new_record, new_record_nulls);
 	Assert(new_tuple);
 	/* XXX check return value of this? */
+	if (heap_update(pg_shadow_rel, &tuple->t_self, new_tuple, NULL, NULL) != HeapTupleMayBeUpdated)
+		elog(ERROR, "tuple was already updated");
 	BeginCriticalIO();
-	heap_update(pg_shadow_rel, &tuple->t_self, new_tuple, NULL, NULL);
+	heap_update_new(pg_shadow_rel, &tuple->t_self, new_tuple);
 
 
 	/* Update indexes */
@@ -967,8 +969,10 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 		new_record[Anum_pg_group_grolist - 1] = PointerGetDatum(newarray);
 
 		tuple = heap_formtuple(pg_group_dsc, new_record, new_record_nulls);
+		if (heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL) != HeapTupleMayBeUpdated)
+			elog(ERROR, "tuple was already updated");
 		BeginCriticalIO();
-		heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL);
+		heap_update_new(pg_group_rel, &group_tuple->t_self, tuple);
 
 		/* Update indexes */
 		if (RelationGetForm(pg_group_rel)->relhasindex)
@@ -1077,8 +1081,10 @@ AlterGroup(AlterGroupStmt *stmt, const char *tag)
 			new_record[Anum_pg_group_grolist - 1] = PointerGetDatum(newarray);
 
 			tuple = heap_formtuple(pg_group_dsc, new_record, new_record_nulls);
+			if (heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL) != HeapTupleMayBeUpdated)
+				elog(ERROR, "tuple was already updated");
 			BeginCriticalIO();
-			heap_update(pg_group_rel, &group_tuple->t_self, tuple, NULL, NULL);
+			heap_update_new(pg_group_rel, &group_tuple->t_self, tuple);
 
 			/* Update indexes */
 			if (RelationGetForm(pg_group_rel)->relhasindex)

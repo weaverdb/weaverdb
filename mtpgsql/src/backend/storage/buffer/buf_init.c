@@ -138,6 +138,35 @@ static void* LockedAlloc(MemoryContext cxt, Size size) {
  * amount of available memory.
  */
 void
+ShutdownBufferPool(void)
+{
+	int			i;
+
+	/*
+	 * Private boots malloc the descriptors and keep pages in buffer_cxt.
+	 * Shared-memory boots point BufferDescriptors into the segment that
+	 * shmem_exit frees; leave those alone.
+	 */
+	if (BufferDescriptors != NULL && buffer_cxt != NULL)
+	{
+		for (i = 0; i < Num_Descriptors; i++)
+		{
+			pthread_mutex_destroy(&BufferDescriptors[i].io_in_progress_lock.guard);
+			pthread_cond_destroy(&BufferDescriptors[i].io_in_progress_lock.gate);
+			pthread_mutex_destroy(&BufferDescriptors[i].cntx_lock.guard);
+			pthread_cond_destroy(&BufferDescriptors[i].cntx_lock.gate);
+		}
+		os_free(BufferDescriptors);
+		BufferDescriptors = NULL;
+		BufferBlocks = NULL;
+		MemoryContextDelete(buffer_cxt);
+		buffer_cxt = NULL;
+		Num_Descriptors = 0;
+	}
+	ShutdownFreeList();
+}
+
+void
 InitBufferPool(IPCKey key)
 {
 	bool		foundBufs = false,foundDescs = false;
@@ -145,6 +174,7 @@ InitBufferPool(IPCKey key)
         if ( MaxBuffers < NBuffers ) MaxBuffers = NBuffers;
                 
         if ( key == PrivateIPCKey ) {
+            ShutdownBufferPool();
             buffer_cxt = AllocSetContextCreate(NULL,"BufferMainMemory",
                 ALLOCSET_DEFAULT_MINSIZE,
                 ALLOCSET_DEFAULT_INITSIZE,

@@ -114,6 +114,5 @@ public class DirectInitTest {
     }
     /*
      * Leave the embedded backend up for later test classes (pgvector suite).
-     * JVM exit cleans up; forceShutdown here breaks re-init in the same process.
      */
 }

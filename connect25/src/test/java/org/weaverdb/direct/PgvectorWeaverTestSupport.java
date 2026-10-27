@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.Properties;
 import org.weaverdb.DBReference;
 import org.weaverdb.ExecutionException;
+import org.weaverdb.NativeBuild;
 import org.weaverdb.Statement;
 
 final class PgvectorWeaverTestSupport {
@@ -42,12 +43,12 @@ final class PgvectorWeaverTestSupport {
             b.inheritIO().start().waitFor();
 
             if (!DirectWeaverInitializer.isBackendLoaded()) {
+                Path repo = Path.of(System.getProperty("weaver.repo.root", connect25.getParent().toString()));
+                NativeBuild.assertCurrent(repo);
                 b = new ProcessBuilder("rm", "-rf", DB_DIR);
                 b.inheritIO().start().waitFor();
 
-                b = new ProcessBuilder(
-                        connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", DB_DIR);
-                b.inheritIO().start().waitFor();
+                NativeBuild.initdb(connect25.resolve("build/mtpg/bin/initdb"), Path.of(DB_DIR), 60);
 
                 Properties prop = new Properties();
                 prop.setProperty("datadir", DB_DIR);
@@ -60,6 +61,8 @@ final class PgvectorWeaverTestSupport {
                  */
                 prop.setProperty("sortmem",
                         System.getProperty("weaver.sortmem", "131072"));
+                /* Test-only. Production DBWriter sync wait stays 5000ms. */
+                prop.setProperty("synctimeout", "1000");
                 DirectWeaverInitializer.initialize(prop);
             }
             initialized = true;

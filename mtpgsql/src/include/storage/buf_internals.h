@@ -211,6 +211,7 @@ PG_EXTERN bool IsWaitingForFlush(unsigned owner);
 PG_EXTERN BufferDesc *GetFreeBuffer(Relation rel);
 PG_EXTERN void PutFreeBuffer(BufferDesc* bufHdr);
 PG_EXTERN void InitFreeList(bool init);
+PG_EXTERN void ShutdownFreeList(void);
 
 /* buf_table.c */
 

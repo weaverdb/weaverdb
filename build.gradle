@@ -3,11 +3,49 @@ plugins {
 
 }
 
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
 
 description = 'weaver db system'
+
+abstract class BuildNative extends DefaultTask {
+    @Inject
+    abstract ExecOperations getExecOperations()
+
+    @TaskAction
+    void buildNatives() {
+        def root = project.rootDir
+        def buildDir = new File(root, 'build_test')
+        if (!new File(buildDir, 'CMakeCache.txt').exists()) {
+            execOperations.exec {
+                commandLine 'cmake', '-S', root.absolutePath, '-B', buildDir.absolutePath
+            }
+        }
+        execOperations.exec {
+            commandLine 'cmake', '--build', buildDir.absolutePath,
+                    '-j', String.valueOf(Runtime.runtime.availableProcessors()),
+                    '--target', 'weaver', '--target', 'postgres', '--target', 'weaver_jni'
+        }
+        def head = new ByteArrayOutputStream()
+        execOperations.exec {
+            commandLine 'git', '-C', root.absolutePath, 'rev-parse', 'HEAD'
+            standardOutput = head
+        }
+        def stamp = new File(buildDir, 'mtpg/BUILD_COMMIT')
+        stamp.parentFile.mkdirs()
+        stamp.text = head.toString('UTF-8').trim() + '\n'
+    }
+}
+
+tasks.register('buildNative', BuildNative) {
+    group = 'build'
+    description = 'Build weaver, postgres, and weaver_jni, then stamp BUILD_COMMIT'
+    outputs.upToDateWhen { false }
+}
 
 subprojects { sub ->
     sub.tasks.withType(Test).configureEach {
         systemProperty 'weaver.repo.root', rootDir.absolutePath
+        dependsOn rootProject.tasks.named('buildNative')
     }
 }

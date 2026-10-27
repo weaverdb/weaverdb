@@ -54,6 +54,7 @@
 
 static int                      envcount;
 static pthread_key_t		envkey;
+static bool			envkey_ready = false;
 static CommitType               default_type = SOFT_COMMIT;
 
 static Env*                     *envmap;
@@ -142,7 +143,8 @@ Env* InitSystem(bool  isPrivate) {
         	pthread_mutexattr_setpshared(&process_mutex_attr,PTHREAD_PROCESS_SHARED);
         }
          
-        counter = pthread_key_create(&envkey,NULL);
+        if (pthread_key_create(&envkey, NULL) == 0)
+            envkey_ready = true;
                 
         SetEnv(CreateEnv(NULL));
 	InitVirtualFileSystem();  
@@ -157,6 +159,20 @@ int DestroySystem(void) {
     if ( envcount != 0 ) {
         printf("all system environments not shutdown\n");
     }
+
+	/*
+	 * InitSystem allocates a new map and a new pthread key. Leave the
+	 * old ones in place and the next boot leaks a key; enough restarts
+	 * and pthread_key_create fails.
+	 */
+	if (envmap != NULL) {
+		os_free(envmap);
+		envmap = NULL;
+	}
+	if (envkey_ready) {
+		pthread_key_delete(envkey);
+		envkey_ready = false;
+	}
 	
 	pthread_mutex_destroy(&envlock);
 
@@ -173,7 +189,16 @@ extern Env* GetEnv(void) {
 #else
 	EnvPointer* 		envp;
 	EnvPointer 		env;
-        
+
+        /*
+         * envkey is 0 until InitSystem. pthread key 0 belongs to the JVM,
+         * so a lookup here returns some other thread-local value and
+         * CheckForCancel faults on it. initweaverbackend asks whether the
+         * process is shutting down before InitSystem.
+         */
+        if (!envkey_ready)
+            return NULL;
+
         envp = (EnvPointer*)pthread_getspecific(envkey);
 	if ( envp == NULL ) return NULL;
 	env = *envp;
@@ -211,8 +236,13 @@ extern bool SetEnv(void* envp)
         } else {
             if ( current == NULL ) return FALSE;
            if ( current->parent != NULL ) {
-/* sub-connections cannot jump threads b/c we need to be able to join */
-                
+            /*
+             * Keep owner so a parent can join this thread. Clear the
+             * thread-local env so this thread can enter its other
+             * connection. Sub-connections do not drop owner the way a
+             * top-level env does.
+             */
+                pthread_setspecific(envkey, NULL);
             } else {
                 pthread_mutex_lock(current->env_guard);
                 current->owner = 0;
@@ -689,13 +719,19 @@ IsMultiuser()
 }
 
 bool CheckForCancel() {
-	Env* env = GetEnv();
+	Env* env;
 
         if (WeaverIsPanicked())
             return true;
-        
+
+        /*
+         * Shutdown is process-wide. Do not touch GetEnv first: on a
+         * restart the thread-local env is not current yet, and before
+         * InitSystem the pthread key does not exist.
+         */
         if ( CurrentMode == ShutdownProcessing ) return true;
-	
+
+	env = GetEnv();
         if ( env == NULL ) {
             return false;
         }
@@ -705,7 +741,15 @@ bool CheckForCancel() {
         }
 
         if ( env->parent != NULL ) {
-            return (env->parent->cancelled || !env->parent->in_transaction);
+            if ( env->parent->cancelled )
+                return TRUE;
+            /*
+             * Workers created under a leader stop when that transaction
+             * ends. A helper is its own sub-connection and stays runnable
+             * while the parent is idle.
+             */
+            if ( !env->independent && !env->parent->in_transaction )
+                return TRUE;
         }
         
         return FALSE;
@@ -874,6 +918,15 @@ MemoryContext GetEnvMemoryContext( void ) {
 }
 
 void SetProcessingMode(ProcessingMode mode) {
+    if ( CurrentMode == ShutdownProcessing && mode == InitProcessing ) {
+        /*
+         * initweaverbackend calls this before InitSystem on a second boot.
+         * CreateEnv refuses to run while the process is still shutting
+         * down, and GetEnv() is not current yet.
+         */
+        CurrentMode = InitProcessing;
+        return;
+    }
     if ( CurrentMode == InitProcessing && mode == NormalProcessing ) {
         /*
          * Publish Normal for the process, and for this thread. The

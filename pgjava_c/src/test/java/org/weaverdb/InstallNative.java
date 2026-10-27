@@ -38,7 +38,9 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             }
             Path moduleDir = Path.of(System.getProperty("user.dir")).toAbsolutePath();
             String repoRoot = System.getProperty("weaver.repo.root", moduleDir.getParent().toString());
-            Path mtpgSource = Path.of(repoRoot).resolve("build_test/mtpg");
+            Path repo = Path.of(repoRoot);
+            NativeBuild.assertCurrent(repo);
+            Path mtpgSource = repo.resolve("build_test/mtpg");
             String dbDir = moduleDir.resolve("build/testdb").toString();
 
             ProcessBuilder b = new ProcessBuilder("rm", "-rf", moduleDir.resolve("build/mtpg").toString());
@@ -51,8 +53,7 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             b = new ProcessBuilder("rm", "-rf", dbDir);
             b.inheritIO().start().waitFor();
 
-            b = new ProcessBuilder(moduleDir.resolve("build/mtpg/bin/initdb").toString(), "-D", dbDir);
-            b.inheritIO().start().waitFor();
+            NativeBuild.initdb(moduleDir.resolve("build/mtpg/bin/initdb"), Path.of(dbDir), 60);
 
             Properties prop = new Properties();
             prop.setProperty("datadir", dbDir);
@@ -61,6 +62,8 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             prop.setProperty("disable_crc", "TRUE");
         prop.setProperty("index_corruption", "IGNORE");
         prop.setProperty("heap_corruption", "IGNORE");
+            /* Test-only. Production DBWriter sync wait stays 5000ms. */
+            prop.setProperty("synctimeout", "1000");
             WeaverInitializer.initialize(prop);
 
             try (DBReference conn = DBReferenceManager.connect("template1");

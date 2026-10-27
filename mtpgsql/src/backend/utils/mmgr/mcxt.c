@@ -396,10 +396,12 @@ MemoryContextCreate(NodeTag tag, Size size,
 
     /* Get space for node and name */
     if (parent != NULL) {
-        /* Normal case: allocate the node in TopMemoryContext */
-        MemoryContext old = MemoryContextSwitchTo(parent);
-        node = (MemoryContext) palloc(needed);
-        MemoryContextSwitchTo(old);
+        /*
+         * Allocate in the parent context itself. SwitchTo would read
+         * GetEnv(), and a helper's CreateEnv runs before that thread
+         * has an env.
+         */
+        node = (MemoryContext) MemoryContextAlloc(parent, needed);
     } else {
         /* Special case for startup: use good ol' malloc */
         node = (MemoryContext) os_malloc(needed);

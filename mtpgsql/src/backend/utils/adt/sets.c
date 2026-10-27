@@ -114,8 +114,10 @@ SetDefine(char *querystr, char *typename)
 									  replNull,
 									  repl);
 
+			if (heap_update(procrel, &tup->t_self, newtup, NULL, NULL) != HeapTupleMayBeUpdated)
+				elog(ERROR, "tuple was already updated");
 			BeginCriticalIO();
-			heap_update(procrel, &tup->t_self, newtup, NULL, NULL);
+			heap_update_new(procrel, &tup->t_self, newtup);
 
 			setoid = newtup->t_data->t_oid;
 		}

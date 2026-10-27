@@ -283,6 +283,8 @@ PG_EXTERN Datum btbulkdelete(Relation rel,int delcount,ItemPointerData* del_heap
  */
 PG_EXTERN InsertIndexResult _bt_doinsert(Relation rel, BTItem btitem,
 			 bool index_is_unique, Relation heapRel);
+PG_EXTERN void _bt_wait_unique(Relation rel, Datum *datum, char *nulls,
+			 Relation heapRel, ItemPointer conflict);
 PG_EXTERN InsertIndexResult _bt_queueinsert(Relation rel, BTItem btitem,
 			 bool index_is_unique, Relation heapRel);
 PG_EXTERN Buffer _bt_fixroot(Relation rel, Buffer oldrootbuf, bool release);

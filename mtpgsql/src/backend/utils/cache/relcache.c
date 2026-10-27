@@ -1378,6 +1378,51 @@ RelationShutdown(RelNameCacheEnt* ptr, int dummy) {
     }
 }
 
+/*
+ * Close the process-wide nailed index files. The descriptors themselves
+ * stay until RelationBootstrapCacheRelease: env relcache entries are
+ * shallow copies of this memory, and DestroyEnv frees those copies
+ * without walking them.
+ */
+void
+RelationBootstrapCacheShutdown(void) {
+    int i;
+    int relno;
+
+    if (igate != NULL)
+        pthread_mutex_lock(igate);
+
+    for (i = 0; i < listsize; i++) {
+        for (relno = 0; relno < Num_indices_bootstrap; relno++) {
+            Relation rel = masterlist[i].icache[relno];
+
+            if (rel != NULL && rel->rd_smgr != NULL) {
+                smgrclose(rel->rd_smgr);
+                rel->rd_smgr = NULL;
+            }
+        }
+    }
+
+    if (igate != NULL)
+        pthread_mutex_unlock(igate);
+}
+
+void
+RelationBootstrapCacheRelease(void) {
+    if (igate != NULL)
+        pthread_mutex_lock(igate);
+
+    if (GlobalCacheMemory != NULL) {
+        MemoryContextDelete(GlobalCacheMemory);
+        GlobalCacheMemory = NULL;
+    }
+    masterlist = NULL;
+    listsize = 0;
+
+    if (igate != NULL)
+        pthread_mutex_unlock(igate);
+}
+
 /* --------------------------------
  * RelationClearRelation
  *

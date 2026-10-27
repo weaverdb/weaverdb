@@ -44,7 +44,21 @@ CPPTMPFILE=fmgrtmp.c
 HFILE=fmgr.h
 TABCFILE=fmgrtab.c
 
-$CPP -E $BKIOPTS $1 |
+if [ -z "$CPP" ]; then
+	echo "`basename $0`: CPP is not set" >&2
+	exit 1
+fi
+
+CPPFILE=fmgr.cpp.out
+$CPP -E $BKIOPTS "$1" > "$CPPFILE"
+cpp_status=$?
+if [ "$cpp_status" -ne 0 ]; then
+	echo "`basename $0`: preprocessor failed (exit $cpp_status), CPP=$CPP" >&2
+	rm -f "$CPPFILE" "$RAWFILE" "$CPPTMPFILE" "$HFILE" "$TABCFILE"
+	exit "$cpp_status"
+fi
+
+cat "$CPPFILE" |
 #
 # Generate the file containing raw pg_proc tuple data
 # (but only for "internal" language procedures...).
@@ -66,11 +80,19 @@ awk '
 /^#/		{ print; next; }
 $4 == "11"	{ print; next; }' > $CPPTMPFILE
 
+rm -f "$CPPFILE"
 cat $CPPTMPFILE | \
 egrep '^[0-9]' | \
 sort -n > $RAWFILE
 
 rm -f $CPPTMPFILE
+
+if ! grep -q '^[0-9]' "$RAWFILE"; then
+	echo "`basename $0`: no internal procedures parsed from $INFILE" >&2
+	echo "`basename $0`: CPP=$CPP did not produce a function table" >&2
+	rm -f "$RAWFILE" "$HFILE" "$TABCFILE"
+	exit 1
+fi
 
 #
 # Generate fmgr.h

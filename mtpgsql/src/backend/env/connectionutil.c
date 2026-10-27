@@ -35,6 +35,7 @@
 //#include "env/timestamp.h"
 
 #include "utils/builtins.h"
+#include "utils/hsearch.h"
 
 #include "env/freespace.h"
 #include "env/poolsweep.h"
@@ -52,6 +53,7 @@
 #include "utils/portal.h"
 #include "storage/smgr.h"
 #include "storage/fd.h"
+#include "storage/bufmgr.h"
 #include "storage/sinvaladt.h"
 #include "access/xlog.h"
 #include "env/dbwriter.h"
@@ -94,6 +96,8 @@ static volatile sig_atomic_t weaver_panicked = 0;
 static volatile sig_atomic_t weaver_panic_reentered = 0;
 
 static void CreateProperties(void);
+static void DestroyProperties(void);
+static void release_lockfile(void);
 
 static int checklockfile(void);
 
@@ -235,6 +239,9 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         
 	gettimeofday(&timer,NULL);	
 
+        if (IsShutdownProcessingMode())
+            SetProcessingMode(InitProcessing);
+
 	env = InitSystem(isPrivate);	
         
 	if ( output != NULL && strlen(output) == 0 ) {
@@ -274,7 +281,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
         if (reason != NULL) {
                 elog(NOTICE, "%s", reason);
                 pthread_mutex_unlock(&init_lock);
-                unlink(lock_name);
+                release_lockfile();
                 return FALSE;
         }
 
@@ -289,7 +296,7 @@ LIB_EXTERN bool initweaverbackend(const char* vars)
 	if (access(DataDir, F_OK) == -1) {
                 elog(NOTICE, "Database system not found. Data directory '%s' does not exist.",DataDir);
                 pthread_mutex_unlock(&init_lock);
-                unlink(lock_name);
+                release_lockfile();
                 return FALSE;
         }
 
@@ -592,41 +599,88 @@ prepareforshutdown()
     return true;
 }
 
+static void
+release_lockfile(void)
+{
+	if (lock_name[0] != '\0')
+		unlink(lock_name);
+	lock_name[0] = '\0';
+	/*
+	 * checklockfile() keeps the closed fd number as a "held" flag.
+	 * Leave it set and the next boot skips the lock file entirely.
+	 */
+	exclusive_lock = -1;
+}
+
 LIB_EXTERN void
 wrapupweaverbackend()
 {
-/*  not part of the inval message queue  */	
-/*	CallableCleanupInvalidationState();    */
+	if (env == NULL)
+		return;
+
+	pthread_mutex_lock(&init_lock);
+	initialized = false;
+	pthread_mutex_unlock(&init_lock);
+
 	SetEnv(env);
-        
+	SetProcessingMode(ShutdownProcessing);
+
+	/*
+	 * JNI already stopped sweeps in prepareforshutdown. FFM calls
+	 * wrapup directly, and a sweep still running faults in
+	 * MemoryContextGetEnv once this env is destroyed.
+	 */
+	PoolsweepDestroy();
+
+	/*
+	 * prepareforshutdown already holds this. Taking it again is a no-op
+	 * while the flag is set. The unlock has to happen before proc_exit
+	 * frees the shared-memory segment masterlock lives in.
+	 */
+	MasterWriteLock();
+
 	ShutdownDBWriter();
 
-	RelationCacheShutdown();  
-        smgrshutdown();
-        
+	RelationCacheShutdown();
+	RelationBootstrapCacheShutdown();
+	smgrshutdown();
+
 	ShutdownProcess(master);
-	if ( master ) {
+	if (master)
 		ShutdownXLOG();
-	} 	
 
 	ThreadReleaseLocks(false);
 	ThreadReleaseSpins(GetMyThread());
-		
+
 	DestroyThread();
-	
-	proc_exit(-1);  
-	
-	MasterUnLock();  
+	MasterUnLock();
+	if (masterlock != NULL) {
+		pthread_mutex_destroy(&masterlock->guard);
+		pthread_cond_destroy(&masterlock->gate);
+	}
 
-        ShutdownVirtualFileSystem();
+	/*
+	 * -1 returns. proc_exit still runs shmem_exit, which frees the
+	 * private shared-memory slots the next boot has to reuse.
+	 * masterlock lives in that segment, so it is already unlocked.
+	 */
+	proc_exit(-1);
+	masterlock = NULL;
+	master = false;
 
-        elog(DEBUG,"system shutdown successful");
-        
-        SetEnv(NULL);
-        DestroyEnv(env);
+	ShutdownFreespace();
+	ShutdownBufferPool();
+	ShutdownVirtualFileSystem();
+
+	elog(DEBUG, "system shutdown successful");
+
+	SetEnv(NULL);
+	DestroyEnv(env);
+	env = NULL;
+	RelationBootstrapCacheRelease();
 	DestroySystem();
-    
-        unlink(lock_name);
+	DestroyProperties();
+	release_lockfile();
 }
 
 static void* PropertiesAlloc(Size size,void* cxt)
@@ -639,9 +693,20 @@ static void PropertiesFree(void* pointer,void* cxt)
     os_free(pointer);   
 }
 
+static void
+DestroyProperties(void)
+{
+	if (properties == NULL)
+		return;
+	hash_destroy(properties);
+	properties = NULL;
+}
+
 void CreateProperties(void)
 {
     HASHCTL		ctl;
+
+    DestroyProperties();
 
     MemSet(&ctl, 0, (int) sizeof(ctl));
     ctl.keysize = sizeof(NameData);

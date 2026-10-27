@@ -126,10 +126,29 @@ static void FreespaceFree(void* pointer,void* cxt)
 }
 
 void
+ShutdownFreespace(void)
+{
+	if (!inited)
+		return;
+
+	inited = false;
+	pthread_mutex_destroy(&freespace_access);
+	freetable = NULL;
+	if (free_cxt != NULL) {
+		MemoryContextDelete(free_cxt);
+		free_cxt = NULL;
+	}
+}
+
+void
 InitFreespace()
 {
 	HASHCTL ctl;
     MemoryContext  hash_cxt,old;
+
+	/* A second boot must not pthread_mutex_init the live mutex. */
+	if (inited)
+		ShutdownFreespace();
 	
     free_cxt = AllocSetContextCreate((MemoryContext) NULL,
                                                  "FreespaceMemoryContext",
@@ -380,6 +399,9 @@ GetFreespace(Relation rel,int request,BlockNumber limit)
     int 	space = request;
 
     if (IsBootstrapProcessingMode()) {
+        /* Empty heap: rd_nblocks - 1 wraps. Caller must extend. */
+        if (rel->rd_nblocks == 0)
+            return P_NEW;
         return rel->rd_nblocks - 1;
     }
 
@@ -1068,8 +1090,10 @@ SetExtentForRelation(Relation rel, int amount,bool percentage) {
                     newtup = heap_modifytuple(&tuple,erel,values,nulls,replace);
                     ReleaseBuffer(erel,release);
 
+                    if (heap_update(erel,&newtup->t_self,newtup,NULL,NULL) != HeapTupleMayBeUpdated)
+                    	elog(ERROR, "tuple was already updated");
                     BeginCriticalIO();
-                    heap_update(erel,&newtup->t_self,newtup,NULL,NULL);
+                    heap_update_new(erel, &newtup->t_self, newtup);
                 }
                 set = true;
                 break;
