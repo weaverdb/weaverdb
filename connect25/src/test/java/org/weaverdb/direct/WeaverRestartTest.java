@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.weaverdb.DBReference;
+import org.weaverdb.NativeBuild;
 import org.weaverdb.Statement;
 
 /**
@@ -34,17 +35,14 @@ public class WeaverRestartTest {
     @Test
     public void shutdownThenInitializeKeepsRowsAndLock() throws Exception {
         Path connect25 = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-        Path initdb = connect25.getParent().resolve("build_test/mtpg/bin/initdb");
+        Path repo = Path.of(System.getProperty("weaver.repo.root", connect25.getParent().toString()));
+        NativeBuild.assertCurrent(repo);
+        Path initdb = repo.resolve("build_test/mtpg/bin/initdb");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
 
         Path data = connect25.resolve("build/restart_test_db");
         deleteTree(data);
-        ProcessBuilder init = new ProcessBuilder(initdb.toString(), "-D", data.toString());
-        init.redirectErrorStream(true);
-        Process initProc = init.start();
-        String initOut = readAll(initProc.getInputStream());
-        int initRc = initProc.waitFor();
-        Assertions.assertEquals(0, initRc, "initdb failed\n" + initOut);
+        NativeBuild.initdb(initdb, data, 60);
 
         String lib = System.getProperty("java.library.path");
         Assertions.assertNotNull(lib, "java.library.path");

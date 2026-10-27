@@ -7,11 +7,11 @@
 
 package org.weaverdb.direct;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Properties;
 import org.weaverdb.DBReference;
 import org.weaverdb.ExecutionException;
+import org.weaverdb.NativeBuild;
 import org.weaverdb.Statement;
 
 final class PgvectorWeaverTestSupport {
@@ -43,18 +43,12 @@ final class PgvectorWeaverTestSupport {
             b.inheritIO().start().waitFor();
 
             if (!DirectWeaverInitializer.isBackendLoaded()) {
+                Path repo = Path.of(System.getProperty("weaver.repo.root", connect25.getParent().toString()));
+                NativeBuild.assertCurrent(repo);
                 b = new ProcessBuilder("rm", "-rf", DB_DIR);
                 b.inheritIO().start().waitFor();
 
-                b = new ProcessBuilder(
-                        connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", DB_DIR);
-                b.redirectErrorStream(true);
-                Process initdb = b.start();
-                String initOut = new String(initdb.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                int initRc = initdb.waitFor();
-                if (initRc != 0) {
-                    throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
-                }
+                NativeBuild.initdb(connect25.resolve("build/mtpg/bin/initdb"), Path.of(DB_DIR), 60);
 
                 Properties prop = new Properties();
                 prop.setProperty("datadir", DB_DIR);

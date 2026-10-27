@@ -13,7 +13,6 @@
 package org.weaverdb;
 
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -39,7 +38,9 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             }
             Path moduleDir = Path.of(System.getProperty("user.dir")).toAbsolutePath();
             String repoRoot = System.getProperty("weaver.repo.root", moduleDir.getParent().toString());
-            Path mtpgSource = Path.of(repoRoot).resolve("build_test/mtpg");
+            Path repo = Path.of(repoRoot);
+            NativeBuild.assertCurrent(repo);
+            Path mtpgSource = repo.resolve("build_test/mtpg");
             String dbDir = moduleDir.resolve("build/testdb").toString();
 
             ProcessBuilder b = new ProcessBuilder("rm", "-rf", moduleDir.resolve("build/mtpg").toString());
@@ -52,14 +53,7 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
             b = new ProcessBuilder("rm", "-rf", dbDir);
             b.inheritIO().start().waitFor();
 
-            b = new ProcessBuilder(moduleDir.resolve("build/mtpg/bin/initdb").toString(), "-D", dbDir);
-            b.redirectErrorStream(true);
-            Process initdb = b.start();
-            String initOut = new String(initdb.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            int initRc = initdb.waitFor();
-            if (initRc != 0) {
-                throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
-            }
+            NativeBuild.initdb(moduleDir.resolve("build/mtpg/bin/initdb"), Path.of(dbDir), 60);
 
             Properties prop = new Properties();
             prop.setProperty("datadir", dbDir);

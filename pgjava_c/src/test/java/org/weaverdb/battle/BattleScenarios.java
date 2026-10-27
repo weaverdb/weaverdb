@@ -24,6 +24,7 @@ import org.weaverdb.DBReference;
 import org.weaverdb.ExecutionException;
 import org.weaverdb.FunctionInstaller;
 import org.weaverdb.Input;
+import org.weaverdb.NativeBuild;
 import org.weaverdb.Output;
 import org.weaverdb.Statement;
 import org.weaverdb.TransactionSequence;
@@ -1017,19 +1018,13 @@ public final class BattleScenarios {
      */
     public static ChildResult launchChild(String mode, String scenario, int timeoutSeconds) throws Exception {
         Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        NativeBuild.assertCurrent(root);
         Path initdb = root.resolve("build_test/mtpg/bin/initdb");
         Path lib = root.resolve("build_test/mtpg/lib");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
         Path work = Files.createTempDirectory("weaver-battle-");
         Path data = work.resolve("data");
-        ProcessBuilder init = new ProcessBuilder(initdb.toString(), "-D", data.toString());
-        init.redirectErrorStream(true);
-        Process initProc = init.start();
-        String initOut = readAll(initProc, 60);
-        int initRc = initProc.waitFor();
-        if (initRc != 0) {
-            throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
-        }
+        NativeBuild.initdb(initdb, data, 60);
         List<String> cmd = List.of(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--enable-native-access=ALL-UNNAMED",
@@ -1066,19 +1061,13 @@ public final class BattleScenarios {
      */
     public static ChildResult killAfterSync(String mode, String phase, int timeoutSeconds) throws Exception {
         Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        NativeBuild.assertCurrent(root);
         Path initdb = root.resolve("build_test/mtpg/bin/initdb");
         Path lib = root.resolve("build_test/mtpg/lib");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
         Path work = Files.createTempDirectory("weaver-battle-kill-");
         Path data = work.resolve("data");
-        ProcessBuilder init = new ProcessBuilder(initdb.toString(), "-D", data.toString());
-        init.redirectErrorStream(true);
-        Process initProc = init.start();
-        String initOut = readAll(initProc, 60);
-        int initRc = initProc.waitFor();
-        if (initRc != 0) {
-            throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
-        }
+        NativeBuild.initdb(initdb, data, 60);
         String marker = "BATTLE KILLWINDOW " + phase;
         Process victim = startChild(mode, lib, data, "kill-" + phase);
         StringBuilder victimBuf = new StringBuilder();
@@ -1186,26 +1175,13 @@ public final class BattleScenarios {
      */
     public static ChildResult launchBootstrap(String mode, int timeoutSeconds) throws Exception {
         Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        NativeBuild.assertCurrent(root);
         Path initdb = root.resolve("build_test/mtpg/bin/initdb");
         Path lib = root.resolve("build_test/mtpg/lib");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
         Path work = Files.createTempDirectory("weaver-battle-initdb-");
         Path data = work.resolve("data");
-        ProcessBuilder init = new ProcessBuilder("setsid", initdb.toString(), "-D", data.toString());
-        init.redirectErrorStream(true);
-        Process initProc = init.start();
-        String initOut = readAll(initProc, 40);
-        if (initProc.isAlive()) {
-            long pid = initProc.pid();
-            new ProcessBuilder("kill", "-KILL", "--", "-" + pid).start().waitFor(2, TimeUnit.SECONDS);
-            initProc.destroyForcibly();
-            initProc.waitFor(5, TimeUnit.SECONDS);
-            throw new IllegalStateException("initdb timed out\n" + initOut);
-        }
-        int initRc = initProc.exitValue();
-        if (initRc != 0) {
-            throw new IllegalStateException("initdb failed " + initRc + "\n" + initOut);
-        }
+        NativeBuild.initdb(initdb, data, 40);
         Process child = startChild(mode, lib, data, "initdb-catalog");
         String output = readAll(child, timeoutSeconds);
         boolean finished = child.waitFor(1, TimeUnit.SECONDS);
