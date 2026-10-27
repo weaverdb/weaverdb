@@ -13,12 +13,12 @@ tasks.register('buildNative') {
     doLast {
         def cache = new File(rootDir, 'build_test/CMakeCache.txt')
         if (!cache.exists()) {
-            exec {
+            project.exec {
                 commandLine 'cmake', '-S', rootDir.absolutePath, '-B', new File(rootDir, 'build_test').absolutePath
             }
         }
         def jobs = String.valueOf(Runtime.runtime.availableProcessors())
-        exec {
+        project.exec {
             commandLine 'cmake', '--build', new File(rootDir, 'build_test').absolutePath,
                     '-j', jobs, '--target', 'weaver', '--target', 'postgres', '--target', 'weaver_jni'
         }
