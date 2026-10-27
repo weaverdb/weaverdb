@@ -198,7 +198,7 @@ proc_exit(int code)
 
 	TPRINTF(TRACE_VERBOSE, "exit(%d)", code);
         
-        if (code >= 0 ) {
+	if (code >= 0 ) {
             if ( GetEnv() != NULL ) {
                 ShutdownVirtualFileSystem();                
                 DestroyEnv(GetEnv());
@@ -206,6 +206,8 @@ proc_exit(int code)
             }
             exit(code);  
         }
+	/* Embedded shutdown returns and may boot again in this process. */
+	in_proc_exit = 0;
 }
 
 /* ------------------
