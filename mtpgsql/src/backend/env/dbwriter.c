@@ -1620,6 +1620,9 @@ void ShutdownDBWriter(void) {
      * wake SyncWriter before joining it. */
     for (writercount -= 1; writercount >= 0; writercount--) {
         void           *ret;
+        /* proc_exit from a writer thread cannot join itself. */
+        if (pthread_equal(writerid[writercount], pthread_self()))
+            continue;
         pthread_join(writerid[writercount], &ret);
         if (writercount > 0)
             WakeSyncWriterForShutdown();

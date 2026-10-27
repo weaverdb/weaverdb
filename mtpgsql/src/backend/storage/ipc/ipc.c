@@ -38,6 +38,7 @@
 #include "postgres.h"
 #include "env/env.h"
 #include "env/dbwriter.h"
+#include "env/poolsweep.h"
 #include "storage/ipc.h"
 #ifdef SPIN_IS_MUTEX
 #include "storage/m_lock.h"
@@ -149,8 +150,27 @@ PrivateMemoryAttach(IpcMemoryId id)
 void
 proc_exit(int code)
 {
+	static int	in_proc_exit = 0;
+
+	/*
+	 * elog(FATAL) from a shutdown helper calls back here. Exit rather
+	 * than free the same regions twice.
+	 */
+	if (in_proc_exit)
+		exit(code >= 0 ? code : 1);
+	in_proc_exit = 1;
 
 	TPRINTF(TRACE_VERBOSE, "proc_exit(%d)", code);
+
+	/*
+	 * shmem_exit frees private regions the background threads still
+	 * read. Bootstrap cleanup() reaches here without
+	 * wrapupweaverbackend, so the DBWriter was still in DiscardInvalid
+	 * when slot 2 disappeared (CacheIdInvalidate cacheId=0). Stop them
+	 * first. A second ShutdownDBWriter from wrapup is a no-op.
+	 */
+	PoolsweepDestroy();
+	ShutdownDBWriter();
 
 	/* do our shared memory exits first */
 	shmem_exit(code);
@@ -180,7 +200,6 @@ proc_exit(int code)
         
         if (code >= 0 ) {
             if ( GetEnv() != NULL ) {
-                ShutdownDBWriter();
                 ShutdownVirtualFileSystem();                
                 DestroyEnv(GetEnv());
                 DestroySystem();
