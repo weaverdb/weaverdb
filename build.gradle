@@ -3,34 +3,44 @@ plugins {
 
 }
 
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
 
 description = 'weaver db system'
 
-tasks.register('buildNative') {
+abstract class BuildNative extends DefaultTask {
+    @Inject
+    abstract ExecOperations getExecOperations()
+
+    @TaskAction
+    void buildNatives() {
+        def root = project.rootDir
+        def buildDir = new File(root, 'build_test')
+        if (!new File(buildDir, 'CMakeCache.txt').exists()) {
+            execOperations.exec {
+                commandLine 'cmake', '-S', root.absolutePath, '-B', buildDir.absolutePath
+            }
+        }
+        execOperations.exec {
+            commandLine 'cmake', '--build', buildDir.absolutePath,
+                    '-j', String.valueOf(Runtime.runtime.availableProcessors()),
+                    '--target', 'weaver', '--target', 'postgres', '--target', 'weaver_jni'
+        }
+        def head = new ByteArrayOutputStream()
+        execOperations.exec {
+            commandLine 'git', '-C', root.absolutePath, 'rev-parse', 'HEAD'
+            standardOutput = head
+        }
+        def stamp = new File(buildDir, 'mtpg/BUILD_COMMIT')
+        stamp.parentFile.mkdirs()
+        stamp.text = head.toString('UTF-8').trim() + '\n'
+    }
+}
+
+tasks.register('buildNative', BuildNative) {
     group = 'build'
     description = 'Build weaver, postgres, and weaver_jni, then stamp BUILD_COMMIT'
     outputs.upToDateWhen { false }
-    doLast {
-        def cache = new File(rootDir, 'build_test/CMakeCache.txt')
-        if (!cache.exists()) {
-            project.exec {
-                commandLine 'cmake', '-S', rootDir.absolutePath, '-B', new File(rootDir, 'build_test').absolutePath
-            }
-        }
-        def jobs = String.valueOf(Runtime.runtime.availableProcessors())
-        project.exec {
-            commandLine 'cmake', '--build', new File(rootDir, 'build_test').absolutePath,
-                    '-j', jobs, '--target', 'weaver', '--target', 'postgres', '--target', 'weaver_jni'
-        }
-        def git = ['git', '-C', rootDir.absolutePath, 'rev-parse', 'HEAD'].execute()
-        git.waitFor()
-        if (git.exitValue() != 0) {
-            throw new GradleException('git rev-parse HEAD failed')
-        }
-        def stamp = new File(rootDir, 'build_test/mtpg/BUILD_COMMIT')
-        stamp.parentFile.mkdirs()
-        stamp.text = git.text.trim() + '\n'
-    }
 }
 
 subprojects { sub ->
