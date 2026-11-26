@@ -497,7 +497,7 @@ WriteBuffer(Relation rel, Buffer buffer) {
         b/c the Register command locks the buffer on its own
      */
     DirtyBufferIO(bufHdr);
-    bool defer = bufenv->pinned_generation >= 0;
+    bool defer = bufenv->pinned_generation > 0; /*  anything over zero has a live writegroup */
     long generation = RegisterBufferWrite(bufHdr, defer, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
     if (defer) {
         bufenv->CriticalMark[bufHdr->buf_id] += 1;
@@ -559,7 +559,7 @@ we don't have to lock  */
 retry:
         iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus == IO_SUCCESS) {
-            bool defer = bufenv->pinned_generation >= 0;
+            bool defer = bufenv->pinned_generation > 0;/*  anything over zero has a live writegroup */
             Block data = AdvanceBufferIO(defer, bufHdr, true);
 
             status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, data);
@@ -619,7 +619,7 @@ WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
      * the write; Register locks the buffer on its own.
      */
     DirtyBufferIO(bufHdr);
-    bool defer = env->pinned_generation >= 0;
+    bool defer = env->pinned_generation > 0;/*  anything over zero has a live writegroup */
     generation = RegisterBufferWrite(bufHdr, defer, false);
     if (defer) {
         env->CriticalMark[bufHdr->buf_id] += 1;
@@ -1554,7 +1554,7 @@ GetBufferCxt() {
         
         env->DidWrite    = false;
         env->critical_io_depth = 0;
-        env->pinned_generation = -1;
+        env->pinned_generation = 0;
         
         MemoryContextSwitchTo(oldcxt);
         
@@ -1585,7 +1585,7 @@ EndCriticalIO(void) {
         Assert(env->pinned_generation == generation);
         memset(env->CriticalMark, 0, MaxBuffers*sizeof(int));
 
-        env->pinned_generation = -1;
+        env->pinned_generation = 0;
     }
 }
 
@@ -1600,7 +1600,7 @@ AbortCriticalIO(void) {
         memset(env->CriticalMark, 0, MaxBuffers*sizeof(int));
 
         env->critical_io_depth = 0;
-        env->pinned_generation = -1;
+        env->pinned_generation = 0;
     }
 }
 
@@ -1618,7 +1618,7 @@ TraceBufferFlushEnabled(void)
 bool ShadowBufferIfNeeded(long generation, BufferDesc* bufHdr) {
     bool shadowed = false;
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-    if (generation >= 0 && bufHdr->generation < generation) {
+    if (generation > 0 && bufHdr->generation < generation) {
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
         bufHdr->generation = generation;
         shadowed = true;

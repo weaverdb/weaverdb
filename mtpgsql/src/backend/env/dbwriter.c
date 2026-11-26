@@ -976,6 +976,7 @@ long UnmarkDeferredWrites(int * criticals) {
 
 long CriticalIOHold() {
     WriteGroup     cart = GetCurrentWriteGroup(false);
+    /*  this is the generation currently being written so -1 */
     long generation = cart->generation - 1;
 
     if (cart->loggable) {
@@ -989,6 +990,7 @@ long CriticalIOHold() {
 
 long CriticalIORelease() {
     WriteGroup     cart = GetCurrentWriteGroup(false);
+    /*  this is the generation currently being written so -1 */
     long generation = cart->generation - 1;
     if (cart->loggable) {
         cart->cioHolds -= 1;
