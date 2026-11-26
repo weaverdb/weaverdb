@@ -86,6 +86,10 @@ public final class NativeBuild {
      * the postgres child instead of being waited on forever.
      */
     public static void initdb(Path initdb, Path data, int timeoutSeconds) throws Exception {
+        Path parent = data.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         ProcessBuilder init = new ProcessBuilder("setsid", initdb.toString(), "-D", data.toString());
         init.redirectErrorStream(true);
         Process proc = init.start();
