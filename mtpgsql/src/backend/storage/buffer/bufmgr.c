@@ -497,7 +497,11 @@ WriteBuffer(Relation rel, Buffer buffer) {
         b/c the Register command locks the buffer on its own
      */
     DirtyBufferIO(bufHdr);
-    bool defer = bufenv->pinned_generation > 0; /*  anything over zero has a live writegroup */
+    /*
+     * Idle is -1. 0 is a live pin: the first cart is generation 1, and
+     * CriticalIOHold records generation-1. Non-loggable carts also pin 0.
+     */
+    bool defer = bufenv->pinned_generation >= 0;
     long generation = RegisterBufferWrite(bufHdr, defer, bufenv->PrivateRefCount[bufHdr->buf_id] == 1);
     if (defer) {
         bufenv->CriticalMark[bufHdr->buf_id] += 1;
@@ -559,7 +563,7 @@ we don't have to lock  */
 retry:
         iostatus = WriteBufferIO(bufHdr,WRITE_FLUSH);
         if ( iostatus == IO_SUCCESS) {
-            bool defer = bufenv->pinned_generation > 0;/*  anything over zero has a live writegroup */
+            bool defer = bufenv->pinned_generation >= 0;
             Block data = AdvanceBufferIO(defer, bufHdr, true);
 
             status = smgrflush(rel->rd_smgr, bufHdr->tag.blockNum, data);
@@ -619,7 +623,7 @@ WriteNoReleaseBufferGen(Relation rel, Buffer buffer) {
      * the write; Register locks the buffer on its own.
      */
     DirtyBufferIO(bufHdr);
-    bool defer = env->pinned_generation > 0;/*  anything over zero has a live writegroup */
+    bool defer = env->pinned_generation >= 0;
     generation = RegisterBufferWrite(bufHdr, defer, false);
     if (defer) {
         env->CriticalMark[bufHdr->buf_id] += 1;
@@ -1554,7 +1558,7 @@ GetBufferCxt() {
         
         env->DidWrite    = false;
         env->critical_io_depth = 0;
-        env->pinned_generation = 0;
+        env->pinned_generation = -1;
         
         MemoryContextSwitchTo(oldcxt);
         
@@ -1585,7 +1589,7 @@ EndCriticalIO(void) {
         Assert(env->pinned_generation == generation);
         memset(env->CriticalMark, 0, MaxBuffers*sizeof(int));
 
-        env->pinned_generation = 0;
+        env->pinned_generation = -1;
     }
 }
 
@@ -1600,7 +1604,7 @@ AbortCriticalIO(void) {
         memset(env->CriticalMark, 0, MaxBuffers*sizeof(int));
 
         env->critical_io_depth = 0;
-        env->pinned_generation = 0;
+        env->pinned_generation = -1;
     }
 }
 
@@ -1618,7 +1622,7 @@ TraceBufferFlushEnabled(void)
 bool ShadowBufferIfNeeded(long generation, BufferDesc* bufHdr) {
     bool shadowed = false;
     pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
-    if (generation > 0 && bufHdr->generation < generation) {
+    if (generation >= 0 && bufHdr->generation < generation) {
         memmove(bufHdr->shadow, bufHdr->data, BLCKSZ);
         bufHdr->generation = generation;
         shadowed = true;
@@ -1631,7 +1635,19 @@ bool ShadowBufferIfNeeded(long generation, BufferDesc* bufHdr) {
 
 Block AdvanceBufferIO(long gen, BufferDesc* bufHdr, bool forflush) {
     if (bufHdr->kind != RELKIND_SPECIAL && !forflush) {
-        if (ShadowBufferIfNeeded(gen, bufHdr)) {
+        /*
+         * Log the live page. A previous log of this same cart generation
+         * freezes bufHdr->generation, so ShadowBufferIfNeeded would keep
+         * the pre-xmax image while a later new-tuple page in the group
+         * is copied. Recovery would then see two live copies.
+         */
+        if (gen >= 0) {
+            pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
+            memcpy(bufHdr->shadow, bufHdr->data, BLCKSZ);
+            bufHdr->generation = gen;
+            pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
+            PageInsertChecksum((Page)bufHdr->shadow);
+        } else if (ShadowBufferIfNeeded(gen, bufHdr)) {
             PageInsertChecksum((Page)bufHdr->shadow);
         }
         return (Block)bufHdr->shadow;

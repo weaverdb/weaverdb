@@ -335,7 +335,17 @@ void
 _bt_wrtbuf(Relation rel, Buffer buf)
 {
 	LockBuffer((rel),  buf, BT_NONE);
+	/*
+	 * One finished btree page. Callers that already hold a section
+	 * (heap insert plus its index updates) nest here; the pin stays
+	 * until that outer section ends. A build or metapage write has
+	 * no outer section, so this is the whole group for the page.
+	 * The page is already filled and the lock is dropped, so the
+	 * section does not wait.
+	 */
+	BeginCriticalIO();
 	WriteBuffer(rel, buf);
+	EndCriticalIO();
 }
 
 /*
