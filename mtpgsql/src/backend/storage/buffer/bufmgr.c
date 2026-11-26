@@ -1635,7 +1635,19 @@ bool ShadowBufferIfNeeded(long generation, BufferDesc* bufHdr) {
 
 Block AdvanceBufferIO(long gen, BufferDesc* bufHdr, bool forflush) {
     if (bufHdr->kind != RELKIND_SPECIAL && !forflush) {
-        if (ShadowBufferIfNeeded(gen, bufHdr)) {
+        /*
+         * Log the live page. A previous log of this same cart generation
+         * freezes bufHdr->generation, so ShadowBufferIfNeeded would keep
+         * the pre-xmax image while a later new-tuple page in the group
+         * is copied. Recovery would then see two live copies.
+         */
+        if (gen >= 0) {
+            pthread_mutex_lock(&(bufHdr->io_in_progress_lock.guard));
+            memcpy(bufHdr->shadow, bufHdr->data, BLCKSZ);
+            bufHdr->generation = gen;
+            pthread_mutex_unlock(&(bufHdr->io_in_progress_lock.guard));
+            PageInsertChecksum((Page)bufHdr->shadow);
+        } else if (ShadowBufferIfNeeded(gen, bufHdr)) {
             PageInsertChecksum((Page)bufHdr->shadow);
         }
         return (Block)bufHdr->shadow;
