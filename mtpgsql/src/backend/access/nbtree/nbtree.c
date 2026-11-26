@@ -1049,7 +1049,14 @@ btbulkdelete(Relation rel, int delcount, ItemPointerData* tuple_deletes) {
             if (buf != lockedbuf) {
                 Assert(BufferIsValid(lockedbuf));
                 if (dirtied) {
+                    /*
+                     * The leaf is exclusively locked and already edited.
+                     * One section per page: a kill keeps the pre-image
+                     * instead of a torn leaf that drops live keys.
+                     */
+                    BeginCriticalIO();
                     WriteBuffer(rel, lockedbuf);
+                    EndCriticalIO();
                     dirtied = false;
                 } else {
                     ReleaseBuffer(rel, lockedbuf);
