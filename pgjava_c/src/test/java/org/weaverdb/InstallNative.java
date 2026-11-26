@@ -36,27 +36,18 @@ public class InstallNative implements BeforeAllCallback, ExtensionContext.Store.
                 rollbackQuiet();
                 return;
             }
-            Path moduleDir = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-            String repoRoot = System.getProperty("weaver.repo.root", moduleDir.getParent().toString());
-            Path repo = Path.of(repoRoot);
+            Path repo = NativeBuild.repoRoot();
             NativeBuild.assertCurrent(repo);
-            Path mtpgSource = repo.resolve("build_test/mtpg");
-            String dbDir = moduleDir.resolve("build/testdb").toString();
+            Path home = NativeBuild.nativeHome();
+            Path db = NativeBuild.dataDir();
 
-            ProcessBuilder b = new ProcessBuilder("rm", "-rf", moduleDir.resolve("build/mtpg").toString());
+            ProcessBuilder b = new ProcessBuilder("rm", "-rf", db.toString());
             b.inheritIO().start().waitFor();
 
-            b = new ProcessBuilder("cp", "-rf", mtpgSource.toString(),
-                    moduleDir.resolve("build/mtpg").toString());
-            b.inheritIO().start().waitFor();
-
-            b = new ProcessBuilder("rm", "-rf", dbDir);
-            b.inheritIO().start().waitFor();
-
-            NativeBuild.initdb(moduleDir.resolve("build/mtpg/bin/initdb"), Path.of(dbDir), 60);
+            NativeBuild.initdb(home.resolve("bin/initdb"), db, 60);
 
             Properties prop = new Properties();
-            prop.setProperty("datadir", dbDir);
+            prop.setProperty("datadir", db.toString());
             prop.setProperty("start_delay", "10");
             prop.setProperty("stdlog", "TRUE");
             prop.setProperty("disable_crc", "TRUE");

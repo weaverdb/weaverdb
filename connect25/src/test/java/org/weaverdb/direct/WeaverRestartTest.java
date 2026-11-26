@@ -35,9 +35,9 @@ public class WeaverRestartTest {
     @Test
     public void shutdownThenInitializeKeepsRowsAndLock() throws Exception {
         Path connect25 = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-        Path repo = Path.of(System.getProperty("weaver.repo.root", connect25.getParent().toString()));
+        Path repo = NativeBuild.repoRoot();
         NativeBuild.assertCurrent(repo);
-        Path initdb = repo.resolve("build_test/mtpg/bin/initdb");
+        Path initdb = NativeBuild.nativeHome().resolve("bin/initdb");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
 
         Path data = connect25.resolve("build/restart_test_db");
@@ -76,6 +76,7 @@ public class WeaverRestartTest {
             Assertions.fail("restart child timed out\n" + output);
         }
         reader.join(5_000);
+        NativeBuild.appendLog(output.toString());
         Assertions.assertEquals(0, proc.exitValue(), output.toString());
         Assertions.assertTrue(output.toString().contains("restart ok"), output.toString());
     }

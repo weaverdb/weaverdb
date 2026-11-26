@@ -8,27 +8,76 @@ import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The battle tests run whatever postgres and libweaver are already in
- * build_test/mtpg. Gradle writes BUILD_COMMIT after it builds those
- * binaries, and initdb is killed if it does not finish.
+ * Shared native tree. Gradle writes {@code BUILD_COMMIT} next to
+ * {@code bin/} and {@code lib/}. Tests read that tree; they do not copy it.
  */
 public final class NativeBuild {
 
     private NativeBuild() {
     }
 
+    public static Path repoRoot() {
+        String prop = System.getProperty("weaver.repo.root");
+        if (prop != null && !prop.isBlank()) {
+            return Path.of(prop).toAbsolutePath();
+        }
+        Path user = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+        String name = user.getFileName().toString();
+        if (name.equals("pgjava_c") || name.equals("connect25") || name.equals("connect21")) {
+            return user.getParent();
+        }
+        return user;
+    }
+
+    /** {@code build_test/mtpg}, or {@code weaver.native.home} when Gradle sets it. */
+    public static Path nativeHome() {
+        String prop = System.getProperty("weaver.native.home");
+        if (prop != null && !prop.isBlank()) {
+            return Path.of(prop);
+        }
+        return repoRoot().resolve("build_test/mtpg");
+    }
+
+    /** Per-task datadir from {@code weaver.datadir}, else {@code build/testdb}. */
+    public static Path dataDir() {
+        String prop = System.getProperty("weaver.datadir");
+        if (prop != null && !prop.isBlank()) {
+            return Path.of(prop);
+        }
+        return Path.of(System.getProperty("user.dir"), "build", "testdb");
+    }
+
     public static void assertCurrent(Path repo) throws Exception {
-        Path stamp = repo.resolve("build_test/mtpg/BUILD_COMMIT");
+        Path stamp = nativeHome().resolve("BUILD_COMMIT");
         if (!Files.isRegularFile(stamp)) {
             throw new IllegalStateException("missing " + stamp
-                    + "; build weaver and postgres before running tests");
+                    + "; run ./gradlew buildNative before tests");
         }
         String built = Files.readString(stamp).trim();
         String head = gitHead(repo);
         if (!built.equals(head)) {
             throw new IllegalStateException("native build " + built
                     + " does not match HEAD " + head
-                    + "; rebuild build_test/mtpg before running tests");
+                    + "; run ./gradlew buildNative");
+        }
+    }
+
+    /** Append child output to {@code weaver.harness.log} when Gradle set it. */
+    public static void appendLog(String text) {
+        String path = System.getProperty("weaver.harness.log");
+        if (path == null || path.isBlank() || text == null) {
+            return;
+        }
+        try {
+            Path log = Path.of(path);
+            Path parent = log.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(log, text + "\n", StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
         }
     }
 
@@ -37,6 +86,10 @@ public final class NativeBuild {
      * the postgres child instead of being waited on forever.
      */
     public static void initdb(Path initdb, Path data, int timeoutSeconds) throws Exception {
+        Path parent = data.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         ProcessBuilder init = new ProcessBuilder("setsid", initdb.toString(), "-D", data.toString());
         init.redirectErrorStream(true);
         Process proc = init.start();

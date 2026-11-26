@@ -19,26 +19,26 @@ public class PgvectorOrderByShellTest {
 
     @BeforeAll
     public static void ensureMtpgBuild() throws Exception {
-        Path repoRoot = Path.of(System.getProperty("user.dir")).toAbsolutePath().getParent();
-        Path src = repoRoot.resolve("build_test/mtpg");
+        Path src = NativeBuild.nativeHome();
         Assertions.assertTrue(Files.isExecutable(src.resolve("bin/postgres")),
-                "build_test/mtpg missing; run: cmake --build build_test --target postgres");
+                "missing " + src + "; run ./gradlew buildNative");
     }
 
     @Test
     public void orderByShellRegression() throws Exception {
-        Path repoRoot = Path.of(System.getProperty("user.dir")).toAbsolutePath().getParent();
+        Path repoRoot = NativeBuild.repoRoot();
         Path script = repoRoot.resolve("mtpgsql/scripts/pgvector_orderby_smoke.sh");
 
         ProcessBuilder pb = new ProcessBuilder("/bin/bash", script.toString());
         pb.directory(repoRoot.toFile());
-        pb.environment().put("PGVECTOR_BUILD_DIR", repoRoot.resolve("build_test").toString());
+        pb.environment().put("PGVECTOR_BUILD_DIR", NativeBuild.nativeHome().getParent().toString());
         pb.redirectErrorStream(true);
 
         Process p = pb.start();
         String output = new String(p.getInputStream().readAllBytes());
         int code = p.waitFor();
 
+        NativeBuild.appendLog(output);
         if (code != 0) {
             System.err.println(output);
         }

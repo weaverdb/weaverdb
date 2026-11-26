@@ -1017,10 +1017,10 @@ public final class BattleScenarios {
      * codes that are clean (non-crash) outcomes the caller wants to assert on.
      */
     public static ChildResult launchChild(String mode, String scenario, int timeoutSeconds) throws Exception {
-        Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        Path root = NativeBuild.repoRoot();
         NativeBuild.assertCurrent(root);
-        Path initdb = root.resolve("build_test/mtpg/bin/initdb");
-        Path lib = root.resolve("build_test/mtpg/lib");
+        Path initdb = NativeBuild.nativeHome().resolve("bin/initdb");
+        Path lib = NativeBuild.nativeHome().resolve("lib");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
         Path work = Files.createTempDirectory("weaver-battle-");
         Path data = work.resolve("data");
@@ -1060,10 +1060,10 @@ public final class BattleScenarios {
      * A second process then checks the hard-synced rows.
      */
     public static ChildResult killAfterSync(String mode, String phase, int timeoutSeconds) throws Exception {
-        Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        Path root = NativeBuild.repoRoot();
         NativeBuild.assertCurrent(root);
-        Path initdb = root.resolve("build_test/mtpg/bin/initdb");
-        Path lib = root.resolve("build_test/mtpg/lib");
+        Path initdb = NativeBuild.nativeHome().resolve("bin/initdb");
+        Path lib = NativeBuild.nativeHome().resolve("lib");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
         Path work = Files.createTempDirectory("weaver-battle-kill-");
         Path data = work.resolve("data");
@@ -1174,10 +1174,10 @@ public final class BattleScenarios {
      * bootstrap catalogs. A hung initdb is killed instead of waiting forever.
      */
     public static ChildResult launchBootstrap(String mode, int timeoutSeconds) throws Exception {
-        Path root = Path.of(System.getProperty("weaver.repo.root", "..")).toAbsolutePath();
+        Path root = NativeBuild.repoRoot();
         NativeBuild.assertCurrent(root);
-        Path initdb = root.resolve("build_test/mtpg/bin/initdb");
-        Path lib = root.resolve("build_test/mtpg/lib");
+        Path initdb = NativeBuild.nativeHome().resolve("bin/initdb");
+        Path lib = NativeBuild.nativeHome().resolve("lib");
         Assertions.assertTrue(Files.isExecutable(initdb), "missing initdb at " + initdb);
         Path work = Files.createTempDirectory("weaver-battle-initdb-");
         Path data = work.resolve("data");

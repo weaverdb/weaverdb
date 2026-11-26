@@ -1,0 +1,27 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilers, bison, flex, JDKs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bison flex openjdk-17-jdk openjdk-21-jdk openjdk-25-jdk
+
+      - name: CMake 4.2.1
+        run: |
+          curl -fsSL -o /tmp/cmake.tgz https://github.com/Kitware/CMake/releases/download/v4.2.1/cmake-4.2.1-linux-x86_64.tar.gz
+          sudo tar -C /usr/local --strip-components=1 -xzf /tmp/cmake.tgz
+          cmake --version
+
+      - name: Gradle check
+        run: ./gradlew check --no-daemon
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-25-openjdk-amd64

@@ -27,25 +27,15 @@ public class DirectInitTest {
             return;
         }
         try {
-                java.nio.file.Path connect25 = java.nio.file.Path.of(System.getProperty("user.dir")).toAbsolutePath();
-                java.nio.file.Path repoRoot = connect25.getParent();
-                java.nio.file.Path mtpgSrc = repoRoot.resolve("build_test/mtpg");
-
-                ProcessBuilder b = new ProcessBuilder("rm", "-rf", connect25.resolve("build/mtpg").toString());
+                org.weaverdb.NativeBuild.assertCurrent(org.weaverdb.NativeBuild.repoRoot());
+                java.nio.file.Path db = org.weaverdb.NativeBuild.dataDir();
+                ProcessBuilder b = new ProcessBuilder("rm", "-rf", db.toString());
                 b.inheritIO().start().waitFor();
-
-                b = new ProcessBuilder("cp", "-rf", mtpgSrc.toString(),
-                        connect25.resolve("build/mtpg").toString());
-                b.inheritIO().start().waitFor();
-
-                String dbDir = connect25.resolve("build/testdb").toString();
-                b = new ProcessBuilder("rm", "-rf", dbDir);
-                b.inheritIO().start().waitFor();
-                b = new ProcessBuilder(connect25.resolve("build/mtpg/bin/initdb").toString(), "-D", dbDir);
-                b.inheritIO().start().waitFor();
+                org.weaverdb.NativeBuild.initdb(
+                        org.weaverdb.NativeBuild.nativeHome().resolve("bin/initdb"), db, 60);
 
                 Properties prop = new Properties();
-                prop.setProperty("datadir", dbDir);
+                prop.setProperty("datadir", db.toString());
 
                 prop.setProperty("start_delay", "10");
                 prop.setProperty("stdlog", "TRUE");
