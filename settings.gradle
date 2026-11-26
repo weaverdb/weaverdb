@@ -1,8 +1,11 @@
-
 rootProject.name = 'weaver'
 include('pgjava_c')
 include('connect21')
 include('connect25')
+
+// A native abort fails its own test task. Keep going so the other suites
+// still report, then fail the build if any task failed.
+gradle.startParameter.continueOnFailure = true
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)

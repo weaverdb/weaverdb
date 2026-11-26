@@ -57,69 +57,112 @@ jar {
     }
 }
 
-tasks.named('test', Test) {
-    useJUnitPlatform {
-        excludeTags 'crash-long'
-    }
-    maxParallelForks = 1
-
-    // InstallNative initdbs from a copy of build_test/mtpg. Load natives from
-    // build_test directly so AM OIDs match and the dylib exists before BeforeAll.
-    systemProperty 'java.library.path', rootProject.file('build_test/mtpg/lib').absolutePath
-    ['weaver.crash.rounds', 'weaver.crash.scenario', 'weaver.crash.seed',
-     'weaver.crash.keep', 'weaver.crash.stdlog', 'weaver.crash.clients'].each { key ->
-        def value = System.getProperty(key)
-        if (value != null) {
-            systemProperty key, value
-        }
-    }
-
-    maxHeapSize = '1G'
-    javaLauncher = javaToolchains.launcherFor {
+def useJava25(Test t) {
+    t.maxParallelForks = 1
+    t.maxHeapSize = '1G'
+    t.javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(25)
     }
-
-    jvmArgs '-verbose:jni', '--enable-native-access=ALL-UNNAMED'
-    testLogging {
-        events "passed"
-        if (System.getProperty('weaver.crash.stdlog')) {
-            events 'passed', 'failed', 'standardOut', 'standardError'
-            showStandardStreams = true
-        }
-    }
+    t.jvmArgs '--enable-native-access=ALL-UNNAMED'
 }
 
-tasks.register('indexHeapCrashLong', Test) {
-    group = 'verification'
-    description = 'Long-running Java multiuser index/heap crash-consistency (child JVM SIGKILL)'
-    testClassesDirs = sourceSets.test.output.classesDirs
-    classpath = sourceSets.test.runtimeClasspath
-    useJUnitPlatform {
-        includeTags 'crash-long'
-    }
-    maxParallelForks = 1
-    systemProperty 'java.library.path', rootProject.file('build_test/mtpg/lib').absolutePath
-    systemProperty 'weaver.repo.root', rootProject.projectDir.absolutePath
+def forwardCrashProperties(Test t) {
     ['weaver.crash.rounds', 'weaver.crash.duration.sec', 'weaver.crash.seed',
      'weaver.crash.scenario', 'weaver.crash.include.writes', 'weaver.crash.keep',
      'weaver.crash.timeout.sec', 'weaver.crash.recover.jvms', 'weaver.sortmem',
      'weaver.crash.stdlog', 'weaver.crash.clients'].each { key ->
         def value = System.getProperty(key)
         if (value != null) {
-            systemProperty key, value
+            t.systemProperty key, value
         }
+    }
+}
+
+def engineClasses(Test t) {
+    t.testClassesDirs = sourceSets.test.output.classesDirs
+    t.classpath = sourceSets.test.runtimeClasspath
+    t.dependsOn tasks.named('testClasses')
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'org.weaverdb.base.*'
+        includeTestsMatching 'org.weaverdb.vector.*'
+        includeTestsMatching 'org.weaverdb.JavaFunctionsTest'
+    }
+    maxParallelForks = 1
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+tasks.register('integrationTest', Test) {
+    group = 'verification'
+    description = 'Engine-backed JNI tests. JNITest and crash harnesses run in their own tasks.'
+    engineClasses(it)
+    useJava25(it)
+    useJUnitPlatform {
+        excludeTags 'crash-long'
+    }
+    filter {
+        includeTestsMatching 'org.weaverdb.battle.*'
+        includeTestsMatching 'org.weaverdb.Pgvector*'
+        includeTestsMatching 'org.weaverdb.Vacuum*'
+        includeTestsMatching 'org.weaverdb.Persistence*'
+        includeTestsMatching 'org.weaverdb.ImageTest'
+    }
+}
+
+tasks.register('jniTest', Test) {
+    group = 'verification'
+    description = 'JNITest in its own JVM so a native abort cannot hide other suites'
+    engineClasses(it)
+    useJava25(it)
+    forkEvery = 1
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'org.weaverdb.JNITest'
+    }
+}
+
+tasks.register('crashSmokeTest', Test) {
+    group = 'verification'
+    description = 'Crash-harness smoke tests, one class per JVM'
+    engineClasses(it)
+    useJava25(it)
+    forwardCrashProperties(it)
+    forkEvery = 1
+    useJUnitPlatform {
+        excludeTags 'crash-long'
+    }
+    filter {
+        includeTestsMatching 'org.weaverdb.IndexHeapCrashConsistencyShellTest'
+        includeTestsMatching 'org.weaverdb.IndexHeapCrashConsistencyJavaTest'
+    }
+}
+
+tasks.register('soakTest', Test) {
+    group = 'verification'
+    description = 'Opt-in multi-hour index/heap crash soak. Not part of check.'
+    engineClasses(it)
+    useJava25(it)
+    forwardCrashProperties(it)
+    useJUnitPlatform {
+        includeTags 'crash-long'
     }
     outputs.upToDateWhen { false }
     timeout = java.time.Duration.ofHours(8)
-    maxHeapSize = '1G'
-    javaLauncher = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(25)
-    }
-    jvmArgs '--enable-native-access=ALL-UNNAMED'
-    testLogging {
-        events 'passed', 'failed', 'standardOut', 'standardError'
-        showStandardStreams = true
-    }
+}
+
+tasks.register('indexHeapCrashLong') {
+    group = 'verification'
+    description = 'Alias for soakTest'
+    dependsOn tasks.named('soakTest')
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('integrationTest'), tasks.named('jniTest'), tasks.named('crashSmokeTest')
 }
 
 tasks.register('printClasspath') {

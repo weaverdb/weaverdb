@@ -34,27 +34,38 @@ jar {
     }
 }
 
-tasks.named('test', Test) {
-    useJUnitPlatform()
-    maxParallelForks = 1
-
-    filter {
-        includeTestsMatching 'org.weaverdb.PgvectorJniSuite'
-        includeTestsMatching 'org.weaverdb.TestVersioning'
-    }
-
-    systemProperty 'java.library.path', layout.projectDirectory.dir('build/mtpg/lib').asFile.absolutePath
-
-    maxHeapSize = '1G'
-    javaLauncher = javaToolchains.launcherFor {
+def useJava21(Test t) {
+    t.maxParallelForks = 1
+    t.maxHeapSize = '1G'
+    t.javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(21)
     }
+    t.jvmArgs '--enable-native-access=ALL-UNNAMED'
+}
 
-    jvmArgs '--enable-native-access=ALL-UNNAMED'
-
-    testLogging {
-        events "passed"
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'org.weaverdb.TestVersioning'
     }
+    useJava21(it)
+}
+
+tasks.register('integrationTest', Test) {
+    group = 'verification'
+    description = 'Java 21 JNI pgvector suite against the shared native build'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    dependsOn tasks.named('testClasses')
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'org.weaverdb.PgvectorJniSuite'
+    }
+    useJava21(it)
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('integrationTest')
 }
 
 task printClasspath {

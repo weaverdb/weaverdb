@@ -1,12 +1,13 @@
-
-plugins {
-
-}
-
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.process.ExecOperations
+
 import javax.inject.Inject
 
 description = 'weaver db system'
+
+def nativeBuildDir = layout.projectDirectory.dir('build_test')
+def nativeHome = layout.projectDirectory.dir('build_test/mtpg')
 
 abstract class BuildNative extends DefaultTask {
     @Inject
@@ -14,15 +15,16 @@ abstract class BuildNative extends DefaultTask {
 
     @TaskAction
     void buildNatives() {
+        def cmake = requireCMake()
         def root = project.rootDir
         def buildDir = new File(root, 'build_test')
-        if (!new File(buildDir, 'CMakeCache.txt').exists()) {
+        if (needsConfigure(buildDir)) {
             execOperations.exec {
-                commandLine 'cmake', '-S', root.absolutePath, '-B', buildDir.absolutePath
+                commandLine cmake, '-S', root.absolutePath, '-B', buildDir.absolutePath
             }
         }
         execOperations.exec {
-            commandLine 'cmake', '--build', buildDir.absolutePath,
+            commandLine cmake, '--build', buildDir.absolutePath,
                     '-j', String.valueOf(Runtime.runtime.availableProcessors()),
                     '--target', 'weaver', '--target', 'postgres', '--target', 'weaver_jni'
         }
@@ -35,17 +37,170 @@ abstract class BuildNative extends DefaultTask {
         stamp.parentFile.mkdirs()
         stamp.text = head.toString('UTF-8').trim() + '\n'
     }
+
+    private String requireCMake() {
+        def out = new ByteArrayOutputStream()
+        try {
+            execOperations.exec {
+                commandLine 'cmake', '--version'
+                standardOutput = out
+                errorOutput = out
+            }
+        } catch (Exception e) {
+            throw new GradleException("cmake was not found on PATH. Install CMake 4.2.1 or newer and re-run.\n" + e.message)
+        }
+        def text = out.toString('UTF-8')
+        def matcher = (text =~ /cmake version (\d+)\.(\d+)\.(\d+)/)
+        if (!matcher.find()) {
+            throw new GradleException("Could not read a CMake version from:\n" + text)
+        }
+        int major = matcher.group(1) as int
+        int minor = matcher.group(2) as int
+        int patch = matcher.group(3) as int
+        if (major < 4 || (major == 4 && minor < 2) || (major == 4 && minor == 2 && patch < 1)) {
+            throw new GradleException("CMake ${major}.${minor}.${patch} is too old. WeaverDB requires CMake 4.2.1 or newer.")
+        }
+        return 'cmake'
+    }
+
+    private static boolean needsConfigure(File buildDir) {
+        def cache = new File(buildDir, 'CMakeCache.txt')
+        if (!cache.exists()) {
+            return true
+        }
+        def text = cache.getText('UTF-8')
+        def major = cacheValue(text, 'CMAKE_CACHE_MAJOR_VERSION')
+        def minor = cacheValue(text, 'CMAKE_CACHE_MINOR_VERSION')
+        def patch = cacheValue(text, 'CMAKE_CACHE_PATCH_VERSION')
+        if (major == null) {
+            return true
+        }
+        int maj = major as int
+        int min = (minor ?: '0') as int
+        int pat = (patch ?: '0') as int
+        return maj < 4 || (maj == 4 && min < 2) || (maj == 4 && min == 2 && pat < 1)
+    }
+
+    private static String cacheValue(String text, String key) {
+        def matcher = (text =~ /(?m)^${key}:INTERNAL=(.+)$/)
+        return matcher.find() ? matcher.group(1).trim() : null
+    }
+}
+
+tasks.register('verifyJdks') {
+    group = 'verification'
+    description = 'Fail if JDK 17, 21, or 25 is not installed'
+    doLast {
+        def toolchains = project(':pgjava_c').extensions.getByType(JavaToolchainService)
+        [17, 21, 25].each { ver ->
+            try {
+                def launcher = toolchains.launcherFor {
+                    languageVersion = JavaLanguageVersion.of(ver)
+                }.get()
+                logger.lifecycle("JDK ${ver}: ${launcher.metadata.installationPath}")
+            } catch (Exception e) {
+                throw new GradleException("JDK ${ver} is required and was not found. Install a JDK ${ver} (Gradle toolchains look at installed JDKs) and re-run.\n" + e.message)
+            }
+        }
+    }
 }
 
 tasks.register('buildNative', BuildNative) {
     group = 'build'
-    description = 'Build weaver, postgres, and weaver_jni, then stamp BUILD_COMMIT'
-    outputs.upToDateWhen { false }
+    description = 'Configure (when needed) and incrementally build weaver, postgres, and weaver_jni'
+    dependsOn tasks.named('verifyJdks')
+    def sources = fileTree(rootDir) {
+        include 'CMakeLists.txt'
+        include '**/CMakeLists.txt'
+        include 'mtpgsql/**/*.c'
+        include 'mtpgsql/**/*.h'
+        include 'mtpgsql/**/*.y'
+        include 'mtpgsql/**/*.l'
+        include 'mtpgsql/**/*.sh'
+        include 'pgjava_c/**/*.c'
+        include 'pgjava_c/**/*.h'
+        exclude 'mtpgsql/src/include/fmgr.h'
+        exclude 'mtpgsql/src/include/parser/parse.h'
+        exclude 'mtpgsql/src/include/env/timestamp.h'
+        exclude 'mtpgsql/src/backend/utils/fmgrtab.c'
+        exclude 'mtpgsql/src/backend/parser/gram.c'
+        exclude 'mtpgsql/src/backend/parser/scan.c'
+        exclude 'mtpgsql/src/backend/parser/parse.h'
+        exclude 'mtpgsql/src/backend/bootstrap/bootparse.c'
+        exclude 'mtpgsql/src/backend/bootstrap/bootscanner.c'
+        exclude 'mtpgsql/src/backend/bootstrap/bootstrap_tokens.h'
+        exclude 'build_test/**'
+        exclude '**/build/**'
+        exclude '**/.git/**'
+    }
+    inputs.files(sources).withPropertyName('nativeSources')
+    inputs.property('gitHead', providers.exec {
+        commandLine 'git', '-C', rootDir.absolutePath, 'rev-parse', 'HEAD'
+    }.standardOutput.asText.map { it.trim() })
+    outputs.dir(nativeHome)
 }
 
+tasks.register('clean', Delete) {
+    group = 'build'
+    description = 'Delete Gradle build outputs and the CMake build_test tree'
+    delete nativeBuildDir
+    delete layout.buildDirectory
+    subprojects.each { sub ->
+        dependsOn sub.tasks.matching { it.name == 'clean' }
+    }
+}
+
+tasks.register('check') {
+    group = 'verification'
+    description = 'Run unit and integration tests for every module'
+    dependsOn tasks.named('verifyJdks')
+    dependsOn subprojects.collect { it.tasks.named('check') }
+}
+
+tasks.register('build') {
+    group = 'build'
+    description = 'Assemble every module and run check'
+    dependsOn tasks.named('check')
+    dependsOn tasks.named('buildNative')
+    dependsOn subprojects.collect { it.tasks.named('assemble') }
+}
+
+def progressLog = layout.buildDirectory.file('reports/test-progress.log')
+
 subprojects { sub ->
-    sub.tasks.withType(Test).configureEach {
+    sub.tasks.withType(Test).configureEach { t ->
         systemProperty 'weaver.repo.root', rootDir.absolutePath
-        dependsOn rootProject.tasks.named('buildNative')
+        systemProperty 'weaver.native.home', nativeHome.asFile.absolutePath
+        systemProperty 'weaver.datadir', sub.layout.buildDirectory.dir("testdb/${t.name}").get().asFile.absolutePath
+        systemProperty 'java.library.path', new File(nativeHome.asFile, 'lib').absolutePath
+        def harnessLog = sub.layout.buildDirectory.file("reports/${t.name}-harness.log").get().asFile
+        systemProperty 'weaver.harness.log', harnessLog.absolutePath
+        if (t.name != 'test') {
+            dependsOn rootProject.tasks.named('buildNative')
+        }
+        def logFile = progressLog.get().asFile
+        beforeTest { desc ->
+            logFile.parentFile.mkdirs()
+            logFile.append("${sub.path}:${t.name} STARTED ${desc.className}#${desc.name}\n")
+        }
+        afterTest { desc, result ->
+            logFile.parentFile.mkdirs()
+            logFile.append("${sub.path}:${t.name} ${result.resultType} ${desc.className}#${desc.name}\n")
+        }
+        if (t.name == 'test') {
+            testLogging {
+                events 'passed', 'skipped', 'failed'
+                exceptionFormat = 'full'
+                showExceptions = true
+            }
+        } else {
+            testLogging {
+                events 'started', 'passed', 'skipped', 'failed'
+                showStandardStreams = true
+                showExceptions = true
+                showCauses = true
+                exceptionFormat = 'full'
+            }
+        }
     }
 }
