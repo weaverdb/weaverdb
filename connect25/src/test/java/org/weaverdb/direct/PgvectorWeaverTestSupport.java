@@ -16,9 +16,6 @@ import org.weaverdb.Statement;
 
 final class PgvectorWeaverTestSupport {
 
-    static final String DB_DIR =
-            System.getProperty("user.dir") + "/build/testdb";
-
     private static boolean initialized;
 
     private PgvectorWeaverTestSupport() {
@@ -26,32 +23,17 @@ final class PgvectorWeaverTestSupport {
 
     static synchronized void ensureInitialized() throws Throwable {
         if (!initialized) {
-            Path connect25 = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-
-            /*
-             * Stage build/mtpg before any DirectWeaverInitializer reference.
-             * That class's static System.loadLibrary("weaver") pins the dylib
-             * already under java.library.path; copying afterward cannot refresh it.
-             */
-            ProcessBuilder b = new ProcessBuilder(
-                    "rm", "-rf", connect25.resolve("build/mtpg").toString());
-            b.inheritIO().start().waitFor();
-
-            b = new ProcessBuilder("cp", "-rf",
-                    connect25.getParent().resolve("build_test/mtpg").toString(),
-                    connect25.resolve("build/mtpg").toString());
-            b.inheritIO().start().waitFor();
-
             if (!DirectWeaverInitializer.isBackendLoaded()) {
-                Path repo = Path.of(System.getProperty("weaver.repo.root", connect25.getParent().toString()));
+                Path repo = NativeBuild.repoRoot();
                 NativeBuild.assertCurrent(repo);
-                b = new ProcessBuilder("rm", "-rf", DB_DIR);
+                Path db = NativeBuild.dataDir();
+                ProcessBuilder b = new ProcessBuilder("rm", "-rf", db.toString());
                 b.inheritIO().start().waitFor();
 
-                NativeBuild.initdb(connect25.resolve("build/mtpg/bin/initdb"), Path.of(DB_DIR), 60);
+                NativeBuild.initdb(NativeBuild.nativeHome().resolve("bin/initdb"), db, 60);
 
                 Properties prop = new Properties();
-                prop.setProperty("datadir", DB_DIR);
+                prop.setProperty("datadir", db.toString());
                 prop.setProperty("start_delay", "10");
                 prop.setProperty("stdlog", "TRUE");
                 prop.setProperty("disable_crc", "TRUE");

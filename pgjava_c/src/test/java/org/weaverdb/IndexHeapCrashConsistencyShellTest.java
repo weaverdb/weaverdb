@@ -21,18 +21,17 @@ public class IndexHeapCrashConsistencyShellTest {
 
     @Test
     public void indexHeapCrashConsistencySmoke() throws Exception {
-        Path repoRoot = Path.of(System.getProperty("weaver.repo.root",
-                Path.of(System.getProperty("user.dir")).toAbsolutePath().getParent().toString()));
-        Path src = repoRoot.resolve("build_test/mtpg");
+        Path repoRoot = NativeBuild.repoRoot();
+        Path src = NativeBuild.nativeHome();
         Assertions.assertTrue(Files.isExecutable(src.resolve("bin/weaver_embed_sql")),
-                "build_test/mtpg missing weaver_embed_sql; run: cmake --build build_test --target postgres");
+                "missing " + src.resolve("bin/weaver_embed_sql") + "; run ./gradlew buildNative");
 
         Path script = repoRoot.resolve("mtpgsql/scripts/index_heap_crash_consistency.sh");
         Assertions.assertTrue(Files.isRegularFile(script), "missing " + script);
 
         ProcessBuilder pb = new ProcessBuilder("/bin/bash", script.toString());
         pb.directory(repoRoot.toFile());
-        pb.environment().put("PGVECTOR_BUILD_DIR", repoRoot.resolve("build_test").toString());
+        pb.environment().put("PGVECTOR_BUILD_DIR", NativeBuild.nativeHome().getParent().toString());
         pb.environment().put("WEAVER_CRASH_SMOKE", "1");
         pb.environment().remove("WEAVER_CRASH_SCENARIO");
         pb.environment().remove("WEAVER_CRASH_INCLUDE_WRITES");
@@ -48,6 +47,7 @@ public class IndexHeapCrashConsistencyShellTest {
         String output = new String(p.getInputStream().readAllBytes());
         int code = p.waitFor();
 
+        NativeBuild.appendLog(output);
         if (code != 0) {
             System.err.println(output);
         }

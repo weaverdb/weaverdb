@@ -210,8 +210,7 @@ public final class IndexHeapCrashHarness {
                     : "pgjava_c".equals(user.getFileName().toString()) ? user.getParent() : user;
         }
         if (cfg.mtpg == null) {
-            Path test = cfg.repoRoot.resolve("build_test/mtpg");
-            cfg.mtpg = Files.isDirectory(test) ? test : cfg.repoRoot.resolve("build/mtpg");
+            cfg.mtpg = NativeBuild.nativeHome();
         }
     }
 
