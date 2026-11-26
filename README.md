@@ -13,11 +13,10 @@ This project does not have all of the improvements, development, and reliablitit
 ## Getting Started
 
 ### Building
-    
-    % mkdir build; cmake -S . -B build; cmake --build build
-    % ./gradlew build
 
-Native libraries are written to `build/mtpg/lib` (`libweaver` / `libweaver_jni`). Gradle tests load them from that path.
+    ./gradlew check
+
+That configures and builds the native engine, then runs unit and integration tests. See [BUILDING.md](BUILDING.md) for prerequisites, the opt-in crash soak, and where binaries land (`build_test/mtpg`).
 
 ### Running
 
